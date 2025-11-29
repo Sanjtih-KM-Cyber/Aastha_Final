@@ -1,0 +1,281 @@
+import { GoogleGenAI, Content, Part, Type } from '@google/genai';
+import dotenv from 'dotenv';
+import { ChatMessage } from './groqService';
+
+dotenv.config();
+
+// --- KEY ROTATION & SPLITTING ENGINE (60% FREE / 40% PRO) ---
+const allGeminiKeys = (process.env.GEMINI_API_KEYS || process.env.API_KEY || '')
+  .split(',')
+  .map(key => key.trim())
+  .filter(key => key.length > 0);
+
+const N = allGeminiKeys.length;
+// Allocate 60% of keys to the FREE pool initially (to boost free user experience)
+const FREE_POOL_SHARE = 0.60;
+const PRO_POOL_SHARE = 0.40;
+
+// Calculate sizes: Round up for the larger pool (Free), Round down for the smaller pool (Pro)
+const FREE_POOL_SIZE = Math.ceil(N * FREE_POOL_SHARE);
+const PRO_POOL_SIZE = N - FREE_POOL_SIZE; // The remainder
+
+// Determine the slices based on the dynamic calculation:
+let freeTierKeys: string[] = [];
+let proTierKeys: string[] = [];
+
+if (N >= 2) { 
+    // Assign FREE tier the first 60% of keys
+    freeTierKeys = allGeminiKeys.slice(0, FREE_POOL_SIZE);
+    
+    // Assign PRO tier the remaining keys (starting where the FREE pool ended)
+    proTierKeys = allGeminiKeys.slice(FREE_POOL_SIZE);
+
+    // Safety check: If the calculation leads to 0 Pro keys, give Pro access to all keys.
+    if (proTierKeys.length === 0) {
+        proTierKeys = allGeminiKeys;
+    }
+
+} else {
+    // If 0 or 1 key, assign all keys to both pools to ensure function
+    freeTierKeys = allGeminiKeys;
+    proTierKeys = allGeminiKeys;
+}
+
+
+if (allGeminiKeys.length === 0) {
+  console.warn("Warning: No GEMINI_API_KEYS found. Premium features will fail.");
+} else {
+  console.log(`[AI SERVICE] Total Keys: ${N}. PRO Pool Size: ${proTierKeys.length} (40%). FREE Pool Size: ${freeTierKeys.length} (60%).`);
+}
+
+
+const getGeminiClient = (isPro: boolean = false) => {
+  const pool = isPro ? proTierKeys : freeTierKeys;
+  if (pool.length === 0) return new GoogleGenAI({ apiKey: 'dummy_key' });
+  
+  // Randomize key usage to distribute load
+  const randomKey = pool[Math.floor(Math.random() * pool.length)];
+  return new GoogleGenAI({ apiKey: randomKey });
+};
+
+// --- CHAT STREAMING (Logic remains the same) ---
+export async function* streamGemini(history: ChatMessage[], systemPrompt: string, isPro: boolean) {
+  const contents: Content[] = [];
+  let hasImage = false;
+
+  for (const msg of history) {
+    if (msg.role === 'system') continue;
+    const role = msg.role === 'assistant' ? 'model' : 'user';
+    const parts: Part[] = [];
+
+    if (typeof msg.content === 'string') {
+      parts.push({ text: msg.content });
+    } else if (Array.isArray(msg.content)) {
+      for (const item of msg.content) {
+        if (item.type === 'text' && item.text) {
+          parts.push({ text: item.text });
+        } else if (item.type === 'image_url' && item.image_url?.url) {
+          hasImage = true;
+          const matches = item.image_url.url.match(/^data:(.+);base64,(.+)$/);
+          if (matches) {
+            parts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
+          }
+        }
+      }
+    }
+    if (parts.length > 0) contents.push({ role, parts });
+  }
+
+  const modelName = hasImage ? 'gemini-2.5-flash-image' : 'gemini-2.5-flash';
+  
+  try {
+    const client = getGeminiClient(isPro);
+    const response = await client.models.generateContentStream({
+      model: modelName,
+      contents: contents,
+      config: {
+        systemInstruction: systemPrompt,
+        temperature: 0.7,
+      }
+    });
+
+    for await (const chunk of response) {
+      if (chunk.text) yield chunk.text;
+    }
+  } catch (error) {
+    console.error("Gemini Stream Error:", error);
+    yield " [Aastha is having trouble connecting to her premium senses. Please try again.]";
+  }
+}
+
+// --- AI MAGIC FUNCTIONS (Uses Pro Client for reliability) ---
+
+export const extractThemeFromImage = async (base64Image: string): Promise<any> => {
+  const matches = base64Image.match(/^data:(.+);base64,(.+)$/);
+  if (!matches) throw new Error("Invalid image format");
+
+  // Use Pro pool for reliability 
+  const client = getGeminiClient(true); 
+  
+  try {
+    const response = await client.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [
+          { inlineData: { mimeType: matches[1], data: matches[2] } },
+          { text: "Extract the dominant primary color (Hex), a complementary accent color, and a creative name for this color palette based on the mood of the image." }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            primaryColor: { type: Type.STRING, description: "The dominant hex color" },
+            accentColor: { type: Type.STRING, description: "A matching accent hex color" },
+            themeName: { type: Type.STRING, description: "A creative name for the palette" }
+          },
+          required: ["primaryColor", "themeName"]
+        }
+      }
+    });
+
+    return JSON.parse(response.text || '{}');
+  } catch (error) {
+    console.error("Theme Extraction Error:", error);
+    throw error;
+  }
+};
+
+export const getMusicRecommendation = async (mood: string, userHistory: string[]): Promise<any> => {
+  const client = getGeminiClient(true); // Priority feature
+  
+  try {
+    const response = await client.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `Suggest 3 soothing songs for someone feeling "${mood}". 
+                 History: ${userHistory.join(', ')}. 
+                 Provide YouTube-searchable titles.`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              artist: { type: Type.STRING },
+              reason: { type: Type.STRING }
+            }
+          }
+        }
+      }
+    });
+
+    return JSON.parse(response.text || '[]');
+  } catch (error) {
+    console.error("Music Recommendation Error:", error);
+    throw error;
+  }
+};
+
+// --- 4. DIARY ANALYSIS (For Mood Tracker) ---
+export const analyzeDiaryEntries = async (entries: any[]): Promise<any> => {
+    const client = getGeminiClient(true);
+    try {
+        const textData = entries.map(e => `[${e.createdAt}]: ${e.content}`).join('\n\n');
+        
+        const response = await client.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: `
+                You are an empathetic psychologist AI. Read these diary entries from the past week.
+                
+                Task:
+                1. Identify the recurring emotional themes.
+                2. Spot any triggers or wins.
+                3. Write a warm, 3-4 sentence summary directly to the user about their week.
+                4. End with a short, actionable piece of advice or affirmation.
+                
+                Diary Content:
+                ${textData}
+            `,
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        analysis: { type: Type.STRING, description: "The warm summary and advice paragraph." }
+                    }
+                }
+            }
+        });
+
+        return JSON.parse(response.text || '{}');
+    } catch (error) {
+        console.error("Diary Analysis Error:", error);
+        return { analysis: "Unable to analyze diary entries at this moment." };
+    }
+};
+
+// --- 5. CHAT ANALYSIS (For Mood Tracker) ---
+export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> => {
+    const client = getGeminiClient(true);
+    try {
+        const textData = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
+        
+        const response = await client.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: `
+                You are an empathetic therapist AI. Analyze this recent chat history.
+                Provide a warm, 2-sentence summary of how the user seems to be feeling lately.
+                Then add one sentence of gentle advice.
+                
+                Chat History:
+                ${textData}
+            `
+        });
+
+        return response.text || "I need more conversations to understand you better.";
+    } catch (error) {
+        console.error("Chat Analysis Error:", error);
+        return "Unable to analyze chat at the moment.";
+    }
+};
+
+export const getVibePlaylist = async (chatHistory: any[], languages: string[], userMoods: string[]): Promise<string[]> => {
+    const client = getGeminiClient(true);
+    try {
+        const textData = chatHistory.slice(-15).map(m => `${m.role}: ${m.content}`).join('\n');
+        const langString = languages.length > 0 ? languages.join(', ') : "English";
+        const moodOverride = userMoods.length > 0 
+            ? `The user explicitly feels: ${userMoods.join(', ')}. Prioritize this over the chat analysis.` 
+            : "";
+
+        const response = await client.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: `
+                Analyze the recent chat history to understand the user's emotional state (e.g., Happy, Sad, Stressed, Nostalgic).
+                ${moodOverride}
+                
+                Based on this vibe, create a playlist of 5 distinct songs.
+                RULES:
+                1. Mix songs from these languages: ${langString}.
+                2. Ensure the mood matches the user's state perfectly.
+                3. Return ONLY a JSON array of strings in "Song Title - Artist" format.
+                
+                Chat Context:
+                ${textData}
+            `,
+            config: { responseMimeType: "application/json" }
+        });
+
+        const result = JSON.parse(response.text || '[]');
+        if (Array.isArray(result)) return result.map(String);
+        if (result.songs) return result.songs;
+        return [];
+
+    } catch (error) {
+        console.error("Vibe Gen Error:", error);
+        return ["Lo-Fi Beats - Lofi Girl"];
+    }
+};
