@@ -317,7 +317,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                                   <p className="text-sm text-white/70 mb-6">Unlock the full healing potential of Aastha.</p>
 
                                   <div className="space-y-3 mb-8">
-                                      <div className="flex items-center gap-3 text-sm text-white/80"><Zap size={16} className="text-amber-400"/> Unlimited AI Chat (Gemini Pro)</div>
+                                      <div className="flex items-center gap-3 text-sm text-white/80"><Zap size={16} className="text-amber-400"/> Unlimited AI Chat (Aastha Pro)</div>
                                       <div className="flex items-center gap-3 text-sm text-white/80"><ImageIcon size={16} className="text-teal-400"/> Vision Support (Send Images)</div>
                                       <div className="flex items-center gap-3 text-sm text-white/80"><Headphones size={16} className="text-violet-400"/> Voice Mode</div>
                                       <div className="flex items-center gap-3 text-sm text-white/80"><Sparkles size={16} className="text-rose-400"/> Custom Soundscapes</div>
