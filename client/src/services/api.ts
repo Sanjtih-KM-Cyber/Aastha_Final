@@ -1,21 +1,15 @@
-import axios from 'axios';
+import axios from "axios";
 
-// Helper to dynamically determine the API URL based on the current browser URL
-// This works for localhost, 192.168.x.x, or any domain.
-const getBaseUrl = () => {
-  const { hostname } = window.location;
-  return `http://${hostname}:5000/api`;
-};
+const API_URL = import.meta.env.VITE_API_URL; // <-- use env variable
 
 const api = axios.create({
-  baseURL: getBaseUrl(),
-  withCredentials: true, // Important for Cookies
+  baseURL: API_URL,
+  withCredentials: true,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
-// Request Interceptor
 api.interceptors.request.use(
   (config) => {
     return config;
@@ -23,11 +17,9 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response Interceptor
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Log but don't crash on 401, let components handle redirect
     if (error.response && error.response.status === 401) {
       console.warn("API Unauthorized");
     }
