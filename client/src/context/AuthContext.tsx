@@ -1,107 +1,16 @@
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-  withCredentials: true,
-});
-
-// Check auth
-useEffect(() => {
-  const checkAuth = async () => {
-    try {
-      const res = await api.get('/auth/me');
-      setState(prev => ({
-        ...prev,
-        user: res.data,
-        isAuthenticated: true,
-        isLoading: false,
-      }));
-    } catch {
-      setState(prev => ({
-        ...prev,
-        isAuthenticated: false,
-        isLoading: false,
-        user: null,
-      }));
-    }
-  };
-  checkAuth();
-}, []);
-
-const login = async (identifier: string, password: string) => {
-  const cleanedIdentifier = identifier.toLowerCase().trim();
-  const res = await api.post('/auth/login', {
-    identifier: cleanedIdentifier,
-    password,
-  });
-
-  const user: User = res.data;
-
-  let key = null;
-  if (!user.hasDiarySetup) {
-    key = deriveKey(password, cleanedIdentifier);
-  }
-
-  setState({
-    user,
-    isAuthenticated: true,
-    isLoading: false,
-    encryptionKey: key,
-  });
-};
-
-const register = async (data: RegisterData) => {
-  const res = await api.post('/auth/register', data);
-
-  const user: User = res.data;
-  const pwdToUse = data.diaryPassword || data.password;
-  const key = deriveKey(pwdToUse, data.email);
-
-  setState({
-    user,
-    isAuthenticated: true,
-    isLoading: false,
-    encryptionKey: key,
-  });
-};
-
-const unlockSanctuary = async (password: string) => {
-  if (!state.user) return false;
-
-  await api.post('/auth/verify-diary', { diaryPassword: password });
-
-  const emailInput = prompt("Please enter your email used for registration:");
-  if (!emailInput) return false;
-
-  const key = deriveKey(password, emailInput);
-  setState(prev => ({ ...prev, encryptionKey: key }));
-  return true;
-};
-
-const logout = async () => {
-  try {
-    await api.get('/auth/logout');
-  } finally {
-    setState({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      encryptionKey: null,
-    });
-  }
-};
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { AuthState, User } from '../types';
 import { deriveKey } from '../utils/encryptionUtils';
 
-// --- MOCK SERVER KEY DECRYPTION (FOR DISPLAY ONLY) ---
 const getClientServerDecrypt = (ciphertext: string) => {
-    try {
-        const parts = ciphertext.split(':');
-        if (parts.length !== 3) return ciphertext;
-        return "[Encrypted Profile Data]";
-    } catch (e) {
-        return "[Error Decrypting]";
-    }
+  try {
+    const parts = ciphertext.split(':');
+    if (parts.length !== 3) return ciphertext;
+    return "[Encrypted Profile Data]";
+  } catch {
+    return "[Error Decrypting]";
+  }
 };
 
 interface RegisterData {
@@ -109,7 +18,7 @@ interface RegisterData {
   email: string;
   password: string;
   diaryPassword?: string;
-  securityQuestions: { question: string, answer: string }[];
+  securityQuestions: { question: string; answer: string }[];
 }
 
 interface AuthContextType extends AuthState {
@@ -125,8 +34,6 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-
-  // ---------- STATE ----------
   const [state, setState] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
@@ -134,30 +41,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     encryptionKey: null,
   });
 
-  // ---------- API CLIENT ----------
   const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL,   // ⚠️ FIXED
+    baseURL: import.meta.env.VITE_API_URL,
     withCredentials: true,
   });
 
-  // ---------- CHECK AUTH ON LOAD ----------
+  // ---------- CHECK AUTH ----------
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await api.get('/auth/me');   // ⚠️ FIXED
-        setState(prev => ({
-          ...prev,
+        const res = await api.get('/users/me');
+        setState({
           user: res.data,
           isAuthenticated: true,
           isLoading: false,
-        }));
+          encryptionKey: state.encryptionKey
+        });
       } catch {
-        setState(prev => ({
-          ...prev,
+        setState({
+          user: null,
           isAuthenticated: false,
           isLoading: false,
-          user: null,
-        }));
+          encryptionKey: null
+        });
       }
     };
     checkAuth();
@@ -165,99 +71,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ---------- LOGIN ----------
   const login = async (identifier: string, password: string) => {
-    try {
-      const cleanedIdentifier = identifier.toLowerCase().trim();
+    const cleanedIdentifier = identifier.toLowerCase().trim();
+    const res = await api.post('/users/login', { identifier: cleanedIdentifier, password });
 
-      const res = await api.post('/auth/login', {   // ⚠️ FIXED
-        identifier: cleanedIdentifier,
-        password,
-      });
+    const user: User = res.data;
 
-      const user: User = res.data;
+    let key = null;
+    if (!user.hasDiarySetup) key = deriveKey(password, cleanedIdentifier);
 
-      let key = null;
-      if (!user.hasDiarySetup) {
-        key = deriveKey(password, cleanedIdentifier);
-      }
-
-      setState({
-        user,
-        isAuthenticated: true,
-        isLoading: false,
-        encryptionKey: key,
-      });
-
-    } catch (error) {
-      console.error("Login failed", error);
-      throw error;
-    }
+    setState({
+      user,
+      isAuthenticated: true,
+      isLoading: false,
+      encryptionKey: key,
+    });
   };
 
   // ---------- REGISTER ----------
   const register = async (data: RegisterData) => {
-    try {
-      const res = await api.post('/auth/register', data);   // ⚠️ FIXED
+    const res = await api.post('/users/register', data);
+    const user: User = res.data;
 
-      const user: User = res.data;
+    const pwdToUse = data.diaryPassword || data.password;
+    const key = deriveKey(pwdToUse, data.email);
 
-      const pwdToUse = data.diaryPassword || data.password;
-      const key = deriveKey(pwdToUse, data.email);
-
-      setState({
-        user,
-        isAuthenticated: true,
-        isLoading: false,
-        encryptionKey: key,
-      });
-    } catch (error) {
-      console.error("Registration failed", error);
-      throw error;
-    }
+    setState({
+      user,
+      isAuthenticated: true,
+      isLoading: false,
+      encryptionKey: key,
+    });
   };
 
-  // ---------- UNLOCK SANCTUARY ----------
+  // ---------- UNLOCK ----------
   const unlockSanctuary = async (password: string): Promise<boolean> => {
     if (!state.user) return false;
 
-    try {
-      await api.post('/auth/verify-diary', { diaryPassword: password });   // ⚠️ FIXED
+    await api.post('/users/verify-diary', { diaryPassword: password });
 
-      const emailInput = prompt("To derive your diary key, re-enter your registration email:");
-      if (!emailInput) return false;
+    const emailInput = prompt("Enter your registration email:");
+    if (!emailInput) return false;
 
-      const key = deriveKey(password, emailInput);
-
-      setState(prev => ({ ...prev, encryptionKey: key }));
-      return true;
-
-    } catch (error) {
-      console.error("Unlock failed", error);
-      return false;
-    }
+    const key = deriveKey(password, emailInput);
+    setState(prev => ({ ...prev, encryptionKey: key }));
+    return true;
   };
 
-  // ---------- MANUAL SET KEY ----------
+  // ---------- MANUAL KEY ----------
   const setEncryptionKeyManual = (key: string) => {
     setState(prev => ({ ...prev, encryptionKey: key }));
   };
 
   // ---------- DISPLAY HELPERS ----------
-  const getUserDisplayName = useCallback((): string => {
-    if (!state.user) return 'Guest';
+  const getUserDisplayName = useCallback(() => {
+    if (!state.user) return "Guest";
     return getClientServerDecrypt(state.user.nameEncrypted);
   }, [state.user]);
 
-  const getUserDisplayEmail = useCallback((): string => {
-    if (!state.user) return 'N/A';
+  const getUserDisplayEmail = useCallback(() => {
+    if (!state.user) return "N/A";
     return getClientServerDecrypt(state.user.emailEncrypted);
   }, [state.user]);
 
   // ---------- LOGOUT ----------
   const logout = async () => {
     try {
-      await api.get('/auth/logout');   // ⚠️ FIXED
-    } catch (error) {
-      console.error("Logout error", error);
+      await api.get('/users/logout');
     } finally {
       setState({
         user: null,
@@ -277,7 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unlockSanctuary,
       setEncryptionKeyManual,
       getUserDisplayName,
-      getUserDisplayEmail,
+      getUserDisplayEmail
     }}>
       {children}
     </AuthContext.Provider>
@@ -285,9 +164,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 };
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  return ctx;
 };

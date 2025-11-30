@@ -11,7 +11,7 @@ import {
   verifySecurityAnswer,
   resetDiaryNuclear,
   updateProfile,
-  upgradeToPro // Kept as fallback/mock
+  upgradeToPro
 } from '../controllers/authController';
 import { createOrder, verifyPayment } from '../controllers/paymentController';
 import { protect } from '../middleware/authMiddleware';
@@ -20,23 +20,24 @@ const router = express.Router();
 
 router.post('/register', registerUser);
 router.post('/login', loginUser);
-router.post('/logout', logoutUser);
-router.post('/verify-diary', protect as any, verifyDiaryPassword as any);
-router.get('/verify', protect as any, getMe as any);
-router.get('/me', protect as any, getMe as any);
-router.put('/profile', protect as any, updateProfile as any);
+router.get('/logout', logoutUser);                // GET logout (matching frontend)
+router.post('/verify-diary', protect, verifyDiaryPassword);
+router.get('/verify', protect, getMe);
+router.get('/me', protect, getMe);
+router.put('/profile', protect, updateProfile);
 
-// Payment Routes
-router.post('/create-order', protect as any, createOrder as any);
-router.post('/verify-payment', protect as any, verifyPayment as any);
-router.post('/upgrade', protect as any, upgradeToPro as any); // Fallback mock
+// Payment / pro
+router.post('/create-order', protect, createOrder);
+router.post('/verify-payment', protect, verifyPayment);
+router.post('/upgrade', protect, upgradeToPro);
 
-router.post('/delete-account', protect as any, softDeleteUser as any);
+// Account management
+router.post('/delete-account', protect, softDeleteUser);
 router.post('/reset-init', initiateReset);
 router.post('/reset-complete', completeReset);
 
-// Diary Reset
-router.post('/verify-security-answer', protect as any, verifySecurityAnswer as any);
-router.post('/reset-diary-nuclear', protect as any, resetDiaryNuclear as any);
+// Diary reset
+router.post('/verify-security-answer', protect, verifySecurityAnswer);
+router.post('/reset-diary-nuclear', protect, resetDiaryNuclear);
 
 export default router;
