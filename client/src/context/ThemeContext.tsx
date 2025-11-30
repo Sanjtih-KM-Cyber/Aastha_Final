@@ -1,7 +1,6 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth';
 import api from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 export interface Theme {
   id: string;
@@ -31,32 +30,34 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  
+
   const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('user_theme_id');
     const savedCustom = localStorage.getItem('user_custom_theme_color');
     if (saved === 'custom' && savedCustom) {
-        return { ...defaultThemes.custom, primaryColor: savedCustom, gradient: 'from-white/20 to-black/20' };
+      return { ...defaultThemes.custom, primaryColor: savedCustom, gradient: 'from-white/20 to-black/20' };
     }
     return defaultThemes[saved?.toLowerCase() || 'aurora'] || defaultThemes.aurora;
   });
-  
+
   const [wallpaper, setWallpaperState] = useState<string | null>(() => localStorage.getItem('user_wallpaper'));
 
   useEffect(() => {
+    // sync when user changes (from server)
     if (user) {
-        if (user.wallpaper !== wallpaper) {
-            setWallpaperState(user.wallpaper || null);
-            if (user.wallpaper) {
-                localStorage.setItem('user_wallpaper', user.wallpaper);
-                // Trigger extraction on sync if needed
-                extractThemeFromImage(user.wallpaper);
-            } else {
-                localStorage.removeItem('user_wallpaper');
-            }
+      const serverWallpaper = (user as any).wallpaper || null;
+      if (serverWallpaper !== wallpaper) {
+        setWallpaperState(serverWallpaper);
+        if (serverWallpaper) {
+          localStorage.setItem('user_wallpaper', serverWallpaper);
+          extractThemeFromImage(serverWallpaper); // best-effort theme extraction
+        } else {
+          localStorage.removeItem('user_wallpaper');
         }
+      }
     }
-  }, [user]); 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-color', currentTheme.primaryColor);
@@ -66,46 +67,52 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const setTheme = (themeId: string) => {
     if (themeId.startsWith('#')) {
-       setCurrentTheme({ ...defaultThemes.custom, primaryColor: themeId, id: 'custom', gradient: `from-[${themeId}]/20 to-black/50` });
+      setCurrentTheme({ ...defaultThemes.custom, primaryColor: themeId, id: 'custom', gradient: `from-[${themeId}]/20 to-black/50` });
     } else {
-       const key = themeId.toLowerCase();
-       if (defaultThemes[key]) setCurrentTheme(defaultThemes[key]);
+      const key = themeId.toLowerCase();
+      if (defaultThemes[key]) setCurrentTheme(defaultThemes[key]);
     }
   };
 
+  // Tries backend AI then falls back to local canvas sampling.
   const extractThemeFromImage = async (base64Image: string) => {
-      try {
-          // Attempt AI Extraction via Backend
-          const res = await api.post('/ai/theme', { image: base64Image });
-          const { primaryColor } = res.data;
-          
-          if (primaryColor) {
-              setTheme(primaryColor);
-          }
-      } catch (error: any) {
-          console.warn("AI Theme extraction failed or limit reached:", error);
-          if (error.response?.status === 403) {
-              alert("Daily AI limit reached for Free plan. Switching to local extraction (less accurate). Upgrade to Pro for AI magic!");
-          }
-          // Fallback to local canvas extraction
-          fallbackLocalExtraction(base64Image);
+    try {
+      // backend AI extraction endpoint (mounted under /api)
+      const res = await api.post('/ai/theme', { image: base64Image });
+      const { primaryColor } = res.data || {};
+      if (primaryColor) {
+        setTheme(primaryColor);
+      } else {
+        fallbackLocalExtraction(base64Image);
       }
+    } catch (error: any) {
+      console.warn('AI theme extraction failed, falling back to local extraction', error);
+      fallbackLocalExtraction(base64Image);
+    }
   };
 
   const fallbackLocalExtraction = (imageSrc: string) => {
+    try {
       const img = new Image();
-      img.crossOrigin = "Anonymous";
+      img.crossOrigin = 'Anonymous';
       img.src = imageSrc;
       img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          if (!ctx) return;
-          canvas.width = 1; canvas.height = 1;
-          ctx.drawImage(img, 0, 0, 1, 1);
-          const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-          const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
-          setTheme(hex);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        canvas.width = 1;
+        canvas.height = 1;
+        ctx.drawImage(img, 0, 0, 1, 1);
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+        const hex = '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        setTheme(hex);
       };
+      img.onerror = () => {
+        console.warn('Image load error for local theme extraction');
+      };
+    } catch (err) {
+      console.error('Fallback extraction error', err);
+    }
   };
 
   const setWallpaper = (file: File | null) => {
@@ -113,38 +120,43 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setWallpaperState(null);
       localStorage.removeItem('user_wallpaper');
       if (user) {
-          api.put('/users/profile', { wallpaper: '' }).catch(console.error);
+        // Clear on server if user exists
+        api.put('/users/profile', { wallpaper: '' }).catch(console.error);
       }
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
+      const dataUrl = e.target?.result as string;
+      // Resize/compress to keep payload small
       const img = new Image();
-      img.src = e.target?.result as string;
-      img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1024; 
-          const scaleSize = MAX_WIDTH / img.width;
-          canvas.width = MAX_WIDTH;
-          canvas.height = img.height * scaleSize;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          
-          const compressedData = canvas.toDataURL('image/jpeg', 0.6);
-          
-          setWallpaperState(compressedData);
-          try {
-            localStorage.setItem('user_wallpaper', compressedData);
-            extractThemeFromImage(compressedData); // Calls Backend with fallback
-            
-            if (user) {
-                api.put('/users/profile', { wallpaper: compressedData }).catch(console.error);
-            }
-          } catch (err) {
-            console.error("Wallpaper error", err);
-            alert("Image is too large for local storage.");
+      img.src = dataUrl;
+      img.onload = async () => {
+        const MAX_WIDTH = 1024;
+        const ratio = Math.min(1, MAX_WIDTH / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const compressedData = canvas.toDataURL('image/jpeg', 0.6);
+        setWallpaperState(compressedData);
+        try {
+          localStorage.setItem('user_wallpaper', compressedData);
+          extractThemeFromImage(compressedData);
+          if (user) {
+            // Persist on server
+            await api.put('/users/profile', { wallpaper: compressedData });
           }
+        } catch (err) {
+          console.error('Error saving wallpaper', err);
+          alert('Failed to save wallpaper to server.');
+        }
+      };
+      img.onerror = () => {
+        alert('Invalid image file.');
       };
     };
     reader.readAsDataURL(file);
@@ -152,9 +164,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const resetTheme = () => {
     setCurrentTheme(defaultThemes.aurora);
-    setWallpaper(null);
+    setWallpaperState(null);
     localStorage.removeItem('user_theme_id');
     localStorage.removeItem('user_custom_theme_color');
+    localStorage.removeItem('user_wallpaper');
+    // Optionally clear on server
+    if (user) {
+      api.put('/users/profile', { wallpaper: '' }).catch(console.error);
+    }
   };
 
   return (
@@ -165,7 +182,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 };
 
 export const useTheme = () => {
-  const context = useContext(ThemeContext);
-  if (!context) throw new Error('useTheme must be used within a ThemeProvider');
-  return context;
+  const ctx = useContext(ThemeContext);
+  if (!ctx) throw new Error('useTheme must be used within a ThemeProvider');
+  return ctx;
 };
