@@ -69,7 +69,9 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     if (user) {
       const token = generateToken((user._id as any).toString());
       // Render (Backend) to Vercel (Frontend) requires SameSite=None and Secure=true
-      const isProduction = process.env.NODE_ENV === 'production';
+      // We check for NODE_ENV=production OR if we are explicitly on Render (process.env.RENDER)
+      const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+
       (res as any).cookie('jwt', token, {
         httpOnly: true,
         secure: isProduction, // Must be true for SameSite=None
@@ -144,7 +146,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       // 4. Generate Token & Respond
       const token = generateToken((user._id as any).toString());
 
-      const isProduction = process.env.NODE_ENV === 'production';
+      const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
       (res as any).cookie('jwt', token, {
         httpOnly: true,
         secure: isProduction,
