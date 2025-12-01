@@ -59,8 +59,12 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
   // Handle AI Pre-selection
   useEffect(() => {
     if (initialMode && isOpen) {
-        const match = Object.keys(MODES).find(k => k.toLowerCase() === initialMode.toLowerCase());
-        if (match) setActiveMode(match as keyof typeof MODES);
+        const match = Object.keys(MODES).find(k => k.toLowerCase() === initialMode.toLowerCase() || MODES[k as keyof typeof MODES].label.toLowerCase().includes(initialMode.toLowerCase()));
+        if (match) {
+            setActiveMode(match as keyof typeof MODES);
+            // Auto-start if suggested by AI
+            setIsActive(true);
+        }
     }
   }, [initialMode, isOpen]);
 
