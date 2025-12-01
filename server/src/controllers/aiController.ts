@@ -100,7 +100,7 @@ export const generateVibePlaylist = async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
         
-        const { languages, moods } = req.body; // Received from frontend
+        const { languages, moods, duration } = req.body; // Received from frontend (duration in minutes)
 
         // 1. Get Chat History
         const chat = await Chat.findOne({ user: req.user._id });
@@ -111,7 +111,7 @@ export const generateVibePlaylist = async (req: AuthRequest, res: Response) => {
 
         // 2. Ask AI for Song Titles
         // Pass arrays to service
-        const songTitles = await getVibePlaylist(recentMessages, languages, moods);
+        const songTitles = await getVibePlaylist(recentMessages, languages, moods, duration);
 
         // 3. Search YouTube
         // Uses the searchYouTubeInternal defined at the top of the file
