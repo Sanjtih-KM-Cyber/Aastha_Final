@@ -68,7 +68,14 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 
     if (user) {
       const token = generateToken((user._id as any).toString());
-      (res as any).cookie('jwt', token, { httpOnly: true, secure: false, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+      // Render (Backend) to Vercel (Frontend) requires SameSite=None and Secure=true
+      const isProduction = process.env.NODE_ENV === 'production';
+      (res as any).cookie('jwt', token, {
+        httpOnly: true,
+        secure: isProduction, // Must be true for SameSite=None
+        sameSite: isProduction ? 'none' : 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000
+      });
       
       (res as any).status(201).json({
         _id: user._id,
@@ -136,7 +143,14 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
 
       // 4. Generate Token & Respond
       const token = generateToken((user._id as any).toString());
-      (res as any).cookie('jwt', token, { httpOnly: true, secure: false, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+
+      const isProduction = process.env.NODE_ENV === 'production';
+      (res as any).cookie('jwt', token, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000
+      });
       
       (res as any).json({
         _id: user._id,
