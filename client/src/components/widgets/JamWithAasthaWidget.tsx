@@ -52,6 +52,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   // Generator State (Multi-Select)
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
+  const [targetDuration, setTargetDuration] = useState<number>(30); // minutes
   
   // Loop Engine State
   const [loopMode, setLoopMode] = useState<LoopMode>('off');
@@ -205,7 +206,8 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       try {
           const res = await api.post('/ai/generate-vibe', { 
               languages: langsToSend,
-              moods: selectedMoods
+              moods: selectedMoods,
+              duration: targetDuration // Send duration to backend (even if backend logic for duration isn't fully complex yet)
           });
           const tracks = res.data;
           
@@ -304,6 +306,38 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                                             {tag}
                                         </button>
                                     ))}
+                                </div>
+                            </div>
+
+                             {/* Duration Slider */}
+                            <div>
+                                <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Session Duration</h4>
+                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                    <div className="flex justify-between text-xs text-white mb-2">
+                                        <span>10 min</span>
+                                        <span className="font-bold text-teal-400">{targetDuration} min</span>
+                                        <span>180+ min</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="10"
+                                        max="400"
+                                        step="10"
+                                        value={targetDuration}
+                                        onChange={(e) => setTargetDuration(parseInt(e.target.value))}
+                                        className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-teal-400 [&::-webkit-slider-thumb]:rounded-full"
+                                    />
+                                    <div className="flex justify-between items-center mt-3">
+                                        <span className="text-[10px] text-white/40">Custom duration (10 - 400 min)</span>
+                                        <input
+                                            type="number"
+                                            min="10"
+                                            max="600"
+                                            value={targetDuration}
+                                            onChange={(e) => setTargetDuration(Math.max(10, Math.min(600, parseInt(e.target.value) || 10)))}
+                                            className="w-16 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-right text-white focus:border-teal-400 focus:outline-none"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </div>
