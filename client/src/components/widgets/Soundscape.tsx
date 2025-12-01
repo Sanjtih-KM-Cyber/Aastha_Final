@@ -30,7 +30,7 @@ const SOUNDS = [
   { id: 'ocean', label: 'Ocean', color: '#2DD4BF', path: '/sounds/ocean.mp3' },
   { id: 'night', label: 'Night', color: '#818CF8', path: '/sounds/night.mp3' },
   { id: 'wind', label: 'Wind', color: '#94A3B8', path: '/sounds/wind.mp3' },
-  { id: 'thunder', label: 'Storm', color: '#A78BFA', path: '/sounds/thunder.mp3' },
+  { id: 'thunder', label: 'Storm', color: '#A78BFA', path: '/sounds/storm2.mp3' }, // Fixed path
   { id: 'birds', label: 'Birds', color: '#FACC15', path: '/sounds/birds.mp3' }
 ];
 

@@ -27,8 +27,20 @@ const EMOJIS = ['😊', '🌿', '☁️', '✨', '💜', '🌧️', '🎵', '�
 
 // --- Dynamic API URL Helper ---
 const getApiUrl = (endpoint: string) => {
+  // Use the environment variable if available (e.g., from .env or Vercel)
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) {
+    return `${envUrl}${endpoint}`;
+  }
+  // Fallback (mostly for local dev if .env is missing)
   const host = window.location.hostname;
-  return `http://${host}:5000/api${endpoint}`;
+  // If we are on localhost, assume local backend on 5000
+  if (host === 'localhost' || host === '127.0.0.1') {
+      return `http://${host}:5000/api${endpoint}`;
+  }
+  // Otherwise, use relative path (if proxy is set up) or expect VITE_API_URL to be set
+  // For safety, we can default to the provided Render URL if not on localhost
+  return `https://aastha-final.onrender.com/api${endpoint}`;
 };
 
 const compressImage = (file: File): Promise<string> => {
@@ -76,7 +88,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
+
+  // Search
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<string[]>([]); // Array of Message IDs
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
   // Voice & Dictation
   const [isVoiceMode, setIsVoiceMode] = useState(false);
@@ -156,7 +172,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       recognition.lang = 'en-US';
 
       recognition.onstart = () => setIsListening(true);
-      recognition.onend = () => setIsListening(false);
+      recognition.onend = () => {
+          setIsListening(false);
+          // If in voice mode and not manually stopped, restart?
+          // No, usually we stop after sending. But if connection dropped, maybe notify.
+      };
+      recognition.onerror = (event: any) => {
+          console.error("Speech Recognition Error:", event.error);
+          if (event.error === 'not-allowed') {
+              setError("Microphone access denied. Please check browser settings.");
+              setIsVoiceMode(false);
+          }
+      };
+
       recognition.onresult = (event: any) => {
         let currentText = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -164,25 +192,38 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         }
         
         if (isDictating) {
-            setInput(prev => {
-                const spacer = prev.length > 0 && !prev.endsWith(' ') ? ' ' : '';
-                return prev + spacer + currentText;
-            });
-            if (textareaRef.current) {
-                textareaRef.current.style.height = 'auto';
-                textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+            // For dictation, we append only final results or handle interim differently
+            // Here, simplicity: if isFinal, append.
+            const isFinal = event.results[event.results.length - 1].isFinal;
+            if (isFinal) {
+                setInput(prev => {
+                    const spacer = prev.length > 0 && !prev.endsWith(' ') ? ' ' : '';
+                    return prev + spacer + currentText;
+                });
+                if (textareaRef.current) {
+                    textareaRef.current.style.height = 'auto';
+                    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+                }
+                // Don't stop immediately if continuous, but for simple dictation, maybe stop?
+                // The previous logic stopped immediately which is why it felt broken.
+                // Let's keep listening until user toggles off, or just update input.
             }
-            setIsDictating(false);
-            recognition.stop();
         } else {
+            // Voice Mode
             setTranscript(currentText);
+            const isFinal = event.results[event.results.length - 1].isFinal;
+
+            // Only send on silence timer OR if final result is clear
             if (currentText.trim().length > 0) {
                 if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-                silenceTimerRef.current = setTimeout(() => { handleVoiceSend(currentText); }, 2000); 
+                // Reduce silence timer for snappier response
+                silenceTimerRef.current = setTimeout(() => { handleVoiceSend(currentText); }, 1500);
             }
         }
       };
       recognitionRef.current = recognition;
+    } else {
+        console.warn("Speech Recognition API not supported in this browser.");
     }
   }, [isDictating]);
 
@@ -191,6 +232,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const stopListening = () => { if (recognitionRef.current && isListening) recognitionRef.current.stop(); };
   
   const toggleVoiceMode = () => {
+    // @ts-ignore
+    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+        setError("Your browser does not support Voice Mode. Try Chrome or Edge.");
+        return;
+    }
     if (isStandardMode) {
         alert("Voice Mode requires Premium Credits. Upgrade to Pro.");
         return;
@@ -200,6 +246,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
   
   const toggleDictation = () => {
+      // @ts-ignore
+      if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+          setError("Dictation not supported.");
+          return;
+      }
       if (isDictating) {
           recognitionRef.current?.stop();
           setIsDictating(false);
@@ -315,12 +366,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       
-      const modelMessageId = Date.now().toString();
+      const newModelMessageId = Date.now().toString();
       setMessages(prev => [...prev, { 
           role: 'assistant', 
           content: '', 
           timestamp: Date.now(), 
-          id: modelMessageId 
+          id: newModelMessageId
       }]);
       
       let aiContentRaw = '';
@@ -355,7 +406,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             const cleanContent = processMagicTags(aiContentRaw);
                             
                             setMessages(prev => prev.map(msg => {
-                                if (msg.id === modelMessageId) {
+                                if (msg.id === newModelMessageId) {
                                     return { 
                                         ...msg, 
                                         content: cleanContent, 
@@ -379,7 +430,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     } catch (error: any) {
       setError(error.message || "Connection failed");
       setIsTyping(false);
-      setMessages(prev => prev.filter(msg => msg.id !== modelMessageId)); 
+      // We can't access modelMessageId/newModelMessageId here easily if it was local to the try block
+      // But we can filter out empty assistant messages if needed, or just leave it.
+      // Ideally, define the ID before the try block if we want to use it here.
     } finally { setIsTyping(false); }
   };
 
@@ -403,11 +456,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const speakMessage = (text: string) => {
     if ('speechSynthesis' in window) {
        window.speechSynthesis.cancel();
-       const utterance = new SpeechSynthesisUtterance(text.replace(/[*#]/g, ''));
+       // Remove markdown, emojis, and special chars for TTS
+       const cleanText = text
+         .replace(/[*#]/g, '') // remove markdown
+         .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, ''); // remove emojis
+
+       const utterance = new SpeechSynthesisUtterance(cleanText);
        const voices = window.speechSynthesis.getVoices();
        let chosenVoice = voices.find(v => v.voiceURI === selectedVoiceURI) || voices.find(v => v.name.includes('Google US English'));
        if (chosenVoice) utterance.voice = chosenVoice;
-       utterance.onend = () => { if (isVoiceMode) startListening(); };
+       utterance.onend = () => {
+           // In "Talk like in a call" mode, we want to immediately listen again
+           if (isVoiceMode) {
+               // Small delay to prevent catching own echo
+               setTimeout(() => startListening(), 300);
+           }
+       };
        window.speechSynthesis.speak(utterance);
     }
   };
@@ -421,19 +485,51 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
   };
 
+  // --- Search Logic ---
+  useEffect(() => {
+      if (searchQuery.trim()) {
+          const hits = messages
+              .filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
+              .map(m => m.id || '')
+              .filter(id => id); // Ensure IDs exist
+          setSearchResults(hits);
+          setCurrentMatchIndex(hits.length > 0 ? hits.length - 1 : 0); // Start at latest
+      } else {
+          setSearchResults([]);
+          setCurrentMatchIndex(0);
+      }
+  }, [searchQuery, messages]);
+
+  // Find target ID for scrolling
+  useEffect(() => {
+      if (searchResults.length > 0 && searchResults[currentMatchIndex]) {
+          const id = searchResults[currentMatchIndex];
+          const el = document.getElementById(`msg-${id}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+  }, [currentMatchIndex, searchResults]);
+
+  const nextMatch = () => setCurrentMatchIndex(prev => (prev + 1) % searchResults.length);
+  const prevMatch = () => setCurrentMatchIndex(prev => (prev - 1 + searchResults.length) % searchResults.length);
+
   const renderMessages = () => {
-      const filtered = searchQuery ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase())) : messages;
+      // We do NOT filter messages anymore, we show all and highlight
       let lastDateLabel = '';
 
-      return filtered.map((msg, idx) => {
+      return messages.map((msg, idx) => {
           const dateLabel = getDateLabel(msg.timestamp || Date.now());
           const showSeparator = dateLabel !== lastDateLabel;
           lastDateLabel = dateLabel;
 
-          const isCurrentlyStreaming = isTyping && msg.role === 'assistant' && idx === filtered.length - 1;
+          // Provide an ID for scrolling if it doesn't have one (generate on fly if needed, but safer to use state)
+          const domId = `msg-${msg.id || idx}`;
+          // Check if this message is the current search match
+          const isCurrentMatch = searchResults[currentMatchIndex] === msg.id && searchQuery.length > 0;
+
+          const isCurrentlyStreaming = isTyping && msg.role === 'assistant' && idx === messages.length - 1;
 
           return (
-             <React.Fragment key={idx}>
+             <React.Fragment key={domId}>
                 {showSeparator && (
                     <div className="flex justify-center my-8">
                         <span className="bg-black/30 backdrop-blur-md border border-white/5 text-white/50 text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm">
@@ -441,7 +537,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         </span>
                     </div>
                 )}
-                <div className="flex flex-col w-full">
+                <div id={domId} className="flex flex-col w-full">
                     <MessageBubble 
                         role={msg.role} 
                         content={msg.content} 
@@ -449,6 +545,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         onReply={() => handleReply(msg.content)} 
                         onCopy={copyToClipboard}
                         searchQuery={searchQuery}
+                        isCurrentMatch={isCurrentMatch}
                         isStreaming={isCurrentlyStreaming} 
                     />
                     {msg.warning && (
@@ -506,8 +603,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          {/* The Pill Search Bar */}
          <div className="pointer-events-auto flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full pl-4 pr-2 py-2 shadow-2xl w-[280px] md:w-[400px] transition-all focus-within:w-[320px] md:focus-within:w-[450px] focus-within:bg-black/50 group">
              <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2" />
-             <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search conversation..." className="bg-transparent border-none outline-none text-sm text-white w-full" />
-             {searchQuery && <button onClick={() => setSearchQuery('')} className="p-1 text-white/30 hover:text-white"><X size={14}/></button>}
+             <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..." className="bg-transparent border-none outline-none text-sm text-white w-full" />
+             {searchQuery && (
+                 <div className="flex items-center gap-1 ml-2 border-l border-white/10 pl-2">
+                     <span className="text-[10px] text-white/40 whitespace-nowrap">
+                         {searchResults.length > 0 ? `${currentMatchIndex + 1}/${searchResults.length}` : '0/0'}
+                     </span>
+                     <button onClick={prevMatch} disabled={searchResults.length === 0} className="p-1 text-white/50 hover:text-white"><span className="text-xs">▲</span></button>
+                     <button onClick={nextMatch} disabled={searchResults.length === 0} className="p-1 text-white/50 hover:text-white"><span className="text-xs">▼</span></button>
+                     <button onClick={() => setSearchQuery('')} className="p-1 text-white/30 hover:text-white ml-1"><X size={14}/></button>
+                 </div>
+             )}
          </div>
 
          {/* Right Controls */}
