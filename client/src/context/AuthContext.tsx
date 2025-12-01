@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+// Use the pre-configured api instance to ensure consistent Base URL and credentials
+import api from '../services/api';
 import { AuthState, User } from '../types';
 import { deriveKey } from '../utils/encryptionUtils';
 
@@ -41,10 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     encryptionKey: null,
   });
 
-  const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL,
-    withCredentials: true,
-  });
+  // Removed local api creation to use the imported 'api' from services/api.ts
 
   // ---------- CHECK AUTH ----------
   useEffect(() => {
@@ -144,6 +142,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading: false,
         encryptionKey: null,
       });
+      // Force reload or redirect to ensure clean state
+      window.location.href = '/login';
     }
   };
 
