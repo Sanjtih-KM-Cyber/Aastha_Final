@@ -81,6 +81,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFlash, setShowFlash] = useState(false);
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [countdownNum, setCountdownNum] = useState(3);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   
   // Interactions
@@ -437,17 +439,48 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const processMagicTags = (text: string) => {
-    const flashMatch = text.match(/<trigger_color_flash color="([^"]+)"\/>/);
-    if (flashMatch) {
-        const color = flashMatch[1];
-        if (!showFlash) { setShowFlash(true); setTimeout(() => { setTheme(color); setTimeout(() => setShowFlash(false), 500); }, 300); }
+    // Handle <color> tag for theme change with 3-2-1 countdown effect
+    const colorMatch = text.match(/<color>([^<]+)<\/color>/);
+    if (colorMatch) {
+        const color = colorMatch[1];
+        if (!showCountdown) {
+            setShowCountdown(true);
+            setCountdownNum(3);
+
+            // Countdown Logic
+            const timer = setInterval(() => {
+                setCountdownNum(prev => {
+                    if (prev <= 1) {
+                        clearInterval(timer);
+                        setShowCountdown(false);
+                        // Trigger Flash
+                        setShowFlash(true);
+                        setTimeout(() => {
+                            setTheme(color);
+                            setTimeout(() => setShowFlash(false), 500);
+                        }, 300);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        }
     }
+
     if (onOpenWidget) {
-        if (text.match(/<recommend_breathing mode="([^"]+)"\/>/)) onOpenWidget('breathing', { initialMode: text.match(/<recommend_breathing mode="([^"]+)"\/>/)?.[1] });
+        // Updated regex to capture parameters
+        const breathMatch = text.match(/<recommend_breathing mode="([^"]+)"\/>/);
+        if (breathMatch) onOpenWidget('breathing', { initialMode: breathMatch[1] });
+        else if (text.includes('<open_breathing/>')) onOpenWidget('breathing');
+
         if (text.includes('<open_diary/>')) onOpenWidget('diary');
         if (text.includes('<open_mood_tracker/>')) onOpenWidget('mood');
         if (text.includes('<open_pomodoro/>')) onOpenWidget('pomodoro');
-        if (text.includes('<open_soundscape/>')) onOpenWidget('soundscape');
+
+        const soundMatch = text.match(/<open_soundscape preset="([^"]+)"\/>/);
+        if (soundMatch) onOpenWidget('soundscape', { preset: soundMatch[1] });
+        else if (text.includes('<open_soundscape/>')) onOpenWidget('soundscape');
+
         if (text.includes('<open_jam-with-aastha/>')) onOpenWidget('jam');
     }
     return text.replace(/<[^>]*>/g, ''); 
@@ -567,8 +600,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
            style={{ background: `radial-gradient(circle at 50% 30%, ${currentTheme.primaryColor}22 0%, #0a0e17 70%)` }} />
       <div className="absolute inset-0 z-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
 
-      {/* 2. Flash Effect */}
+      {/* 2. Flash Effect & Countdown */}
       <AnimatePresence>
+          {showCountdown && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 pointer-events-none">
+                  <motion.div
+                    key={countdownNum}
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1.5, opacity: 1 }}
+                    exit={{ scale: 2, opacity: 0 }}
+                    className="text-white text-9xl font-bold font-serif"
+                  >
+                      {countdownNum}
+                  </motion.div>
+              </motion.div>
+          )}
           {showFlash && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-white pointer-events-none" />}
       </AnimatePresence>
 

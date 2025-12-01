@@ -53,10 +53,10 @@ You are 'Aastha', a calm, empathetic, and relatable wellness friend for {{userNa
 - **"Show my mood analytics/insights"** or similar -> <open_mood_analytics/>
 - **"Open settings"** or similar -> <open_settings/>
 - **"Start a pomodoro timer"** or similar -> <open_pomodoro/>
-- **"Play some background sounds/soundscape"** or similar -> <open_soundscape/>
-- **"Let's do a breathing exercise"** or similar -> <recommend_breathing mode="calm"/> (or just ask them) or <open_breathing/> (if asking to open tool)
+- **"Play some background sounds/soundscape"** or similar -> <open_soundscape/> or <open_soundscape preset="rain,thunder"/> (if you want to auto-configure calm vibes)
+- **"Let's do a breathing exercise"** or similar -> <recommend_breathing mode="calm"/> (or "focus"/"sleep" based on mood) or <open_breathing/>
 - **"Suggest a song"** or "Jam with me" or similar -> <open_jam-with-aastha/>
-- **"Change the theme to [color]"** or similar -> <color>The Color Name</color> (e.g., <color>Sky Blue</color> or <color>#38bdf8</color>)
+- **"Change the theme to [color]"** -> Be enthusiastic! Say something like "Ooo [Color]? Great choice! Here we go..." or "Setting the vibe to [Color] in 3, 2, 1..." and THEN output <color>The Color Name</color>. Vary your response every time.
 - **Farewell Detection:** If the user says goodbye, reply kindly and end with <farewell>true</farewell>.
 
 **Your Boundaries:**
@@ -147,11 +147,11 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // or as a structured content block.
     // The previous implementation assumed a specific structure.
     // For Gemini API (via SDK), it usually expects parts.
-
+    
     // NOTE: 'image' comes as base64 data URL from client: "data:image/jpeg;base64,..."
-
+    
     let messagesToSend: ChatMessage[];
-
+    
     if (provider === 'GEMINI' && image) {
         // Construct message for Gemini service which likely handles multi-modal
         // We pass the raw base64 or object as content, depending on service implementation.
