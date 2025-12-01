@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { 
   Play, Pause, SkipForward, SkipBack, Repeat, Search, 
-  Disc, Sparkles, Plus, ListMusic, Lock, X, Music2, Globe, Check, Settings
+  Disc, Sparkles, Plus, ListMusic, Lock, X, Music2, Globe, Check, Settings,
+  ArrowUp, ArrowDown, Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
@@ -48,10 +49,12 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [showQueue, setShowQueue] = useState(false);
 
   // Generator State (Multi-Select)
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
+  const [targetDuration, setTargetDuration] = useState<number>(30); // minutes
   
   // Loop Engine State
   const [loopMode, setLoopMode] = useState<LoopMode>('off');
@@ -176,12 +179,68 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           const res = await api.get(`/data/videos/search?q=${encodeURIComponent(query)}`);
           if (res.data && res.data.length > 0) {
               const newTrack = res.data[0];
-              setQueue([newTrack]); 
-              setCurrentIndex(0);
-              loadAndPlay(newTrack);
+
+              setQueue(prev => {
+                // If queue is empty, play immediately
+                if (prev.length === 0) {
+                    setTimeout(() => loadAndPlay(newTrack), 100);
+                    return [newTrack];
+                }
+                // Otherwise append
+                return [...prev, newTrack];
+              });
+
+              if (queue.length === 0) {
+                  setCurrentIndex(0);
+              }
           }
       } catch (e) { console.error("Search failed", e); } 
       finally { setIsSearching(false); setQuery(''); }
+  };
+
+  const removeFromQueue = (index: number) => {
+      setQueue(prev => {
+          const newQueue = [...prev];
+          newQueue.splice(index, 1);
+          return newQueue;
+      });
+      // Adjust current index if needed
+      if (index < currentIndex) {
+          setCurrentIndex(prev => prev - 1);
+      } else if (index === currentIndex) {
+          // If we removed current track, stop or play next?
+          // Simple logic: if queue empty, stop. Else load new current.
+          if (queue.length <= 1) {
+             setIsPlaying(false);
+             setCurrentIndex(0);
+          } else {
+             // Try to stay on index or go to next available
+             const nextIdx = index >= queue.length - 1 ? 0 : index;
+             setCurrentIndex(nextIdx);
+             // We might need to reload player if active track removed
+             // But for now let's keep it simple (user might need to click play)
+          }
+      }
+  };
+
+  const moveTrack = (index: number, direction: 'up' | 'down') => {
+      if (direction === 'up' && index > 0) {
+          setQueue(prev => {
+              const newQ = [...prev];
+              [newQ[index], newQ[index - 1]] = [newQ[index - 1], newQ[index]];
+              return newQ;
+          });
+          if (currentIndex === index) setCurrentIndex(index - 1);
+          else if (currentIndex === index - 1) setCurrentIndex(index);
+      } else if (direction === 'down' && index < queue.length - 1) {
+          setQueue(prev => {
+              const newQ = [...prev];
+              [newQ[index], newQ[index + 1]] = [newQ[index + 1], newQ[index]];
+              return newQ;
+          });
+          if (currentIndex === index) setCurrentIndex(index + 1);
+          else if (currentIndex === index + 1) setCurrentIndex(index);
+      }
   };
 
   const handleGenerateClick = () => {
@@ -205,7 +264,8 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       try {
           const res = await api.post('/ai/generate-vibe', { 
               languages: langsToSend,
-              moods: selectedMoods
+              moods: selectedMoods,
+              duration: targetDuration // Send duration to backend (even if backend logic for duration isn't fully complex yet)
           });
           const tracks = res.data;
           
@@ -306,6 +366,38 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                                     ))}
                                 </div>
                             </div>
+
+                             {/* Duration Slider */}
+                            <div>
+                                <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Session Duration</h4>
+                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                    <div className="flex justify-between text-xs text-white mb-2">
+                                        <span>10 min</span>
+                                        <span className="font-bold text-teal-400">{targetDuration} min</span>
+                                        <span>180+ min</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="10"
+                                        max="400"
+                                        step="10"
+                                        value={targetDuration}
+                                        onChange={(e) => setTargetDuration(parseInt(e.target.value))}
+                                        className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-teal-400 [&::-webkit-slider-thumb]:rounded-full"
+                                    />
+                                    <div className="flex justify-between items-center mt-3">
+                                        <span className="text-[10px] text-white/40">Custom duration (10 - 400 min)</span>
+                                        <input
+                                            type="number"
+                                            min="10"
+                                            max="600"
+                                            value={targetDuration}
+                                            onChange={(e) => setTargetDuration(Math.max(10, Math.min(600, parseInt(e.target.value) || 10)))}
+                                            className="w-16 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-right text-white focus:border-teal-400 focus:outline-none"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="mt-6 pt-4 border-t border-white/10 shrink-0">
@@ -382,40 +474,75 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
         </div>
 
         {/* --- BOTTOM 45%: The Deck --- */}
-        <div className="h-[45%] bg-gray-900 p-6 flex flex-col justify-between relative z-10">
+        <div className="h-[45%] bg-gray-900 p-6 flex flex-col justify-between relative z-10 overflow-hidden">
             
-            {/* Track Info */}
-            <div className="flex justify-between items-end mb-2">
-                <div className="overflow-hidden">
-                    <h3 className="text-white font-bold text-lg truncate pr-4">
-                        {currentTrackData?.title || 'Ready to Jam'}
-                    </h3>
-                    <p className="text-white/40 text-xs font-medium truncate">
-                        {currentTrackData?.artist || 'Select a song or ask Aastha'}
-                    </p>
+            {showQueue ? (
+                <div className="flex-1 overflow-y-auto pr-1 -mr-2 mb-4 custom-scrollbar">
+                     <div className="flex justify-between items-center mb-3 sticky top-0 bg-gray-900 z-10 pb-2 border-b border-white/5">
+                        <h3 className="text-white/60 text-xs font-bold uppercase tracking-widest">Queue ({queue.length})</h3>
+                        <button onClick={() => setShowQueue(false)} className="text-white/40 hover:text-white"><X size={14}/></button>
+                     </div>
+                     {queue.length === 0 ? (
+                         <div className="text-white/20 text-center py-8 text-xs italic">Queue is empty</div>
+                     ) : (
+                         <div className="space-y-2">
+                             {queue.map((track, idx) => (
+                                 <div key={`${track.id}-${idx}`} className={`group flex items-center gap-3 p-2 rounded-lg transition-colors ${currentIndex === idx ? 'bg-white/10' : 'hover:bg-white/5'}`}>
+                                     {currentIndex === idx && isPlaying ? (
+                                         <div className="w-1 h-8 bg-teal-400 rounded-full animate-pulse shrink-0"/>
+                                     ) : (
+                                         <span className="w-4 text-[10px] text-white/30 text-center shrink-0">{idx + 1}</span>
+                                     )}
+                                     <div className="flex-1 min-w-0" onClick={() => { setCurrentIndex(idx); loadAndPlay(track); }}>
+                                         <div className={`text-xs truncate font-medium ${currentIndex === idx ? 'text-white' : 'text-white/70'}`}>{track.title}</div>
+                                         <div className="text-[10px] truncate text-white/40">{track.artist}</div>
+                                     </div>
+                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                         <button onClick={() => moveTrack(idx, 'up')} disabled={idx === 0} className="p-1 text-white/30 hover:text-white disabled:opacity-0"><ArrowUp size={12}/></button>
+                                         <button onClick={() => moveTrack(idx, 'down')} disabled={idx === queue.length - 1} className="p-1 text-white/30 hover:text-white disabled:opacity-0"><ArrowDown size={12}/></button>
+                                         <button onClick={() => removeFromQueue(idx)} className="p-1 text-white/30 hover:text-red-400"><Trash2 size={12}/></button>
+                                     </div>
+                                 </div>
+                             ))}
+                         </div>
+                     )}
                 </div>
-                {loopMode === 'custom' && (
-                    <div className="text-[10px] text-white/30 font-mono text-right">
-                        Loop: <span style={{ color: currentTheme.primaryColor }}>{currentLoopCount}</span>/{loopTarget}
+            ) : (
+                <>
+                    {/* Track Info */}
+                    <div className="flex justify-between items-end mb-2">
+                        <div className="overflow-hidden">
+                            <h3 className="text-white font-bold text-lg truncate pr-4">
+                                {currentTrackData?.title || 'Ready to Jam'}
+                            </h3>
+                            <p className="text-white/40 text-xs font-medium truncate">
+                                {currentTrackData?.artist || 'Select a song or ask Aastha'}
+                            </p>
+                        </div>
+                        {loopMode === 'custom' && (
+                            <div className="text-[10px] text-white/30 font-mono text-right">
+                                Loop: <span style={{ color: currentTheme.primaryColor }}>{currentLoopCount}</span>/{loopTarget}
+                            </div>
+                        )}
                     </div>
-                )}
-            </div>
 
-            {/* Progress Bar */}
-            <div className="mb-6 group">
-                <div className="flex justify-between text-[10px] text-white/30 mb-1 font-mono group-hover:text-white/50 transition-colors">
-                    <span>{formatTime(currentTime)}</span>
-                    <span>{formatTime(duration)}</span>
-                </div>
-                <div className="h-1.5 bg-white/10 rounded-full w-full overflow-hidden relative">
-                    <motion.div 
-                        className="h-full rounded-full"
-                        style={{ width: `${(currentTime / (duration || 1)) * 100}%`, backgroundColor: currentTheme.primaryColor }}
-                    />
-                </div>
-            </div>
+                    {/* Progress Bar */}
+                    <div className="mb-6 group">
+                        <div className="flex justify-between text-[10px] text-white/30 mb-1 font-mono group-hover:text-white/50 transition-colors">
+                            <span>{formatTime(currentTime)}</span>
+                            <span>{formatTime(duration)}</span>
+                        </div>
+                        <div className="h-1.5 bg-white/10 rounded-full w-full overflow-hidden relative">
+                            <motion.div
+                                className="h-full rounded-full"
+                                style={{ width: `${(currentTime / (duration || 1)) * 100}%`, backgroundColor: currentTheme.primaryColor }}
+                            />
+                        </div>
+                    </div>
+                </>
+            )}
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between shrink-0">
                 {/* Loop Control */}
                 <div className="flex items-center gap-2">
                     <button 
@@ -427,16 +554,13 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                         {loopMode === 'one' && <span className="absolute text-[8px] font-bold ml-[-6px] mt-[6px]">1</span>}
                         {loopMode === 'custom' && <span className="absolute text-[8px] font-bold ml-[-6px] mt-[6px]">*</span>}
                     </button>
-                    {/* Custom Loop Input */}
+                    {/* Custom Loop Input - Upgraded */}
                     {loopMode === 'custom' && (
-                        <motion.input 
-                            initial={{ width: 0, opacity: 0 }}
-                            animate={{ width: 40, opacity: 1 }}
-                            type="number" min="2" max="100" 
-                            value={loopTarget}
-                            onChange={(e) => setLoopTarget(Math.max(2, Math.min(100, parseInt(e.target.value) || 2)))}
-                            className="bg-white/5 border border-white/10 rounded text-center text-xs text-white h-8 focus:outline-none focus:border-white/30"
-                        />
+                         <div className="flex items-center bg-white/5 rounded-lg border border-white/10 h-8">
+                             <button onClick={() => setLoopTarget(p => Math.max(2, p - 1))} className="px-2 text-white/50 hover:text-white text-xs font-bold">-</button>
+                             <span className="text-[10px] text-white font-mono w-4 text-center">{loopTarget}</span>
+                             <button onClick={() => setLoopTarget(p => Math.min(100, p + 1))} className="px-2 text-white/50 hover:text-white text-xs font-bold">+</button>
+                         </div>
                     )}
                 </div>
 
@@ -461,9 +585,9 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                 </div>
 
                 {/* Queue / Misc */}
-                <button className="p-2 text-white/30 hover:text-white transition-colors relative">
+                <button onClick={() => setShowQueue(!showQueue)} className={`p-2 transition-colors relative ${showQueue ? 'text-white bg-white/10 rounded-lg' : 'text-white/30 hover:text-white'}`}>
                     <ListMusic size={20} />
-                    <span className="absolute -top-1 -right-1 bg-white/10 text-[9px] w-4 h-4 flex items-center justify-center rounded-full text-white/70">{queue.length}</span>
+                    {!showQueue && <span className="absolute -top-1 -right-1 bg-white/10 text-[9px] w-4 h-4 flex items-center justify-center rounded-full text-white/70">{queue.length}</span>}
                 </button>
             </div>
 

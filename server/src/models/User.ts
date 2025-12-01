@@ -21,7 +21,8 @@ export interface IUser extends Document {
 
   // --- Indexed/Plain Fields (Used for Login, Display, or Features) ---
   name: string; // Plain text name for display
-  email: string; // Plain text email for lookup/key derivation
+  email?: string; // DEPRECATED: Plain text email. Used for legacy lookup.
+  emailHash?: string; // SHA-256 Hash of email for lookup
   username?: string; // Plain text username for lookup
   streak: number; // Feature tracking
   lastVisit: Date; // Feature tracking
@@ -65,7 +66,8 @@ const paymentRecordSchema = new Schema({
 const userSchema = new Schema<IUser>({
   // --- PII Index & Display Fields ---
   name: { type: String, required: true },
-  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  email: { type: String, required: false, lowercase: true, trim: true }, // Not unique anymore, handled by hash
+  emailHash: { type: String, required: false, unique: true, sparse: true },
   username: { type: String, unique: true, sparse: true, trim: true, lowercase: true },
   
   // --- Encrypted Storage Fields ---

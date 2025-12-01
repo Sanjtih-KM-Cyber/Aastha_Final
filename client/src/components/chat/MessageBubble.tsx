@@ -20,11 +20,29 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onReply,
   onCopy,
   searchQuery,
-  isStreaming
-}) => {
+  isStreaming,
+  isCurrentMatch
+}: MessageBubbleProps & { isCurrentMatch?: boolean }) => {
   const isUser = role === 'user';
   const { currentTheme } = useTheme();
   const [isHovered, setIsHovered] = useState(false);
+
+  // Highlighting logic
+  const renderContent = (text: string) => {
+      if (!searchQuery) return text;
+
+      const parts = text.split(new RegExp(`(${searchQuery})`, 'gi'));
+      return parts.map((part, index) =>
+          part.toLowerCase() === searchQuery.toLowerCase() ? (
+              <span
+                  key={index}
+                  className={`px-0.5 rounded font-bold text-black transition-colors duration-500 ${isCurrentMatch ? 'bg-yellow-400 scale-110 inline-block px-1' : 'bg-yellow-200/50'}`}
+              >
+                  {part}
+              </span>
+          ) : part
+      );
+  };
 
   // Format time
   const timeString = timestamp
@@ -97,8 +115,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         >
           <div className="space-y-1">
             {displayContent.split('\n').map((line, i) => (
-              <p key={i} className="my-0 leading-snug">
-                {line}
+              <p key={i} className="my-0 leading-snug break-words whitespace-pre-wrap">
+                {renderContent(line)}
               </p>
             ))}
           </div>
