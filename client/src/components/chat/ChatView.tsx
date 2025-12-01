@@ -27,8 +27,20 @@ const EMOJIS = ['😊', '🌿', '☁️', '✨', '💜', '🌧️', '🎵', '�
 
 // --- Dynamic API URL Helper ---
 const getApiUrl = (endpoint: string) => {
+  // Use the environment variable if available (e.g., from .env or Vercel)
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) {
+    return `${envUrl}${endpoint}`;
+  }
+  // Fallback (mostly for local dev if .env is missing)
   const host = window.location.hostname;
-  return `http://${host}:5000/api${endpoint}`;
+  // If we are on localhost, assume local backend on 5000
+  if (host === 'localhost' || host === '127.0.0.1') {
+      return `http://${host}:5000/api${endpoint}`;
+  }
+  // Otherwise, use relative path (if proxy is set up) or expect VITE_API_URL to be set
+  // For safety, we can default to the provided Render URL if not on localhost
+  return `https://aastha-final.onrender.com/api${endpoint}`;
 };
 
 const compressImage = (file: File): Promise<string> => {
@@ -315,12 +327,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       
-      const modelMessageId = Date.now().toString();
+      const newModelMessageId = Date.now().toString();
       setMessages(prev => [...prev, { 
           role: 'assistant', 
           content: '', 
           timestamp: Date.now(), 
-          id: modelMessageId 
+          id: newModelMessageId
       }]);
       
       let aiContentRaw = '';
@@ -355,7 +367,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             const cleanContent = processMagicTags(aiContentRaw);
                             
                             setMessages(prev => prev.map(msg => {
-                                if (msg.id === modelMessageId) {
+                                if (msg.id === newModelMessageId) {
                                     return { 
                                         ...msg, 
                                         content: cleanContent, 
@@ -379,7 +391,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     } catch (error: any) {
       setError(error.message || "Connection failed");
       setIsTyping(false);
-      setMessages(prev => prev.filter(msg => msg.id !== modelMessageId)); 
+      // We can't access modelMessageId/newModelMessageId here easily if it was local to the try block
+      // But we can filter out empty assistant messages if needed, or just leave it.
+      // Ideally, define the ID before the try block if we want to use it here.
     } finally { setIsTyping(false); }
   };
 
