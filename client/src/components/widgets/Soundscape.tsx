@@ -35,7 +35,7 @@ const SOUNDS = [
   { id: 'birds', label: 'Birds', color: '#FACC15', path: '/sounds/birds.mp3' }
 ];
 
-export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
+export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex, onFocus, preset }) => {
   const { currentTheme } = useTheme();
   
   // State
