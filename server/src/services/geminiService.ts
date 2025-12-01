@@ -250,24 +250,30 @@ export const getVibePlaylist = async (chatHistory: any[], languages: string[], u
         const moodOverride = userMoods.length > 0 
             ? `The user explicitly feels: ${userMoods.join(', ')}. Prioritize this over the chat analysis.` 
             : "";
-
+        
         // Calculate song count based on duration (approx 4 mins per song)
         // Default to 5 songs if no duration
         const targetCount = duration ? Math.ceil(duration / 4) : 5;
         // Cap it at reasonable limits to prevent context overflow or timeouts
-        const safeCount = Math.min(Math.max(targetCount, 3), 30);
+        const safeCount = Math.min(Math.max(targetCount, 3), 50); // Increased cap to 50 for longer sessions
+        
+        const randomSeed = Math.floor(Math.random() * 10000); // Add randomness
 
         const response = await client.models.generateContent({
             model: 'gemini-2.0-flash',
             contents: `
-                Analyze the recent chat history to understand the user's emotional state (e.g., Happy, Sad, Stressed, Nostalgic).
+                Analyze the recent chat history to understand the user's emotional state.
                 ${moodOverride}
                 
-                Based on this vibe, create a playlist of ${safeCount} distinct songs.
+                Based on this vibe, create a unique and curated playlist of EXACTLY ${safeCount} distinct songs to last for ${duration || 20} minutes.
+                Randomness Seed: ${randomSeed} (Use this to vary selections)
+                
                 RULES:
                 1. Mix songs from these languages: ${langString}.
                 2. Ensure the mood matches the user's state perfectly.
-                3. Return ONLY a JSON array of strings in "Song Title - Artist" format.
+                3. You MUST provide ${safeCount} songs. Do not provide less.
+                4. AVOID repeating the most generic top-chart songs. Dig deeper for hidden gems and varied artists.
+                5. Return ONLY a JSON array of strings in "Song Title - Artist" format.
                 
                 Chat Context:
                 ${textData}

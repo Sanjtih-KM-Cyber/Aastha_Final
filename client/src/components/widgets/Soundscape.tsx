@@ -21,6 +21,7 @@ interface SoundscapeProps {
   onClose: () => void;
   zIndex?: number;
   onFocus?: () => void;
+  preset?: string; // e.g. "rain,thunder"
 }
 
 const SOUNDS = [
@@ -30,7 +31,7 @@ const SOUNDS = [
   { id: 'ocean', label: 'Ocean', color: '#2DD4BF', path: '/sounds/ocean.mp3' },
   { id: 'night', label: 'Night', color: '#818CF8', path: '/sounds/night.mp3' },
   { id: 'wind', label: 'Wind', color: '#94A3B8', path: '/sounds/wind.mp3' },
-  { id: 'thunder', label: 'Storm', color: '#A78BFA', path: '/sounds/thunder.mp3' },
+  { id: 'thunder', label: 'Storm', color: '#A78BFA', path: '/sounds/storm2.mp3' }, // Fixed path
   { id: 'birds', label: 'Birds', color: '#FACC15', path: '/sounds/birds.mp3' }
 ];
 
@@ -115,6 +116,30 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
       }
     });
   }, [activeLoops, masterVolume, previewId]);
+
+  // Auto-configure from preset
+  useEffect(() => {
+      if (isOpen && preset) {
+          const soundsToActivate = preset.split(',').map(s => s.trim().toLowerCase());
+
+          setActiveLoops(prev => {
+              const newState = { ...prev };
+              // Deactivate others? Maybe not, just additive for now or reset?
+              // Let's reset to ensure "perfect vibe"
+              Object.keys(newState).forEach(k => delete newState[k]);
+
+              soundsToActivate.forEach(soundId => {
+                  // Find ID by partial match or exact match
+                  const match = SOUNDS.find(s => s.id === soundId || s.label.toLowerCase() === soundId);
+                  if (match) {
+                      newState[match.id] = 0.5; // Default volume
+                      getAudio(match.id); // Preload
+                  }
+              });
+              return newState;
+          });
+      }
+  }, [isOpen, preset]);
 
   // Cleanup on unmount or close
   useEffect(() => {

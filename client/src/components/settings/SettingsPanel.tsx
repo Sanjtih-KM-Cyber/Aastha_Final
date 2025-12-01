@@ -28,7 +28,7 @@ declare global {
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState('appearance');
   const { currentTheme, setTheme, setWallpaper, wallpaper } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -49,6 +49,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   // Security (Diary Reset)
   const [securityAnswer, setSecurityAnswer] = useState('');
   const [newDiaryPassword, setNewDiaryPassword] = useState('');
+  const [oldDiaryPassword, setOldDiaryPassword] = useState(''); // For change password
   const [resetStep, setResetStep] = useState(0); // 0: init, 1: answer, 2: password
   const [securityQuestion, setSecurityQuestion] = useState('');
   
@@ -118,15 +119,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   const saveProfile = async () => {
       try {
           // The backend route is /users/profile and it accepts PUT
-          await api.put('/users/profile', { name: editName, username: editUsername, avatar: newAvatar });
+          const res = await api.put('/users/profile', { name: editName, username: editUsername, avatar: newAvatar });
+          // Instant Update
+          if (res.data) {
+              updateUser(res.data);
+          }
           setIsEditingProfile(false);
-          // Wait for a second for the DB to update then reload
-          // Ideally we should update the AuthContext state directly, but a reload is a safe fallback for now
-          // to ensure the new avatar is fetched on 'me' call.
-          setTimeout(() => window.location.reload(), 500);
-      } catch (e) {
+      } catch (e) { 
           console.error(e);
-          alert("Failed to update profile.");
+          alert("Failed to update profile."); 
       }
   };
 
@@ -162,6 +163,17 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
           setNewDiaryPassword('');
       } catch (e) {
           alert("Failed to reset diary.");
+      }
+  };
+
+  const handleChangeDiaryPassword = async () => {
+      try {
+          await api.post('/users/change-diary-password', { oldPassword: oldDiaryPassword, newPassword: newDiaryPassword });
+          alert("Diary password updated successfully.");
+          setOldDiaryPassword('');
+          setNewDiaryPassword('');
+      } catch (e) {
+          alert("Failed to update password. Check your old password.");
       }
   };
 
@@ -340,14 +352,27 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                   <div className="space-y-8 animate-fade-in">
                       <section>
                           <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Diary Security</h3>
+                          
+                          {/* Change Password */}
+                          <div className="p-6 bg-white/5 rounded-2xl border border-white/5 mb-6">
+                              <h4 className="text-lg font-medium text-white mb-2">Change Diary Password</h4>
+                              <p className="text-sm text-white/60 mb-4">Update your password without losing your data.</p>
+                              <div className="space-y-3">
+                                  <input type="password" value={oldDiaryPassword} onChange={e => setOldDiaryPassword(e.target.value)} placeholder="Old Password" className="w-full bg-black/40 border border-white/20 rounded p-2 text-white text-sm" />
+                                  <input type="password" value={newDiaryPassword} onChange={e => setNewDiaryPassword(e.target.value)} placeholder="New Password" className="w-full bg-black/40 border border-white/20 rounded p-2 text-white text-sm" />
+                                  <button onClick={handleChangeDiaryPassword} disabled={!oldDiaryPassword || !newDiaryPassword} className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg transition-colors text-sm disabled:opacity-50">Update Password</button>
+                              </div>
+                          </div>
+
+                          {/* Reset Password */}
                           <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
-                              <h4 className="text-lg font-medium text-white mb-2">Reset Diary Password</h4>
-                              <p className="text-sm text-white/60 mb-6">Forgot your diary password? You can reset it using your security question. <br/><span className="text-red-400">Warning: This will wipe your existing diary entries as they cannot be decrypted without the old password.</span></p>
-
+                              <h4 className="text-lg font-medium text-white mb-2">Forgot Password (Nuclear Reset)</h4>
+                              <p className="text-sm text-white/60 mb-6">Use this if you cannot remember your old password. <br/><span className="text-red-400">Warning: This will wipe your existing diary entries.</span></p>
+                              
                               {resetStep === 0 && (
-                                  <button onClick={handleInitiateDiaryReset} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors">Start Reset Process</button>
+                                  <button onClick={handleInitiateDiaryReset} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors text-sm">Start Recovery Process</button>
                               )}
-
+                              
                               {resetStep === 1 && (
                                   <div className="space-y-4">
                                       <p className="text-teal-400 font-medium">{securityQuestion}</p>
@@ -355,7 +380,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                                       <button onClick={handleVerifyAnswer} className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg">Verify</button>
                                   </div>
                               )}
-
+                              
                               {resetStep === 2 && (
                                   <div className="space-y-4">
                                       <input type="password" value={newDiaryPassword} onChange={e => setNewDiaryPassword(e.target.value)} placeholder="New Diary Password" className="w-full bg-black/40 border border-white/20 rounded p-2 text-white" />
