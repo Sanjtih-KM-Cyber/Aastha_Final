@@ -14,6 +14,8 @@ connectDB();
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 // Accept a list of origins (add your domains)
 const allowedOrigins = [
   'http://localhost:3000',
@@ -45,7 +47,7 @@ const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: tr
 app.get('/health', (_req: Request, res: Response) => res.json({ status: 'ok', ts: new Date() }));
 
 // Mount routers
-app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/users', authLimiter, authRoutes);
 app.use('/api/chat', chatLimiter, chatRoutes);
 app.use('/api/ai', apiLimiter, aiRoutes);
 app.use('/api/data', apiLimiter, dataRoutes);
