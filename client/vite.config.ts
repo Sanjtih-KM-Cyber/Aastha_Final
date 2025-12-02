@@ -21,3 +21,4 @@ export default defineConfig(({ mode }) => {
       }
     };
 });
+// Force rebuild Mon Dec  1 20:29:30 UTC 2025
