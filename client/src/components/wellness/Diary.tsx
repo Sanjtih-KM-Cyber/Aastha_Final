@@ -38,6 +38,7 @@ interface CalendarDay {
 
 // --- Helper Functions ---
 const toDateString = (date: Date) => {
+  // Use a reliable conversion that respects the local Date object's state
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
@@ -313,11 +314,13 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
     
     for (let i = 0; i < paddingDays; i++) resultDays.push(null);
 
+    const todayStr = toDateString(new Date());
+
     for (let d = 1; d <= lastDay.getDate(); d++) {
        const dateObj = new Date(year, month, d);
        const dateStr = toDateString(dateObj);
        const hasEntry = !!entriesMap[dateStr];
-       const isToday = toDateString(new Date()) === dateStr;
+       const isToday = todayStr === dateStr;
        const isSelected = toDateString(activeDate) === dateStr;
        
        resultDays.push({
