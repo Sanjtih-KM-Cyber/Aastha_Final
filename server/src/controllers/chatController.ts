@@ -147,9 +147,9 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // or as a structured content block.
     // The previous implementation assumed a specific structure.
     // For Gemini API (via SDK), it usually expects parts.
-
+    
     // NOTE: 'image' comes as base64 data URL from client: "data:image/jpeg;base64,..."
-
+    
     let messagesToSend: ChatMessage[];
     
     if (provider === 'GEMINI' && image) {
@@ -168,7 +168,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             { role: 'user', content: textContent }
         ];
     }
-
+    
     // (Removed this block as it is replaced by logic above)
 
     // 4. Send Metadata to Client

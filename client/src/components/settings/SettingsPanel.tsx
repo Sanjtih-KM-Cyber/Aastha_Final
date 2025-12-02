@@ -125,9 +125,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
               updateUser(res.data);
           }
           setIsEditingProfile(false);
-      } catch (e) {
+      } catch (e) { 
           console.error(e);
-          alert("Failed to update profile.");
+          alert("Failed to update profile."); 
       }
   };
 
@@ -352,7 +352,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                   <div className="space-y-8 animate-fade-in">
                       <section>
                           <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Diary Security</h3>
-
+                          
                           {/* Change Password */}
                           <div className="p-6 bg-white/5 rounded-2xl border border-white/5 mb-6">
                               <h4 className="text-lg font-medium text-white mb-2">Change Diary Password</h4>
@@ -368,11 +368,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                           <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
                               <h4 className="text-lg font-medium text-white mb-2">Forgot Password (Nuclear Reset)</h4>
                               <p className="text-sm text-white/60 mb-6">Use this if you cannot remember your old password. <br/><span className="text-red-400">Warning: This will wipe your existing diary entries.</span></p>
-
+                              
                               {resetStep === 0 && (
                                   <button onClick={handleInitiateDiaryReset} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors text-sm">Start Recovery Process</button>
                               )}
-
+                              
                               {resetStep === 1 && (
                                   <div className="space-y-4">
                                       <p className="text-teal-400 font-medium">{securityQuestion}</p>
@@ -380,7 +380,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                                       <button onClick={handleVerifyAnswer} className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg">Verify</button>
                                   </div>
                               )}
-
+                              
                               {resetStep === 2 && (
                                   <div className="space-y-4">
                                       <input type="password" value={newDiaryPassword} onChange={e => setNewDiaryPassword(e.target.value)} placeholder="New Diary Password" className="w-full bg-black/40 border border-white/20 rounded p-2 text-white" />
