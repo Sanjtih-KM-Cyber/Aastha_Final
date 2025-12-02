@@ -86,7 +86,7 @@ export async function* streamGemini(history: ChatMessage[], systemPrompt: string
     if (parts.length > 0) contents.push({ role, parts });
   }
 
-  const modelName = hasImage ? 'gemini-2.5-flash-image' : 'gemini-2.5-flash';
+  const modelName = hasImage ? 'gemini-1.5-flash' : 'gemini-1.5-flash';
   
   try {
     const client = getGeminiClient(isPro);
@@ -119,7 +119,7 @@ export const extractThemeFromImage = async (base64Image: string): Promise<any> =
   
   try {
     const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-1.5-flash',
       contents: {
         parts: [
           { inlineData: { mimeType: matches[1], data: matches[2] } },
@@ -152,7 +152,7 @@ export const getMusicRecommendation = async (mood: string, userHistory: string[]
   
   try {
     const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash',
       contents: `Suggest 3 soothing songs for someone feeling "${mood}". 
                  History: ${userHistory.join(', ')}. 
                  Provide YouTube-searchable titles.`,
