@@ -205,7 +205,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
               currency: "INR",
               name: "Aastha Wellness",
               description: "Early Bird Pro Access",
-              image: "https://i.ibb.co/5GzXwzJ/logo.png", // Fallback logo or app logo
+              image: "https://placehold.co/256?text=Aastha", // Fallback logo or app logo
               order_id: orderId,
               handler: async (response: any) => {
                   try {
@@ -267,7 +267,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                     </button>
                 ))}
               </div>
-              <button onClick={() => { logout(); window.location.reload(); }} className="mt-auto flex items-center gap-3 px-4 py-3 text-red-300 hover:text-red-200 hover:bg-red-500/10 rounded-xl transition-all"><span className="text-sm font-medium">Log Out</span></button>
+              <button onClick={() => logout()} className="mt-auto flex items-center gap-3 px-4 py-3 text-red-300 hover:text-red-200 hover:bg-red-500/10 rounded-xl transition-all"><span className="text-sm font-medium">Log Out</span></button>
             </div>
 
             <div className="flex-1 p-8 overflow-y-auto relative custom-scrollbar">
