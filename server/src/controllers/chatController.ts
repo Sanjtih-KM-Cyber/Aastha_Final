@@ -238,10 +238,14 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
     try {
         const chatSession = await Chat.findOne({ user: req.user._id }).sort({ updatedAt: -1 });
         
-        const messages = chatSession ? chatSession.messages.map(m => ({
-            ...(m as any).toObject(),
-            content: decrypt(m.content)
-        })).slice(-50) : [];
+        const messages = chatSession ? chatSession.messages.map(m => {
+            const obj = (m as any).toObject();
+            return {
+                ...obj,
+                id: obj._id, // Explicitly map _id to id for frontend
+                content: decrypt(m.content)
+            };
+        }).slice(-50) : [];
         
         (res as any).json(messages);
     } catch (error) {
