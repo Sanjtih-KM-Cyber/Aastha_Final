@@ -22,6 +22,9 @@ export const Sanctuary: React.FC = () => {
     mood: false,
   });
 
+  // State for widget configurations (passed from Chat)
+  const [widgetConfigs, setWidgetConfigs] = useState<Record<string, any>>({});
+
   // State to track z-indices of windows
   const [zIndices, setZIndices] = useState<Record<string, number>>({
     diary: 20,
@@ -55,6 +58,9 @@ export const Sanctuary: React.FC = () => {
   };
 
   const openWidget = (key: string, config?: any) => {
+    if (config) {
+        setWidgetConfigs(prev => ({ ...prev, [key]: config }));
+    }
     if (!widgets[key]) {
         setWidgets(prev => ({ ...prev, [key]: true }));
         bringToFront(key);
@@ -122,6 +128,7 @@ export const Sanctuary: React.FC = () => {
                 onClose={() => closeWidget('soundscape')} 
                 zIndex={zIndices.soundscape}
                 onFocus={() => bringToFront('soundscape')}
+                preset={widgetConfigs.soundscape?.preset}
             />
           </div>
 
@@ -131,7 +138,7 @@ export const Sanctuary: React.FC = () => {
                 onClose={() => closeWidget('breathing')} 
                 zIndex={zIndices.breathing}
                 onFocus={() => bringToFront('breathing')}
-                initialMode="Box"
+                initialMode={widgetConfigs.breathing?.initialMode || "Box"}
             />
           </div>
 

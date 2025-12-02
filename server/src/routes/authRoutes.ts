@@ -10,6 +10,7 @@ import {
   completeReset,
   verifySecurityAnswer,
   resetDiaryNuclear,
+  changeDiaryPassword,
   updateProfile,
   upgradeToPro
 } from '../controllers/authController';
@@ -39,5 +40,6 @@ router.post('/reset-complete', completeReset);
 // Diary reset
 router.post('/verify-security-answer', protect, verifySecurityAnswer);
 router.post('/reset-diary-nuclear', protect, resetDiaryNuclear);
+router.post('/change-diary-password', protect, changeDiaryPassword);
 
 export default router;

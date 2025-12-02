@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+// Use the pre-configured api instance to ensure consistent Base URL and credentials
+import api from '../services/api';
 import { AuthState, User } from '../types';
 import { deriveKey } from '../utils/encryptionUtils';
 
@@ -29,6 +30,7 @@ interface AuthContextType extends AuthState {
   setEncryptionKeyManual: (key: string) => void;
   getUserDisplayName: () => string;
   getUserDisplayEmail: () => string;
+  updateUser: (data: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -41,10 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     encryptionKey: null,
   });
 
-  const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL,
-    withCredentials: true,
-  });
+  // Removed local api creation to use the imported 'api' from services/api.ts
 
   // ---------- CHECK AUTH ----------
   useEffect(() => {
@@ -122,6 +121,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setState(prev => ({ ...prev, encryptionKey: key }));
   };
 
+  // ---------- UPDATE USER (INSTANT) ----------
+  const updateUser = (data: Partial<User>) => {
+      setState(prev => ({
+          ...prev,
+          user: prev.user ? { ...prev.user, ...data } : null
+      }));
+  };
+
   // ---------- DISPLAY HELPERS ----------
   const getUserDisplayName = useCallback(() => {
     if (!state.user) return "Guest";
@@ -144,6 +151,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading: false,
         encryptionKey: null,
       });
+      // Force reload or redirect to ensure clean state
+      window.location.href = '/login';
     }
   };
 
@@ -156,7 +165,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unlockSanctuary,
       setEncryptionKeyManual,
       getUserDisplayName,
-      getUserDisplayEmail
+      getUserDisplayEmail,
+      updateUser
     }}>
       {children}
     </AuthContext.Provider>
