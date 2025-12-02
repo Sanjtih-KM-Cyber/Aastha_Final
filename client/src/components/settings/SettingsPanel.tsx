@@ -205,7 +205,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
               currency: "INR",
               name: "Aastha Wellness",
               description: "Early Bird Pro Access",
-              image: "https://i.ibb.co/5GzXwzJ/logo.png", // Fallback logo or app logo
+              image: "https://placehold.co/256?text=Aastha", // Fallback logo or app logo
               order_id: orderId,
               handler: async (response: any) => {
                   try {
