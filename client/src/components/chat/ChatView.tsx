@@ -341,7 +341,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         finalContent = `[Image Attached] ${finalContent}`;
     }
 
-    const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now() };
+    const userMsg: ChatMessage = {
+        role: 'user',
+        content: finalContent,
+        timestamp: Date.now(),
+        id: `local-${Date.now()}` // Assign ID for search
+    };
     setMessages(prev => [...prev, userMsg]);
     
     setInput(''); setAttachedImage(null); setShowEmojiPicker(false); setIsTyping(true); setError(null);
@@ -369,6 +374,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       const decoder = new TextDecoder();
       
       const newModelMessageId = Date.now().toString();
+      // Clear processed tags for new message
+      processedTagsRef.current.clear();
+
       setMessages(prev => [...prev, { 
           role: 'assistant', 
           content: '', 
@@ -439,50 +447,65 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const processMagicTags = (text: string) => {
-    // Handle <color> tag for theme change with 3-2-1 countdown effect
-    const colorMatch = text.match(/<color>([^<]+)<\/color>/);
-    if (colorMatch) {
-        const color = colorMatch[1];
-        if (!showCountdown) {
-            setShowCountdown(true);
-            setCountdownNum(3);
+    // Scan for tags
+    const tags = text.match(/<[^>]+>/g);
+    if (tags) {
+        tags.forEach(tag => {
+            if (processedTagsRef.current.has(tag)) return; // Skip already processed
 
-            // Countdown Logic
-            const timer = setInterval(() => {
-                setCountdownNum(prev => {
-                    if (prev <= 1) {
-                        clearInterval(timer);
-                        setShowCountdown(false);
-                        // Trigger Flash
-                        setShowFlash(true);
-                        setTimeout(() => {
-                            setTheme(color);
-                            setTimeout(() => setShowFlash(false), 500);
-                        }, 300);
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
-        }
+            // Handle <color>
+            if (tag.includes('<color>')) {
+                 const match = tag.match(/<color>([^<]+)<\/color>/);
+                 if (match) {
+                     const color = match[1];
+                     if (!showCountdown) {
+                        setShowCountdown(true);
+                        setCountdownNum(3);
+                        const timer = setInterval(() => {
+                            setCountdownNum(prev => {
+                                if (prev <= 1) {
+                                    clearInterval(timer);
+                                    setShowCountdown(false);
+                                    setShowFlash(true);
+                                    setTimeout(() => {
+                                        setTheme(color);
+                                        setTimeout(() => setShowFlash(false), 500);
+                                    }, 300);
+                                    return 0;
+                                }
+                                return prev - 1;
+                            });
+                        }, 1000);
+                     }
+                 }
+            }
+
+            if (onOpenWidget) {
+                // Breathing
+                if (tag.includes('<recommend_breathing')) {
+                     const match = tag.match(/mode="([^"]+)"/);
+                     onOpenWidget('breathing', { initialMode: match ? match[1] : undefined });
+                } else if (tag.includes('<open_breathing')) {
+                     onOpenWidget('breathing');
+                }
+
+                // Soundscape
+                if (tag.includes('<open_soundscape')) {
+                    const match = tag.match(/preset="([^"]+)"/);
+                    onOpenWidget('soundscape', { preset: match ? match[1] : undefined });
+                }
+
+                if (tag.includes('<open_diary')) onOpenWidget('diary');
+                if (tag.includes('<open_mood_tracker')) onOpenWidget('mood');
+                if (tag.includes('<open_pomodoro')) onOpenWidget('pomodoro');
+                if (tag.includes('<open_jam-with-aastha')) onOpenWidget('jam');
+            }
+
+            // Mark as processed
+            processedTagsRef.current.add(tag);
+        });
     }
 
-    if (onOpenWidget) {
-        // Updated regex to capture parameters
-        const breathMatch = text.match(/<recommend_breathing mode="([^"]+)"\/>/);
-        if (breathMatch) onOpenWidget('breathing', { initialMode: breathMatch[1] });
-        else if (text.includes('<open_breathing/>')) onOpenWidget('breathing');
-
-        if (text.includes('<open_diary/>')) onOpenWidget('diary');
-        if (text.includes('<open_mood_tracker/>')) onOpenWidget('mood');
-        if (text.includes('<open_pomodoro/>')) onOpenWidget('pomodoro');
-
-        const soundMatch = text.match(/<open_soundscape preset="([^"]+)"\/>/);
-        if (soundMatch) onOpenWidget('soundscape', { preset: soundMatch[1] });
-        else if (text.includes('<open_soundscape/>')) onOpenWidget('soundscape');
-
-        if (text.includes('<open_jam-with-aastha/>')) onOpenWidget('jam');
-    }
     return text.replace(/<[^>]*>/g, ''); 
   };
 
