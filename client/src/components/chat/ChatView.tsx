@@ -93,7 +93,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<string[]>([]); // Array of Message IDs
+  const [searchResults, setSearchResults] = useState<{ msgId: string, matchIndex: number }[]>([]); // Flattened list of all matches
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
   // Voice & Dictation
@@ -114,6 +114,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processedTagsRef = useRef<Set<string>>(new Set());
 
   // 1. Sync User Credits
   useEffect(() => {
@@ -544,10 +545,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   // --- Search Logic ---
   useEffect(() => {
       if (searchQuery.trim()) {
-          const hits = messages
-              .filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
-              .map(m => m.id || '')
-              .filter(id => id); // Ensure IDs exist
+          const hits: { msgId: string, matchIndex: number }[] = [];
+
+          messages.forEach(msg => {
+             const lowerContent = msg.content.toLowerCase();
+             const lowerQuery = searchQuery.toLowerCase();
+
+             // Count occurrences in this message
+             const parts = lowerContent.split(lowerQuery);
+             // If split results in N parts, there are N-1 matches
+             const matchCount = parts.length - 1;
+
+             if (matchCount > 0 && msg.id) {
+                 for (let i = 0; i < matchCount; i++) {
+                     hits.push({ msgId: msg.id, matchIndex: i });
+                 }
+             }
+          });
+
           setSearchResults(hits);
           setCurrentMatchIndex(hits.length > 0 ? hits.length - 1 : 0); // Start at latest
       } else {
@@ -559,8 +574,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   // Find target ID for scrolling
   useEffect(() => {
       if (searchResults.length > 0 && searchResults[currentMatchIndex]) {
-          const id = searchResults[currentMatchIndex];
-          const el = document.getElementById(`msg-${id}`);
+          const { msgId } = searchResults[currentMatchIndex];
+          const el = document.getElementById(`msg-${msgId}`);
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
   }, [currentMatchIndex, searchResults]);
@@ -579,8 +594,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
           // Provide an ID for scrolling if it doesn't have one (generate on fly if needed, but safer to use state)
           const domId = `msg-${msg.id || idx}`;
-          // Check if this message is the current search match
-          const isCurrentMatch = searchResults[currentMatchIndex] === msg.id && searchQuery.length > 0;
+
+          // Determine if this message contains the *currently active* match
+          // and which specific instance of the word it is
+          let currentMatchIndexInMessage = -1;
+
+          if (searchResults.length > 0) {
+              const currentMatch = searchResults[currentMatchIndex];
+              if (currentMatch && currentMatch.msgId === msg.id) {
+                  currentMatchIndexInMessage = currentMatch.matchIndex;
+              }
+          }
 
           const isCurrentlyStreaming = isTyping && msg.role === 'assistant' && idx === messages.length - 1;
 
@@ -601,7 +625,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         onReply={() => handleReply(msg.content)} 
                         onCopy={copyToClipboard}
                         searchQuery={searchQuery}
-                        isCurrentMatch={isCurrentMatch}
+                        currentMatchIndex={currentMatchIndexInMessage}
                         isStreaming={isCurrentlyStreaming} 
                     />
                     {msg.warning && (
