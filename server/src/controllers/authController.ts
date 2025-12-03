@@ -63,7 +63,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 
     const user = await User.create({
       name: name, // Plain
-      // email: cleanEmail, // REMOVED PLAIN EMAIL
+      email: cleanEmail, // Storing plain email to satisfy legacy unique index constraints
       emailHash: emailHash, // SHA-256 Hash
       username: cleanUsername, // Plain Index
       emailEncrypted: encrypt(email),
