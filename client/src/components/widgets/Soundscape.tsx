@@ -35,7 +35,7 @@ const SOUNDS = [
   { id: 'birds', label: 'Birds', color: '#FACC15', path: '/sounds/birds.mp3' }
 ];
 
-export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex, onFocus, preset }) => {
+export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex, onFocus, preset = '' }) => {
   const { currentTheme } = useTheme();
   
   // State
@@ -119,7 +119,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
 
   // Auto-configure from preset
   useEffect(() => {
-      if (isOpen && preset) {
+      if (isOpen && preset && typeof preset === 'string') {
           const soundsToActivate = preset.split(',').map(s => s.trim().toLowerCase());
 
           setActiveLoops(prev => {
