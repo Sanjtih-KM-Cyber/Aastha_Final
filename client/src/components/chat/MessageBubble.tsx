@@ -21,8 +21,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onCopy,
   searchQuery,
   isStreaming,
-  isCurrentMatch
-}: MessageBubbleProps & { isCurrentMatch?: boolean }) => {
+  currentMatchIndex = -1 // -1 means no active match in this message
+}: MessageBubbleProps & { currentMatchIndex?: number }) => {
   const isUser = role === 'user';
   const { currentTheme } = useTheme();
   const [isHovered, setIsHovered] = useState(false);
@@ -31,17 +31,27 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const renderContent = (text: string) => {
       if (!searchQuery) return text;
 
+      // Note: splitting by regex captures separators, so 'test match test'.split(/(match)/) -> ['test ', 'match', ' test']
+      // We need to count *occurrences* of the search term as we map
+      let occurrenceCount = 0;
+
       const parts = text.split(new RegExp(`(${searchQuery})`, 'gi'));
-      return parts.map((part, index) =>
-          part.toLowerCase() === searchQuery.toLowerCase() ? (
-              <span
-                  key={index}
-                  className={`px-0.5 rounded font-bold text-black transition-colors duration-500 ${isCurrentMatch ? 'bg-yellow-400 scale-110 inline-block px-1' : 'bg-yellow-200/50'}`}
-              >
-                  {part}
-              </span>
-          ) : part
-      );
+      return parts.map((part, index) => {
+          if (part.toLowerCase() === searchQuery.toLowerCase()) {
+              const isActive = occurrenceCount === currentMatchIndex;
+              occurrenceCount++;
+
+              return (
+                <span
+                    key={index}
+                    className={`px-0.5 rounded font-bold text-black transition-colors duration-500 ${isActive ? 'bg-yellow-400 scale-110 inline-block px-1' : 'bg-yellow-200/50'}`}
+                >
+                    {part}
+                </span>
+              );
+          }
+          return part;
+      });
   };
 
   // Format time
