@@ -3,7 +3,7 @@ import { DraggableWindow } from '../layout/DraggableWindow';
 import { 
   Play, Pause, SkipForward, SkipBack, Repeat, Search, 
   Disc, Sparkles, Plus, ListMusic, Lock, X, Music2, Globe, Check, Settings,
-  ArrowUp, ArrowDown, Trash2
+  ArrowUp, ArrowDown, Trash2, Minus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
@@ -34,6 +34,49 @@ type LoopMode = 'off' | 'all' | 'one' | 'custom';
 
 const LANGUAGES = ["English", "Hindi", "Tamil", "Telugu", "Punjabi", "Malayalam", "Kannada", "Bengali", "Marathi"];
 const MOOD_TAGS = ["Happy", "Sad", "Calm", "Energetic", "Romantic", "Focus", "Melancholy", "Party", "Lo-Fi"];
+
+// --- Reusable Stepper Component ---
+interface StepperProps {
+    value: number;
+    onChange: (val: number) => void;
+    min?: number;
+    max?: number;
+    step?: number;
+}
+
+const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max = 100, step = 1 }) => {
+    const handleDecrement = () => {
+        if (value - step >= min) onChange(value - step);
+    };
+
+    const handleIncrement = () => {
+        if (value + step <= max) onChange(value + step);
+    };
+
+    return (
+        <div className="flex items-center bg-[#1F2937] rounded-lg border border-white/10 h-10 w-[120px] justify-between px-1">
+            <button
+                onClick={handleDecrement}
+                disabled={value <= min}
+                className="w-8 h-8 flex items-center justify-center text-white/50 hover:text-white disabled:opacity-30 disabled:hover:text-white/50 transition-colors"
+            >
+                <Minus size={14} />
+            </button>
+
+            <span className="text-sm font-medium text-white font-mono min-w-[20px] text-center">
+                {value}
+            </span>
+
+            <button
+                onClick={handleIncrement}
+                disabled={value >= max}
+                className="w-8 h-8 flex items-center justify-center text-white/50 hover:text-white disabled:opacity-30 disabled:hover:text-white/50 transition-colors"
+            >
+                <Plus size={14} />
+            </button>
+        </div>
+    );
+};
 
 export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
   const { currentTheme } = useTheme();
@@ -367,33 +410,21 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                                 </div>
                             </div>
 
-                             {/* Duration Slider */}
+                             {/* Duration Slider Replaced by Stepper */}
                             <div>
                                 <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Session Duration</h4>
                                 <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                                    <div className="flex justify-between text-xs text-white mb-2">
-                                        <span>10 min</span>
-                                        <span className="font-bold text-teal-400">{targetDuration} min</span>
-                                        <span>180+ min</span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="10"
-                                        max="400"
-                                        step="10"
-                                        value={targetDuration}
-                                        onChange={(e) => setTargetDuration(parseInt(e.target.value))}
-                                        className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-teal-400 [&::-webkit-slider-thumb]:rounded-full"
-                                    />
-                                    <div className="flex justify-between items-center mt-3">
-                                        <span className="text-[10px] text-white/40">Custom duration (10 - 400 min)</span>
-                                        <input
-                                            type="number"
-                                            min="10"
-                                            max="600"
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex flex-col">
+                                            <div className="text-xs text-white/60 mb-1">Duration (min)</div>
+                                            <div className="text-[10px] text-white/30">10 - 400 min</div>
+                                        </div>
+                                        <Stepper
                                             value={targetDuration}
-                                            onChange={(e) => setTargetDuration(Math.max(10, Math.min(600, parseInt(e.target.value) || 10)))}
-                                            className="w-16 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-right text-white focus:border-teal-400 focus:outline-none"
+                                            onChange={setTargetDuration}
+                                            min={10}
+                                            max={400}
+                                            step={10}
                                         />
                                     </div>
                                 </div>
@@ -554,12 +585,16 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                         {loopMode === 'one' && <span className="absolute text-[8px] font-bold ml-[-6px] mt-[6px]">1</span>}
                         {loopMode === 'custom' && <span className="absolute text-[8px] font-bold ml-[-6px] mt-[6px]">*</span>}
                     </button>
-                    {/* Custom Loop Input - Upgraded */}
+                    {/* Custom Loop Input - Upgraded to Stepper */}
                     {loopMode === 'custom' && (
-                         <div className="flex items-center bg-white/5 rounded-lg border border-white/10 h-8">
-                             <button onClick={() => setLoopTarget(p => Math.max(2, p - 1))} className="px-2 text-white/50 hover:text-white text-xs font-bold">-</button>
-                             <span className="text-[10px] text-white font-mono w-4 text-center">{loopTarget}</span>
-                             <button onClick={() => setLoopTarget(p => Math.min(100, p + 1))} className="px-2 text-white/50 hover:text-white text-xs font-bold">+</button>
+                         <div className="ml-2">
+                             <Stepper
+                                value={loopTarget}
+                                onChange={setLoopTarget}
+                                min={2}
+                                max={50}
+                                step={1}
+                             />
                          </div>
                     )}
                 </div>
