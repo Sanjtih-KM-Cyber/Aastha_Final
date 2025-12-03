@@ -114,6 +114,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processedTagsRef = useRef<Set<string>>(new Set());
 
   // 1. Sync User Credits
   useEffect(() => {
