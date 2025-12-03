@@ -5,6 +5,7 @@ import {
   Sparkles, ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
 import { MessageBubble } from './MessageBubble';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
@@ -22,8 +23,6 @@ interface ChatViewProps {
   onMobileMenuClick?: () => void;
   onOpenWidget?: (widget: string, config?: any) => void;
 }
-
-const EMOJIS = ['😊', '🌿', '☁️', '✨', '💜', '🌧️', '🎵', '🧘‍♀️', '🌸', '☕', '🌙', '💪', '🤔', '🔥', '👀', '🫂'];
 
 // --- Dynamic API URL Helper ---
 const getApiUrl = (endpoint: string) => {
@@ -791,8 +790,31 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             <Smile size={20} />
                         </button>
                         {showEmojiPicker && (
-                            <div className="absolute bottom-14 right-0 p-3 bg-[#111] border border-white/10 rounded-2xl grid grid-cols-4 gap-2 shadow-2xl z-50 w-64 backdrop-blur-xl">
-                                {EMOJIS.map(e => (<button key={e} type="button" onClick={() => { setInput(prev => prev + e); setShowEmojiPicker(false); }} className="hover:bg-white/10 rounded-lg p-2 text-2xl transition-colors">{e}</button>))}
+                            <div className="absolute bottom-14 right-0 shadow-2xl z-50">
+                                <EmojiPicker
+                                    theme={Theme.DARK}
+                                    emojiStyle={EmojiStyle.APPLE}
+                                    onEmojiClick={(e) => {
+                                        setInput(prev => prev + e.emoji);
+                                        // Optional: Keep picker open or close it
+                                        // setShowEmojiPicker(false);
+                                    }}
+                                    lazyLoadEmojis={true}
+                                    width={300}
+                                    height={400}
+                                    searchDisabled={false}
+                                    skinTonesDisabled={false}
+                                    categories={[
+                                        { name: 'Smileys', category: 'smileys_people' },
+                                        { name: 'Nature', category: 'animals_nature' },
+                                        { name: 'Food', category: 'food_drink' },
+                                        { name: 'Activities', category: 'activities' },
+                                        { name: 'Travel', category: 'travel_places' },
+                                        { name: 'Objects', category: 'objects' },
+                                        { name: 'Symbols', category: 'symbols' },
+                                        { name: 'Flags', category: 'flags' },
+                                    ] as any} // Cast to any if strict types complain about category names
+                                />
                             </div>
                         )}
                     </div>
