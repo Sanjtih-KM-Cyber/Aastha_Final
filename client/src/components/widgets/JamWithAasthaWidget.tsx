@@ -554,12 +554,18 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                         {loopMode === 'one' && <span className="absolute text-[8px] font-bold ml-[-6px] mt-[6px]">1</span>}
                         {loopMode === 'custom' && <span className="absolute text-[8px] font-bold ml-[-6px] mt-[6px]">*</span>}
                     </button>
-                    {/* Custom Loop Input - Upgraded */}
+                    {/* Custom Loop Input - Upgraded (Range Slider) */}
                     {loopMode === 'custom' && (
-                         <div className="flex items-center bg-white/5 rounded-lg border border-white/10 h-8">
-                             <button onClick={() => setLoopTarget(p => Math.max(2, p - 1))} className="px-2 text-white/50 hover:text-white text-xs font-bold">-</button>
-                             <span className="text-[10px] text-white font-mono w-4 text-center">{loopTarget}</span>
-                             <button onClick={() => setLoopTarget(p => Math.min(100, p + 1))} className="px-2 text-white/50 hover:text-white text-xs font-bold">+</button>
+                         <div className="flex items-center bg-white/5 rounded-lg border border-white/10 h-8 px-2 w-32 gap-2">
+                             <span className="text-[10px] text-white font-mono w-4 text-center">{loopTarget}x</span>
+                             <input
+                                type="range"
+                                min="2"
+                                max="20"
+                                value={loopTarget}
+                                onChange={(e) => setLoopTarget(parseInt(e.target.value))}
+                                className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
+                             />
                          </div>
                     )}
                 </div>
