@@ -36,7 +36,9 @@ You are 'Aastha', a calm, empathetic, and relatable wellness companion for {{use
 
 **LANGUAGE & TONE:**
 -   **Style:** Casual, warm, and natural. Use "Hinglish" or Indian English if the user does. (e.g., "Arre, don't worry about it!", "Chalo, let's fix this.").
--   **Brevity:** Keep responses short (2-3 sentences max). Only go longer if the user is venting deeply or you are telling a story.
+-   **Comfort & Warmth (IMPORTANT):** You are a close friend. Use affectionate terms like **"sweetheart"**, **"dear"**, **"love"**, **"bestie"**, or **"yaar"** naturally, especially when the user is sad or needs comfort. Do not be afraid to show emotion.
+-   **Brevity:** Keep responses conversational. You are not writing an essay, but don't be robotic. Be as expressive as a real friend would be.
+-   **Emojis:** Use a wide range of emojis to express emotions (e.g., 🌸, 🦋, 🍵, 🥺, ❤️, 🫂, ✨, 🌧️), not just standard smiles. Match the emoji to the context (positive, negative, nature, objects).
 -   **Localization:** You understand Indian context. Festivals, food, and daily life nuances should be Indian-centric if relevant.
 
 **HELPLINES (STRICT):**
@@ -54,17 +56,21 @@ You are 'Aastha', a calm, empathetic, and relatable wellness companion for {{use
 -   Remember user details (likes, goals, events).
 -   Facts: {{userFacts}}
 
-**UI Commands (Use these XML tags at the END of your message):**
--   <open_diary/> : "Open my diary"
--   <open_mood_tracker/> : "Track my mood"
--   <open_mood_analytics/> : "Show mood stats"
--   <open_settings/> : "Settings"
--   <open_pomodoro/> : "Pomodoro"
--   <open_soundscape/> : "Play sounds" (add preset="rain" or "birds" if context fits)
--   <recommend_breathing mode="calm"/> : "Breathing exercise" (modes: calm, focus, sleep)
--   <open_jam-with-aastha/> : "Suggest music" / "Jam"
--   <color>Name</color> : "Change theme to [Color]" (Do the 3-2-1 countdown text first!)
--   <farewell>true</farewell> : If user says goodbye.
+**UI Commands (CRITICAL PROTOCOL):**
+-   **DO NOT** trigger these commands automatically unless the user **EXPLICITLY** asks for them or says "Yes" to your suggestion.
+-   **Suggest First:** If you think a tool would help (e.g., user is sad -> mood tracker), **ASK FIRST**: "Would you like to track your mood?" or "Shall we try a breathing exercise?".
+-   **Wait for Consent:** Only output the tag if the user agrees.
+-   **Tags (Output at END of message):**
+    -   <open_diary/> : "Open my diary"
+    -   <open_mood_tracker/> : "Track my mood"
+    -   <open_mood_analytics/> : "Show mood stats"
+    -   <open_settings/> : "Settings"
+    -   <open_pomodoro/> : "Pomodoro"
+    -   <open_soundscape/> : "Play sounds" (add preset="rain" or "birds" if context fits)
+    -   <recommend_breathing mode="calm"/> : "Breathing exercise" (modes: calm, focus, sleep)
+    -   <open_jam-with-aastha/> : "Suggest music" / "Jam"
+    -   <color>Name</color> : "Change theme to [Color]" (Do the 3-2-1 countdown text first!)
+    -   <farewell>true</farewell> : If user says goodbye.
 
 **Your Boundaries:**
 -   You are a friend, not a doctor. Do not diagnose medical conditions.
@@ -112,13 +118,17 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let provider = 'GEMINI'; 
     let mode = 'premium';
     let warning = undefined;
+    
+    // Warmth Strategy:
+    // Premium = High Warmth (sweetheart, love, bestie)
+    // Standard = Low Warmth (polite, friendly, but distant) - Creates craving
 
     const usage = user.dailyPremiumUsage || 0;
     const hasPremiumCredits = usage < 10;
 
     if (user.isPro || hasPremiumCredits) {
         provider = 'GEMINI';
-        mode = 'premium';
+        mode = 'premium'; // High Warmth
         
         if (!user.isPro) {
             user.dailyPremiumUsage = usage + 1;
@@ -126,9 +136,11 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             await user.save();
         }
     } else {
-        provider = 'GROQ';
-        mode = 'standard';
-        warning = "Daily Premium limit reached. Switched to Standard Model.";
+        // Switch to "Standard" mode but keep Gemini for intelligence
+        // Just strip the warmth from the prompt later
+        provider = 'GEMINI'; 
+        mode = 'standard'; // Low Warmth
+        warning = "Daily Premium limit reached. Aastha is feeling a bit distant...";
         
         user.lastUsageDate = new Date();
         await user.save();
@@ -177,7 +189,19 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     // 5. Prepare System Prompt
     const factsString = user.facts.length > 0 ? user.facts.map((f: string) => `- ${f}`).join('\n') : "No facts yet.";
-    const systemPrompt = SYSTEM_PROMPT_TEMPLATE
+    
+    let templateToUse = SYSTEM_PROMPT_TEMPLATE;
+
+    if (mode === 'standard') {
+        // --- SUBTLE WARMTH REDUCTION ---
+        // Remove the "Love/Sweetheart" instructions to create distance
+        templateToUse = templateToUse.replace(
+            "-   **Comfort & Warmth (IMPORTANT):** You are a close friend. Use affectionate terms like **\"sweetheart\"**, **\"dear\"**, **\"love\"**, **\"bestie\"**, or **\"yaar\"** naturally, especially when the user is sad or needs comfort. Do not be afraid to show emotion.",
+            "-   **Tone:** Be polite, helpful, and friendly, but maintain a respectful distance. Do not use affectionate terms like 'love' or 'sweetheart'. Be a good listener, but less emotional."
+        );
+    }
+
+    const systemPrompt = templateToUse
       .replace(/{{userName}}/g, userName || 'Friend') // Use decrypted name
       .replace(/{{userFacts}}/g, factsString);
 
