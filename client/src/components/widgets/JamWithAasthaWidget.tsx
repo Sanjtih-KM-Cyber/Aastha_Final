@@ -54,7 +54,7 @@ const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max = 100, 
         if (value + step <= max) onChange(value + step);
     };
 
-    const containerClass = compact
+    const containerClass = compact 
         ? "flex items-center bg-[#1F2937] rounded-lg border border-white/10 h-8 w-24 justify-between px-1"
         : "flex items-center bg-[#1F2937] rounded-lg border border-white/10 h-10 w-[120px] justify-between px-1";
 
@@ -64,19 +64,19 @@ const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max = 100, 
 
     return (
         <div className={containerClass}>
-            <button
+            <button 
                 onClick={handleDecrement}
                 disabled={value <= min}
                 className={btnClass}
             >
                 <Minus size={compact ? 12 : 14} />
             </button>
-
+            
             <span className={`text-sm font-medium text-white font-mono min-w-[20px] text-center ${compact ? 'text-xs' : ''}`}>
                 {value}
             </span>
 
-            <button
+            <button 
                 onClick={handleIncrement}
                 disabled={value >= max}
                 className={btnClass}
@@ -428,7 +428,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                                             <div className="text-xs text-white/60 mb-1">Duration (min)</div>
                                             <div className="text-[10px] text-white/30">10 - 400 min</div>
                                         </div>
-                                        <Stepper
+                                        <Stepper 
                                             value={targetDuration}
                                             onChange={setTargetDuration}
                                             min={10}
@@ -597,7 +597,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                     {/* Custom Loop Input - Upgraded to Stepper */}
                     {loopMode === 'custom' && (
                          <div className="ml-2">
-                             <Stepper
+                             <Stepper 
                                 value={loopTarget}
                                 onChange={setLoopTarget}
                                 min={2}
