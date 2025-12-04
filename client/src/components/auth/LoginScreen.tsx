@@ -23,9 +23,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
 
-  // Register State - Removed regUsername
+  // Register State - Added regUsername
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
+  const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regDiaryPassword, setRegDiaryPassword] = useState('');
   const [secQ1, setSecQ1] = useState(SECURITY_QUESTIONS[0]);
@@ -50,7 +51,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
     e.preventDefault(); setIsLoading(true); setError('');
     try {
       await register({
-          name: regName, email: regEmail, password: regPassword, diaryPassword: regDiaryPassword,
+          name: regName,
+          email: regEmail,
+          username: regUsername, // Compulsory Username
+          password: regPassword,
+          diaryPassword: regDiaryPassword,
           securityQuestions: [{ question: secQ1, answer: secA1 }]
       });
       navigate('/sanctuary');
@@ -107,6 +112,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
             {mode === 'register' && (
                 <form onSubmit={handleRegister} className="space-y-3 max-h-[60vh] overflow-y-auto scrollbar-hide">
                     <input type="text" placeholder="Full Name" value={regName} onChange={e => setRegName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" required />
+                    <input type="text" placeholder="Username (Unique)" value={regUsername} onChange={e => setRegUsername(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" required />
                     <input type="email" placeholder="Email" value={regEmail} onChange={e => setRegEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" required />
                     <input type="password" placeholder="Password" value={regPassword} onChange={e => setRegPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" required />
                     <div className="p-3 bg-white/5 rounded-xl border border-white/10">

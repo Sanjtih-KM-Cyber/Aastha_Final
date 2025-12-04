@@ -229,22 +229,33 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       setIsSearching(true);
       try {
           const res = await api.get(`/data/videos/search?q=${encodeURIComponent(query)}`);
-          if (res.data && res.data.length > 0) {
-              const newTrack = res.data[0];
+          // Check if res.data is array or wrapped object. Assuming array based on usage.
+          // If the backend returns { items: [...] } adjust accordingly.
+          // Previous code assumed res.data is the array or res.data[0]. 
+          // Let's assume res.data is the array of tracks.
+          
+          if (Array.isArray(res.data) && res.data.length > 0) {
+              const newTrack = res.data[0]; // Take top result
 
               setQueue(prev => {
                 // If queue is empty, play immediately
                 if (prev.length === 0) {
+                    // Need to wait for render update or use ref? 
+                    // loadAndPlay relies on playerRef which is persistent.
+                    // But we need to update state first.
                     setTimeout(() => loadAndPlay(newTrack), 100);
                     return [newTrack];
                 }
                 // Otherwise append
                 return [...prev, newTrack];
               });
-
-              if (queue.length === 0) {
-                  setCurrentIndex(0);
-              }
+              
+              // If we were empty, index is 0.
+              if (queue.length === 0) setCurrentIndex(0);
+              
+          } else {
+              // Fallback or Alert?
+              console.warn("No results found for query:", query);
           }
       } catch (e) { console.error("Search failed", e); } 
       finally { setIsSearching(false); setQuery(''); }
@@ -566,16 +577,30 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                         )}
                     </div>
 
-                    {/* Progress Bar */}
+                    {/* Progress Bar with Seek */}
                     <div className="mb-6 group">
                         <div className="flex justify-between text-[10px] text-white/30 mb-1 font-mono group-hover:text-white/50 transition-colors">
                             <span>{formatTime(currentTime)}</span>
                             <span>{formatTime(duration)}</span>
                         </div>
-                        <div className="h-1.5 bg-white/10 rounded-full w-full overflow-hidden relative">
-                            <motion.div
-                                className="h-full rounded-full"
-                                style={{ width: `${(currentTime / (duration || 1)) * 100}%`, backgroundColor: currentTheme.primaryColor }}
+                        <div className="h-1.5 bg-white/10 rounded-full w-full relative flex items-center cursor-pointer group-hover:h-2 transition-all"
+                             onClick={(e) => {
+                                 if (!playerRef.current || !duration) return;
+                                 const rect = e.currentTarget.getBoundingClientRect();
+                                 const percent = (e.clientX - rect.left) / rect.width;
+                                 playerRef.current.seekTo(percent * duration);
+                             }}
+                        >
+                            <div className="absolute inset-0 rounded-full overflow-hidden">
+                                <motion.div
+                                    className="h-full rounded-full"
+                                    style={{ width: `${(currentTime / (duration || 1)) * 100}%`, backgroundColor: currentTheme.primaryColor }}
+                                />
+                            </div>
+                            {/* Seek Handle (Visible on Hover) */}
+                            <div 
+                                className="w-3 h-3 bg-white rounded-full absolute shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                style={{ left: `calc(${(currentTime / (duration || 1)) * 100}% - 6px)` }}
                             />
                         </div>
                     </div>
