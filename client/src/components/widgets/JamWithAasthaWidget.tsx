@@ -97,6 +97,10 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   
+  // Scrubbing State
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragTime, setDragTime] = useState(0);
+
   // Search & Input State
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -577,30 +581,50 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                         )}
                     </div>
 
-                    {/* Progress Bar with Seek */}
+                    {/* Progress Bar with Fluid Scrubbing */}
                     <div className="mb-6 group">
                         <div className="flex justify-between text-[10px] text-white/30 mb-1 font-mono group-hover:text-white/50 transition-colors">
-                            <span>{formatTime(currentTime)}</span>
+                            <span>{formatTime(isDragging ? dragTime : currentTime)}</span>
                             <span>{formatTime(duration)}</span>
                         </div>
-                        <div className="h-1.5 bg-white/10 rounded-full w-full relative flex items-center cursor-pointer group-hover:h-2 transition-all"
-                             onClick={(e) => {
-                                 if (!playerRef.current || !duration) return;
-                                 const rect = e.currentTarget.getBoundingClientRect();
-                                 const percent = (e.clientX - rect.left) / rect.width;
-                                 playerRef.current.seekTo(percent * duration);
-                             }}
-                        >
-                            <div className="absolute inset-0 rounded-full overflow-hidden">
-                                <motion.div
-                                    className="h-full rounded-full"
-                                    style={{ width: `${(currentTime / (duration || 1)) * 100}%`, backgroundColor: currentTheme.primaryColor }}
+                        <div className="h-4 flex items-center relative">
+                            {/* Background Track */}
+                            <div className="absolute w-full h-1.5 bg-white/10 rounded-full overflow-hidden pointer-events-none">
+                                <div 
+                                    className="h-full" 
+                                    style={{ 
+                                        width: `${((isDragging ? dragTime : currentTime) / (duration || 1)) * 100}%`,
+                                        backgroundColor: currentTheme.primaryColor 
+                                    }}
                                 />
                             </div>
-                            {/* Seek Handle (Visible on Hover) */}
+                            
+                            {/* Range Input for Smooth Scrubbing */}
+                            <input 
+                                type="range" 
+                                min="0" 
+                                max={duration || 100} 
+                                value={isDragging ? dragTime : currentTime}
+                                onMouseDown={() => setIsDragging(true)}
+                                onTouchStart={() => setIsDragging(true)}
+                                onChange={(e) => setDragTime(parseFloat(e.target.value))}
+                                onMouseUp={(e) => {
+                                    setIsDragging(false);
+                                    if (playerRef.current) playerRef.current.seekTo(parseFloat(e.currentTarget.value));
+                                }}
+                                onTouchEnd={(e) => {
+                                    setIsDragging(false);
+                                    if (playerRef.current) playerRef.current.seekTo(dragTime);
+                                }}
+                                className="w-full h-full opacity-0 cursor-pointer z-10"
+                            />
+
+                            {/* Visible Thumb (follows input value) */}
                             <div 
-                                className="w-3 h-3 bg-white rounded-full absolute shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                                style={{ left: `calc(${(currentTime / (duration || 1)) * 100}% - 6px)` }}
+                                className="absolute w-3 h-3 bg-white rounded-full shadow-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"
+                                style={{ 
+                                    left: `calc(${((isDragging ? dragTime : currentTime) / (duration || 1)) * 100}% - 6px)` 
+                                }}
                             />
                         </div>
                     </div>
