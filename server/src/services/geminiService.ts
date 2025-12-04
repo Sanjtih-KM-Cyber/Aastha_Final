@@ -86,7 +86,8 @@ export async function* streamGemini(history: ChatMessage[], systemPrompt: string
     if (parts.length > 0) contents.push({ role, parts });
   }
 
-  const modelName = hasImage ? 'gemini-2.5-flash-image' : 'gemini-2.5-flash';
+  // Use stable model
+  const modelName = 'gemini-1.5-flash';
   
   try {
     const client = getGeminiClient(isPro);
@@ -119,7 +120,7 @@ export const extractThemeFromImage = async (base64Image: string): Promise<any> =
   
   try {
     const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-1.5-flash',
       contents: {
         parts: [
           { inlineData: { mimeType: matches[1], data: matches[2] } },
@@ -152,7 +153,7 @@ export const getMusicRecommendation = async (mood: string, userHistory: string[]
   
   try {
     const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash',
       contents: `Suggest 3 soothing songs for someone feeling "${mood}". 
                  History: ${userHistory.join(', ')}. 
                  Provide YouTube-searchable titles.`,
@@ -186,7 +187,7 @@ export const analyzeDiaryEntries = async (entries: any[]): Promise<any> => {
         const textData = entries.map(e => `[${e.createdAt}]: ${e.content}`).join('\n\n');
         
         const response = await client.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-1.5-flash',
             contents: `
                 You are an empathetic psychologist AI. Read these diary entries from the past week.
                 
@@ -224,7 +225,7 @@ export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> =>
         const textData = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
         
         const response = await client.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-1.5-flash',
             contents: `
                 You are an empathetic therapist AI. Analyze this recent chat history.
                 Provide a warm, 2-sentence summary of how the user seems to be feeling lately.
@@ -260,7 +261,7 @@ export const getVibePlaylist = async (chatHistory: any[], languages: string[], u
         const randomSeed = Math.floor(Math.random() * 10000); // Add randomness
 
         const response = await client.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-1.5-flash',
             contents: `
                 Analyze the recent chat history to understand the user's emotional state.
                 ${moodOverride}
@@ -278,16 +279,24 @@ export const getVibePlaylist = async (chatHistory: any[], languages: string[], u
                 Chat Context:
                 ${textData}
             `,
-            config: { responseMimeType: "application/json" }
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.STRING
+                    }
+                }
+            }
         });
 
         const result = JSON.parse(response.text || '[]');
         if (Array.isArray(result)) return result.map(String);
-        if (result.songs) return result.songs;
+        if ((result as any).songs) return (result as any).songs;
         return [];
 
-    } catch (error) {
-        console.error("Vibe Gen Error:", error);
+    } catch (error: any) {
+        console.error("Vibe Gen Error:", error.message || error);
         return ["Lo-Fi Beats - Lofi Girl"];
     }
 };
