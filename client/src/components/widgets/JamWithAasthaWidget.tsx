@@ -54,7 +54,7 @@ const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max = 100, 
         if (value + step <= max) onChange(value + step);
     };
 
-    const containerClass = compact
+    const containerClass = compact 
         ? "flex items-center bg-[#1F2937] rounded-lg border border-white/10 h-8 w-24 justify-between px-1"
         : "flex items-center bg-[#1F2937] rounded-lg border border-white/10 h-10 w-[120px] justify-between px-1";
 
@@ -64,19 +64,19 @@ const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max = 100, 
 
     return (
         <div className={containerClass}>
-            <button
+            <button 
                 onClick={handleDecrement}
                 disabled={value <= min}
                 className={btnClass}
             >
                 <Minus size={compact ? 12 : 14} />
             </button>
-
+            
             <span className={`text-sm font-medium text-white font-mono min-w-[20px] text-center ${compact ? 'text-xs' : ''}`}>
                 {value}
             </span>
 
-            <button
+            <button 
                 onClick={handleIncrement}
                 disabled={value >= max}
                 className={btnClass}
@@ -235,16 +235,16 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           const res = await api.get(`/data/videos/search?q=${encodeURIComponent(query)}`);
           // Check if res.data is array or wrapped object. Assuming array based on usage.
           // If the backend returns { items: [...] } adjust accordingly.
-          // Previous code assumed res.data is the array or res.data[0].
+          // Previous code assumed res.data is the array or res.data[0]. 
           // Let's assume res.data is the array of tracks.
-
+          
           if (Array.isArray(res.data) && res.data.length > 0) {
               const newTrack = res.data[0]; // Take top result
 
               setQueue(prev => {
                 // If queue is empty, play immediately
                 if (prev.length === 0) {
-                    // Need to wait for render update or use ref?
+                    // Need to wait for render update or use ref? 
                     // loadAndPlay relies on playerRef which is persistent.
                     // But we need to update state first.
                     setTimeout(() => loadAndPlay(newTrack), 100);
@@ -253,10 +253,10 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                 // Otherwise append
                 return [...prev, newTrack];
               });
-
+              
               // If we were empty, index is 0.
               if (queue.length === 0) setCurrentIndex(0);
-
+              
           } else {
               // Fallback or Alert?
               console.warn("No results found for query:", query);
@@ -443,7 +443,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                                             <div className="text-xs text-white/60 mb-1">Duration (min)</div>
                                             <div className="text-[10px] text-white/30">10 - 400 min</div>
                                         </div>
-                                        <Stepper
+                                        <Stepper 
                                             value={targetDuration}
                                             onChange={setTargetDuration}
                                             min={10}
@@ -590,20 +590,20 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                         <div className="h-4 flex items-center relative">
                             {/* Background Track */}
                             <div className="absolute w-full h-1.5 bg-white/10 rounded-full overflow-hidden pointer-events-none">
-                                <div
-                                    className="h-full"
-                                    style={{
+                                <div 
+                                    className="h-full" 
+                                    style={{ 
                                         width: `${((isDragging ? dragTime : currentTime) / (duration || 1)) * 100}%`,
-                                        backgroundColor: currentTheme.primaryColor
+                                        backgroundColor: currentTheme.primaryColor 
                                     }}
                                 />
                             </div>
-
+                            
                             {/* Range Input for Smooth Scrubbing */}
-                            <input
-                                type="range"
-                                min="0"
-                                max={duration || 100}
+                            <input 
+                                type="range" 
+                                min="0" 
+                                max={duration || 100} 
                                 value={isDragging ? dragTime : currentTime}
                                 onMouseDown={() => setIsDragging(true)}
                                 onTouchStart={() => setIsDragging(true)}
@@ -620,10 +620,10 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                             />
 
                             {/* Visible Thumb (follows input value) */}
-                            <div
+                            <div 
                                 className="absolute w-3 h-3 bg-white rounded-full shadow-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"
-                                style={{
-                                    left: `calc(${((isDragging ? dragTime : currentTime) / (duration || 1)) * 100}% - 6px)`
+                                style={{ 
+                                    left: `calc(${((isDragging ? dragTime : currentTime) / (duration || 1)) * 100}% - 6px)` 
                                 }}
                             />
                         </div>
@@ -646,7 +646,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                     {/* Custom Loop Input - Upgraded to Stepper */}
                     {loopMode === 'custom' && (
                          <div className="ml-2">
-                             <Stepper
+                             <Stepper 
                                 value={loopTarget}
                                 onChange={setLoopTarget}
                                 min={2}
