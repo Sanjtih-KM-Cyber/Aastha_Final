@@ -42,9 +42,10 @@ interface StepperProps {
     min?: number;
     max?: number;
     step?: number;
+    compact?: boolean;
 }
 
-const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max = 100, step = 1 }) => {
+const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max = 100, step = 1, compact = false }) => {
     const handleDecrement = () => {
         if (value - step >= min) onChange(value - step);
     };
@@ -53,26 +54,34 @@ const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max = 100, 
         if (value + step <= max) onChange(value + step);
     };
 
+    const containerClass = compact 
+        ? "flex items-center bg-[#1F2937] rounded-lg border border-white/10 h-8 w-24 justify-between px-1"
+        : "flex items-center bg-[#1F2937] rounded-lg border border-white/10 h-10 w-[120px] justify-between px-1";
+
+    const btnClass = compact
+        ? "w-6 h-6 flex items-center justify-center text-white/50 hover:text-white disabled:opacity-30 disabled:hover:text-white/50 transition-colors"
+        : "w-8 h-8 flex items-center justify-center text-white/50 hover:text-white disabled:opacity-30 disabled:hover:text-white/50 transition-colors";
+
     return (
-        <div className="flex items-center bg-[#1F2937] rounded-lg border border-white/10 h-10 w-[120px] justify-between px-1">
-            <button
+        <div className={containerClass}>
+            <button 
                 onClick={handleDecrement}
                 disabled={value <= min}
-                className="w-8 h-8 flex items-center justify-center text-white/50 hover:text-white disabled:opacity-30 disabled:hover:text-white/50 transition-colors"
+                className={btnClass}
             >
-                <Minus size={14} />
+                <Minus size={compact ? 12 : 14} />
             </button>
-
-            <span className="text-sm font-medium text-white font-mono min-w-[20px] text-center">
+            
+            <span className={`text-sm font-medium text-white font-mono min-w-[20px] text-center ${compact ? 'text-xs' : ''}`}>
                 {value}
             </span>
 
-            <button
+            <button 
                 onClick={handleIncrement}
                 disabled={value >= max}
-                className="w-8 h-8 flex items-center justify-center text-white/50 hover:text-white disabled:opacity-30 disabled:hover:text-white/50 transition-colors"
+                className={btnClass}
             >
-                <Plus size={14} />
+                <Plus size={compact ? 12 : 14} />
             </button>
         </div>
     );
@@ -419,7 +428,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                                             <div className="text-xs text-white/60 mb-1">Duration (min)</div>
                                             <div className="text-[10px] text-white/30">10 - 400 min</div>
                                         </div>
-                                        <Stepper
+                                        <Stepper 
                                             value={targetDuration}
                                             onChange={setTargetDuration}
                                             min={10}
@@ -588,12 +597,13 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                     {/* Custom Loop Input - Upgraded to Stepper */}
                     {loopMode === 'custom' && (
                          <div className="ml-2">
-                             <Stepper
+                             <Stepper 
                                 value={loopTarget}
                                 onChange={setLoopTarget}
                                 min={2}
                                 max={50}
                                 step={1}
+                                compact={true}
                              />
                          </div>
                     )}

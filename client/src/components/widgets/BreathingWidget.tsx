@@ -62,7 +62,7 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
         const match = Object.keys(MODES).find(k => k.toLowerCase() === initialMode.toLowerCase() || MODES[k as keyof typeof MODES].label.toLowerCase().includes(initialMode.toLowerCase()));
         if (match) {
             setActiveMode(match as keyof typeof MODES);
-            // DO NOT auto-start, wait for user click as requested
+            setPhaseIndex(0);
             setIsActive(false);
         }
     }

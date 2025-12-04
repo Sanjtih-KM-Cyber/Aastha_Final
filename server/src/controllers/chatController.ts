@@ -194,10 +194,10 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     if (mode === 'standard') {
         // --- SUBTLE WARMTH REDUCTION ---
-        // Remove the "Love/Sweetheart" instructions to create distance
+        // Modify the "Love/Sweetheart" instructions to be less frequent/intimate
         templateToUse = templateToUse.replace(
             "-   **Comfort & Warmth (IMPORTANT):** You are a close friend. Use affectionate terms like **\"sweetheart\"**, **\"dear\"**, **\"love\"**, **\"bestie\"**, or **\"yaar\"** naturally, especially when the user is sad or needs comfort. Do not be afraid to show emotion.",
-            "-   **Tone:** Be polite, helpful, and friendly, but maintain a respectful distance. Do not use affectionate terms like 'love' or 'sweetheart'. Be a good listener, but less emotional."
+            "-   **Tone:** Be polite and friendly, but less consistently intimate. Use affectionate terms like 'sweetheart' sparingly and only when deeply comforting (if user is sad). Avoid overusing 'love' or 'bestie'. Maintain a slightly more respectful distance than usual."
         );
     }
 
