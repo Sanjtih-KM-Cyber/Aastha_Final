@@ -118,7 +118,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let provider = 'GEMINI'; 
     let mode = 'premium';
     let warning = undefined;
-
+    
     // Warmth Strategy:
     // Premium = High Warmth (sweetheart, love, bestie)
     // Standard = Low Warmth (polite, friendly, but distant) - Creates craving
@@ -138,7 +138,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     } else {
         // Switch to "Standard" mode but keep Gemini for intelligence
         // Just strip the warmth from the prompt later
-        provider = 'GEMINI';
+        provider = 'GEMINI'; 
         mode = 'standard'; // Low Warmth
         warning = "Daily Premium limit reached. Aastha is feeling a bit distant...";
         
@@ -189,7 +189,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     // 5. Prepare System Prompt
     const factsString = user.facts.length > 0 ? user.facts.map((f: string) => `- ${f}`).join('\n') : "No facts yet.";
-
+    
     let templateToUse = SYSTEM_PROMPT_TEMPLATE;
 
     if (mode === 'standard') {
