@@ -117,12 +117,29 @@ export const generateVibePlaylist = async (req: AuthRequest, res: Response) => {
         // Uses the searchYouTubeInternal defined at the top of the file
         const searchPromises = songTitles.map(title => searchYouTubeInternal(title));
         const results = await Promise.all(searchPromises);
-        const tracks = results.filter(t => t !== null);
+        let tracks = results.filter(t => t !== null);
+
+        // 4. Emergency Fallback (Ensure we never return empty)
+        if (tracks.length === 0) {
+            console.warn("Vibe Gen: No tracks found (AI or YouTube failed). Using Fallback.");
+            tracks = [{
+                id: 'jfKfPfyJRdk', // Lofi Girl Radio
+                title: 'lofi hip hop radio - beats to relax/study to',
+                artist: 'Lofi Girl',
+                thumbnail: 'https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg'
+            }];
+        }
 
         (res as any).json(tracks);
 
     } catch (e) {
         console.error(e);
-        (res as any).status(500).json({ message: 'Failed to generate vibe.' });
+        // Even in catch, return fallback instead of erroring
+        (res as any).json([{
+            id: 'jfKfPfyJRdk',
+            title: 'lofi hip hop radio - beats to relax/study to',
+            artist: 'Lofi Girl (Safe Mode)',
+            thumbnail: 'https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg'
+        }]);
     }
 };

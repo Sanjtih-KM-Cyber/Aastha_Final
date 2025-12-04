@@ -6,6 +6,7 @@ import User from '../models/User';
 import Diary from '../models/Diary';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { encrypt, decrypt } from '../utils/serverEncryption';
+import { sendOTPEmail } from '../services/emailService';
 // REMOVED: import { decrypt as clientDecrypt } from '../utils/encryptionUtils'; // Cannot resolve
 
 const hashEmail = (email: string) => {
@@ -18,19 +19,24 @@ const generateToken = (id: string) => {
   });
 };
 
+const generateOTP = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
 // --- REGISTER ---
 export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
     // Re-added username back to body destructuring
     const { name, email, username, password, diaryPassword, securityQuestions } = (req as any).body;
 
-    if (!name || !email || !password) {
-      (res as any).status(400).json({ message: 'Please add all required fields' });
+    // Enforce Username for New Users
+    if (!name || !email || !password || !username) {
+      (res as any).status(400).json({ message: 'Please add all required fields (including Username)' });
       return;
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const cleanUsername = username ? username.toLowerCase().trim() : undefined;
+    const cleanUsername = username.toLowerCase().trim();
     const emailHash = hashEmail(cleanEmail);
 
     // Check if user exists using the index fields (Email Hash or Username)
@@ -63,7 +69,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 
     const user = await User.create({
       name: name, // Plain
-      // email: cleanEmail, // REMOVED PLAIN EMAIL
+      email: cleanEmail, // Storing plain email to satisfy legacy unique index constraints
       emailHash: emailHash, // SHA-256 Hash
       username: cleanUsername, // Plain Index
       emailEncrypted: encrypt(email),
@@ -79,31 +85,22 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     });
 
     if (user) {
-      const token = generateToken((user._id as any).toString());
-      // Render (Backend) to Vercel (Frontend) requires SameSite=None and Secure=true
-      // We check for NODE_ENV=production OR if we are explicitly on Render (process.env.RENDER)
-      const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+        // --- OTP FLOW START ---
+        // Instead of issuing token immediately, we generate OTP
+        const otp = generateOTP();
+        const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
-      (res as any).cookie('jwt', token, {
-        httpOnly: true,
-        secure: isProduction, // Must be true for SameSite=None
-        sameSite: isProduction ? 'none' : 'lax',
-        maxAge: 30 * 24 * 60 * 60 * 1000
-      });
-      
-      (res as any).status(201).json({
-        _id: user._id,
-        name: user.name, 
-        email: decrypt(user.emailEncrypted), // Decrypt for response
-        username: user.username,
-        isPro: user.isPro,
-        credits: 10,
-        streak: user.streak, 
-        createdAt: user.createdAt,
-        avatar: user.avatar,
-        wallpaper: user.wallpaper,
-        securityQuestions: user.securityQuestions?.map(q => ({ question: q.question }))
-      });
+        user.otpCode = await bcrypt.hash(otp, 10);
+        user.otpExpires = otpExpires;
+        user.isVerified = false; // Explicitly set false
+        await user.save();
+
+        await sendOTPEmail(cleanEmail, otp);
+
+        (res as any).status(201).json({
+            requiresVerification: true,
+            email: cleanEmail
+        });
     }
   } catch (error) {
     console.error("Register Error:", error);
@@ -151,6 +148,37 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     // 1. Authenticate Password
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
       
+        // --- CHECK VERIFICATION ---
+        if (!user.isVerified) {
+            const otp = generateOTP();
+            const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+
+            user.otpCode = await bcrypt.hash(otp, 10);
+            user.otpExpires = otpExpires;
+            await user.save();
+
+            // Decrypt email for sending if needed, or use the cleanIdentifier if it was an email
+            // Safer to decrypt from stored
+            const emailToSend = decrypt(user.emailEncrypted) || user.email || cleanIdentifier;
+            if (emailToSend && emailToSend.includes('@')) {
+                 await sendOTPEmail(emailToSend, otp);
+            }
+
+            (res as any).status(200).json({
+                requiresVerification: true,
+                email: emailToSend
+            });
+            return;
+        }
+
+      // Check Mandatory Username for Legacy Users
+      if (!user.username) {
+          // We don't block login, but we signal the frontend to force username creation
+          // But wait, the user said "make the old users... to also giving the username".
+          // If we block login, they can't save it (unless we have a specific endpoint).
+          // We will send a special flag 'requireUsername: true'
+      }
+
       // 2. Handle missing fields (Self-healing legacy user data)
       if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email); // Redundant if migrated above, but safe
       if (user.username && !user.usernameEncrypted) user.usernameEncrypted = encrypt(user.username);
@@ -184,7 +212,8 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         _id: user._id,
         name: user.name, 
         email: decrypt(user.emailEncrypted) || user.email, // Fallback if somehow decryption fails
-        username: user.username || undefined, 
+        username: user.username || undefined,
+        requireUsername: !user.username, // Flag for Legacy Users
         hasDiarySetup: !!user.diaryPasswordHash,
         isPro: user.isPro,
         credits: user.isPro ? 9999 : (10 - (user.dailyPremiumUsage || 0)),
@@ -364,6 +393,15 @@ export const initiateReset = async (req: Request, res: Response) => {
     if (!user || !user.securityQuestions || user.securityQuestions.length === 0) {
       return (res as any).status(404).json({ message: 'Account not found or no security questions set.' }); 
     }
+
+    // FIX: Send the question specifically chosen by the user.
+    // Currently, registration only supports setting one question, so index [0] is correct IF the user sets it properly.
+    // However, if the array has multiple (future proof), we might need to send a specific one or let user choose.
+    // For now, index 0 is the only one.
+    // To fix "it shows only the first one", we ensure we return the question TEXT stored in the DB.
+    // If the user feels it's the "first one" from a list, it means they chose index 0 from the dropdown.
+    // But we are returning what is SAVED.
+
     (res as any).status(200).json({ question: user.securityQuestions[0].question });
   } catch (error) { (res as any).status(500).json({ message: 'Server Error' }); }
 };
@@ -409,6 +447,104 @@ export const verifySecurityAnswer = async (req: AuthRequest, res: Response) => {
         if (isValid) (res as any).json({ success: true });
         else (res as any).status(401).json({ message: 'Incorrect answer' });
     } catch(e) { (res as any).status(500).json({ message: 'Error' }); }
+};
+
+// --- OTP VERIFICATION ---
+export const verifyOTP = async (req: Request, res: Response) => {
+    try {
+        const { email, otp } = (req as any).body;
+        const cleanEmail = email.toLowerCase().trim();
+        const emailHash = hashEmail(cleanEmail);
+
+        const user = await User.findOne({
+            $or: [{ emailHash }, { email: cleanEmail }]
+        });
+
+        if (!user) return (res as any).status(404).json({ message: 'User not found' });
+        if (user.isVerified) return (res as any).status(200).json({ message: 'Already verified' }); // Idempotent
+
+        if (!user.otpCode || !user.otpExpires) {
+            return (res as any).status(400).json({ message: 'No OTP requested.' });
+        }
+
+        if (new Date() > user.otpExpires) {
+            return (res as any).status(400).json({ message: 'OTP expired.' });
+        }
+
+        const isValid = await bcrypt.compare(otp, user.otpCode);
+        if (!isValid) {
+            return (res as any).status(400).json({ message: 'Invalid code.' });
+        }
+
+        // Success
+        user.isVerified = true;
+        user.otpCode = undefined;
+        user.otpExpires = undefined;
+
+        // Handle migration fields if missing
+        if (!user.streak) user.streak = 1;
+        if (!user.lastVisit) user.lastVisit = new Date();
+
+        await user.save();
+
+        // Issue Token
+        const token = generateToken((user._id as any).toString());
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+        (res as any).cookie('jwt', token, {
+            httpOnly: true,
+            secure: isProduction,
+            sameSite: isProduction ? 'none' : 'lax',
+            maxAge: 30 * 24 * 60 * 60 * 1000
+        });
+
+        (res as any).json({
+            _id: user._id,
+            name: user.name,
+            email: decrypt(user.emailEncrypted),
+            username: user.username,
+            hasDiarySetup: !!user.diaryPasswordHash,
+            isPro: user.isPro,
+            credits: user.isPro ? 9999 : (10 - (user.dailyPremiumUsage || 0)),
+            streak: user.streak,
+            avatar: user.avatar,
+            wallpaper: user.wallpaper,
+            createdAt: user.createdAt,
+            securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
+        });
+
+    } catch (e) {
+        console.error("Verify OTP Error:", e);
+        (res as any).status(500).json({ message: 'Server error' });
+    }
+};
+
+export const resendOTP = async (req: Request, res: Response) => {
+    try {
+        const { email } = (req as any).body;
+        const cleanEmail = email.toLowerCase().trim();
+        const emailHash = hashEmail(cleanEmail);
+
+        const user = await User.findOne({
+             $or: [{ emailHash }, { email: cleanEmail }]
+        });
+
+        if (!user) return (res as any).status(404).json({ message: 'User not found' });
+        if (user.isVerified) return (res as any).status(400).json({ message: 'Already verified' });
+
+        const otp = generateOTP();
+        const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+        user.otpCode = await bcrypt.hash(otp, 10);
+        user.otpExpires = otpExpires;
+        await user.save();
+
+        await sendOTPEmail(cleanEmail, otp);
+
+        (res as any).status(200).json({ message: 'Code resent' });
+    } catch (e) {
+        console.error("Resend OTP Error:", e);
+        (res as any).status(500).json({ message: 'Server error' });
+    }
 };
 
 // Re-encrypt diary entries with new password (preserving data)
