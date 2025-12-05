@@ -3,7 +3,7 @@ import { DraggableWindow } from '../layout/DraggableWindow';
 import { 
   Play, Pause, SkipForward, SkipBack, Repeat, Search, 
   Disc, Sparkles, Plus, ListMusic, Lock, X, Music2, Globe, Check, Settings,
-  ArrowUp, ArrowDown, Trash2
+  ArrowUp, ArrowDown, Trash2, Minus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
@@ -35,6 +35,58 @@ type LoopMode = 'off' | 'all' | 'one' | 'custom';
 const LANGUAGES = ["English", "Hindi", "Tamil", "Telugu", "Punjabi", "Malayalam", "Kannada", "Bengali", "Marathi"];
 const MOOD_TAGS = ["Happy", "Sad", "Calm", "Energetic", "Romantic", "Focus", "Melancholy", "Party", "Lo-Fi"];
 
+// --- Reusable Stepper Component ---
+interface StepperProps {
+    value: number;
+    onChange: (val: number) => void;
+    min?: number;
+    max?: number;
+    step?: number;
+    compact?: boolean;
+}
+
+const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max = 100, step = 1, compact = false }) => {
+    const handleDecrement = () => {
+        if (value - step >= min) onChange(value - step);
+    };
+
+    const handleIncrement = () => {
+        if (value + step <= max) onChange(value + step);
+    };
+
+    const containerClass = compact
+        ? "flex items-center bg-[#1F2937] rounded-lg border border-white/10 h-8 w-24 justify-between px-1"
+        : "flex items-center bg-[#1F2937] rounded-lg border border-white/10 h-10 w-[120px] justify-between px-1";
+
+    const btnClass = compact
+        ? "w-6 h-6 flex items-center justify-center text-white/50 hover:text-white disabled:opacity-30 disabled:hover:text-white/50 transition-colors"
+        : "w-8 h-8 flex items-center justify-center text-white/50 hover:text-white disabled:opacity-30 disabled:hover:text-white/50 transition-colors";
+
+    return (
+        <div className={containerClass}>
+            <button
+                onClick={handleDecrement}
+                disabled={value <= min}
+                className={btnClass}
+            >
+                <Minus size={compact ? 12 : 14} />
+            </button>
+
+            <span className={`text-sm font-medium text-white font-mono min-w-[20px] text-center ${compact ? 'text-xs' : ''}`}>
+                {value}
+            </span>
+
+            <button
+                onClick={handleIncrement}
+                disabled={value >= max}
+                className={btnClass}
+            >
+                <Plus size={compact ? 12 : 14} />
+            </button>
+        </div>
+    );
+};
+
 export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
   const { currentTheme } = useTheme();
   
@@ -45,6 +97,10 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   
+  // Scrubbing State
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragTime, setDragTime] = useState(0);
+
   // Search & Input State
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -177,12 +233,20 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       setIsSearching(true);
       try {
           const res = await api.get(`/data/videos/search?q=${encodeURIComponent(query)}`);
-          if (res.data && res.data.length > 0) {
-              const newTrack = res.data[0];
+          // Check if res.data is array or wrapped object. Assuming array based on usage.
+          // If the backend returns { items: [...] } adjust accordingly.
+          // Previous code assumed res.data is the array or res.data[0].
+          // Let's assume res.data is the array of tracks.
+
+          if (Array.isArray(res.data) && res.data.length > 0) {
+              const newTrack = res.data[0]; // Take top result
 
               setQueue(prev => {
                 // If queue is empty, play immediately
                 if (prev.length === 0) {
+                    // Need to wait for render update or use ref?
+                    // loadAndPlay relies on playerRef which is persistent.
+                    // But we need to update state first.
                     setTimeout(() => loadAndPlay(newTrack), 100);
                     return [newTrack];
                 }
@@ -190,9 +254,12 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                 return [...prev, newTrack];
               });
 
-              if (queue.length === 0) {
-                  setCurrentIndex(0);
-              }
+              // If we were empty, index is 0.
+              if (queue.length === 0) setCurrentIndex(0);
+
+          } else {
+              // Fallback or Alert?
+              console.warn("No results found for query:", query);
           }
       } catch (e) { console.error("Search failed", e); } 
       finally { setIsSearching(false); setQuery(''); }
@@ -367,33 +434,21 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                                 </div>
                             </div>
 
-                             {/* Duration Slider */}
+                             {/* Duration Slider Replaced by Stepper */}
                             <div>
                                 <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Session Duration</h4>
                                 <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                                    <div className="flex justify-between text-xs text-white mb-2">
-                                        <span>10 min</span>
-                                        <span className="font-bold text-teal-400">{targetDuration} min</span>
-                                        <span>180+ min</span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="10"
-                                        max="400"
-                                        step="10"
-                                        value={targetDuration}
-                                        onChange={(e) => setTargetDuration(parseInt(e.target.value))}
-                                        className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-teal-400 [&::-webkit-slider-thumb]:rounded-full"
-                                    />
-                                    <div className="flex justify-between items-center mt-3">
-                                        <span className="text-[10px] text-white/40">Custom duration (10 - 400 min)</span>
-                                        <input
-                                            type="number"
-                                            min="10"
-                                            max="600"
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex flex-col">
+                                            <div className="text-xs text-white/60 mb-1">Duration (min)</div>
+                                            <div className="text-[10px] text-white/30">10 - 400 min</div>
+                                        </div>
+                                        <Stepper
                                             value={targetDuration}
-                                            onChange={(e) => setTargetDuration(Math.max(10, Math.min(600, parseInt(e.target.value) || 10)))}
-                                            className="w-16 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-right text-white focus:border-teal-400 focus:outline-none"
+                                            onChange={setTargetDuration}
+                                            min={10}
+                                            max={400}
+                                            step={10}
                                         />
                                     </div>
                                 </div>
@@ -526,16 +581,50 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                         )}
                     </div>
 
-                    {/* Progress Bar */}
+                    {/* Progress Bar with Fluid Scrubbing */}
                     <div className="mb-6 group">
                         <div className="flex justify-between text-[10px] text-white/30 mb-1 font-mono group-hover:text-white/50 transition-colors">
-                            <span>{formatTime(currentTime)}</span>
+                            <span>{formatTime(isDragging ? dragTime : currentTime)}</span>
                             <span>{formatTime(duration)}</span>
                         </div>
-                        <div className="h-1.5 bg-white/10 rounded-full w-full overflow-hidden relative">
-                            <motion.div
-                                className="h-full rounded-full"
-                                style={{ width: `${(currentTime / (duration || 1)) * 100}%`, backgroundColor: currentTheme.primaryColor }}
+                        <div className="h-4 flex items-center relative">
+                            {/* Background Track */}
+                            <div className="absolute w-full h-1.5 bg-white/10 rounded-full overflow-hidden pointer-events-none">
+                                <div
+                                    className="h-full"
+                                    style={{
+                                        width: `${((isDragging ? dragTime : currentTime) / (duration || 1)) * 100}%`,
+                                        backgroundColor: currentTheme.primaryColor
+                                    }}
+                                />
+                            </div>
+
+                            {/* Range Input for Smooth Scrubbing */}
+                            <input
+                                type="range"
+                                min="0"
+                                max={duration || 100}
+                                value={isDragging ? dragTime : currentTime}
+                                onMouseDown={() => setIsDragging(true)}
+                                onTouchStart={() => setIsDragging(true)}
+                                onChange={(e) => setDragTime(parseFloat(e.target.value))}
+                                onMouseUp={(e) => {
+                                    setIsDragging(false);
+                                    if (playerRef.current) playerRef.current.seekTo(parseFloat(e.currentTarget.value));
+                                }}
+                                onTouchEnd={(e) => {
+                                    setIsDragging(false);
+                                    if (playerRef.current) playerRef.current.seekTo(dragTime);
+                                }}
+                                className="w-full h-full opacity-0 cursor-pointer z-10"
+                            />
+
+                            {/* Visible Thumb (follows input value) */}
+                            <div
+                                className="absolute w-3 h-3 bg-white rounded-full shadow-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"
+                                style={{
+                                    left: `calc(${((isDragging ? dragTime : currentTime) / (duration || 1)) * 100}% - 6px)`
+                                }}
                             />
                         </div>
                     </div>
@@ -554,12 +643,17 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                         {loopMode === 'one' && <span className="absolute text-[8px] font-bold ml-[-6px] mt-[6px]">1</span>}
                         {loopMode === 'custom' && <span className="absolute text-[8px] font-bold ml-[-6px] mt-[6px]">*</span>}
                     </button>
-                    {/* Custom Loop Input - Upgraded */}
+                    {/* Custom Loop Input - Upgraded to Stepper */}
                     {loopMode === 'custom' && (
-                         <div className="flex items-center bg-white/5 rounded-lg border border-white/10 h-8">
-                             <button onClick={() => setLoopTarget(p => Math.max(2, p - 1))} className="px-2 text-white/50 hover:text-white text-xs font-bold">-</button>
-                             <span className="text-[10px] text-white font-mono w-4 text-center">{loopTarget}</span>
-                             <button onClick={() => setLoopTarget(p => Math.min(100, p + 1))} className="px-2 text-white/50 hover:text-white text-xs font-bold">+</button>
+                         <div className="ml-2">
+                             <Stepper
+                                value={loopTarget}
+                                onChange={setLoopTarget}
+                                min={2}
+                                max={50}
+                                step={1}
+                                compact={true}
+                             />
                          </div>
                     )}
                 </div>
