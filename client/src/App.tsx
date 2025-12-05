@@ -53,6 +53,56 @@ const AppRoutes = () => {
 };
 
 const App: React.FC = () => {
+  // --- Security: Disable Inspect & Right Click ---
+  React.useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Block F12
+      if (e.key === 'F12') {
+        e.preventDefault();
+        return;
+      }
+
+      // Block Ctrl+Shift+I/J/C, Ctrl+U, Cmd+Option+I/J/C/U
+      if (e.ctrlKey || e.metaKey) {
+        const key = e.key.toLowerCase();
+
+        // Ctrl+U or Cmd+U (View Source)
+        if (key === 'u') {
+          e.preventDefault();
+          return;
+        }
+
+        // Ctrl+Shift+...
+        if (e.shiftKey) {
+          if (key === 'i' || key === 'j' || key === 'c') {
+             e.preventDefault();
+             return;
+          }
+        }
+
+        // Cmd+Option+... (Mac)
+        if (e.altKey) {
+          if (key === 'i' || key === 'j' || key === 'c' || key === 'u') {
+            e.preventDefault();
+            return;
+          }
+        }
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   return (
     <AuthProvider>
       <EncryptionProvider>
