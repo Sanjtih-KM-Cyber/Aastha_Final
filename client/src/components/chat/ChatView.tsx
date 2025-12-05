@@ -74,6 +74,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const { setTheme, currentTheme } = useTheme();
   const navigate = useNavigate();
   
+  const botName = user?.persona === 'aarav' ? 'Aastik' : 'Aastha';
+
   // --- State Management ---
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -146,10 +148,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  setMessages(data);
                  setTimeout(() => scrollToBottom(), 100);
              } else {
-                 setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am Aastha. How can I support you right now?`, timestamp: Date.now() }]);
+                 setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. How can I support you right now?`, timestamp: Date.now() }]);
              }
          } catch (e) { 
-             setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am Aastha. I'm ready to listen.`, timestamp: Date.now() }]);
+             setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. I'm ready to listen.`, timestamp: Date.now() }]);
          }
      };
      
@@ -384,7 +386,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
               return;
           }
           const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.message || 'Aastha is unreachable.');
+          throw new Error(errData.message || `${botName} is unreachable.`);
       }
 
       const reader = response.body?.getReader();

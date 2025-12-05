@@ -39,19 +39,19 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     const cleanUsername = username.toLowerCase().trim();
     const emailHash = hashEmail(cleanEmail);
 
-    // Check if user exists using the index fields (Email Hash or Username)
-    // We also check legacy 'email' field just in case
-    const userExists = await User.findOne({ 
-      $or: [
-        { emailHash: emailHash },
-        { email: cleanEmail },
-        ...(cleanUsername ? [{ username: cleanUsername }] : [])
-      ]
-    });
+    // Unique Checks
+    const emailExists = await User.findOne({ $or: [{ emailHash }, { email: cleanEmail }] });
+    if (emailExists) {
+        (res as any).status(400).json({ message: 'Email already registered' });
+        return;
+    }
 
-    if (userExists) {
-      (res as any).status(400).json({ message: 'User already exists' });
-      return;
+    if (cleanUsername) {
+        const usernameExists = await User.findOne({ username: cleanUsername });
+        if (usernameExists) {
+            (res as any).status(400).json({ message: 'Username already taken' });
+            return;
+        }
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -216,15 +216,16 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       (res as any).json({
         _id: user._id,
         name: user.name, 
-        email: decrypt(user.emailEncrypted) || user.email, // Fallback if somehow decryption fails
+            email: decrypt(user.emailEncrypted) || user.email, 
         username: user.username || undefined,
-        requireUsername: !user.username, // Flag for Legacy Users
+            requireUsername: !user.username, 
         hasDiarySetup: !!user.diaryPasswordHash,
         isPro: user.isPro,
         credits: user.isPro ? 9999 : (10 - (user.dailyPremiumUsage || 0)),
         streak: user.streak,
         avatar: user.avatar,
         wallpaper: user.wallpaper,
+            persona: user.persona || 'aastha',
         createdAt: user.createdAt,
         securityQuestions: user.securityQuestions?.map(q => ({ question: q.question }))
       });
@@ -316,6 +317,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
         streak: user.streak,
         avatar: user.avatar,
         wallpaper: user.wallpaper,
+        persona: user.persona || 'aastha',
         createdAt: user.createdAt,
         securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
     });
@@ -329,13 +331,14 @@ export const getMe = async (req: AuthRequest, res: Response) => {
 export const updateProfile = async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-        const { name, username, avatar, wallpaper } = (req as any).body;
+        const { name, username, avatar, wallpaper, persona } = (req as any).body;
         const user = await User.findById(req.user._id);
         if (!user) return (res as any).status(404).json({ message: 'User not found' });
         
         if (name !== undefined) user.name = name;
         if (avatar !== undefined) user.avatar = avatar;
         if (wallpaper !== undefined) user.wallpaper = wallpaper;
+        if (persona !== undefined) user.persona = persona;
         
         if (username) {
             const cleanUsername = username.toLowerCase().trim();
@@ -363,6 +366,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
             streak: user.streak,
             avatar: user.avatar,
             wallpaper: user.wallpaper,
+            persona: user.persona || 'aastha',
             createdAt: user.createdAt,
             securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
         });

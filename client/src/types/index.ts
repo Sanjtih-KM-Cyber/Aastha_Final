@@ -13,6 +13,7 @@ export interface User {
   isPro?: boolean;
   streak?: number; // NEW
   securityQuestions?: { question: string }[];
+  persona?: 'aastha' | 'aarav'; // NEW
 }
 
 export interface AuthState {

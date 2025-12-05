@@ -181,6 +181,16 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       setWallpaper(null);
   };
 
+  const savePersona = async (persona: 'aastha' | 'aarav') => {
+      try {
+          const res = await api.put('/users/profile', { persona });
+          if (res.data) updateUser(res.data);
+      } catch (e) {
+          console.error(e);
+          alert("Failed to update persona.");
+      }
+  };
+
   const handleSoftDelete = async () => {
       if (!deleteReason) return;
       setIsDeleting(true);
@@ -306,6 +316,33 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
 
               {activeTab === 'voice' && (
                   <div className="space-y-8 animate-fade-in">
+                       <section>
+                           <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Companion Persona</h3>
+                           <div className="grid grid-cols-2 gap-4 mb-8">
+                               <button
+                                   onClick={() => savePersona('aastha')}
+                                   className={`p-4 rounded-xl border flex flex-col items-center gap-3 transition-all ${user?.persona !== 'aarav' ? 'bg-teal-500/20 border-teal-500 text-teal-200 shadow-[0_0_15px_rgba(20,184,166,0.2)]' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'}`}
+                               >
+                                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center text-xl shadow-lg">🌸</div>
+                                   <div className="text-center">
+                                       <div className="font-bold text-sm mb-1">Aastha</div>
+                                       <div className="text-[10px] opacity-70">Calm, Sisterly, Warm</div>
+                                   </div>
+                               </button>
+
+                               <button
+                                   onClick={() => savePersona('aarav')}
+                                   className={`p-4 rounded-xl border flex flex-col items-center gap-3 transition-all ${user?.persona === 'aarav' ? 'bg-indigo-500/20 border-indigo-500 text-indigo-200 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'}`}
+                               >
+                                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-violet-600 flex items-center justify-center text-xl shadow-lg">🧘‍♂️</div>
+                                   <div className="text-center">
+                                       <div className="font-bold text-sm mb-1">Aastik</div>
+                                       <div className="text-[10px] opacity-70">Grounded, Brotherly, Protective</div>
+                                   </div>
+                               </button>
+                           </div>
+                       </section>
+
                        <section>
                            <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">AI Voice Settings</h3>
                            <div className="flex justify-between items-center p-4 rounded-xl bg-white/5 mb-4">

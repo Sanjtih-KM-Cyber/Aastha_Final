@@ -53,6 +53,9 @@ export interface IUser extends Document {
   isVerified?: boolean;
   otpCode?: string;
   otpExpires?: Date;
+
+  // AI Persona
+  persona?: 'aastha' | 'aarav'; 
 }
 
 const securityQuestionSchema = new Schema({
@@ -108,7 +111,10 @@ const userSchema = new Schema<IUser>({
   // Verification
   isVerified: { type: Boolean, default: false },
   otpCode: { type: String },
-  otpExpires: { type: Date }
+  otpExpires: { type: Date },
+
+  // AI Persona Preference (Default: Aastha/Female)
+  persona: { type: String, enum: ['aastha', 'aarav'], default: 'aastha' }
 }, {
   timestamps: true,
 });
