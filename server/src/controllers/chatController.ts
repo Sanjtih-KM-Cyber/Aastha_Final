@@ -140,7 +140,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let provider = 'GEMINI'; 
     let mode = 'premium';
     let warning = undefined;
-
+    
     // Warmth Strategy:
     // Premium = High Warmth (sweetheart, love, bestie)
     // Standard = Low Warmth (polite, friendly, but distant) - Creates craving
@@ -160,7 +160,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     } else {
         // Switch to "Standard" mode but keep Gemini for intelligence
         // Just strip the warmth from the prompt later
-        provider = 'GEMINI';
+        provider = 'GEMINI'; 
         mode = 'standard'; // Low Warmth
         warning = "Daily Premium limit reached. Aastha is feeling a bit distant...";
         
@@ -211,7 +211,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     // 5. Prepare System Prompt
     const factsString = user.facts.length > 0 ? user.facts.map((f: string) => `- ${f}`).join('\n') : "No facts yet.";
-
+    
     // Select Persona (Default Aastha)
     let templateToUse = user.persona === 'aarav' ? AASTIK_PROMPT_TEMPLATE : AASTHA_PROMPT_TEMPLATE;
 
@@ -219,7 +219,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         // --- SUBTLE WARMTH REDUCTION ---
         // Replace the warmth section with a more neutral/polite version
         const standardTone = "-   **Tone:** Be polite and friendly, but less consistently intimate. Use affectionate terms sparingly and only when deeply comforting. Maintain a slightly more respectful distance than usual.";
-
+        
         // Try replacing Aastha's warmth block
         templateToUse = templateToUse.replace(
             "-   **Comfort & Warmth (IMPORTANT):** You are a close friend. Use affectionate terms like **\"sweetheart\"**, **\"dear\"**, **\"love\"**, **\"bestie\"**, or **\"yaar\"** naturally, especially when the user is sad or needs comfort. Do not be afraid to show emotion.",

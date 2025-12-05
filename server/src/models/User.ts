@@ -55,7 +55,7 @@ export interface IUser extends Document {
   otpExpires?: Date;
 
   // AI Persona
-  persona?: 'aastha' | 'aarav';
+  persona?: 'aastha' | 'aarav'; 
 }
 
 const securityQuestionSchema = new Schema({
