@@ -34,14 +34,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       // Note: splitting by regex captures separators, so 'test match test'.split(/(match)/) -> ['test ', 'match', ' test']
       // We need to count *occurrences* of the search term as we map
       let occurrenceCount = 0;
-
+      
       const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const parts = text.split(new RegExp(`(${escapedQuery})`, 'gi'));
       return parts.map((part, index) => {
           if (part.toLowerCase() === searchQuery.toLowerCase()) {
               const isActive = occurrenceCount === currentMatchIndex;
               occurrenceCount++;
-
+              
               return (
                 <span
                     key={index}

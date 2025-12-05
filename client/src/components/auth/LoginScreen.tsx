@@ -42,22 +42,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); setIsLoading(true); setError('');
-    try {
-        const res = await login(identifier, password);
+    try { 
+        const res = await login(identifier, password); 
         if (res && res.requiresVerification) {
             navigate('/verify', { state: { email: res.email } });
         } else {
-            navigate('/sanctuary');
+            navigate('/sanctuary'); 
         }
-    }
-    catch (err: any) {
+    } 
+    catch (err: any) { 
         // If the error response contains the verification flag (e.g. from axios interceptor or direct 200 with flag)
         if (err.response?.data?.requiresVerification) {
              navigate('/verify', { state: { email: err.response.data.email } });
         } else {
-             setError(err.response?.data?.message || 'Login failed.');
+             setError(err.response?.data?.message || 'Login failed.'); 
         }
-    }
+    } 
     finally { setIsLoading(false); }
   };
 
@@ -65,14 +65,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
     e.preventDefault(); setIsLoading(true); setError('');
     try {
       const res = await register({
-          name: regName,
-          email: regEmail,
+          name: regName, 
+          email: regEmail, 
           username: regUsername, // Compulsory Username
-          password: regPassword,
+          password: regPassword, 
           diaryPassword: regDiaryPassword,
           securityQuestions: [{ question: secQ1, answer: secA1 }]
       });
-
+      
       if (res && res.requiresVerification) {
           navigate('/verify', { state: { email: res.email } });
       } else {
