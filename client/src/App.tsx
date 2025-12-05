@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AppContainer } from './components/layout/AppContainer';
 import { Landing } from './pages/Landing';
 import { Auth } from './pages/Auth';
+import { VerifyOTPScreen } from './pages/VerifyOTPScreen';
 import { Sanctuary } from './pages/Sanctuary';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -33,6 +34,7 @@ const AppRoutes = () => {
       {/* Public Routes */}
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Auth />} />
+      <Route path="/verify" element={<VerifyOTPScreen />} />
       
       {/* Protected Routes */}
       <Route

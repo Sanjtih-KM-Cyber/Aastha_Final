@@ -183,7 +183,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             credits: user.isPro ? '∞' : (10 - (user.dailyPremiumUsage || 0)), 
             mode: mode,
             warning: warning,
-            model: provider === 'GEMINI' ? 'Gemini 1.5 Flash' : 'Llama 3.1'
+            model: provider === 'GEMINI' ? 'Gemini 2.5 Flash' : 'Llama 3.1'
         } 
     })}\n\n`);
 
