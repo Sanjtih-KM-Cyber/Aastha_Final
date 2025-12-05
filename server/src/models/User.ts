@@ -48,6 +48,14 @@ export interface IUser extends Document {
   // Subscription
   subscriptionDate?: Date;
   paymentHistory: IPaymentRecord[];
+
+  // Verification
+  isVerified?: boolean;
+  otpCode?: string;
+  otpExpires?: Date;
+
+  // AI Persona
+  persona?: 'aastha' | 'aarav';
 }
 
 const securityQuestionSchema = new Schema({
@@ -98,7 +106,15 @@ const userSchema = new Schema<IUser>({
   
   // Subscription
   subscriptionDate: { type: Date },
-  paymentHistory: { type: [paymentRecordSchema], default: [] }
+  paymentHistory: { type: [paymentRecordSchema], default: [] },
+
+  // Verification
+  isVerified: { type: Boolean, default: false },
+  otpCode: { type: String },
+  otpExpires: { type: Date },
+
+  // AI Persona Preference (Default: Aastha/Female)
+  persona: { type: String, enum: ['aastha', 'aarav'], default: 'aastha' }
 }, {
   timestamps: true,
 });

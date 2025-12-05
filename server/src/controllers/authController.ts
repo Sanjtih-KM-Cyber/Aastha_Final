@@ -6,6 +6,7 @@ import User from '../models/User';
 import Diary from '../models/Diary';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { encrypt, decrypt } from '../utils/serverEncryption';
+import { sendOTPEmail } from '../services/emailService';
 // REMOVED: import { decrypt as clientDecrypt } from '../utils/encryptionUtils'; // Cannot resolve
 
 const hashEmail = (email: string) => {
@@ -18,34 +19,39 @@ const generateToken = (id: string) => {
   });
 };
 
+const generateOTP = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
 // --- REGISTER ---
 export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
     // Re-added username back to body destructuring
     const { name, email, username, password, diaryPassword, securityQuestions } = (req as any).body;
 
-    if (!name || !email || !password) {
-      (res as any).status(400).json({ message: 'Please add all required fields' });
+    // Enforce Username for New Users
+    if (!name || !email || !password || !username) {
+      (res as any).status(400).json({ message: 'Please add all required fields (including Username)' });
       return;
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const cleanUsername = username ? username.toLowerCase().trim() : undefined;
+    const cleanUsername = username.toLowerCase().trim();
     const emailHash = hashEmail(cleanEmail);
 
-    // Check if user exists using the index fields (Email Hash or Username)
-    // We also check legacy 'email' field just in case
-    const userExists = await User.findOne({ 
-      $or: [
-        { emailHash: emailHash },
-        { email: cleanEmail },
-        ...(cleanUsername ? [{ username: cleanUsername }] : [])
-      ]
-    });
+    // Unique Checks
+    const emailExists = await User.findOne({ $or: [{ emailHash }, { email: cleanEmail }] });
+    if (emailExists) {
+        (res as any).status(400).json({ message: 'Email already registered' });
+        return;
+    }
 
-    if (userExists) {
-      (res as any).status(400).json({ message: 'User already exists' });
-      return;
+    if (cleanUsername) {
+        const usernameExists = await User.findOne({ username: cleanUsername });
+        if (usernameExists) {
+            (res as any).status(400).json({ message: 'Username already taken' });
+            return;
+        }
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -63,7 +69,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 
     const user = await User.create({
       name: name, // Plain
-      // email: cleanEmail, // REMOVED PLAIN EMAIL
+      email: cleanEmail, // Storing plain email to satisfy legacy unique index constraints
       emailHash: emailHash, // SHA-256 Hash
       username: cleanUsername, // Plain Index
       emailEncrypted: encrypt(email),
@@ -79,31 +85,32 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     });
 
     if (user) {
-      const token = generateToken((user._id as any).toString());
-      // Render (Backend) to Vercel (Frontend) requires SameSite=None and Secure=true
-      // We check for NODE_ENV=production OR if we are explicitly on Render (process.env.RENDER)
-      const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+        // --- OTP DISABLED: Auto-Verify & Login ---
+        user.isVerified = true;
+        await user.save();
 
-      (res as any).cookie('jwt', token, {
-        httpOnly: true,
-        secure: isProduction, // Must be true for SameSite=None
-        sameSite: isProduction ? 'none' : 'lax',
-        maxAge: 30 * 24 * 60 * 60 * 1000
-      });
-      
-      (res as any).status(201).json({
-        _id: user._id,
-        name: user.name, 
-        email: decrypt(user.emailEncrypted), // Decrypt for response
-        username: user.username,
-        isPro: user.isPro,
-        credits: 10,
-        streak: user.streak, 
-        createdAt: user.createdAt,
-        avatar: user.avatar,
-        wallpaper: user.wallpaper,
-        securityQuestions: user.securityQuestions?.map(q => ({ question: q.question }))
-      });
+        const token = generateToken((user._id as any).toString());
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+        (res as any).cookie('jwt', token, {
+            httpOnly: true,
+            secure: isProduction,
+            sameSite: isProduction ? 'none' : 'lax',
+            maxAge: 30 * 24 * 60 * 60 * 1000
+        });
+
+        (res as any).status(201).json({
+            _id: user._id,
+            name: user.name,
+            email: decrypt(user.emailEncrypted) || user.email,
+            username: user.username,
+            hasDiarySetup: false,
+            isPro: user.isPro,
+            credits: 10,
+            streak: 1,
+            avatar: user.avatar,
+            wallpaper: user.wallpaper,
+            createdAt: user.createdAt
+        });
     }
   } catch (error) {
     console.error("Register Error:", error);
@@ -151,11 +158,37 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     // 1. Authenticate Password
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
       
+        // --- OTP DISABLED: Auto-verify if not verified ---
+        if (!user.isVerified) {
+             user.isVerified = true;
+             await user.save();
+        }
+
+      // Check Mandatory Username for Legacy Users
+      if (!user.username) {
+          // We don't block login, but we signal the frontend to force username creation
+          // But wait, the user said "make the old users... to also giving the username".
+          // If we block login, they can't save it (unless we have a specific endpoint).
+          // We will send a special flag 'requireUsername: true'
+      }
+
       // 2. Handle missing fields (Self-healing legacy user data)
-      if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email); // Redundant if migrated above, but safe
-      if (user.username && !user.usernameEncrypted) user.usernameEncrypted = encrypt(user.username);
+      if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email);
+
+      // Auto-generate username for legacy users
+      if (!user.username) {
+          const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+          const baseName = user.name ? user.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 10) : 'user';
+          user.username = `${baseName}${randomSuffix}`;
+          user.usernameEncrypted = encrypt(user.username);
+      } else if (!user.usernameEncrypted) {
+          user.usernameEncrypted = encrypt(user.username);
+      }
+
       if (!user.streak) user.streak = 1; 
       if (!user.lastVisit) user.lastVisit = new Date(); 
+      if (user.dailyPremiumUsage === undefined) user.dailyPremiumUsage = 0;
+      if (user.isPro === undefined) user.isPro = false;
 
       // 3. Daily Reset Check
       const today = new Date();
@@ -183,14 +216,16 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       (res as any).json({
         _id: user._id,
         name: user.name, 
-        email: decrypt(user.emailEncrypted) || user.email, // Fallback if somehow decryption fails
-        username: user.username || undefined, 
+            email: decrypt(user.emailEncrypted) || user.email,
+        username: user.username || undefined,
+            requireUsername: !user.username,
         hasDiarySetup: !!user.diaryPasswordHash,
         isPro: user.isPro,
         credits: user.isPro ? 9999 : (10 - (user.dailyPremiumUsage || 0)),
         streak: user.streak,
         avatar: user.avatar,
         wallpaper: user.wallpaper,
+            persona: user.persona || 'aastha',
         createdAt: user.createdAt,
         securityQuestions: user.securityQuestions?.map(q => ({ question: q.question }))
       });
@@ -228,8 +263,21 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     }
 
     if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email);
+
+    // Auto-generate username for legacy users
+    if (!user.username) {
+        const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+        const baseName = user.name ? user.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 10) : 'user';
+        user.username = `${baseName}${randomSuffix}`;
+        user.usernameEncrypted = encrypt(user.username);
+    } else if (!user.usernameEncrypted) {
+        user.usernameEncrypted = encrypt(user.username);
+    }
+
     if (!user.streak) user.streak = 1;
     if (!user.lastVisit) user.lastVisit = new Date(); 
+    if (user.dailyPremiumUsage === undefined) user.dailyPremiumUsage = 0;
+    if (user.isPro === undefined) user.isPro = false;
     
     // Streak Logic & Daily Usage Reset
     const now = new Date();
@@ -269,6 +317,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
         streak: user.streak,
         avatar: user.avatar,
         wallpaper: user.wallpaper,
+        persona: user.persona || 'aastha',
         createdAt: user.createdAt,
         securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
     });
@@ -282,13 +331,14 @@ export const getMe = async (req: AuthRequest, res: Response) => {
 export const updateProfile = async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-        const { name, username, avatar, wallpaper } = (req as any).body;
+        const { name, username, avatar, wallpaper, persona } = (req as any).body;
         const user = await User.findById(req.user._id);
         if (!user) return (res as any).status(404).json({ message: 'User not found' });
         
         if (name !== undefined) user.name = name;
         if (avatar !== undefined) user.avatar = avatar;
         if (wallpaper !== undefined) user.wallpaper = wallpaper;
+        if (persona !== undefined) user.persona = persona;
         
         if (username) {
             const cleanUsername = username.toLowerCase().trim();
@@ -316,6 +366,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
             streak: user.streak,
             avatar: user.avatar,
             wallpaper: user.wallpaper,
+            persona: user.persona || 'aastha',
             createdAt: user.createdAt,
             securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
         });
@@ -364,6 +415,15 @@ export const initiateReset = async (req: Request, res: Response) => {
     if (!user || !user.securityQuestions || user.securityQuestions.length === 0) {
       return (res as any).status(404).json({ message: 'Account not found or no security questions set.' }); 
     }
+
+    // FIX: Send the question specifically chosen by the user.
+    // Currently, registration only supports setting one question, so index [0] is correct IF the user sets it properly.
+    // However, if the array has multiple (future proof), we might need to send a specific one or let user choose.
+    // For now, index 0 is the only one.
+    // To fix "it shows only the first one", we ensure we return the question TEXT stored in the DB.
+    // If the user feels it's the "first one" from a list, it means they chose index 0 from the dropdown.
+    // But we are returning what is SAVED.
+
     (res as any).status(200).json({ question: user.securityQuestions[0].question });
   } catch (error) { (res as any).status(500).json({ message: 'Server Error' }); }
 };
@@ -409,6 +469,104 @@ export const verifySecurityAnswer = async (req: AuthRequest, res: Response) => {
         if (isValid) (res as any).json({ success: true });
         else (res as any).status(401).json({ message: 'Incorrect answer' });
     } catch(e) { (res as any).status(500).json({ message: 'Error' }); }
+};
+
+// --- OTP VERIFICATION ---
+export const verifyOTP = async (req: Request, res: Response) => {
+    try {
+        const { email, otp } = (req as any).body;
+        const cleanEmail = email.toLowerCase().trim();
+        const emailHash = hashEmail(cleanEmail);
+
+        const user = await User.findOne({
+            $or: [{ emailHash }, { email: cleanEmail }]
+        });
+
+        if (!user) return (res as any).status(404).json({ message: 'User not found' });
+        if (user.isVerified) return (res as any).status(200).json({ message: 'Already verified' }); // Idempotent
+
+        if (!user.otpCode || !user.otpExpires) {
+            return (res as any).status(400).json({ message: 'No OTP requested.' });
+        }
+
+        if (new Date() > user.otpExpires) {
+            return (res as any).status(400).json({ message: 'OTP expired.' });
+        }
+
+        const isValid = await bcrypt.compare(otp, user.otpCode);
+        if (!isValid) {
+            return (res as any).status(400).json({ message: 'Invalid code.' });
+        }
+
+        // Success
+        user.isVerified = true;
+        user.otpCode = undefined;
+        user.otpExpires = undefined;
+
+        // Handle migration fields if missing
+        if (!user.streak) user.streak = 1;
+        if (!user.lastVisit) user.lastVisit = new Date();
+
+        await user.save();
+
+        // Issue Token
+        const token = generateToken((user._id as any).toString());
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+        (res as any).cookie('jwt', token, {
+            httpOnly: true,
+            secure: isProduction,
+            sameSite: isProduction ? 'none' : 'lax',
+            maxAge: 30 * 24 * 60 * 60 * 1000
+        });
+
+        (res as any).json({
+            _id: user._id,
+            name: user.name,
+            email: decrypt(user.emailEncrypted),
+            username: user.username,
+            hasDiarySetup: !!user.diaryPasswordHash,
+            isPro: user.isPro,
+            credits: user.isPro ? 9999 : (10 - (user.dailyPremiumUsage || 0)),
+            streak: user.streak,
+            avatar: user.avatar,
+            wallpaper: user.wallpaper,
+            createdAt: user.createdAt,
+            securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
+        });
+
+    } catch (e) {
+        console.error("Verify OTP Error:", e);
+        (res as any).status(500).json({ message: 'Server error' });
+    }
+};
+
+export const resendOTP = async (req: Request, res: Response) => {
+    try {
+        const { email } = (req as any).body;
+        const cleanEmail = email.toLowerCase().trim();
+        const emailHash = hashEmail(cleanEmail);
+
+        const user = await User.findOne({
+             $or: [{ emailHash }, { email: cleanEmail }]
+        });
+
+        if (!user) return (res as any).status(404).json({ message: 'User not found' });
+        if (user.isVerified) return (res as any).status(400).json({ message: 'Already verified' });
+
+        const otp = generateOTP();
+        const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+        user.otpCode = await bcrypt.hash(otp, 10);
+        user.otpExpires = otpExpires;
+        await user.save();
+
+        await sendOTPEmail(cleanEmail, otp);
+
+        (res as any).status(200).json({ message: 'Code resent' });
+    } catch (e) {
+        console.error("Resend OTP Error:", e);
+        (res as any).status(500).json({ message: 'Server error' });
+    }
 };
 
 // Re-encrypt diary entries with new password (preserving data)

@@ -5,6 +5,7 @@ import {
   Sparkles, ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
 import { MessageBubble } from './MessageBubble';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
@@ -22,8 +23,6 @@ interface ChatViewProps {
   onMobileMenuClick?: () => void;
   onOpenWidget?: (widget: string, config?: any) => void;
 }
-
-const EMOJIS = ['😊', '🌿', '☁️', '✨', '💜', '🌧️', '🎵', '🧘‍♀️', '🌸', '☕', '🌙', '💪', '🤔', '🔥', '👀', '🫂'];
 
 // --- Dynamic API URL Helper ---
 const getApiUrl = (endpoint: string) => {
@@ -75,6 +74,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const { setTheme, currentTheme } = useTheme();
   const navigate = useNavigate();
   
+  const botName = user?.persona === 'aarav' ? 'Aastik' : 'Aastha';
+
   // --- State Management ---
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -93,7 +94,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<string[]>([]); // Array of Message IDs
+  const [searchResults, setSearchResults] = useState<{ msgId: string, matchIndex: number }[]>([]); // Flattened list of all matches
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
   // Voice & Dictation
@@ -114,6 +115,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processedTagsRef = useRef<Set<string>>(new Set());
 
   // 1. Sync User Credits
   useEffect(() => {
@@ -146,10 +148,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  setMessages(data);
                  setTimeout(() => scrollToBottom(), 100);
              } else {
-                 setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am Aastha. How can I support you right now?`, timestamp: Date.now() }]);
+                 setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. How can I support you right now?`, timestamp: Date.now() }]);
              }
          } catch (e) { 
-             setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am Aastha. I'm ready to listen.`, timestamp: Date.now() }]);
+             setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. I'm ready to listen.`, timestamp: Date.now() }]);
          }
      };
      
@@ -243,8 +245,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         alert("Voice Mode requires Premium Credits. Upgrade to Pro.");
         return;
     }
-    if (isVoiceMode) { stopListening(); setIsVoiceMode(false); }
-    else { setIsVoiceMode(true); startListening(); }
+    if (isVoiceMode) {
+        stopListening();
+        setIsVoiceMode(false);
+    } else {
+        // If Dictation is active, swap seamlessly without stopping recognition
+        if (isDictating) {
+            setIsDictating(false);
+            setIsVoiceMode(true);
+            return;
+        }
+        setIsVoiceMode(true);
+        startListening();
+    }
   };
   
   const toggleDictation = () => {
@@ -257,6 +270,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           recognitionRef.current?.stop();
           setIsDictating(false);
       } else {
+          // If Voice Mode is active, swap seamlessly without stopping recognition
+          if (isVoiceMode) {
+              setIsVoiceMode(false);
+              setIsDictating(true);
+              return;
+          }
           try { recognitionRef.current?.start(); setIsDictating(true); } catch(e) { console.error("Dictation start failed", e); }
       }
   };
@@ -367,7 +386,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
               return;
           }
           const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.message || 'Aastha is unreachable.');
+          throw new Error(errData.message || `${botName} is unreachable.`);
       }
 
       const reader = response.body?.getReader();
@@ -544,10 +563,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   // --- Search Logic ---
   useEffect(() => {
       if (searchQuery.trim()) {
-          const hits = messages
-              .filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
-              .map(m => m.id || '')
-              .filter(id => id); // Ensure IDs exist
+          const hits: { msgId: string, matchIndex: number }[] = [];
+
+          messages.forEach(msg => {
+             const lowerContent = msg.content.toLowerCase();
+             const lowerQuery = searchQuery.toLowerCase();
+
+             // Count occurrences in this message
+             const parts = lowerContent.split(lowerQuery);
+             // If split results in N parts, there are N-1 matches
+             const matchCount = parts.length - 1;
+
+             if (matchCount > 0 && msg.id) {
+                 for (let i = 0; i < matchCount; i++) {
+                     hits.push({ msgId: msg.id, matchIndex: i });
+                 }
+             }
+          });
+
           setSearchResults(hits);
           setCurrentMatchIndex(hits.length > 0 ? hits.length - 1 : 0); // Start at latest
       } else {
@@ -559,8 +592,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   // Find target ID for scrolling
   useEffect(() => {
       if (searchResults.length > 0 && searchResults[currentMatchIndex]) {
-          const id = searchResults[currentMatchIndex];
-          const el = document.getElementById(`msg-${id}`);
+          const { msgId } = searchResults[currentMatchIndex];
+          const el = document.getElementById(`msg-${msgId}`);
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
   }, [currentMatchIndex, searchResults]);
@@ -579,8 +612,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
           // Provide an ID for scrolling if it doesn't have one (generate on fly if needed, but safer to use state)
           const domId = `msg-${msg.id || idx}`;
-          // Check if this message is the current search match
-          const isCurrentMatch = searchResults[currentMatchIndex] === msg.id && searchQuery.length > 0;
+
+          // Determine if this message contains the *currently active* match
+          // and which specific instance of the word it is
+          let currentMatchIndexInMessage = -1;
+
+          if (searchResults.length > 0) {
+              const currentMatch = searchResults[currentMatchIndex];
+              if (currentMatch && currentMatch.msgId === msg.id) {
+                  currentMatchIndexInMessage = currentMatch.matchIndex;
+              }
+          }
 
           const isCurrentlyStreaming = isTyping && msg.role === 'assistant' && idx === messages.length - 1;
 
@@ -601,7 +643,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         onReply={() => handleReply(msg.content)} 
                         onCopy={copyToClipboard}
                         searchQuery={searchQuery}
-                        isCurrentMatch={isCurrentMatch}
+                        currentMatchIndex={currentMatchIndexInMessage}
                         isStreaming={isCurrentlyStreaming} 
                     />
                     {msg.warning && (
@@ -767,8 +809,31 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             <Smile size={20} />
                         </button>
                         {showEmojiPicker && (
-                            <div className="absolute bottom-14 right-0 p-3 bg-[#111] border border-white/10 rounded-2xl grid grid-cols-4 gap-2 shadow-2xl z-50 w-64 backdrop-blur-xl">
-                                {EMOJIS.map(e => (<button key={e} type="button" onClick={() => { setInput(prev => prev + e); setShowEmojiPicker(false); }} className="hover:bg-white/10 rounded-lg p-2 text-2xl transition-colors">{e}</button>))}
+                            <div className="absolute bottom-14 right-0 shadow-2xl z-50">
+                                <EmojiPicker
+                                    theme={Theme.DARK}
+                                    emojiStyle={EmojiStyle.APPLE}
+                                    onEmojiClick={(e) => {
+                                        setInput(prev => prev + e.emoji);
+                                        // Optional: Keep picker open or close it
+                                        // setShowEmojiPicker(false);
+                                    }}
+                                    lazyLoadEmojis={true}
+                                    width={300}
+                                    height={400}
+                                    searchDisabled={false}
+                                    skinTonesDisabled={false}
+                                    categories={[
+                                        { name: 'Smileys', category: 'smileys_people' },
+                                        { name: 'Nature', category: 'animals_nature' },
+                                        { name: 'Food', category: 'food_drink' },
+                                        { name: 'Activities', category: 'activities' },
+                                        { name: 'Travel', category: 'travel_places' },
+                                        { name: 'Objects', category: 'objects' },
+                                        { name: 'Symbols', category: 'symbols' },
+                                        { name: 'Flags', category: 'flags' },
+                                    ] as any} // Cast to any if strict types complain about category names
+                                />
                             </div>
                         )}
                     </div>
