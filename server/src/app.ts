@@ -19,9 +19,10 @@ app.set('trust proxy', 1);
 // Accept a list of origins (add your domains)
 const allowedOrigins = [
   'http://localhost:3000',
+  'http://localhost:5173', // Vite default
   'http://127.0.0.1:3000',
-  'http://192.168.56.1:3000', // your local IP if needed
-  process.env.FRONTEND_URL || 'https://your-frontend.vercel.app',
+  'https://aasthafv2.vercel.app', // Explicitly allow the frontend
+  process.env.FRONTEND_URL || '',
 ];
 
 app.use(cors({
@@ -29,6 +30,8 @@ app.use(cors({
     // allow no-origin (e.g. curl) and known origins
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) return callback(null, true);
+
+    console.log('Blocked CORS origin:', origin);
     return callback(new Error('CORS not allowed'), false);
   },
   credentials: true,
