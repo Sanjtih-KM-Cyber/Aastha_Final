@@ -181,7 +181,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
   useEffect(() => {
     if (isOpen && isUnlocked) fetchEntries();
-  }, [isOpen, isUnlocked]);
+  }, [isOpen, isUnlocked, user]); // Added user dependency to ensure fetch on auth ready
 
   // When date changes, load data into editor state
   useEffect(() => {
@@ -359,6 +359,13 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                 {/* BOOK CONTAINER */}
                 <div className="relative flex w-full h-full shadow-2xl bg-[#2a2a2a] rounded-lg" style={{ perspective: '2500px', transformStyle: 'preserve-3d' }}>
                     
+                    {/* Loading Overlay */}
+                    {isLoading && (
+                        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-lg pointer-events-none">
+                            <Loader2 className="animate-spin text-white/80" size={32} />
+                        </div>
+                    )}
+
                     {/* STATIC LAYER */}
                     <div className="absolute inset-0 flex">
                         {/* Left Static Page (Calendar) */}

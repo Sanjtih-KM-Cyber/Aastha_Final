@@ -94,6 +94,29 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const [isPlaying, setIsPlaying] = useState(false);
   const [queue, setQueue] = useState<Track[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Persistence: Load on Mount
+  useEffect(() => {
+    const savedQ = localStorage.getItem('jam_queue');
+    const savedIdx = localStorage.getItem('jam_index');
+    if (savedQ) {
+        try {
+            const parsed = JSON.parse(savedQ);
+            if (Array.isArray(parsed)) setQueue(parsed);
+        } catch(e) { console.error("Failed to load queue", e); }
+    }
+    if (savedIdx) {
+        const idx = parseInt(savedIdx);
+        if (!isNaN(idx)) setCurrentIndex(idx);
+    }
+  }, []);
+
+  // Persistence: Save on Change
+  useEffect(() => {
+      localStorage.setItem('jam_queue', JSON.stringify(queue));
+      localStorage.setItem('jam_index', currentIndex.toString());
+  }, [queue, currentIndex]);
+
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   
@@ -147,9 +170,10 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
     if (playerRef.current) return;
     playerRef.current = new window.YT.Player('jam-player-frame', {
         height: '0', width: '0',
-        playerVars: { 'playsinline': 1, 'controls': 0, 'disablekb': 1, 'fs': 0, 'iv_load_policy': 3 },
+        playerVars: { 'playsinline': 1, 'controls': 0, 'disablekb': 1, 'fs': 0, 'iv_load_policy': 3, 'autoplay': 1 },
         events: {
-            'onStateChange': onPlayerStateChange
+            'onStateChange': onPlayerStateChange,
+            'onError': (e: any) => console.error("YT Player Error:", e.data)
         }
     });
   };
@@ -192,6 +216,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const loadAndPlay = (track: Track) => {
       if (playerRef.current && playerRef.current.loadVideoById) {
           playerRef.current.loadVideoById(track.id);
+          playerRef.current.playVideo();
           setIsPlaying(true);
       }
   };

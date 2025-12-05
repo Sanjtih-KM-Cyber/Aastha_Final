@@ -173,10 +173,22 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       }
 
       // 2. Handle missing fields (Self-healing legacy user data)
-      if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email); // Redundant if migrated above, but safe
-      if (user.username && !user.usernameEncrypted) user.usernameEncrypted = encrypt(user.username);
+      if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email); 
+      
+      // Auto-generate username for legacy users
+      if (!user.username) {
+          const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+          const baseName = user.name ? user.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 10) : 'user';
+          user.username = `${baseName}${randomSuffix}`;
+          user.usernameEncrypted = encrypt(user.username);
+      } else if (!user.usernameEncrypted) {
+          user.usernameEncrypted = encrypt(user.username);
+      }
+
       if (!user.streak) user.streak = 1; 
       if (!user.lastVisit) user.lastVisit = new Date(); 
+      if (user.dailyPremiumUsage === undefined) user.dailyPremiumUsage = 0;
+      if (user.isPro === undefined) user.isPro = false;
 
       // 3. Daily Reset Check
       const today = new Date();
@@ -250,8 +262,21 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     }
 
     if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email);
+    
+    // Auto-generate username for legacy users
+    if (!user.username) {
+        const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+        const baseName = user.name ? user.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 10) : 'user';
+        user.username = `${baseName}${randomSuffix}`;
+        user.usernameEncrypted = encrypt(user.username);
+    } else if (!user.usernameEncrypted) {
+        user.usernameEncrypted = encrypt(user.username);
+    }
+
     if (!user.streak) user.streak = 1;
     if (!user.lastVisit) user.lastVisit = new Date(); 
+    if (user.dailyPremiumUsage === undefined) user.dailyPremiumUsage = 0;
+    if (user.isPro === undefined) user.isPro = false;
     
     // Streak Logic & Daily Usage Reset
     const now = new Date();
