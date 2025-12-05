@@ -386,15 +386,15 @@ export const initiateReset = async (req: Request, res: Response) => {
     if (!user || !user.securityQuestions || user.securityQuestions.length === 0) {
       return (res as any).status(404).json({ message: 'Account not found or no security questions set.' }); 
     }
-
-    // FIX: Send the question specifically chosen by the user.
+    
+    // FIX: Send the question specifically chosen by the user. 
     // Currently, registration only supports setting one question, so index [0] is correct IF the user sets it properly.
     // However, if the array has multiple (future proof), we might need to send a specific one or let user choose.
-    // For now, index 0 is the only one.
+    // For now, index 0 is the only one. 
     // To fix "it shows only the first one", we ensure we return the question TEXT stored in the DB.
     // If the user feels it's the "first one" from a list, it means they chose index 0 from the dropdown.
-    // But we are returning what is SAVED.
-
+    // But we are returning what is SAVED. 
+    
     (res as any).status(200).json({ question: user.securityQuestions[0].question });
   } catch (error) { (res as any).status(500).json({ message: 'Server Error' }); }
 };
@@ -449,7 +449,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
         const cleanEmail = email.toLowerCase().trim();
         const emailHash = hashEmail(cleanEmail);
 
-        const user = await User.findOne({
+        const user = await User.findOne({ 
             $or: [{ emailHash }, { email: cleanEmail }]
         });
 
@@ -473,11 +473,11 @@ export const verifyOTP = async (req: Request, res: Response) => {
         user.isVerified = true;
         user.otpCode = undefined;
         user.otpExpires = undefined;
-
+        
         // Handle migration fields if missing
-        if (!user.streak) user.streak = 1;
-        if (!user.lastVisit) user.lastVisit = new Date();
-
+        if (!user.streak) user.streak = 1; 
+        if (!user.lastVisit) user.lastVisit = new Date(); 
+        
         await user.save();
 
         // Issue Token
@@ -517,7 +517,7 @@ export const resendOTP = async (req: Request, res: Response) => {
         const cleanEmail = email.toLowerCase().trim();
         const emailHash = hashEmail(cleanEmail);
 
-        const user = await User.findOne({
+        const user = await User.findOne({ 
              $or: [{ emailHash }, { email: cleanEmail }]
         });
 
