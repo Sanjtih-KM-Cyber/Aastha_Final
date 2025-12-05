@@ -243,8 +243,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         alert("Voice Mode requires Premium Credits. Upgrade to Pro.");
         return;
     }
-    if (isVoiceMode) { stopListening(); setIsVoiceMode(false); }
-    else { setIsVoiceMode(true); startListening(); }
+    if (isVoiceMode) {
+        stopListening();
+        setIsVoiceMode(false);
+    } else {
+        // If Dictation is active, swap seamlessly without stopping recognition
+        if (isDictating) {
+            setIsDictating(false);
+            setIsVoiceMode(true);
+            return;
+        }
+        setIsVoiceMode(true);
+        startListening();
+    }
   };
   
   const toggleDictation = () => {
@@ -257,6 +268,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           recognitionRef.current?.stop();
           setIsDictating(false);
       } else {
+          // If Voice Mode is active, swap seamlessly without stopping recognition
+          if (isVoiceMode) {
+              setIsVoiceMode(false);
+              setIsDictating(true);
+              return;
+          }
           try { recognitionRef.current?.start(); setIsDictating(true); } catch(e) { console.error("Dictation start failed", e); }
       }
   };
