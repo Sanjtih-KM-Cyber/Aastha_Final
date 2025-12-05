@@ -279,7 +279,7 @@ export const getVibePlaylist = async (chatHistory: any[], languages: string[], u
                 Chat Context:
                 ${textData}
             `,
-            config: {
+            config: { 
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.ARRAY,
