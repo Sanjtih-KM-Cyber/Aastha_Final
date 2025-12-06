@@ -30,10 +30,9 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     // Re-added username back to body destructuring
     const { name, email, username, password, diaryPassword, securityQuestions } = (req as any).body;
 
-    // NoSQL Injection Prevention: Strict Type Checks
-    if (typeof name !== 'string' || typeof email !== 'string' || typeof username !== 'string' || typeof password !== 'string') {
-         (res as any).status(400).json({ message: "Invalid input format." });
-         return;
+    if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string' || typeof username !== 'string') {
+        (res as any).status(400).json({ message: 'Invalid input format. Strings required.' });
+        return;
     }
 
     // Enforce Username for New Users
@@ -135,9 +134,8 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { identifier, password } = (req as any).body;
 
-    // NoSQL Injection Prevention: Strict Type Checks
     if (typeof identifier !== 'string' || typeof password !== 'string') {
-        (res as any).status(400).json({ message: "Invalid input format." });
+        (res as any).status(400).json({ message: 'Invalid input format. Strings required.' });
         return;
     }
 
