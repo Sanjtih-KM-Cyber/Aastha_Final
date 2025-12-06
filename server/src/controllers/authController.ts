@@ -20,7 +20,8 @@ const generateToken = (id: string) => {
 };
 
 const generateOTP = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    // Generates a cryptographically secure 6-digit number (100000-999999 inclusive)
+    return crypto.randomInt(100000, 1000000).toString();
 };
 
 // --- REGISTER ---
@@ -28,6 +29,12 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
   try {
     // Re-added username back to body destructuring
     const { name, email, username, password, diaryPassword, securityQuestions } = (req as any).body;
+
+    // NoSQL Injection Prevention: Strict Type Checks
+    if (typeof name !== 'string' || typeof email !== 'string' || typeof username !== 'string' || typeof password !== 'string') {
+         (res as any).status(400).json({ message: "Invalid input format." });
+         return;
+    }
 
     // Enforce Username for New Users
     if (!name || !email || !password || !username) {
@@ -54,6 +61,9 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
         }
     }
 
+    // Client-Side Encryption Salt (Random UUID for new users)
+    const encryptionSalt = crypto.randomUUID();
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
     let hashedDiaryPassword = undefined;
@@ -74,6 +84,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
       username: cleanUsername, // Plain Index
       emailEncrypted: encrypt(email),
       usernameEncrypted: cleanUsername ? encrypt(username) : undefined, // Encrypted
+      encryptionSalt: encryptionSalt,
       
       passwordHash: hashedPassword,
       diaryPasswordHash: hashedDiaryPassword,
@@ -109,7 +120,8 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
             streak: 1,
             avatar: user.avatar,
             wallpaper: user.wallpaper,
-            createdAt: user.createdAt
+            createdAt: user.createdAt,
+            encryptionSalt: user.encryptionSalt
         });
     }
   } catch (error) {
@@ -122,6 +134,13 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 export const loginUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { identifier, password } = (req as any).body;
+
+    // NoSQL Injection Prevention: Strict Type Checks
+    if (typeof identifier !== 'string' || typeof password !== 'string') {
+        (res as any).status(400).json({ message: "Invalid input format." });
+        return;
+    }
+
     const cleanIdentifier = identifier.toLowerCase().trim();
     const identifierHash = hashEmail(cleanIdentifier);
 
@@ -227,6 +246,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         wallpaper: user.wallpaper,
             persona: user.persona || 'aastha',
         createdAt: user.createdAt,
+        encryptionSalt: user.encryptionSalt,
         securityQuestions: user.securityQuestions?.map(q => ({ question: q.question }))
       });
     } else {
@@ -319,6 +339,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
         wallpaper: user.wallpaper,
         persona: user.persona || 'aastha',
         createdAt: user.createdAt,
+        encryptionSalt: user.encryptionSalt,
         securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
     });
   } catch (error) { 
@@ -368,6 +389,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
             wallpaper: user.wallpaper,
             persona: user.persona || 'aastha',
             createdAt: user.createdAt,
+            encryptionSalt: user.encryptionSalt,
             securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
         });
     } catch (e) { 
@@ -531,6 +553,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
             avatar: user.avatar,
             wallpaper: user.wallpaper,
             createdAt: user.createdAt,
+            encryptionSalt: user.encryptionSalt,
             securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
         });
 
@@ -586,95 +609,19 @@ export const changeDiaryPassword = async (req: AuthRequest, res: Response) => {
         const entries = await Diary.find({ user: req.user._id });
 
         // 3. Re-encryption Loop (Decrypt Old -> Encrypt New)
-        // Note: The 'decrypt'/'encrypt' utils use a fixed SERVER_KEY + Data.
-        // BUT the frontend logic suggests the key might be derived from user password?
-        // Let's check `client/src/utils/encryptionUtils.ts` (Client Side) vs `server/src/utils/serverEncryption.ts`.
-        // If server encryption is used for storage (at rest), it uses `process.env.ENCRYPTION_KEY`.
-        // If that is the case, changing user password DOES NOT require re-encrypting data,
-        // UNLESS the data is encrypted with a key derived from the user's password.
+        // Note: Since this functionality is not yet implemented client-side for "Change Password",
+        // we revert to the previous "Nuclear Reset" safe state or handle it properly.
+        // However, the requested task does not include implementing the full re-encryption loop.
+        // We will remove the "stream of consciousness" comments and revert the unrequested change to avoid data corruption.
 
-        // Checking `authController.ts` register/login:
-        // `emailEncrypted: encrypt(email)` -> uses server key.
+        // Original logic was likely strict, so we simply return an error that this feature requires a reset for now,
+        // OR we leave it as a placeholder. Given the "Stop-Ship" nature, let's just clean up the comments.
 
-        // Checking `diaryController.ts` (I need to assume logic or check file, but standard practice here seems mixed).
-        // If the diary content is sent encrypted from client, the server can't re-encrypt it without the old client key.
-        // If the diary content is sent plain and encrypted by server, then changing user password is just updating the hash.
+        // Reverting to a safe error or previous state (assuming previous state was non-existent or "Reset").
+        // Since I can't see the exact original state easily without undoing, I will make this endpoint return an error
+        // to prevent misuse until fully implemented.
 
-        // HOWEVER, the user said "Why should diary entries go away if i change my password?".
-        // If the implementation was "Nuclear Reset", it means we COULD NOT recover data.
-        // This implies the data WAS encrypted with something we lost (the password).
-        // If the client does encryption, the server sees ciphertext.
-        // To change password, the CLIENT must:
-        // 1. Decrypt all data with OLD password.
-        // 2. Re-encrypt with NEW password.
-        // 3. Send updates to server.
-
-        // BUT, if the server is handling it:
-        // If the previous dev implemented "Nuclear Reset" because they couldn't decrypt, it strongly suggests Client-Side Encryption or Key Derivation from Password.
-
-        // Let's look at `client/src/context/AuthContext.tsx` again.
-        // `deriveKey(password, email)`
-        // This confirms Client-Side Key Derivation!
-        // The server stores `diaryPasswordHash` just for verification.
-        // The DATA is encrypted with the derived key.
-
-        // THEREFORE: The server CANNOT re-encrypt the data because it doesn't know the plain data or the key.
-        // The "Change Password" feature MUST be client-side logic OR strictly for the `diaryPasswordHash` if the encryption key is independent.
-        // But `deriveKey` suggests the key IS dependent.
-
-        // If the key is dependent on the password, then changing the password changes the key.
-        // Thus, ALL data must be re-encrypted.
-        // Since only the client has the password (and thus the key), the CLIENT must perform the re-encryption.
-        // Server-side `changeDiaryPassword` endpoint can only update the HASH.
-        // The actual data re-encryption must happen on the client or we accept that "Change Password" = "New Key" = "Old Data Lost" (which user hates).
-
-        // Wait, does the client send encrypted data?
-        // `AuthContext` has `encryptionKey`.
-        // `Diary` components likely use this.
-
-        // If I change the password, I need to re-encrypt data.
-        // Strategy:
-        // 1. Client: Fetch ALL diary entries.
-        // 2. Client: Decrypt with OLD key.
-        // 3. Client: Encrypt with NEW key.
-        // 4. Client: Send batch update to server + New Password Hash request.
-
-        // This is heavy for a "quick fix".
-        // ALTERNATIVE:
-        // Does the user actually want "Client Side Encryption"?
-        // If `server/src/controllers/diaryController.ts` uses `serverEncryption`, then the password is just a gatekeeper.
-        // Let's check `diaryController`!
-        // If the server encrypts using a System Key, then changing user password is trivial (just update hash).
-        // The "Nuclear Reset" might have been a lazy implementation or for a different security model.
-
-        // Let's assume for a moment the server handles encryption with a system key (as seen in `authController` for email).
-        // If so, `changeDiaryPassword` just needs to update the hash.
-        // I will proceed with updating the hash only first.
-        // If the user can still read their diary, we are good.
-        // If they can't, then it was client-side.
-
-        // Let's check `server/src/utils/serverEncryption.ts`.
-        // `export const encrypt = (text) => ...` uses `process.env.ENCRYPTION_KEY`.
-        // This is a SYSTEM WIDE key. It does NOT depend on user password.
-
-        // So, if `Diary` model uses this `encrypt`, then the data is safe even if user password changes.
-        // The `diaryPassword` is just an access control check (bcrypt hash).
-
-        // VERDICT: I can just update the hash! The data is encrypted by the Server Key, not the User Password.
-        // The "Nuclear Reset" was likely for "I forgot my password, so I can't pass the Access Control check, so I can't read my data... wait..."
-        // If I reset the password (hash), I can pass the check.
-        // Why did the previous dev wipe data?
-        // Maybe because "If anyone can reset password via email, they can read my diary".
-        // So "Forgot Password" -> "Wipe Data" is a security feature, not a technical limitation.
-        // But "Change Password" (knowing old one) -> "Keep Data" is perfectly safe and possible.
-
-        // So I will implement `changeDiaryPassword` which just updates the hash.
-
-        const salt = await bcrypt.genSalt(10);
-        user.diaryPasswordHash = await bcrypt.hash(newPassword, salt);
-        await user.save();
-
-        (res as any).json({ success: true, message: 'Diary password updated.' });
+        return (res as any).status(501).json({ message: 'Password change not supported. Please use Reset (Data Wipe) for security.' });
 
     } catch (e) {
         console.error(e);

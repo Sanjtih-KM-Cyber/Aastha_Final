@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import helmet from 'helmet';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
@@ -10,9 +11,23 @@ import dataRoutes from './routes/dataRoutes';
 import aiRoutes from './routes/aiRoutes';
 
 dotenv.config();
+
+// --- CRITICAL SECURITY CHECK ---
+const requiredEnvVars = ['JWT_SECRET', 'SERVER_ENCRYPTION_KEY', 'MONGO_URI'];
+const missingVars = requiredEnvVars.filter(key => !process.env[key]);
+
+if (missingVars.length > 0) {
+    console.error(`FATAL ERROR: Missing required environment variables: ${missingVars.join(', ')}`);
+    process.exit(1); // Stop the server immediately
+}
+
 connectDB();
 
 const app = express();
+
+// --- DEFENSE IN DEPTH ---
+app.use(helmet()); // Adds various security headers (XSS, HSTS, No-Sniff, etc.)
+app.disable('x-powered-by'); // Hide the Tech Stack
 
 app.set('trust proxy', 1);
 

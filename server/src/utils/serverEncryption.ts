@@ -8,7 +8,10 @@ const ALGORITHM = 'aes-256-gcm';
 
 // Ensure the key is exactly 32 bytes
 const getKey = (): Buffer => {
-    const secret = process.env.SERVER_ENCRYPTION_KEY || 'default_insecure_fallback_key_32_bytes_needed';
+    const secret = process.env.SERVER_ENCRYPTION_KEY;
+    if (!secret) {
+        throw new Error("FATAL: SERVER_ENCRYPTION_KEY is missing from environment variables.");
+    }
     return crypto.createHash('sha256').update(secret).digest();
 };
 
