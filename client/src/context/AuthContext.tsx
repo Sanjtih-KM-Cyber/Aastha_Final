@@ -76,7 +76,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const user: User = res.data;
 
     let key = null;
-    if (!user.hasDiarySetup) key = deriveKey(password, cleanedIdentifier);
+    // Prefer encryptionSalt, fallback to email for legacy users
+    const salt = user.encryptionSalt || user.email;
+
+    if (!user.hasDiarySetup) key = deriveKey(password, salt);
 
     setState({
       user,
@@ -92,7 +95,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const user: User = res.data;
 
     const pwdToUse = data.diaryPassword || data.password;
-    const key = deriveKey(pwdToUse, data.email);
+    // Use the returned salt from server, or fallback to email (shouldn't happen for new users)
+    const salt = user.encryptionSalt || user.email;
+    const key = deriveKey(pwdToUse, salt);
 
     setState({
       user,
@@ -108,10 +113,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     await api.post('/users/verify-diary', { diaryPassword: password });
 
-    const emailInput = prompt("Enter your registration email:");
-    if (!emailInput) return false;
+    // Use stored salt or email - no prompt needed!
+    const salt = state.user.encryptionSalt || state.user.email;
 
-    const key = deriveKey(password, emailInput);
+    const key = deriveKey(password, salt);
     setState(prev => ({ ...prev, encryptionKey: key }));
     return true;
   };

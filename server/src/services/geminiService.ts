@@ -11,47 +11,54 @@ const allGeminiKeys = (process.env.GEMINI_API_KEYS || process.env.API_KEY || '')
   .filter(key => key.length > 0);
 
 const N = allGeminiKeys.length;
-// Allocate 60% of keys to the FREE pool initially (to boost free user experience)
-const FREE_POOL_SHARE = 0.60;
-const PRO_POOL_SHARE = 0.40;
-
-// Calculate sizes: Round up for the larger pool (Free), Round down for the smaller pool (Pro)
-const FREE_POOL_SIZE = Math.ceil(N * FREE_POOL_SHARE);
-const PRO_POOL_SIZE = N - FREE_POOL_SIZE; // The remainder
 
 // Determine the slices based on the dynamic calculation:
 let freeTierKeys: string[] = [];
 let proTierKeys: string[] = [];
 
-if (N >= 2) { 
-    // Assign FREE tier the first 60% of keys
-    freeTierKeys = allGeminiKeys.slice(0, FREE_POOL_SIZE);
+// CRITICAL SECURITY CHECK FOR API KEYS
+if (allGeminiKeys.length === 0) {
+  console.error("FATAL ERROR: No GEMINI_API_KEYS found in environment variables. AI features will be unavailable.");
+  // We do NOT crash the app here, to allow read-only/journal access.
+} else {
+    // Allocate 60% of keys to the FREE pool initially (to boost free user experience)
+    const FREE_POOL_SHARE = 0.60;
     
-    // Assign PRO tier the remaining keys (starting where the FREE pool ended)
-    proTierKeys = allGeminiKeys.slice(FREE_POOL_SIZE);
+    // Calculate sizes: Round up for the larger pool (Free), Round down for the smaller pool (Pro)
+    const FREE_POOL_SIZE = Math.ceil(N * FREE_POOL_SHARE);
 
-    // Safety check: If the calculation leads to 0 Pro keys, give Pro access to all keys.
-    if (proTierKeys.length === 0) {
+    if (N >= 2) {
+        // Assign FREE tier the first 60% of keys
+        freeTierKeys = allGeminiKeys.slice(0, FREE_POOL_SIZE);
+
+        // Assign PRO tier the remaining keys (starting where the FREE pool ended)
+        proTierKeys = allGeminiKeys.slice(FREE_POOL_SIZE);
+
+        // Safety check: If the calculation leads to 0 Pro keys, give Pro access to all keys.
+        if (proTierKeys.length === 0) {
+            proTierKeys = allGeminiKeys;
+        }
+    } else {
+        // If 1 key, assign it to both pools
+        freeTierKeys = allGeminiKeys;
         proTierKeys = allGeminiKeys;
     }
 
-} else {
-    // If 0 or 1 key, assign all keys to both pools to ensure function
-    freeTierKeys = allGeminiKeys;
-    proTierKeys = allGeminiKeys;
-}
-
-
-if (allGeminiKeys.length === 0) {
-  console.warn("Warning: No GEMINI_API_KEYS found. Premium features will fail.");
-} else {
-  console.log(`[AI SERVICE] Total Keys: ${N}. PRO Pool Size: ${proTierKeys.length} (40%). FREE Pool Size: ${freeTierKeys.length} (60%).`);
+    console.log(`[AI SERVICE] Total Keys: ${N}. PRO Pool Size: ${proTierKeys.length} (40%). FREE Pool Size: ${freeTierKeys.length} (60%).`);
 }
 
 
 const getGeminiClient = (isPro: boolean = false) => {
   const pool = isPro ? proTierKeys : freeTierKeys;
-  if (pool.length === 0) return new GoogleGenAI({ apiKey: 'dummy_key' });
+
+  // Prevent crash if pool is empty
+  if (!pool || pool.length === 0) {
+      console.warn("Gemini Client requested but no keys available.");
+      // Return a dummy client that will fail gracefully during calls if possible,
+      // or rely on the try-catch blocks in the service methods.
+      // We use a dummy key which will cause an API error, which is caught.
+      return new GoogleGenAI({ apiKey: 'MISSING_API_KEY_HANDLED_GRACEFULLY' });
+  }
   
   // Randomize key usage to distribute load
   const randomKey = pool[Math.floor(Math.random() * pool.length)];
