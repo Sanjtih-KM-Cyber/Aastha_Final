@@ -14,6 +14,7 @@ export interface User {
   streak?: number; // NEW
   securityQuestions?: { question: string }[];
   persona?: 'aastha' | 'aarav'; // NEW
+  encryptionSalt?: string; // NEW: For secure key derivation (replaces email for new users)
 }
 
 export interface AuthState {

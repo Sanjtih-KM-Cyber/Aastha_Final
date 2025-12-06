@@ -18,6 +18,7 @@ export interface IUser extends Document {
   nameEncrypted?: string;
   emailEncrypted: string;
   usernameEncrypted?: string; // Add encrypted username back
+  encryptionSalt?: string; // Random salt for Client-Side Key Derivation (New Users)
 
   // --- Indexed/Plain Fields (Used for Login, Display, or Features) ---
   name: string; // Plain text name for display
@@ -82,6 +83,7 @@ const userSchema = new Schema<IUser>({
   nameEncrypted: { type: String, required: false }, // Will be set on registration
   emailEncrypted: { type: String, required: true, unique: true }, 
   usernameEncrypted: { type: String, required: false },
+  encryptionSalt: { type: String, required: false },
 
   // --- Feature Fields ---
   streak: { type: Number, default: 0 }, // Initialize streak

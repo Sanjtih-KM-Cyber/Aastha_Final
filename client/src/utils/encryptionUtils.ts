@@ -5,15 +5,15 @@ const SALT_ITERATIONS = 10000;
 const KEY_SIZE = 256 / 32; // 256-bit key
 
 /**
- * Derives a strong encryption key from the user's password and email (used as salt).
- * This mimics PBKDF2.
+ * Derives a strong encryption key from the user's password and a salt.
+ * Uses PBKDF2 with SHA-256.
  * @param password - The user's password
- * @param email - The user's email (acts as a salt)
+ * @param salt - The user's specific salt (encryptionSalt) OR email (for legacy users)
  * @returns The derived key as a Hex string
  */
-export const deriveKey = (password: string, email: string): string => {
-  const salt = email.trim().toLowerCase();
-  const key = CryptoJS.PBKDF2(password, salt, {
+export const deriveKey = (password: string, salt: string): string => {
+  const cleanSalt = salt.trim().toLowerCase();
+  const key = CryptoJS.PBKDF2(password, cleanSalt, {
     keySize: KEY_SIZE,
     iterations: SALT_ITERATIONS,
     hasher: CryptoJS.algo.SHA256
