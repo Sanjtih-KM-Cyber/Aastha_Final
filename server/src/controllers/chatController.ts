@@ -160,7 +160,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     } else {
         // Switch to "Standard" mode but keep Gemini for intelligence
         // Just strip the warmth from the prompt later
-        provider = 'GEMINI'; 
+        provider = 'GROQ';
         mode = 'standard'; // Low Warmth
         warning = "Daily Premium limit reached. Aastha is feeling a bit distant...";
         
