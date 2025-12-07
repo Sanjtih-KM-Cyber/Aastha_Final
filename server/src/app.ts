@@ -1,6 +1,9 @@
-import express, { Request, Response, NextFunction } from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
+dotenv.config(); // Must be first to ensure env vars are loaded before imports
+
+import express, { Request, Response, NextFunction } from 'express';
+import helmet from 'helmet';
+import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import connectDB from './db'; // assume you have this
@@ -8,8 +11,6 @@ import authRoutes from './routes/authRoutes';
 import chatRoutes from './routes/chatRoutes';
 import dataRoutes from './routes/dataRoutes';
 import aiRoutes from './routes/aiRoutes';
-
-dotenv.config();
 
 // --- CRITICAL SECURITY CHECK ---
 const requiredEnvVars = ['JWT_SECRET', 'SERVER_ENCRYPTION_KEY', 'MONGO_URI'];
@@ -23,6 +24,10 @@ if (missingVars.length > 0) {
 connectDB();
 
 const app = express();
+
+// --- DEFENSE IN DEPTH ---
+app.use(helmet()); // Adds various security headers (XSS, HSTS, No-Sniff, etc.)
+app.disable('x-powered-by'); // Hide the Tech Stack
 
 app.set('trust proxy', 1);
 
