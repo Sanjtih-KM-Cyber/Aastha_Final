@@ -27,10 +27,10 @@ if (allGeminiKeys.length === 0) {
     // Calculate sizes: Round up for the larger pool (Free), Round down for the smaller pool (Pro)
     const FREE_POOL_SIZE = Math.ceil(N * FREE_POOL_SHARE);
 
-    if (N >= 2) {
+    if (N >= 2) { 
         // Assign FREE tier the first 60% of keys
         freeTierKeys = allGeminiKeys.slice(0, FREE_POOL_SIZE);
-
+        
         // Assign PRO tier the remaining keys (starting where the FREE pool ended)
         proTierKeys = allGeminiKeys.slice(FREE_POOL_SIZE);
 
@@ -43,18 +43,18 @@ if (allGeminiKeys.length === 0) {
         freeTierKeys = allGeminiKeys;
         proTierKeys = allGeminiKeys;
     }
-
+    
     console.log(`[AI SERVICE] Total Keys: ${N}. PRO Pool Size: ${proTierKeys.length} (40%). FREE Pool Size: ${freeTierKeys.length} (60%).`);
 }
 
 
 const getGeminiClient = (isPro: boolean = false) => {
   const pool = isPro ? proTierKeys : freeTierKeys;
-
+  
   // Prevent crash if pool is empty
   if (!pool || pool.length === 0) {
       console.warn("Gemini Client requested but no keys available.");
-      // Return a dummy client that will fail gracefully during calls if possible,
+      // Return a dummy client that will fail gracefully during calls if possible, 
       // or rely on the try-catch blocks in the service methods.
       // We use a dummy key which will cause an API error, which is caught.
       return new GoogleGenAI({ apiKey: 'MISSING_API_KEY_HANDLED_GRACEFULLY' });
