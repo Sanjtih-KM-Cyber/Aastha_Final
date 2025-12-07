@@ -75,7 +75,7 @@ const paymentRecordSchema = new Schema({
 const userSchema = new Schema<IUser>({
   // --- PII Index & Display Fields ---
   name: { type: String, required: true },
-  email: { type: String, required: false, lowercase: true, trim: true }, // Not unique anymore, handled by hash
+  email: { type: String, required: false, lowercase: true, trim: true, index: true }, // Not unique anymore, handled by hash
   emailHash: { type: String, required: false, unique: true, sparse: true },
   username: { type: String, unique: true, sparse: true, trim: true, lowercase: true },
   

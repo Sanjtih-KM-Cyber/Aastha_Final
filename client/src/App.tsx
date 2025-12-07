@@ -8,6 +8,7 @@ import { Sanctuary } from './pages/Sanctuary';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { EncryptionProvider } from './context/EncryptionContext';
+import { useSecurity } from './hooks/useSecurity';
 
 // Protected Route Wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -53,7 +54,8 @@ const AppRoutes = () => {
 };
 
 const App: React.FC = () => {
-  // DevTools enabled for debugging
+  useSecurity();
+
   return (
     <AuthProvider>
       <EncryptionProvider>
