@@ -1,7 +1,9 @@
+import dotenv from 'dotenv';
+dotenv.config(); // Must be first to ensure env vars are loaded before imports
+
 import express, { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import connectDB from './db'; // assume you have this
@@ -9,8 +11,6 @@ import authRoutes from './routes/authRoutes';
 import chatRoutes from './routes/chatRoutes';
 import dataRoutes from './routes/dataRoutes';
 import aiRoutes from './routes/aiRoutes';
-
-dotenv.config();
 
 // --- CRITICAL SECURITY CHECK ---
 const requiredEnvVars = ['JWT_SECRET', 'SERVER_ENCRYPTION_KEY', 'MONGO_URI'];
