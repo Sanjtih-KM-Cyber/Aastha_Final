@@ -26,7 +26,11 @@ connectDB();
 const app = express();
 
 // --- DEFENSE IN DEPTH ---
-app.use(helmet()); // Adds various security headers (XSS, HSTS, No-Sniff, etc.)
+// FIX: Relax security headers to allow external CDNs and Cross-Origin Streams
+app.use(helmet({
+  contentSecurityPolicy: false,   // Allows Tailwind CDN and external scripts
+  crossOriginResourcePolicy: false, // Fixes: Groq/Gemini Stream Blocking (The "Aastha Not Talking" bug)
+}));
 app.disable('x-powered-by'); // Hide the Tech Stack
 
 app.set('trust proxy', 1);
