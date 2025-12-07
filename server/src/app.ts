@@ -1,12 +1,11 @@
 import dotenv from 'dotenv';
-dotenv.config(); // Must be first to ensure env vars are loaded before imports
+dotenv.config(); 
 
 import express, { Request, Response, NextFunction } from 'express';
-import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
-import connectDB from './db'; // assume you have this
+import connectDB from './db'; 
 import authRoutes from './routes/authRoutes';
 import chatRoutes from './routes/chatRoutes';
 import dataRoutes from './routes/dataRoutes';
@@ -18,38 +17,32 @@ const missingVars = requiredEnvVars.filter(key => !process.env[key]);
 
 if (missingVars.length > 0) {
     console.error(`FATAL ERROR: Missing required environment variables: ${missingVars.join(', ')}`);
-    process.exit(1); // Stop the server immediately
+    process.exit(1); 
 }
 
 connectDB();
 
 const app = express();
 
-// --- DEFENSE IN DEPTH ---
-// FIX: Relax security headers to allow external CDNs and Cross-Origin Streams
-app.use(helmet({
-  contentSecurityPolicy: false,   // Allows Tailwind CDN and external scripts
-  crossOriginResourcePolicy: false, // Fixes: Groq/Gemini Stream Blocking (The "Aastha Not Talking" bug)
-}));
-app.disable('x-powered-by'); // Hide the Tech Stack
+// --- HELMET REMOVED HERE ---
+// Kept this simple security measure as it does NOT break functionality:
+app.disable('x-powered-by'); 
 
 app.set('trust proxy', 1);
 
-// Accept a list of origins (add your domains)
+// Accept a list of origins
 const allowedOrigins = [
   'http://localhost:3000',
-  'http://localhost:5173', // Vite default
+  'http://localhost:5173',
   'http://127.0.0.1:3000',
-  'https://aasthafv2.vercel.app', // Explicitly allow the frontend
+  'https://aasthafv2.vercel.app', 
   process.env.FRONTEND_URL || '',
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // allow no-origin (e.g. curl) and known origins
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) return callback(null, true);
-
     console.log('Blocked CORS origin:', origin);
     return callback(new Error('CORS not allowed'), false);
   },
