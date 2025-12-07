@@ -2,7 +2,6 @@ import dotenv from 'dotenv';
 dotenv.config(); // Must be first to ensure env vars are loaded before imports
 
 import express, { Request, Response, NextFunction } from 'express';
-import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
@@ -26,7 +25,6 @@ connectDB();
 const app = express();
 
 // --- DEFENSE IN DEPTH ---
-app.use(helmet()); // Adds various security headers (XSS, HSTS, No-Sniff, etc.)
 app.disable('x-powered-by'); // Hide the Tech Stack
 
 app.set('trust proxy', 1);
