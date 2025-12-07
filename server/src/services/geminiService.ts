@@ -4,63 +4,56 @@ import { ChatMessage } from './groqService';
 
 dotenv.config();
 
-// --- KEY ROTATION & SPLITTING ENGINE (60% FREE / 40% PRO) ---
-const allGeminiKeys = (process.env.GEMINI_API_KEYS || process.env.API_KEY || '')
-  .split(',')
-  .map(key => key.trim())
-  .filter(key => key.length > 0);
+// --- KEY ROTATION & SPLITTING ENGINE ---
 
-const N = allGeminiKeys.length;
-
-// Determine the slices based on the dynamic calculation:
+// Lazy-load keys to avoid import-order race conditions
 let freeTierKeys: string[] = [];
 let proTierKeys: string[] = [];
+let keysInitialized = false;
 
-// CRITICAL SECURITY CHECK FOR API KEYS
-if (allGeminiKeys.length === 0) {
-  console.error("FATAL ERROR: No GEMINI_API_KEYS found in environment variables. AI features will be unavailable.");
-  // We do NOT crash the app here, to allow read-only/journal access.
-} else {
-    // Allocate 60% of keys to the FREE pool initially (to boost free user experience)
+const initKeys = () => {
+    if (keysInitialized) return;
+
+    const allGeminiKeys = (process.env.GEMINI_API_KEYS || process.env.API_KEY || '')
+      .split(',')
+      .map(key => key.trim())
+      .filter(key => key.length > 0);
+
+    const N = allGeminiKeys.length;
+
+    if (N === 0) {
+        console.error("FATAL ERROR: No GEMINI_API_KEYS found in environment variables. AI features will be unavailable.");
+        keysInitialized = true;
+        return;
+    }
+
+    // Allocate 60% of keys to the FREE pool initially
     const FREE_POOL_SHARE = 0.60;
-    
-    // Calculate sizes: Round up for the larger pool (Free), Round down for the smaller pool (Pro)
     const FREE_POOL_SIZE = Math.ceil(N * FREE_POOL_SHARE);
 
-    if (N >= 2) { 
-        // Assign FREE tier the first 60% of keys
+    if (N >= 2) {
         freeTierKeys = allGeminiKeys.slice(0, FREE_POOL_SIZE);
-        
-        // Assign PRO tier the remaining keys (starting where the FREE pool ended)
         proTierKeys = allGeminiKeys.slice(FREE_POOL_SIZE);
-
-        // Safety check: If the calculation leads to 0 Pro keys, give Pro access to all keys.
-        if (proTierKeys.length === 0) {
-            proTierKeys = allGeminiKeys;
-        }
+        if (proTierKeys.length === 0) proTierKeys = allGeminiKeys;
     } else {
-        // If 1 key, assign it to both pools
         freeTierKeys = allGeminiKeys;
         proTierKeys = allGeminiKeys;
     }
-    
-    console.log(`[AI SERVICE] Total Keys: ${N}. PRO Pool Size: ${proTierKeys.length} (40%). FREE Pool Size: ${freeTierKeys.length} (60%).`);
-}
 
+    console.log(`[AI SERVICE] Total Keys: ${N}. PRO Pool Size: ${proTierKeys.length} (40%). FREE Pool Size: ${freeTierKeys.length} (60%).`);
+    keysInitialized = true;
+};
 
 const getGeminiClient = (isPro: boolean = false) => {
+  initKeys(); // Ensure keys are loaded
+
   const pool = isPro ? proTierKeys : freeTierKeys;
   
-  // Prevent crash if pool is empty
   if (!pool || pool.length === 0) {
       console.warn("Gemini Client requested but no keys available.");
-      // Return a dummy client that will fail gracefully during calls if possible, 
-      // or rely on the try-catch blocks in the service methods.
-      // We use a dummy key which will cause an API error, which is caught.
       return new GoogleGenAI({ apiKey: 'MISSING_API_KEY_HANDLED_GRACEFULLY' });
   }
-  
-  // Randomize key usage to distribute load
+
   const randomKey = pool[Math.floor(Math.random() * pool.length)];
   return new GoogleGenAI({ apiKey: randomKey });
 };
@@ -110,8 +103,8 @@ export async function* streamGemini(history: ChatMessage[], systemPrompt: string
     for await (const chunk of response) {
       if (chunk.text) yield chunk.text;
     }
-  } catch (error) {
-    console.error("Gemini Stream Error:", error);
+  } catch (error: any) {
+    console.error("Gemini Stream Error:", error?.message || error);
     yield " [Aastha is having trouble connecting to her premium senses. Please try again.]";
   }
 }

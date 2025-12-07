@@ -115,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Use stored salt or email - no prompt needed!
     const salt = state.user.encryptionSalt || state.user.email;
-    
+
     const key = deriveKey(password, salt);
     setState(prev => ({ ...prev, encryptionKey: key }));
     return true;
