@@ -162,7 +162,13 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                initPlayer();
            }
        }, 500);
-       return () => clearInterval(checkYT);
+       return () => {
+           clearInterval(checkYT);
+           if (playerRef.current) {
+               playerRef.current.destroy();
+               playerRef.current = null;
+           }
+       };
     }
   }, [isOpen]);
 

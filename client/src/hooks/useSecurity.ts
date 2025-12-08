@@ -16,7 +16,13 @@ export const useSecurity = () => {
       }
 
       // Ctrl+Shift+I (Inspect), Ctrl+Shift+J (Console), Ctrl+Shift+C (Element Inspector)
-      if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C' || e.key === 'i' || e.key === 'j' || e.key === 'c')) {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C' || e.key === 'i' || e.key === 'j' || e.key === 'c')) {
+        e.preventDefault();
+        return;
+      }
+
+      // Mac specific: Cmd+Option+I (Inspect)
+      if (e.metaKey && e.altKey && (e.key === 'I' || e.key === 'i')) {
         e.preventDefault();
         return;
       }

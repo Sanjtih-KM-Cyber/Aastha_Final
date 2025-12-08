@@ -466,65 +466,69 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const processMagicTags = (text: string) => {
-    // Scan for tags
-    const tags = text.match(/<[^>]+>/g);
-    if (tags) {
-        tags.forEach(tag => {
-            if (processedTagsRef.current.has(tag)) return; // Skip already processed
+    // 1. Scan for <color> tags specifically in the full text
+    const colorRegex = /<color>([^<]+)<\/color>/gi;
+    let match;
+    while ((match = colorRegex.exec(text)) !== null) {
+        const fullTag = match[0];
+        const colorValue = match[1].trim();
 
-            // Handle <color>
-            if (tag.includes('<color>')) {
-                 const match = tag.match(/<color>([^<]+)<\/color>/);
-                 if (match) {
-                     const color = match[1];
-                     if (!showCountdown) {
-                        setShowCountdown(true);
-                        setCountdownNum(3);
-                        const timer = setInterval(() => {
-                            setCountdownNum(prev => {
-                                if (prev <= 1) {
-                                    clearInterval(timer);
-                                    setShowCountdown(false);
-                                    setShowFlash(true);
-                                    setTimeout(() => {
-                                        setTheme(color);
-                                        setTimeout(() => setShowFlash(false), 500);
-                                    }, 300);
-                                    return 0;
-                                }
-                                return prev - 1;
-                            });
-                        }, 1000);
-                     }
-                 }
-            }
+        if (!processedTagsRef.current.has(fullTag)) {
+             if (!showCountdown) {
+                setShowCountdown(true);
+                setCountdownNum(3);
+                const timer = setInterval(() => {
+                    setCountdownNum(prev => {
+                        if (prev <= 1) {
+                            clearInterval(timer);
+                            setShowCountdown(false);
+                            setShowFlash(true);
+                            setTimeout(() => {
+                                setTheme(colorValue);
+                                setTimeout(() => setShowFlash(false), 500);
+                            }, 300);
+                            return 0;
+                        }
+                        return prev - 1;
+                    });
+                }, 1000);
+             }
+             processedTagsRef.current.add(fullTag);
+        }
+    }
+
+    // 2. Scan for self-closing or other tags
+    const otherTags = text.match(/<[^>]+>/gi);
+    if (otherTags) {
+        otherTags.forEach(tag => {
+            if (processedTagsRef.current.has(tag)) return;
+            const lowerTag = tag.toLowerCase();
 
             if (onOpenWidget) {
-                // Breathing
-                if (tag.includes('<recommend_breathing')) {
-                     const match = tag.match(/mode="([^"]+)"/);
-                     onOpenWidget('breathing', { initialMode: match ? match[1] : undefined });
-                } else if (tag.includes('<open_breathing')) {
+                if (lowerTag.includes('<recommend_breathing')) {
+                     const m = tag.match(/mode="([^"]+)"/i);
+                     onOpenWidget('breathing', { initialMode: m ? m[1] : undefined });
+                } else if (lowerTag.includes('<open_breathing')) {
                      onOpenWidget('breathing');
                 }
 
-                // Soundscape
-                if (tag.includes('<open_soundscape')) {
-                    const match = tag.match(/preset="([^"]+)"/);
-                    onOpenWidget('soundscape', { preset: match ? match[1] : undefined });
+                if (lowerTag.includes('<open_soundscape')) {
+                    const m = tag.match(/preset="([^"]+)"/i);
+                    onOpenWidget('soundscape', { preset: m ? m[1] : undefined });
                 }
 
-                if (tag.includes('<open_diary')) onOpenWidget('diary');
-                if (tag.includes('<open_mood_tracker')) onOpenWidget('mood');
-                if (tag.includes('<open_pomodoro')) onOpenWidget('pomodoro');
-                if (tag.includes('<open_jam-with-aastha')) onOpenWidget('jam');
+                if (lowerTag.includes('<open_diary')) onOpenWidget('diary');
+                if (lowerTag.includes('<open_mood_tracker')) onOpenWidget('mood');
+                if (lowerTag.includes('<open_pomodoro')) onOpenWidget('pomodoro');
+                if (lowerTag.includes('<open_jam-with-aastha')) onOpenWidget('jam');
+                if (lowerTag.includes('<farewell')) { /* Optional: Trigger logout or farewell anim */ }
             }
 
-            // Mark as processed
             processedTagsRef.current.add(tag);
         });
     }
 
+    // Strip all tags
     return text.replace(/<[^>]*>/g, ''); 
   };
 
