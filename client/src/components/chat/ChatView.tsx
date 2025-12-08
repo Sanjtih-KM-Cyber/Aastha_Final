@@ -528,8 +528,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         });
     }
 
-    // Strip all tags
-    return text.replace(/<[^>]*>/g, ''); 
+    // Strip tags:
+    // 1. Remove <color>...content...</color> entirely so the name doesn't show
+    let cleanText = text.replace(/<color>[\s\S]*?<\/color>/gi, '');
+
+    // 2. Strip remaining tags (like self-closing ones)
+    return cleanText.replace(/<[^>]*>/g, '');
   };
 
   const speakMessage = (text: string) => {
