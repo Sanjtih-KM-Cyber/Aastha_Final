@@ -62,8 +62,9 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string) 
       const completion = await groqClient.chat.completions.create({
           messages: messages,
           model: model,
-          temperature: 0.7,
+          temperature: 0.6,
           max_tokens: 1024,
+          frequency_penalty: 0.5,
           stream: true,
       });
 

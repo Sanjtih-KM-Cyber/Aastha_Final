@@ -26,19 +26,14 @@ interface ChatViewProps {
 
 // --- Dynamic API URL Helper ---
 const getApiUrl = (endpoint: string) => {
-  // Use the environment variable if available (e.g., from .env or Vercel)
   const envUrl = import.meta.env.VITE_API_URL;
   if (envUrl) {
     return `${envUrl}${endpoint}`;
   }
-  // Fallback (mostly for local dev if .env is missing)
   const host = window.location.hostname;
-  // If we are on localhost, assume local backend on 5000
   if (host === 'localhost' || host === '127.0.0.1') {
       return `http://${host}:5000/api${endpoint}`;
   }
-  // Otherwise, use relative path (if proxy is set up) or expect VITE_API_URL to be set
-  // For safety, we can default to the provided Render URL if not on localhost
   return `https://aastha-final.onrender.com/api${endpoint}`;
 };
 
@@ -69,6 +64,38 @@ const compressImage = (file: File): Promise<string> => {
     });
 };
 
+// Helper to map color names to Theme IDs or Hex codes
+const mapColorToTheme = (colorName: string): string => {
+    const lower = colorName.toLowerCase().trim();
+    // Predefined Theme IDs
+    const themes = ['aurora', 'sunset', 'ocean', 'midnight'];
+    if (themes.includes(lower)) return lower;
+
+    // Common Color Map
+    const colorMap: Record<string, string> = {
+        'blue': '#3b82f6',
+        'red': '#ef4444',
+        'green': '#22c55e',
+        'orange': '#f97316',
+        'purple': '#a855f7',
+        'pink': '#ec4899',
+        'yellow': '#eab308',
+        'teal': '#14b8a6',
+        'cyan': '#06b6d4',
+        'white': '#ffffff',
+        'black': '#000000',
+        'gray': '#6b7280'
+    };
+
+    if (colorMap[lower]) return colorMap[lower];
+
+    // If it's a hex code, return it
+    if (lower.startsWith('#')) return lower;
+
+    // Default to a safe theme if unknown
+    return 'aurora';
+};
+
 export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget }) => {
   const { user } = useAuth();
   const { setTheme, currentTheme } = useTheme();
@@ -82,6 +109,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFlash, setShowFlash] = useState(false);
+  const [targetFlashColor, setTargetFlashColor] = useState('#ffffff');
   const [showCountdown, setShowCountdown] = useState(false);
   const [countdownNum, setCountdownNum] = useState(3);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -94,7 +122,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<{ msgId: string, matchIndex: number }[]>([]); // Flattened list of all matches
+  const [searchResults, setSearchResults] = useState<{ msgId: string, matchIndex: number }[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
   // Voice & Dictation
@@ -117,32 +145,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedTagsRef = useRef<Set<string>>(new Set());
 
-  // 1. Sync User Credits
+  // ... (Effects for Credits, History, Voice, Speech Recog - Unchanged) ...
   useEffect(() => {
       if (user) {
           const credits = user.credits || 0;
           const isPremium = user.isPro || credits > 0;
-          
           setIsStandardMode(!isPremium);
           setLocalCredits(user.isPro ? 9999 : credits);
           setModelMode(isPremium ? 'pro' : 'eco');
       }
   }, [user]);
 
-  // 2. Initial History Load (Redirects on 401)
   useEffect(() => {
      const fetchHistory = async () => {
          try {
              const res = await fetch(getApiUrl('/chat/history'), { credentials: 'include' });
-             
              if (!res.ok) { 
-                 if (res.status === 401) {
-                    navigate('/login'); 
-                    return;
-                 }
+                 if (res.status === 401) { navigate('/login'); return; }
                  throw new Error("Failed to fetch history"); 
              }
-             
              const data = await res.json();
              if (Array.isArray(data) && data.length > 0) {
                  setMessages(data);
@@ -154,18 +175,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. I'm ready to listen.`, timestamp: Date.now() }]);
          }
      };
-     
      if (user) fetchHistory();
   }, [user, navigate]);
 
-  // 3. Voice Synthesis Setup
   useEffect(() => {
     const loadVoices = () => { window.speechSynthesis.getVoices(); };
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
   }, []);
 
-  // 4. Speech Recognition Setup
   useEffect(() => {
     // @ts-ignore
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -174,30 +192,20 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
-
       recognition.onstart = () => setIsListening(true);
-      recognition.onend = () => {
-          setIsListening(false);
-          // If in voice mode and not manually stopped, restart?
-          // No, usually we stop after sending. But if connection dropped, maybe notify.
-      };
+      recognition.onend = () => { setIsListening(false); };
       recognition.onerror = (event: any) => {
-          console.error("Speech Recognition Error:", event.error);
           if (event.error === 'not-allowed') {
               setError("Microphone access denied. Please check browser settings.");
               setIsVoiceMode(false);
           }
       };
-
       recognition.onresult = (event: any) => {
         let currentText = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
            currentText += event.results[i][0].transcript;
         }
-        
         if (isDictating) {
-            // For dictation, we append only final results or handle interim differently
-            // Here, simplicity: if isFinal, append.
             const isFinal = event.results[event.results.length - 1].isFinal;
             if (isFinal) {
                 setInput(prev => {
@@ -208,26 +216,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     textareaRef.current.style.height = 'auto';
                     textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
                 }
-                // Don't stop immediately if continuous, but for simple dictation, maybe stop?
-                // The previous logic stopped immediately which is why it felt broken.
-                // Let's keep listening until user toggles off, or just update input.
             }
         } else {
-            // Voice Mode
             setTranscript(currentText);
-            const isFinal = event.results[event.results.length - 1].isFinal;
-
-            // Only send on silence timer OR if final result is clear
             if (currentText.trim().length > 0) {
                 if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-                // Reduce silence timer for snappier response
                 silenceTimerRef.current = setTimeout(() => { handleVoiceSend(currentText); }, 1500);
             }
         }
       };
       recognitionRef.current = recognition;
-    } else {
-        console.warn("Speech Recognition API not supported in this browser.");
     }
   }, [isDictating]);
 
@@ -237,46 +235,20 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   
   const toggleVoiceMode = () => {
     // @ts-ignore
-    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
-        setError("Your browser does not support Voice Mode. Try Chrome or Edge.");
-        return;
-    }
-    if (isStandardMode) {
-        alert("Voice Mode requires Premium Credits. Upgrade to Pro.");
-        return;
-    }
-    if (isVoiceMode) {
-        stopListening();
-        setIsVoiceMode(false);
-    } else {
-        // If Dictation is active, swap seamlessly without stopping recognition
-        if (isDictating) {
-            setIsDictating(false);
-            setIsVoiceMode(true);
-            return;
-        }
-        setIsVoiceMode(true);
-        startListening();
+    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) { setError("Your browser does not support Voice Mode."); return; }
+    if (isStandardMode) { alert("Voice Mode requires Premium Credits."); return; }
+    if (isVoiceMode) { stopListening(); setIsVoiceMode(false); } else {
+        if (isDictating) { setIsDictating(false); setIsVoiceMode(true); return; }
+        setIsVoiceMode(true); startListening();
     }
   };
   
   const toggleDictation = () => {
       // @ts-ignore
-      if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
-          setError("Dictation not supported.");
-          return;
-      }
-      if (isDictating) {
-          recognitionRef.current?.stop();
-          setIsDictating(false);
-      } else {
-          // If Voice Mode is active, swap seamlessly without stopping recognition
-          if (isVoiceMode) {
-              setIsVoiceMode(false);
-              setIsDictating(true);
-              return;
-          }
-          try { recognitionRef.current?.start(); setIsDictating(true); } catch(e) { console.error("Dictation start failed", e); }
+      if (!window.SpeechRecognition && !window.webkitSpeechRecognition) { setError("Dictation not supported."); return; }
+      if (isDictating) { recognitionRef.current?.stop(); setIsDictating(false); } else {
+          if (isVoiceMode) { setIsVoiceMode(false); setIsDictating(true); return; }
+          try { recognitionRef.current?.start(); setIsDictating(true); } catch(e) {}
       }
   };
 
@@ -290,45 +262,23 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           });
       }
   };
-
   useEffect(() => scrollToBottom(), [messages, isTyping]);
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (isStandardMode) {
-          setError("Vision Analysis requires Premium Credits. Upgrade to Pro.");
-          setTimeout(() => setError(null), 3000);
-          if (fileInputRef.current) fileInputRef.current.value = ''; // Clear input to allow retry
-          return;
-      }
+      if (isStandardMode) { setError("Vision Analysis requires Premium Credits."); return; }
       if (e.target.files && e.target.files[0]) {
-          try {
-            const compressed = await compressImage(e.target.files[0]);
-            setAttachedImage(compressed);
-          } catch (err) { 
-            console.error("Image compression error:", err);
-            setError("Failed to process image. Please try another."); 
-          }
+          try { const compressed = await compressImage(e.target.files[0]); setAttachedImage(compressed); }
+          catch (err) { setError("Failed to process image."); }
       }
-      // Reset value so same file can be selected again if cleared
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const copyToClipboard = (text: string) => {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).catch(e => {
-            console.error("Clipboard write failed:", e);
-            alert("Copy failed (Browser restriction). Please use manual copy.");
-        });
-    } else {
-        console.warn("Clipboard API unavailable/blocked.");
-        alert("Clipboard API unavailable. Please use manual copy.");
-    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
+    else alert("Clipboard API unavailable.");
   };
   
-  const handleReply = (content: string) => {
-      setReplyingTo(content);
-      textareaRef.current?.focus();
-  };
+  const handleReply = (content: string) => { setReplyingTo(content); textareaRef.current?.focus(); };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
@@ -339,10 +289,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
   // --- Main Send Logic ---
@@ -352,20 +299,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     if (!textToSend.trim() && !attachedImage) return;
 
     let finalContent = textToSend;
-    if (replyingTo) {
-        finalContent = `> Replying to: "${replyingTo}"\n\n${textToSend}`;
-        setReplyingTo(null);
-    }
-    if (attachedImage) {
-        finalContent = `[Image Attached] ${finalContent}`;
-    }
+    if (replyingTo) { finalContent = `> Replying to: "${replyingTo}"\n\n${textToSend}`; setReplyingTo(null); }
+    if (attachedImage) { finalContent = `[Image Attached] ${finalContent}`; }
 
-    const userMsg: ChatMessage = {
-        role: 'user',
-        content: finalContent,
-        timestamp: Date.now(),
-        id: `local-${Date.now()}` // Assign ID for search
-    };
+    const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
     setMessages(prev => [...prev, userMsg]);
     
     setInput(''); setAttachedImage(null); setShowEmojiPicker(false); setIsTyping(true); setError(null);
@@ -380,28 +317,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       });
 
       if (!response.ok) {
-          if (response.status === 401) {
-              alert("Session expired. Redirecting to login.");
-              navigate('/login');
-              return;
-          }
+          if (response.status === 401) { navigate('/login'); return; }
           const errData = await response.json().catch(() => ({}));
           throw new Error(errData.message || `${botName} is unreachable.`);
       }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      
       const newModelMessageId = Date.now().toString();
-      // Clear processed tags for new message
       processedTagsRef.current.clear();
 
-      setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: '', 
-          timestamp: Date.now(), 
-          id: newModelMessageId
-      }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: '', timestamp: Date.now(), id: newModelMessageId }]);
       
       let aiContentRaw = '';
       let buffer = '';
@@ -422,64 +348,68 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     if (dataStr.trim() === '[DONE]') break;
                     try {
                         const data = JSON.parse(dataStr);
-                        
                         if (data.meta) { 
                             setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits)); 
                             setModelMode(data.meta.mode); 
                             setIsStandardMode(data.meta.mode === 'standard'); 
                             if (data.meta.warning) warningFromBackend = data.meta.warning;
                         }
-                        
                         if (data.content) {
                             aiContentRaw += data.content;
                             const cleanContent = processMagicTags(aiContentRaw);
-                            
                             setMessages(prev => prev.map(msg => {
                                 if (msg.id === newModelMessageId) {
-                                    return { 
-                                        ...msg, 
-                                        content: cleanContent, 
-                                        warning: warningFromBackend || msg.warning 
-                                    };
+                                    return { ...msg, content: cleanContent, warning: warningFromBackend || msg.warning };
                                 }
                                 return msg;
                             }));
                         }
-                    } catch (e: any) {
-                        if (e.message && e.message.includes("Upgrade")) setError(e.message);
-                    }
+                    } catch (e: any) { if (e.message && e.message.includes("Upgrade")) setError(e.message); }
                 }
             }
         }
       }
-      
       const cleanFinal = processMagicTags(aiContentRaw);
       if ((isVoiceMode || ttsEnabled) && aiContentRaw) speakMessage(cleanFinal);
 
     } catch (error: any) {
       setError(error.message || "Connection failed");
       setIsTyping(false);
-      // We can't access modelMessageId/newModelMessageId here easily if it was local to the try block
-      // But we can filter out empty assistant messages if needed, or just leave it.
-      // Ideally, define the ID before the try block if we want to use it here.
     } finally { setIsTyping(false); }
   };
 
   const processMagicTags = (text: string) => {
-    // Scan for tags
-    const tags = text.match(/<[^>]+>/g);
-    if (tags) {
-        tags.forEach(tag => {
-            if (processedTagsRef.current.has(tag)) return; // Skip already processed
+    // 1. Tag Extraction (Side Effects Only)
+    // Match any tag like <color>...</color> or <open_widget/>
+    const tagRegex = /<[^>]+>/g;
+    const matches = text.match(tagRegex);
 
-            // Handle <color>
-            if (tag.includes('<color>')) {
-                 const match = tag.match(/<color>([^<]+)<\/color>/);
-                 if (match) {
-                     const color = match[1];
+    if (matches) {
+        matches.forEach(tag => {
+            if (processedTagsRef.current.has(tag)) return; // Execute once
+
+            const lowerTag = tag.toLowerCase();
+
+            // --- Theme/Color Handling ---
+            if (lowerTag.startsWith('<color>')) {
+                 // Wait, the tag in match array is just <color> or </color>?
+                 // Regex <[^>]+> matches <color> AND </color> separately if content is between.
+                 // We need to extract the content for color.
+                 // Let's use a specific regex for the full block for Color only.
+            }
+            // For Color specifically, we need the Value between tags
+            const colorMatch = /<color>([\s\S]*?)<\/color>/i.exec(text);
+            if (colorMatch) {
+                const fullBlock = colorMatch[0];
+                const colorValue = colorMatch[1].trim();
+
+                if (!processedTagsRef.current.has(fullBlock)) {
+                     const mappedColor = mapColorToTheme(colorValue);
                      if (!showCountdown) {
                         setShowCountdown(true);
                         setCountdownNum(3);
+                        setTargetFlashColor(mappedColor.startsWith('#') ? mappedColor : '#ffffff'); // Use mapped color for flash if hex
+
                         const timer = setInterval(() => {
                             setCountdownNum(prev => {
                                 if (prev <= 1) {
@@ -487,65 +417,71 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                     setShowCountdown(false);
                                     setShowFlash(true);
                                     setTimeout(() => {
-                                        setTheme(color);
-                                        setTimeout(() => setShowFlash(false), 500);
-                                    }, 300);
+                                        setTheme(mappedColor);
+                                        // Longer flash out for "fill and go back" feel
+                                        setTimeout(() => setShowFlash(false), 800);
+                                    }, 400); // Wait for flash to fully appear
                                     return 0;
                                 }
                                 return prev - 1;
                             });
                         }, 1000);
                      }
-                 }
+                     processedTagsRef.current.add(fullBlock);
+                     // Also add the individual tags to prevent re-trigger if they match below
+                     processedTagsRef.current.add('<color>');
+                     processedTagsRef.current.add('</color>');
+                }
             }
 
+            // --- Widget Handling ---
             if (onOpenWidget) {
-                // Breathing
-                if (tag.includes('<recommend_breathing')) {
-                     const match = tag.match(/mode="([^"]+)"/);
-                     onOpenWidget('breathing', { initialMode: match ? match[1] : undefined });
-                } else if (tag.includes('<open_breathing')) {
+                if (lowerTag.includes('recommend_breathing')) {
+                     const m = lowerTag.match(/mode="([^"]+)"/i);
+                     onOpenWidget('breathing', { initialMode: m ? m[1] : undefined });
+                } else if (lowerTag.includes('open_breathing')) {
                      onOpenWidget('breathing');
                 }
 
-                // Soundscape
-                if (tag.includes('<open_soundscape')) {
-                    const match = tag.match(/preset="([^"]+)"/);
-                    onOpenWidget('soundscape', { preset: match ? match[1] : undefined });
+                if (lowerTag.includes('open_soundscape')) {
+                    const m = lowerTag.match(/preset="([^"]+)"/i);
+                    onOpenWidget('soundscape', { preset: m ? m[1] : undefined });
                 }
 
-                if (tag.includes('<open_diary')) onOpenWidget('diary');
-                if (tag.includes('<open_mood_tracker')) onOpenWidget('mood');
-                if (tag.includes('<open_pomodoro')) onOpenWidget('pomodoro');
-                if (tag.includes('<open_jam-with-aastha')) onOpenWidget('jam');
+                if (lowerTag.includes('open_diary')) onOpenWidget('diary');
+                if (lowerTag.includes('open_mood_tracker')) onOpenWidget('mood');
+                if (lowerTag.includes('open_pomodoro')) onOpenWidget('pomodoro');
+                if (lowerTag.includes('open_jam-with-aastha')) onOpenWidget('jam');
+                // Farewell logic could go here
             }
 
-            // Mark as processed
             processedTagsRef.current.add(tag);
         });
     }
 
-    return text.replace(/<[^>]*>/g, ''); 
+    // 2. Tag Stripping (Visual Cleanup)
+    // Remove <color>content</color> blocks entirely
+    let cleanText = text.replace(/<color>[\s\S]*?<\/color>/gi, '');
+
+    // Remove all other tags <...>
+    cleanText = cleanText.replace(/<[^>]+>/g, '');
+
+    return cleanText;
   };
 
   const speakMessage = (text: string) => {
     if ('speechSynthesis' in window) {
        window.speechSynthesis.cancel();
-       // Remove markdown, emojis, and special chars for TTS
        const cleanText = text
-         .replace(/[*#]/g, '') // remove markdown
-         .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, ''); // remove emojis
+         .replace(/[*#]/g, '')
+         .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
 
        const utterance = new SpeechSynthesisUtterance(cleanText);
        const voices = window.speechSynthesis.getVoices();
        let chosenVoice = voices.find(v => v.voiceURI === selectedVoiceURI) || voices.find(v => v.name.includes('Google US English'));
        if (chosenVoice) utterance.voice = chosenVoice;
        utterance.onend = () => {
-           // In "Talk like in a call" mode, we want to immediately listen again
-           if (isVoiceMode) {
-               // Small delay to prevent catching own echo
-               setTimeout(() => startListening(), 300);
-           }
+           if (isVoiceMode) setTimeout(() => startListening(), 300);
        };
        window.speechSynthesis.speak(utterance);
     }
@@ -564,32 +500,20 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   useEffect(() => {
       if (searchQuery.trim()) {
           const hits: { msgId: string, matchIndex: number }[] = [];
-
           messages.forEach(msg => {
              const lowerContent = msg.content.toLowerCase();
              const lowerQuery = searchQuery.toLowerCase();
-
-             // Count occurrences in this message
              const parts = lowerContent.split(lowerQuery);
-             // If split results in N parts, there are N-1 matches
              const matchCount = parts.length - 1;
-
              if (matchCount > 0 && msg.id) {
-                 for (let i = 0; i < matchCount; i++) {
-                     hits.push({ msgId: msg.id, matchIndex: i });
-                 }
+                 for (let i = 0; i < matchCount; i++) hits.push({ msgId: msg.id, matchIndex: i });
              }
           });
-
           setSearchResults(hits);
-          setCurrentMatchIndex(hits.length > 0 ? hits.length - 1 : 0); // Start at latest
-      } else {
-          setSearchResults([]);
-          setCurrentMatchIndex(0);
-      }
+          setCurrentMatchIndex(hits.length > 0 ? hits.length - 1 : 0);
+      } else { setSearchResults([]); setCurrentMatchIndex(0); }
   }, [searchQuery, messages]);
 
-  // Find target ID for scrolling
   useEffect(() => {
       if (searchResults.length > 0 && searchResults[currentMatchIndex]) {
           const { msgId } = searchResults[currentMatchIndex];
@@ -602,19 +526,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const prevMatch = () => setCurrentMatchIndex(prev => (prev - 1 + searchResults.length) % searchResults.length);
 
   const renderMessages = () => {
-      // We do NOT filter messages anymore, we show all and highlight
       let lastDateLabel = '';
-
       return messages.map((msg, idx) => {
           const dateLabel = getDateLabel(msg.timestamp || Date.now());
           const showSeparator = dateLabel !== lastDateLabel;
           lastDateLabel = dateLabel;
-
-          // Provide an ID for scrolling if it doesn't have one (generate on fly if needed, but safer to use state)
           const domId = `msg-${msg.id || idx}`;
-
-          // Determine if this message contains the *currently active* match
-          // and which specific instance of the word it is
           let currentMatchIndexInMessage = -1;
 
           if (searchResults.length > 0) {
@@ -623,16 +540,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                   currentMatchIndexInMessage = currentMatch.matchIndex;
               }
           }
-
           const isCurrentlyStreaming = isTyping && msg.role === 'assistant' && idx === messages.length - 1;
 
           return (
              <React.Fragment key={domId}>
                 {showSeparator && (
                     <div className="flex justify-center my-8">
-                        <span className="bg-black/30 backdrop-blur-md border border-white/5 text-white/50 text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm">
-                            {dateLabel}
-                        </span>
+                        <span className="bg-black/30 backdrop-blur-md border border-white/5 text-white/50 text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm">{dateLabel}</span>
                     </div>
                 )}
                 <div id={domId} className="flex flex-col w-full">
@@ -646,11 +560,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         currentMatchIndex={currentMatchIndexInMessage}
                         isStreaming={isCurrentlyStreaming} 
                     />
-                    {msg.warning && (
-                        <div className="flex items-center justify-center gap-1.5 text-[10px] text-white/30 -mt-3 mb-4">
-                            <ShieldAlert size={10} /> {msg.warning}
-                        </div>
-                    )}
+                    {msg.warning && <div className="flex items-center justify-center gap-1.5 text-[10px] text-white/30 -mt-3 mb-4"><ShieldAlert size={10} /> {msg.warning}</div>}
                 </div>
              </React.Fragment>
           );
@@ -680,7 +590,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                   </motion.div>
               </motion.div>
           )}
-          {showFlash && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-white pointer-events-none" />}
+          {showFlash && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 1.2 }}
+                transition={{ duration: 0.8, ease: "easeInOut" }}
+                className="fixed inset-0 z-[100] pointer-events-none"
+                style={{ backgroundColor: targetFlashColor }}
+              />
+          )}
       </AnimatePresence>
 
       {/* 3. Full Screen Voice Mode Overlay */}

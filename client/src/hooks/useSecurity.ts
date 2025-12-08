@@ -15,14 +15,21 @@ export const useSecurity = () => {
         return;
       }
 
-      // Ctrl+Shift+I (Inspect), Ctrl+Shift+J (Console), Ctrl+Shift+C (Element Inspector)
-      if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C' || e.key === 'i' || e.key === 'j' || e.key === 'c')) {
+      // Ctrl+Shift+I (Inspect), Ctrl+Shift+J (Console), Ctrl+Shift+C (Element Inspector), Ctrl+Shift+K (Firefox Console), Ctrl+Shift+U (Source)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey &&
+          ['I', 'J', 'C', 'K', 'U', 'i', 'j', 'c', 'k', 'u'].includes(e.key)) {
         e.preventDefault();
         return;
       }
 
-      //Qltrl+U (View Source)
-      if (e.ctrlKey && (e.key === 'U' || e.key === 'u')) {
+      // Mac specific: Cmd+Option+I (Inspect), Cmd+Option+C (Inspect), Cmd+Option+U (Source)
+      if (e.metaKey && e.altKey && ['I', 'C', 'U', 'i', 'c', 'u'].includes(e.key)) {
+        e.preventDefault();
+        return;
+      }
+
+      // Ctrl+U (View Source), Ctrl+S (Save), Ctrl+P (Print)
+      if ((e.ctrlKey || e.metaKey) && ['U', 'S', 'P', 'u', 's', 'p'].includes(e.key)) {
         e.preventDefault();
         return;
       }
