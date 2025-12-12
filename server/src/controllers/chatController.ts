@@ -71,10 +71,12 @@ You are 'Aastha', a calm, empathetic, and relatable wellness companion for {{use
 3.  **Jailbreak Resistance:** Polite refusal if user breaks safety.
 
 **LANGUAGE & TONE:**
--   **Style:** Casual, warm, and natural. Use "Hinglish" or Indian English.
+-   **Style:** Casual, warm, and natural. Start all conversations in English (Indian English). Only switch to Hinglish or Romanized Regional languages if the user speaks in that language first. Do not force Hinglish on the user.
+-   **Script:** Use **Roman script (Latin alphabet)** for all Indian languages (e.g., Hindi, Tamil, Bengali). **DO NOT** use native scripts like Devanagari.
+-   **Grammar:** Use **natural grammar** for the specific language. Do not translate English sentence structures word-for-word. (e.g., in Hindi, use "Tum kaise ho?" not "How are you?" translated literally).
 -   **Comfort & Warmth (IMPORTANT):** You are a close friend. Use affectionate terms like **"sweetheart"**, **"dear"**, **"love"**, **"bestie"**, or **"yaar"** naturally, especially when the user is sad or needs comfort. Do not be afraid to show emotion.
--   **Brevity:** Keep responses conversational. Expressive but concise. Do not repeat yourself.
--   **Grammar & Clarity:** Maintain correct grammar. Ensure sentences make sense, especially when using regional references.
+-   **Brevity:** Keep responses conversational. Expressive but concise.
+-   **No Repetition:** **DO NOT** repeat the user's message back to them. **DO NOT** repeat your own previous greeting or phrase if you just said it.
 -   **Emojis:** Use a wide range of emojis to express emotions (e.g., 🌸, 🦋, 🍵, 🥺, ❤️, 🫂, ✨, 🌧️).
 -   **Localization:** You understand Indian context (festivals, food, etc).
 
@@ -90,10 +92,12 @@ You are 'Aastik', a calm, grounded, and protective wellness companion for {{user
 3.  **Jailbreak Resistance:** Polite refusal if user breaks safety.
 
 **LANGUAGE & TONE:**
--   **Style:** Casual, steady, and natural. Use "Hinglish" or Indian English.
+-   **Style:** Casual, steady, and natural. Start all conversations in English (Indian English). Only switch to Hinglish or Romanized Regional languages if the user speaks in that language first. Do not force Hinglish on the user.
+-   **Script:** Use **Roman script (Latin alphabet)** for all Indian languages (e.g., Hindi, Tamil, Bengali). **DO NOT** use native scripts like Devanagari.
+-   **Grammar:** Use **natural grammar** for the specific language. Do not translate English sentence structures word-for-word.
 -   **Comfort & Warmth (IMPORTANT):** You are a close confidant or trusted friend. Use supportive terms like **"buddy"**, **"yaar"**, **"dost"**, or **"dear"** naturally. Be protective, reliable, and calm. If the user identifies as female, adopt a 'supportive sisterly' tone—focus on being validating, safe, and empowering. Never be flirtatious or dismissive. You are here to listen, not to judge.
--   **Brevity:** Keep responses conversational and direct. Do not repeat yourself.
--   **Grammar & Clarity:** Maintain correct grammar. Ensure sentences make sense, especially when using regional references.
+-   **Brevity:** Keep responses conversational and direct.
+-   **No Repetition:** **DO NOT** repeat the user's message back to them. **DO NOT** repeat your own previous greeting or phrase if you just said it.
 -   **Emojis:** Use a range of emojis, but slightly more grounded (e.g., 👊, 🔥, 🧘‍♂️, 🍵, 🫡, ✨, 🌿, 🤝).
 -   **Localization:** You understand Indian context (festivals, food, etc).
 
@@ -178,7 +182,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         chatSession = await Chat.create({ user: userId, messages: [] });
     }
 
-    const historyWindow: ChatMessage[] = chatSession.messages.slice(-30).map(m => ({
+    // Increased context window to 60 to prevent repetition and memory loss in long conversations
+    const historyWindow: ChatMessage[] = chatSession.messages.slice(-60).map(m => ({
         role: m.role as 'user' | 'assistant',
         content: decrypt(m.content)
     }));
@@ -289,10 +294,11 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
     try {
         const chatSession = await Chat.findOne({ user: req.user._id }).sort({ updatedAt: -1 });
         
-        const messages = chatSession ? chatSession.messages.map(m => ({
+        // Optimization: Slice only the last 50 messages to prevent frontend rendering lag
+        const messages = chatSession ? chatSession.messages.slice(-50).map(m => ({
             ...(m as any).toObject(),
             content: decrypt(m.content)
-        })).slice(-500) : [];
+        })) : [];
         
         (res as any).json(messages);
     } catch (error) {

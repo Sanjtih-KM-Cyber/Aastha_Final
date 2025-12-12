@@ -95,32 +95,22 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     });
 
     if (user) {
-        // --- OTP DISABLED: Auto-Verify & Login ---
-        user.isVerified = true;
+        // --- OTP ENABLED ---
+        const otp = generateOTP();
+        user.otpCode = await bcrypt.hash(otp, 10);
+        user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
         await user.save();
 
-        const token = generateToken((user._id as any).toString());
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
-        (res as any).cookie('jwt', token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? 'none' : 'lax',
-            maxAge: 30 * 24 * 60 * 60 * 1000
-        });
+        const emailSent = await sendOTPEmail(cleanEmail, otp);
+        if (!emailSent) {
+             console.error("Failed to send OTP email");
+             // Note: User is created but email failed. They can try login to resend.
+        }
 
-        (res as any).status(201).json({
-            _id: user._id,
-            name: user.name,
-            email: decrypt(user.emailEncrypted) || user.email,
-            username: user.username,
-            hasDiarySetup: false,
-            isPro: user.isPro,
-            credits: 10,
-            streak: 1,
-            avatar: user.avatar,
-            wallpaper: user.wallpaper,
-            createdAt: user.createdAt,
-            encryptionSalt: user.encryptionSalt
+        (res as any).status(200).json({
+            requiresVerification: true,
+            email: cleanEmail,
+            message: 'Verification code sent to email.'
         });
     }
   } catch (error) {
@@ -157,6 +147,11 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         user.emailHash = identifierHash;
         if (!user.emailEncrypted) user.emailEncrypted = encrypt(cleanIdentifier);
         user.email = undefined; // Clear plain text email
+
+        // FORCE VERIFICATION FOR LEGACY USERS
+        // Since this is a migration event, we assume they haven't done OTP verification yet.
+        user.isVerified = false;
+
         await user.save();
     }
 
@@ -175,22 +170,30 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     // 1. Authenticate Password
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
       
-        // --- OTP DISABLED: Auto-verify if not verified ---
+        // --- OTP CHECK ---
         if (!user.isVerified) {
-             user.isVerified = true;
-             await user.save();
+            // Generate & Resend OTP
+            const otp = generateOTP();
+            user.otpCode = await bcrypt.hash(otp, 10);
+            user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+            await user.save(); // Must save new OTP
+
+            await sendOTPEmail(cleanIdentifier.includes('@') ? cleanIdentifier : (decrypt(user.emailEncrypted) || user.email || ""), otp);
+
+            return (res as any).status(200).json({
+                requiresVerification: true,
+                email: cleanIdentifier.includes('@') ? cleanIdentifier : (decrypt(user.emailEncrypted) || user.email),
+                message: 'Account not verified. New code sent.'
+            });
         }
 
-      // Check Mandatory Username for Legacy Users
-      if (!user.username) {
-          // We don't block login, but we signal the frontend to force username creation
-          // But wait, the user said "make the old users... to also giving the username".
-          // If we block login, they can't save it (unless we have a specific endpoint).
-          // We will send a special flag 'requireUsername: true'
-      }
+        let needsSave = false;
 
       // 2. Handle missing fields (Self-healing legacy user data)
-      if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email); 
+      if (!user.emailEncrypted && user.email) {
+          user.emailEncrypted = encrypt(user.email);
+          needsSave = true;
+      }
       
       // Auto-generate username for legacy users
       if (!user.username) {
@@ -198,14 +201,16 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           const baseName = user.name ? user.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 10) : 'user';
           user.username = `${baseName}${randomSuffix}`;
           user.usernameEncrypted = encrypt(user.username);
+          needsSave = true;
       } else if (!user.usernameEncrypted) {
           user.usernameEncrypted = encrypt(user.username);
+          needsSave = true;
       }
 
-      if (!user.streak) user.streak = 1; 
-      if (!user.lastVisit) user.lastVisit = new Date(); 
-      if (user.dailyPremiumUsage === undefined) user.dailyPremiumUsage = 0;
-      if (user.isPro === undefined) user.isPro = false;
+      if (!user.streak) { user.streak = 1; needsSave = true; }
+      if (!user.lastVisit) { user.lastVisit = new Date(); needsSave = true; }
+      if (user.dailyPremiumUsage === undefined) { user.dailyPremiumUsage = 0; needsSave = true; }
+      if (user.isPro === undefined) { user.isPro = false; needsSave = true; }
 
       // 3. Daily Reset Check
       const today = new Date();
@@ -215,9 +220,19 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           lastUsage.getFullYear() !== today.getFullYear()) {
           user.dailyPremiumUsage = 0;
           user.lastUsageDate = today;
+          needsSave = true;
       }
-      user.lastVisit = today; // Update visit date for streak
-      await user.save();
+
+      // Only update lastVisit if date changed to avoid writing on every login
+      const lastVisitTime = new Date(user.lastVisit).getTime();
+      const todayTime = today.getTime();
+      // Only update if difference > 1 minute to prevent spam updates
+      if (Math.abs(todayTime - lastVisitTime) > 60000) {
+          user.lastVisit = today;
+          needsSave = true;
+      }
+
+      if (needsSave) await user.save();
 
       // 4. Generate Token & Respond
       const token = generateToken((user._id as any).toString());

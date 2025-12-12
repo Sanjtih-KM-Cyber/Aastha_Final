@@ -105,14 +105,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       )}
 
       {/* Message bubble */}
-      <div className="relative max-w-[85%] md:max-w-[70%]">
+      <div className="relative max-w-[90%] md:max-w-[70%]">
         <div
           className={`
-            relative px-6 py-3.5 text-base leading-snug backdrop-blur-xl shadow-sm
+            relative px-4 py-3 md:px-6 md:py-3.5 text-sm md:text-base leading-snug backdrop-blur-xl shadow-sm
             ${
               isUser
-                ? 'rounded-[20px] rounded-br-md text-white border border-white/10 bg-white/10'
-                : 'rounded-[20px] rounded-bl-md text-white border border-white/10'
+                ? 'rounded-[18px] rounded-br-none text-white border border-white/10 bg-white/10'
+                : 'rounded-[18px] rounded-bl-none text-white border border-white/10'
             }
           `}
           style={
