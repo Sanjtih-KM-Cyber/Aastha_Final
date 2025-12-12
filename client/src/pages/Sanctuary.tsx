@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WellnessHub } from '../components/wellness/WellnessHub';
 import { ChatView } from '../components/chat/ChatView';
 import { Diary } from '../components/wellness/Diary';
@@ -8,10 +8,20 @@ import { Soundscape } from '../components/widgets/Soundscape';
 import { BreathingWidget } from '../components/widgets/BreathingWidget';
 import { MoodTracker } from '../components/widgets/MoodTracker';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
+import { MobileNavBar } from '../components/layout/MobileNavBar';
 
 export const Sanctuary: React.FC = () => {
   // Mobile Sidebar State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeMobileTab, setActiveMobileTab] = useState<'chat' | 'wellness' | 'profile'>('chat');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const [widgets, setWidgets] = useState<Record<string, boolean>>({
     diary: false,
@@ -90,8 +100,19 @@ export const Sanctuary: React.FC = () => {
          <ChatView 
             onMobileMenuClick={() => setIsMobileMenuOpen(true)} 
             onOpenWidget={openWidget}
+            isMobile={isMobile}
          />
       </main>
+
+      {/* Mobile Bottom Nav */}
+      {isMobile && (
+          <MobileNavBar
+            activeTab={activeMobileTab}
+            onTabChange={setActiveMobileTab}
+            onOpenWellness={() => setIsMobileMenuOpen(true)}
+            onOpenProfile={() => setIsSettingsOpen(true)}
+          />
+      )}
 
       {/* 3. Floating Widget Ecosystem */}
       <div style={{ position: 'absolute', pointerEvents: 'none', inset: 0, zIndex: 30 }}>

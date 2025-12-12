@@ -109,94 +109,74 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
   };
 
   if (isMobile) {
+      // Logic for mobile is now handled by MobileNavBar triggering onToggleWidget directly via Bottom Sheet logic
+      // OR by opening this Card Deck if the user explicitly opens "Toolkit".
+      // We keep the Card Deck as the "Menu View".
+
       return (
         <AnimatePresence>
             {isMobileOpen && (
                 <motion.div
-                    initial={{ opacity: 0, y: 50 }}
+                    initial={{ opacity: 0, y: '100%' }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 50 }}
-                    className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-3xl p-6"
+                    exit={{ opacity: 0, y: '100%' }}
+                    className="fixed inset-0 z-[60] bg-black flex flex-col"
                 >
-                    {/* Close Button */}
-                    <button
-                        onClick={onCloseMobile}
-                        className="absolute top-6 right-6 p-2 rounded-full bg-white/10 text-white/70 hover:bg-white/20"
-                    >
-                        <X size={24} />
-                    </button>
-
-                    {/* Greeting Header */}
-                    <div className="text-center mb-8 mt-4">
-                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4 shadow-lg"
-                             style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #111827)` }}>
-                            <Sparkles size={24} className="text-white" />
-                        </div>
-                        <h2 className="text-2xl font-serif text-white mb-1">
-                            {getGreeting()}, <span className="text-white/60">{user?.name?.split(' ')[0]}</span>
-                        </h2>
-                        <div className="flex items-center justify-center gap-2 mt-2">
-                            <Flame size={14} className="text-orange-400" fill="currentColor" />
-                            <span className="text-xs font-mono text-white/40">{user?.streak || 1} Day Streak</span>
-                        </div>
+                    {/* Header */}
+                    <div className="h-16 flex items-center justify-between px-6 border-b border-white/5 bg-black/50 backdrop-blur-xl">
+                        <span className="font-serif text-xl text-white">Toolkit</span>
+                        <button onClick={onCloseMobile} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/60"><X size={20} /></button>
                     </div>
 
-                    {/* Card Carousel */}
-                    <div
-                        className="relative w-full max-w-sm aspect-[4/5] perspective-1000"
-                        onTouchStart={handleTouchStart}
-                        onTouchEnd={handleTouchEnd}
-                    >
-                        <AnimatePresence mode='wait'>
-                            <motion.div
-                                key={mobileCardIndex}
-                                initial={{ opacity: 0, x: 50, rotateY: -10 }}
-                                animate={{ opacity: 1, x: 0, rotateY: 0 }}
-                                exit={{ opacity: 0, x: -50, rotateY: 10 }}
-                                transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                                className="absolute inset-0 bg-white/5 border border-white/10 rounded-3xl p-8 flex flex-col items-center justify-center shadow-2xl backdrop-blur-md"
-                                style={{
-                                    boxShadow: `0 0 50px -12px ${currentTheme.primaryColor}33`
-                                }}
-                            >
-                                {/* Widget Icon */}
-                                <div className={`p-6 rounded-full bg-white/5 mb-6 ${WIDGETS[mobileCardIndex].color.replace('text-', 'bg-').replace('-200', '-500/20')}`}>
-                                    {React.createElement(WIDGETS[mobileCardIndex].icon, { size: 48, className: WIDGETS[mobileCardIndex].color })}
-                                </div>
+                    {/* Card Carousel Content */}
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden">
 
-                                <h3 className="text-3xl font-serif text-white mb-2">{WIDGETS[mobileCardIndex].label}</h3>
-                                <p className="text-white/40 text-center mb-8">{WIDGETS[mobileCardIndex].desc}</p>
+                        {/* Greeting (Optional Context) */}
+                        <div className="absolute top-8 text-center w-full">
+                            <h2 className="text-white/40 text-sm font-medium uppercase tracking-widest">Select a Tool</h2>
+                        </div>
 
-                                <button
-                                    onClick={() => { onToggleWidget(WIDGETS[mobileCardIndex].id); onCloseMobile(); }}
-                                    className="px-8 py-3 rounded-full bg-white text-black font-bold hover:scale-105 active:scale-95 transition-all"
+                        {/* Card */}
+                        <div
+                            className="relative w-full max-w-sm aspect-[3/4] perspective-1000 mt-8"
+                            onTouchStart={handleTouchStart}
+                            onTouchEnd={handleTouchEnd}
+                        >
+                            <AnimatePresence mode='wait'>
+                                <motion.div
+                                    key={mobileCardIndex}
+                                    initial={{ opacity: 0, x: 100, scale: 0.9 }}
+                                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                                    exit={{ opacity: 0, x: -100, scale: 0.9 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                    className="absolute inset-0 bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-[2rem] p-8 flex flex-col items-center justify-center shadow-2xl backdrop-blur-2xl"
                                 >
-                                    Open Widget
-                                </button>
+                                    <div className={`p-8 rounded-full bg-black/20 mb-8 shadow-inner`}>
+                                        {React.createElement(WIDGETS[mobileCardIndex].icon, { size: 64, className: WIDGETS[mobileCardIndex].color })}
+                                    </div>
 
-                                {/* Dots Indicator */}
-                                <div className="absolute bottom-6 flex gap-2">
-                                    {WIDGETS.map((_, idx) => (
-                                        <div
-                                            key={idx}
-                                            className={`w-2 h-2 rounded-full transition-all ${idx === mobileCardIndex ? 'bg-white w-4' : 'bg-white/20'}`}
-                                        />
-                                    ))}
-                                </div>
-                            </motion.div>
-                        </AnimatePresence>
+                                    <h3 className="text-3xl font-serif text-white mb-3 text-center">{WIDGETS[mobileCardIndex].label}</h3>
+                                    <p className="text-white/50 text-center mb-10 text-lg leading-relaxed">{WIDGETS[mobileCardIndex].desc}</p>
 
-                        {/* Navigation Arrows (for non-swipe users) */}
-                        <button onClick={handlePrevCard} className="absolute top-1/2 -left-4 -translate-y-1/2 p-2 text-white/30 hover:text-white"><ChevronsLeft size={32}/></button>
-                        <button onClick={handleNextCard} className="absolute top-1/2 -right-4 -translate-y-1/2 p-2 text-white/30 hover:text-white"><ChevronsRight size={32}/></button>
-                    </div>
+                                    <button
+                                        onClick={() => { onToggleWidget(WIDGETS[mobileCardIndex].id); onCloseMobile(); }}
+                                        className="w-full py-4 rounded-xl bg-white text-black font-bold text-lg hover:scale-105 active:scale-95 transition-all shadow-lg"
+                                    >
+                                        Open
+                                    </button>
+                                </motion.div>
+                            </AnimatePresence>
+                        </div>
 
-                    {/* Footer Settings */}
-                    <div className="mt-auto pt-8">
-                         <button onClick={onOpenSettings} className="flex items-center gap-2 text-white/40 hover:text-white transition-colors px-4 py-2 rounded-full border border-white/5 hover:bg-white/5">
-                             <Settings size={16} />
-                             <span className="text-sm">Settings & Profile</span>
-                         </button>
+                        {/* Pagination Dots */}
+                        <div className="flex gap-3 mt-8">
+                            {WIDGETS.map((_, idx) => (
+                                <div
+                                    key={idx}
+                                    className={`h-1.5 rounded-full transition-all duration-300 ${idx === mobileCardIndex ? 'bg-white w-8' : 'bg-white/20 w-1.5'}`}
+                                />
+                            ))}
+                        </div>
                     </div>
                 </motion.div>
             )}
