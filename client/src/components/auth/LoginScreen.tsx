@@ -44,6 +44,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
     e.preventDefault(); setIsLoading(true); setError('');
     try { 
         const res = await login(identifier, password); 
+        // Check verification flag in success response
         if (res && res.requiresVerification) {
             navigate('/verify', { state: { email: res.email } });
         } else {
@@ -51,9 +52,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
         }
     } 
     catch (err: any) { 
-        // If the error response contains the verification flag (e.g. from axios interceptor or direct 200 with flag)
-        if (err.response?.data?.requiresVerification) {
-             navigate('/verify', { state: { email: err.response.data.email } });
+        // Also check if the verification flag came back in an error-like response (though we use 200 for verification needed)
+        if (err.requiresVerification || err.response?.data?.requiresVerification) {
+             const email = err.email || err.response?.data?.email;
+             navigate('/verify', { state: { email } });
         } else {
              setError(err.response?.data?.message || 'Login failed.'); 
         }
@@ -67,7 +69,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
       const res = await register({
           name: regName, 
           email: regEmail, 
-          username: regUsername, // Compulsory Username
+          username: regUsername,
           password: regPassword, 
           diaryPassword: regDiaryPassword,
           securityQuestions: [{ question: secQ1, answer: secA1 }]
@@ -78,7 +80,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
       } else {
           navigate('/sanctuary');
       }
-    } catch (err: any) { setError(err.response?.data?.message || 'Registration failed.'); } 
+    } catch (err: any) {
+        if (err.requiresVerification || err.response?.data?.requiresVerification) {
+            const email = err.email || err.response?.data?.email;
+            navigate('/verify', { state: { email } });
+        } else {
+            setError(err.response?.data?.message || 'Registration failed.');
+        }
+    }
     finally { setIsLoading(false); }
   };
 

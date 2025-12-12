@@ -22,6 +22,7 @@ interface ChatMessage {
 interface ChatViewProps {
   onMobileMenuClick?: () => void;
   onOpenWidget?: (widget: string, config?: any) => void;
+  isMobile?: boolean;
 }
 
 // --- Dynamic API URL Helper ---
@@ -96,7 +97,7 @@ const mapColorToTheme = (colorName: string): string => {
     return 'aurora';
 };
 
-export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget }) => {
+export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false }) => {
   const { user } = useAuth();
   const { setTheme, currentTheme } = useTheme();
   const navigate = useNavigate();
@@ -266,9 +267,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (isStandardMode) { setError("Vision Analysis requires Premium Credits."); return; }
-      if (e.target.files && e.target.files[0]) {
-          try { const compressed = await compressImage(e.target.files[0]); setAttachedImage(compressed); }
-          catch (err) { setError("Failed to process image."); }
+      const files = e.target.files;
+      if (files && files.length > 0) {
+          try {
+              const compressed = await compressImage(files[0]);
+              setAttachedImage(compressed);
+          } catch (err) {
+              console.error(err);
+              setError("Failed to process image.");
+          }
       }
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -568,7 +575,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center overflow-hidden">
+    <div className="relative w-full h-[100dvh] flex flex-col items-center overflow-hidden">
       
       {/* 1. Background Ambience */}
       <div className="absolute inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out" 
@@ -622,38 +629,46 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         )}
       </AnimatePresence>
 
-      {/* 4. Header (Dynamic Island) */}
-      <motion.div initial={{ y: -50 }} animate={{ y: 0 }} className="absolute top-0 w-full z-30 pt-6 px-4 pointer-events-none flex justify-center">
+      {/* 4. Header (Dynamic Island for Desktop / Glass Bar for Mobile) */}
+      <motion.div initial={{ y: -50 }} animate={{ y: 0 }} className={`absolute top-0 w-full z-30 pointer-events-none flex justify-center ${isMobile ? 'h-16 bg-black/40 backdrop-blur-xl border-b border-white/5 items-center px-4 pt-safe' : 'pt-6 px-4'}`}>
          
-         {/* Mobile Menu Trigger */}
-         <div className="absolute left-4 top-6 pointer-events-auto md:hidden">
-            <button onClick={onMobileMenuClick} className="p-2.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/10 text-white/70"><Menu size={20} /></button>
+         {/* Mobile: Simple Left Title / Desktop: Menu Trigger */}
+         <div className={`pointer-events-auto ${isMobile ? 'flex-1' : 'absolute left-4 top-6 pt-safe'}`}>
+            {isMobile ? (
+                <span className="font-serif text-lg font-bold text-white tracking-tight">Sanctuary</span>
+            ) : (
+                <button onClick={onMobileMenuClick} className="p-2.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/10 text-white/70 md:hidden"><Menu size={20} /></button>
+            )}
          </div>
 
-         {/* The Pill Search Bar */}
-         <div className="pointer-events-auto flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full pl-4 pr-2 py-2 shadow-2xl w-[280px] md:w-[400px] transition-all focus-within:w-[320px] md:focus-within:w-[450px] focus-within:bg-black/50 group">
-             <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2" />
-             <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..." className="bg-transparent border-none outline-none text-sm text-white w-full" />
-             {searchQuery && (
-                 <div className="flex items-center gap-1 ml-2 border-l border-white/10 pl-2">
-                     <span className="text-[10px] text-white/40 whitespace-nowrap">
-                         {searchResults.length > 0 ? `${currentMatchIndex + 1}/${searchResults.length}` : '0/0'}
-                     </span>
-                     <button onClick={prevMatch} disabled={searchResults.length === 0} className="p-1 text-white/50 hover:text-white"><span className="text-xs">▲</span></button>
-                     <button onClick={nextMatch} disabled={searchResults.length === 0} className="p-1 text-white/50 hover:text-white"><span className="text-xs">▼</span></button>
-                     <button onClick={() => setSearchQuery('')} className="p-1 text-white/30 hover:text-white ml-1"><X size={14}/></button>
-                 </div>
-             )}
-         </div>
+         {/* The Pill Search Bar (Hidden on Mobile Header to reduce clutter, or simplified) */}
+         {!isMobile && (
+            <div className="pointer-events-auto flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full pl-4 pr-2 py-2 shadow-2xl w-[280px] md:w-[400px] transition-all focus-within:w-[320px] md:focus-within:w-[450px] focus-within:bg-black/50 group mt-safe">
+                <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2" />
+                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..." className="bg-transparent border-none outline-none text-sm text-white w-full" />
+                {searchQuery && (
+                    <div className="flex items-center gap-1 ml-2 border-l border-white/10 pl-2">
+                        <span className="text-[10px] text-white/40 whitespace-nowrap">
+                            {searchResults.length > 0 ? `${currentMatchIndex + 1}/${searchResults.length}` : '0/0'}
+                        </span>
+                        <button onClick={prevMatch} disabled={searchResults.length === 0} className="p-1 text-white/50 hover:text-white"><span className="text-xs">▲</span></button>
+                        <button onClick={nextMatch} disabled={searchResults.length === 0} className="p-1 text-white/50 hover:text-white"><span className="text-xs">▼</span></button>
+                        <button onClick={() => setSearchQuery('')} className="p-1 text-white/30 hover:text-white ml-1"><X size={14}/></button>
+                    </div>
+                )}
+            </div>
+         )}
 
          {/* Right Controls */}
-         <div className="absolute right-4 top-6 pointer-events-auto flex items-center gap-3">
-             <div className={`px-3 py-1.5 rounded-full backdrop-blur-xl border flex items-center gap-2 shadow-lg transition-colors ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
-                {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-gray-400" fill="currentColor" />}
-                <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-gray-400'}`}>
-                    {!isStandardMode && localCredits > 100 ? '∞' : `${localCredits} Premium`}
-                </span>
-             </div>
+         <div className={`pointer-events-auto flex items-center gap-3 ${isMobile ? '' : 'absolute right-4 top-6 pt-safe'}`}>
+             {!isMobile && (
+                <div className={`px-3 py-1.5 rounded-full backdrop-blur-xl border flex items-center gap-2 shadow-lg transition-colors hidden md:flex ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
+                    {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-gray-400" fill="currentColor" />}
+                    <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-gray-400'}`}>
+                        {!isStandardMode && localCredits > 100 ? '∞' : `${localCredits} Premium`}
+                    </span>
+                </div>
+             )}
              
              <button onClick={toggleVoiceMode} className="w-10 h-10 rounded-full bg-black/30 border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all shadow-lg relative group">
                 <Headphones size={18} />
@@ -667,7 +682,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       {/* 6. Chat Area (Flex Layout) */}
       <div 
          ref={messagesContainerRef}
-         className="flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide flex flex-col pt-28"
+         className={`flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide flex flex-col ${isMobile ? 'pt-20 pb-4' : 'pt-32 md:pt-28 pb-4'}`}
       >
          <div className="flex flex-col mt-auto pb-4 min-h-0">
              {renderMessages()}
@@ -676,7 +691,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       </div>
 
       {/* 7. Input Area (Static Footer) */}
-      <div className="w-full px-4 pb-6 pt-2 shrink-0 max-w-[700px] mx-auto z-30">
+      <div className={`w-full px-4 pt-2 shrink-0 max-w-[700px] mx-auto z-30 ${isMobile ? 'pb-20' : 'pb-6'}`}>
          <div className="flex flex-col gap-2">
             
             {/* Contexts (Reply / Image) */}
@@ -700,10 +715,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 
                 {/* Left Tools */}
                 <div className="flex items-center gap-1">
-                    <button onClick={() => fileInputRef.current?.click()} disabled={isStandardMode} className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStandardMode} className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}>
                         <ImageIcon size={20} />
                     </button>
-                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
+                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} capture="environment" />
                     
                     <button onClick={toggleDictation} className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>
                         {isDictating ? <MicOff size={20} /> : <Mic size={20} />}

@@ -97,7 +97,6 @@ export async function* streamGemini(history: ChatMessage[], systemPrompt: string
       config: {
         systemInstruction: systemPrompt,
         temperature: 0.6,
-        frequencyPenalty: 0.5,
       }
     });
 
