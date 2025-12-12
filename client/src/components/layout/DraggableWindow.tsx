@@ -112,19 +112,30 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
         <motion.div
           ref={containerRef}
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ 
+          animate={isMobile ? {
+            opacity: 1,
+            y: isMinimized ? 'calc(100% - 60px)' : 0, // Bottom sheet behavior
+            scale: 1,
+            width: '100%',
+            height: '92%', // Leave top gap for context
+            left: 0,
+            top: 'auto',
+            bottom: 0,
+            borderRadius: '24px 24px 0 0',
+            x: 0
+          } : {
             opacity: 1, 
             scale: 1, 
-            // Mobile: Full screen modal style, Desktop: Draggable size
-            width: isMinimized ? 220 : (isMobile ? '100%' : size.width),
-            height: isMinimized ? 48 : (isMobile ? '100%' : size.height),
-            // Mobile: Fixed inset 0, Desktop: Absolute position
-            left: isMobile ? 0 : defaultPosition.x,
-            top: isMobile ? 0 : defaultPosition.y,
+            width: isMinimized ? 220 : size.width,
+            height: isMinimized ? 48 : size.height,
+            left: defaultPosition.x,
+            top: defaultPosition.y,
             x: 0,
-            y: 0
+            y: 0,
+            bottom: 'auto',
+            borderRadius: '12px'
           }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          exit={isMobile ? { y: '100%', opacity: 0 } : { opacity: 0, scale: 0.95, y: 10 }}
           transition={{ type: "spring", damping: 30, stiffness: 400 }}
           drag={!isMobile} // Disable drag on mobile
           dragControls={dragControls}
@@ -148,8 +159,12 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             {/* --- Window Header (Drag Target) --- */}
             <div 
               onPointerDown={(e) => !isMobile && dragControls.start(e)}
-              className={`h-12 flex items-center justify-between px-3 border-b border-white/5 select-none shrink-0 bg-white/5 ${isMobile ? '' : 'cursor-grab active:cursor-grabbing'}`}
+              className={`h-12 flex items-center justify-between px-3 border-b border-white/5 select-none shrink-0 bg-white/5 ${isMobile ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
             >
+               {/* Mobile Pull Handle */}
+               {isMobile && (
+                   <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 rounded-full bg-white/20" />
+               )}
                {/* Controls */}
               <div className="flex items-center gap-2 z-10">
                 <button 
