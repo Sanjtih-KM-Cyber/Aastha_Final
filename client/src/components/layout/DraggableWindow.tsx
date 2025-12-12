@@ -115,13 +115,14 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           animate={{ 
             opacity: 1, 
             scale: 1, 
-            width: isMinimized ? 220 : (isMobile ? '90vw' : size.width),
-            height: isMinimized ? 48 : (isMobile ? 'auto' : size.height),
-            // Mobile specific centering overrides
-            left: isMobile ? '50%' : defaultPosition.x,
-            top: isMobile ? '50%' : defaultPosition.y,
-            x: isMobile ? '-50%' : 0,
-            y: isMobile ? '-50%' : 0
+            // Mobile: Full screen modal style, Desktop: Draggable size
+            width: isMinimized ? 220 : (isMobile ? '100%' : size.width),
+            height: isMinimized ? 48 : (isMobile ? '100%' : size.height),
+            // Mobile: Fixed inset 0, Desktop: Absolute position
+            left: isMobile ? 0 : defaultPosition.x,
+            top: isMobile ? 0 : defaultPosition.y,
+            x: 0,
+            y: 0
           }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ type: "spring", damping: 30, stiffness: 400 }}
