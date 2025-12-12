@@ -96,15 +96,21 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 
     if (user) {
         // --- OTP ENABLED ---
-        const otp = generateOTP();
-        user.otpCode = await bcrypt.hash(otp, 10);
-        user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
-        await user.save();
+        try {
+            const otp = generateOTP();
+            user.otpCode = await bcrypt.hash(otp, 10);
+            user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+            await user.save();
 
-        const emailSent = await sendOTPEmail(cleanEmail, otp);
-        if (!emailSent) {
-             console.error("Failed to send OTP email");
-             // Note: User is created but email failed. They can try login to resend.
+            console.log(`[Auth] Attempting to send OTP to ${cleanEmail}`);
+            const emailSent = await sendOTPEmail(cleanEmail, otp);
+            if (!emailSent) {
+                console.error("[Auth] Failed to send OTP email. Check credentials.");
+            } else {
+                console.log("[Auth] OTP email sent successfully.");
+            }
+        } catch(err) {
+            console.error("[Auth] OTP generation/sending error:", err);
         }
 
         (res as any).status(200).json({

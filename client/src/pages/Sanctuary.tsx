@@ -8,12 +8,10 @@ import { Soundscape } from '../components/widgets/Soundscape';
 import { BreathingWidget } from '../components/widgets/BreathingWidget';
 import { MoodTracker } from '../components/widgets/MoodTracker';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
-import { MobileNavBar } from '../components/layout/MobileNavBar';
 
 export const Sanctuary: React.FC = () => {
   // Mobile Sidebar State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeMobileTab, setActiveMobileTab] = useState<'chat' | 'wellness' | 'profile'>('chat');
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -103,16 +101,6 @@ export const Sanctuary: React.FC = () => {
             isMobile={isMobile}
          />
       </main>
-
-      {/* Mobile Bottom Nav */}
-      {isMobile && (
-          <MobileNavBar
-            activeTab={activeMobileTab}
-            onTabChange={setActiveMobileTab}
-            onOpenWellness={() => setIsMobileMenuOpen(true)}
-            onOpenProfile={() => setIsSettingsOpen(true)}
-          />
-      )}
 
       {/* 3. Floating Widget Ecosystem */}
       <div style={{ position: 'absolute', pointerEvents: 'none', inset: 0, zIndex: 30 }}>

@@ -128,8 +128,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
                     {/* FIX: Changed input type from email to text and updated placeholder to allow username */}
                     <input type="text" placeholder="Email or Username" value={identifier} onChange={e => setIdentifier(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-teal-500/50" required />
                     <div className="relative">
-                        <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-teal-500/50" required />
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-3 text-white/40"><Eye size={18}/></button>
+                        <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-teal-500/50 pr-10" required />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/40 hover:text-white z-10">
+                            <Eye size={18}/>
+                        </button>
                     </div>
                     <button type="button" onClick={() => setMode('forgot-init')} className="text-xs text-teal-400 hover:underline block text-right">Forgot Password?</button>
                     <button disabled={isLoading} className="w-full bg-gradient-to-r from-teal-600 to-violet-600 py-3 rounded-xl text-white font-medium">{isLoading ? <Loader2 className="animate-spin mx-auto"/> : 'Enter Sanctuary'}</button>
