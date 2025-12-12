@@ -153,11 +153,11 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         user.emailHash = identifierHash;
         if (!user.emailEncrypted) user.emailEncrypted = encrypt(cleanIdentifier);
         user.email = undefined; // Clear plain text email
-
+        
         // FORCE VERIFICATION FOR LEGACY USERS
         // Since this is a migration event, we assume they haven't done OTP verification yet.
-        user.isVerified = false;
-
+        user.isVerified = false; 
+        
         await user.save();
     }
 
@@ -228,7 +228,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           user.lastUsageDate = today;
           needsSave = true;
       }
-
+      
       // Only update lastVisit if date changed to avoid writing on every login
       const lastVisitTime = new Date(user.lastVisit).getTime();
       const todayTime = today.getTime();
