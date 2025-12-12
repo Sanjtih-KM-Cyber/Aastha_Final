@@ -11,7 +11,8 @@ import {
   Sparkles, 
   Flame,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  X
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
@@ -25,12 +26,12 @@ interface WellnessHubProps {
 }
 
 const WIDGETS = [
-  { id: 'diary', label: 'Journal', icon: Book, color: 'text-teal-200' },
-  { id: 'mood', label: 'Mood Tracker', icon: Smile, color: 'text-yellow-200' },
-  { id: 'breathing', label: 'Breathing', icon: Wind, color: 'text-cyan-200' },
-  { id: 'jam', label: 'Jam Session', icon: Music, color: 'text-violet-200' },
-  { id: 'soundscape', label: 'Soundscapes', icon: Sliders, color: 'text-emerald-200' },
-  { id: 'pomodoro', label: 'Deep Focus', icon: Clock, color: 'text-rose-200' },
+  { id: 'diary', label: 'Journal', icon: Book, color: 'text-teal-200', desc: 'Reflect on your day' },
+  { id: 'mood', label: 'Mood Tracker', icon: Smile, color: 'text-yellow-200', desc: 'Track your emotions' },
+  { id: 'breathing', label: 'Breathing', icon: Wind, color: 'text-cyan-200', desc: 'Calm your mind' },
+  { id: 'jam', label: 'Jam Session', icon: Music, color: 'text-violet-200', desc: 'Listen together' },
+  { id: 'soundscape', label: 'Soundscapes', icon: Sliders, color: 'text-emerald-200', desc: 'Ambient sounds' },
+  { id: 'pomodoro', label: 'Deep Focus', icon: Clock, color: 'text-rose-200', desc: 'Stay productive' },
 ];
 
 export const WellnessHub: React.FC<WellnessHubProps> = ({ 
@@ -44,6 +45,16 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
   const { currentTheme } = useTheme();
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileCardIndex, setMobileCardIndex] = useState(0);
+
+  // Responsive Check
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Time-based Greeting
   const getGreeting = () => {
@@ -53,19 +64,19 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
     return "Good Evening";
   };
 
-  // Click Outside Logic (Mobile Only)
+  // Click Outside Logic (Mobile Only) - Only for standard Sidebar if somehow rendered
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (isMobileOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
+      if (isMobileOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node) && !isMobile) {
         onCloseMobile();
       }
     };
     
-    if (isMobileOpen) {
+    if (isMobileOpen && !isMobile) {
         document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isMobileOpen, onCloseMobile]);
+  }, [isMobileOpen, onCloseMobile, isMobile]);
 
   // Framer Motion Variants
   const sidebarVariants = {
@@ -74,37 +85,143 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
     desktop: { x: 0, opacity: 1, width: isCollapsed ? 80 : 280 }
   };
 
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  // --- MOBILE CARD CAROUSEL LOGIC ---
+  const handleNextCard = () => {
+    setMobileCardIndex((prev) => (prev + 1) % WIDGETS.length);
+  };
 
+  const handlePrevCard = () => {
+    setMobileCardIndex((prev) => (prev - 1 + WIDGETS.length) % WIDGETS.length);
+  };
+
+  // Swipe Handlers (Simple Touch)
+  const touchStartX = useRef<number | null>(null);
+  const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+      if (!touchStartX.current) return;
+      const touchEndX = e.changedTouches[0].clientX;
+      const diff = touchStartX.current - touchEndX;
+      if (Math.abs(diff) > 50) { // Threshold
+          if (diff > 0) handleNextCard(); // Swipe Left -> Next
+          else handlePrevCard(); // Swipe Right -> Prev
+      }
+      touchStartX.current = null;
+  };
+
+  if (isMobile) {
+      return (
+        <AnimatePresence>
+            {isMobileOpen && (
+                <motion.div
+                    initial={{ opacity: 0, y: 50 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 50 }}
+                    className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-3xl p-6"
+                >
+                    {/* Close Button */}
+                    <button
+                        onClick={onCloseMobile}
+                        className="absolute top-6 right-6 p-2 rounded-full bg-white/10 text-white/70 hover:bg-white/20"
+                    >
+                        <X size={24} />
+                    </button>
+
+                    {/* Greeting Header */}
+                    <div className="text-center mb-8 mt-4">
+                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4 shadow-lg"
+                             style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #111827)` }}>
+                            <Sparkles size={24} className="text-white" />
+                        </div>
+                        <h2 className="text-2xl font-serif text-white mb-1">
+                            {getGreeting()}, <span className="text-white/60">{user?.name?.split(' ')[0]}</span>
+                        </h2>
+                        <div className="flex items-center justify-center gap-2 mt-2">
+                            <Flame size={14} className="text-orange-400" fill="currentColor" />
+                            <span className="text-xs font-mono text-white/40">{user?.streak || 1} Day Streak</span>
+                        </div>
+                    </div>
+
+                    {/* Card Carousel */}
+                    <div
+                        className="relative w-full max-w-sm aspect-[4/5] perspective-1000"
+                        onTouchStart={handleTouchStart}
+                        onTouchEnd={handleTouchEnd}
+                    >
+                        <AnimatePresence mode='wait'>
+                            <motion.div
+                                key={mobileCardIndex}
+                                initial={{ opacity: 0, x: 50, rotateY: -10 }}
+                                animate={{ opacity: 1, x: 0, rotateY: 0 }}
+                                exit={{ opacity: 0, x: -50, rotateY: 10 }}
+                                transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                                className="absolute inset-0 bg-white/5 border border-white/10 rounded-3xl p-8 flex flex-col items-center justify-center shadow-2xl backdrop-blur-md"
+                                style={{
+                                    boxShadow: `0 0 50px -12px ${currentTheme.primaryColor}33`
+                                }}
+                            >
+                                {/* Widget Icon */}
+                                <div className={`p-6 rounded-full bg-white/5 mb-6 ${WIDGETS[mobileCardIndex].color.replace('text-', 'bg-').replace('-200', '-500/20')}`}>
+                                    {React.createElement(WIDGETS[mobileCardIndex].icon, { size: 48, className: WIDGETS[mobileCardIndex].color })}
+                                </div>
+
+                                <h3 className="text-3xl font-serif text-white mb-2">{WIDGETS[mobileCardIndex].label}</h3>
+                                <p className="text-white/40 text-center mb-8">{WIDGETS[mobileCardIndex].desc}</p>
+
+                                <button
+                                    onClick={() => { onToggleWidget(WIDGETS[mobileCardIndex].id); onCloseMobile(); }}
+                                    className="px-8 py-3 rounded-full bg-white text-black font-bold hover:scale-105 active:scale-95 transition-all"
+                                >
+                                    Open Widget
+                                </button>
+
+                                {/* Dots Indicator */}
+                                <div className="absolute bottom-6 flex gap-2">
+                                    {WIDGETS.map((_, idx) => (
+                                        <div
+                                            key={idx}
+                                            className={`w-2 h-2 rounded-full transition-all ${idx === mobileCardIndex ? 'bg-white w-4' : 'bg-white/20'}`}
+                                        />
+                                    ))}
+                                </div>
+                            </motion.div>
+                        </AnimatePresence>
+
+                        {/* Navigation Arrows (for non-swipe users) */}
+                        <button onClick={handlePrevCard} className="absolute top-1/2 -left-4 -translate-y-1/2 p-2 text-white/30 hover:text-white"><ChevronsLeft size={32}/></button>
+                        <button onClick={handleNextCard} className="absolute top-1/2 -right-4 -translate-y-1/2 p-2 text-white/30 hover:text-white"><ChevronsRight size={32}/></button>
+                    </div>
+
+                    {/* Footer Settings */}
+                    <div className="mt-auto pt-8">
+                         <button onClick={onOpenSettings} className="flex items-center gap-2 text-white/40 hover:text-white transition-colors px-4 py-2 rounded-full border border-white/5 hover:bg-white/5">
+                             <Settings size={16} />
+                             <span className="text-sm">Settings & Profile</span>
+                         </button>
+                    </div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+      );
+  }
+
+  // --- DESKTOP SIDEBAR (UNCHANGED) ---
   return (
-    <>
-      {/* Mobile Backdrop */}
-      <AnimatePresence>
-        {isMobileOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
-          />
-        )}
-      </AnimatePresence>
-
-      <motion.aside
-        ref={sidebarRef}
-        variants={sidebarVariants}
-        initial="closed"
-        animate={isMobile ? (isMobileOpen ? "open" : "closed") : "desktop"}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className={`
-          fixed top-0 bottom-0 left-0 z-50
-          h-full
-          bg-black/40 backdrop-blur-2xl border-r border-white/10
-          flex flex-col
-          shadow-2xl
-          overflow-hidden
-        `}
-      >
+    <motion.aside
+      ref={sidebarRef}
+      variants={sidebarVariants}
+      initial="closed"
+      animate="desktop"
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      className={`
+        fixed top-0 bottom-0 left-0 z-50
+        h-full
+        bg-black/40 backdrop-blur-2xl border-r border-white/10
+        flex flex-col
+        shadow-2xl
+        overflow-hidden
+        md:flex hidden
+      `}
+    >
         {/* --- Header: Greeting & Status --- */}
         <div className={`p-6 pb-4 transition-all duration-300 flex flex-col ${isCollapsed ? 'items-center' : ''}`}>
           <div className={`flex items-center gap-3 mb-6 ${isCollapsed ? 'justify-center' : ''}`}>
@@ -155,7 +272,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
             return (
               <button
                 key={widget.id}
-                onClick={() => { onToggleWidget(widget.id); if(isMobile) onCloseMobile(); }}
+                onClick={() => { onToggleWidget(widget.id); }}
                 className={`
                   w-full flex items-center gap-4 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-300 group relative
                   ${isActive 
@@ -228,17 +345,14 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
           )}
 
           {/* Collapse Button */}
-          {!isMobile && (
-              <button 
-                onClick={() => setIsCollapsed(!isCollapsed)}
-                className="w-full flex items-center justify-center py-2 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-colors"
-              >
-                {isCollapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
-              </button>
-          )}
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="w-full flex items-center justify-center py-2 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-colors"
+          >
+            {isCollapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
+          </button>
         </div>
 
       </motion.aside>
-    </>
   );
 };

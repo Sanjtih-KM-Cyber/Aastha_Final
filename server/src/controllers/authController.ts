@@ -175,22 +175,19 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     // 1. Authenticate Password
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
       
+        let needsSave = false;
+
         // --- OTP DISABLED: Auto-verify if not verified ---
         if (!user.isVerified) {
              user.isVerified = true;
-             await user.save();
+             needsSave = true;
         }
 
-      // Check Mandatory Username for Legacy Users
-      if (!user.username) {
-          // We don't block login, but we signal the frontend to force username creation
-          // But wait, the user said "make the old users... to also giving the username".
-          // If we block login, they can't save it (unless we have a specific endpoint).
-          // We will send a special flag 'requireUsername: true'
-      }
-
       // 2. Handle missing fields (Self-healing legacy user data)
-      if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email); 
+      if (!user.emailEncrypted && user.email) {
+          user.emailEncrypted = encrypt(user.email);
+          needsSave = true;
+      }
       
       // Auto-generate username for legacy users
       if (!user.username) {
@@ -198,14 +195,16 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           const baseName = user.name ? user.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 10) : 'user';
           user.username = `${baseName}${randomSuffix}`;
           user.usernameEncrypted = encrypt(user.username);
+          needsSave = true;
       } else if (!user.usernameEncrypted) {
           user.usernameEncrypted = encrypt(user.username);
+          needsSave = true;
       }
 
-      if (!user.streak) user.streak = 1; 
-      if (!user.lastVisit) user.lastVisit = new Date(); 
-      if (user.dailyPremiumUsage === undefined) user.dailyPremiumUsage = 0;
-      if (user.isPro === undefined) user.isPro = false;
+      if (!user.streak) { user.streak = 1; needsSave = true; }
+      if (!user.lastVisit) { user.lastVisit = new Date(); needsSave = true; }
+      if (user.dailyPremiumUsage === undefined) { user.dailyPremiumUsage = 0; needsSave = true; }
+      if (user.isPro === undefined) { user.isPro = false; needsSave = true; }
 
       // 3. Daily Reset Check
       const today = new Date();
@@ -215,9 +214,19 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           lastUsage.getFullYear() !== today.getFullYear()) {
           user.dailyPremiumUsage = 0;
           user.lastUsageDate = today;
+          needsSave = true;
       }
-      user.lastVisit = today; // Update visit date for streak
-      await user.save();
+
+      // Only update lastVisit if date changed to avoid writing on every login
+      const lastVisitTime = new Date(user.lastVisit).getTime();
+      const todayTime = today.getTime();
+      // Only update if difference > 1 minute to prevent spam updates
+      if (Math.abs(todayTime - lastVisitTime) > 60000) {
+          user.lastVisit = today;
+          needsSave = true;
+      }
+
+      if (needsSave) await user.save();
 
       // 4. Generate Token & Respond
       const token = generateToken((user._id as any).toString());

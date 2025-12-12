@@ -266,9 +266,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (isStandardMode) { setError("Vision Analysis requires Premium Credits."); return; }
-      if (e.target.files && e.target.files[0]) {
-          try { const compressed = await compressImage(e.target.files[0]); setAttachedImage(compressed); }
-          catch (err) { setError("Failed to process image."); }
+      const files = e.target.files;
+      if (files && files.length > 0) {
+          try {
+              const compressed = await compressImage(files[0]);
+              setAttachedImage(compressed);
+          } catch (err) {
+              console.error(err);
+              setError("Failed to process image.");
+          }
       }
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -700,10 +706,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 
                 {/* Left Tools */}
                 <div className="flex items-center gap-1">
-                    <button onClick={() => fileInputRef.current?.click()} disabled={isStandardMode} className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStandardMode} className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}>
                         <ImageIcon size={20} />
                     </button>
-                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
+                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} capture="environment" />
                     
                     <button onClick={toggleDictation} className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>
                         {isDictating ? <MicOff size={20} /> : <Mic size={20} />}
