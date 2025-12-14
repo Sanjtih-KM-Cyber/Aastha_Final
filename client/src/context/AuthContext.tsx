@@ -23,8 +23,8 @@ interface RegisterData {
 }
 
 interface AuthContextType extends AuthState {
-  login: (identifier: string, password: string) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<any>;
+  register: (data: RegisterData) => Promise<any>;
   logout: () => Promise<void>;
   unlockSanctuary: (password: string) => Promise<boolean>;
   setEncryptionKeyManual: (key: string) => void;
@@ -73,6 +73,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanedIdentifier = identifier.toLowerCase().trim();
     const res = await api.post('/users/login', { identifier: cleanedIdentifier, password });
 
+    // Handle Verification Flow
+    if (res.data.requiresVerification) {
+        return res.data; // Don't set state, let UI handle redirection
+    }
+
     const user: User = res.data;
 
     let key = null;
@@ -87,11 +92,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isLoading: false,
       encryptionKey: key,
     });
+
+    return user;
   };
 
   // ---------- REGISTER ----------
   const register = async (data: RegisterData) => {
     const res = await api.post('/users/register', data);
+
+    // Handle Verification Flow
+    if (res.data.requiresVerification) {
+        return res.data;
+    }
+
     const user: User = res.data;
 
     const pwdToUse = data.diaryPassword || data.password;
@@ -105,6 +118,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isLoading: false,
       encryptionKey: key,
     });
+
+    return user;
   };
 
   // ---------- UNLOCK ----------
