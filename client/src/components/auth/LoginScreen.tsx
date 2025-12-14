@@ -71,7 +71,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
       const res = await register({
           name: regName, 
           email: regEmail, 
-          username: regUsername,
+          username: regUsername, 
           password: regPassword, 
           diaryPassword: regDiaryPassword,
           securityQuestions: [{ question: secQ1, answer: secA1 }]
@@ -82,14 +82,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
       } else {
           navigate('/sanctuary');
       }
-    } catch (err: any) {
+    } catch (err: any) { 
         if (err.requiresVerification || err.response?.data?.requiresVerification) {
             const email = err.email || err.response?.data?.email;
             navigate('/verify', { state: { email } });
         } else {
-            setError(err.response?.data?.message || 'Registration failed.');
+            setError(err.response?.data?.message || 'Registration failed.'); 
         }
-    }
+    } 
     finally { setIsLoading(false); }
   };
 
@@ -146,7 +146,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
                     <input type="text" placeholder="Full Name" value={regName} onChange={e => setRegName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" required />
                     <input type="text" placeholder="Username (Unique)" value={regUsername} onChange={e => setRegUsername(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" required />
                     <input type="email" placeholder="Email" value={regEmail} onChange={e => setRegEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" required />
-
+                    
                     <div className="relative z-0">
                         <input type={showRegPassword ? "text" : "password"} placeholder="Password" value={regPassword} onChange={e => setRegPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white pr-10" required />
                         <button type="button" onClick={() => setShowRegPassword(!showRegPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/40 hover:text-white z-50">
