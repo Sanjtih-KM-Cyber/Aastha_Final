@@ -97,7 +97,7 @@ export async function* streamGemini(history: ChatMessage[], systemPrompt: string
       config: {
         systemInstruction: systemPrompt,
         temperature: 0.6,
-        frequencyPenalty: 0.5,
+        // REMOVED: frequencyPenalty & presencePenalty (Not supported in Gemini 2.5 Flash)
       }
     });
 

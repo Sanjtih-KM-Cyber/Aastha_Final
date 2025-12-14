@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WellnessHub } from '../components/wellness/WellnessHub';
 import { ChatView } from '../components/chat/ChatView';
 import { Diary } from '../components/wellness/Diary';
@@ -12,6 +12,14 @@ import { SettingsPanel } from '../components/settings/SettingsPanel';
 export const Sanctuary: React.FC = () => {
   // Mobile Sidebar State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const [widgets, setWidgets] = useState<Record<string, boolean>>({
     diary: false,
@@ -90,6 +98,7 @@ export const Sanctuary: React.FC = () => {
          <ChatView 
             onMobileMenuClick={() => setIsMobileMenuOpen(true)} 
             onOpenWidget={openWidget}
+            isMobile={isMobile}
          />
       </main>
 
