@@ -20,6 +20,7 @@ const OTPInput = ({ length = 6, onComplete }: { length?: number; onComplete: (co
     }
 
     const finalCode = newCode.join('');
+    // Always call onComplete with whatever we have if it's full, or even if we just typed the last digit
     if (finalCode.length === length) onComplete(finalCode);
   };
 
@@ -111,7 +112,7 @@ export const VerifyOTPScreen: React.FC = () => {
       try {
           await api.post('/users/resend-otp', { email });
           setResendCooldown(60);
-          alert("Code sent!");
+          alert("Code sent! (Check spam or console in dev)");
       } catch (err: any) {
           setError(err.response?.data?.message || 'Failed to resend');
       } finally {
@@ -153,7 +154,7 @@ export const VerifyOTPScreen: React.FC = () => {
                     )}
                 </AnimatePresence>
 
-                <OTPInput onComplete={(code) => { setOtp(code); handleVerify(code); }} />
+                <OTPInput onComplete={(code) => { setOtp(code); }} />
 
                 <button
                     onClick={() => handleVerify()}
