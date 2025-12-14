@@ -103,12 +103,11 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
             await user.save();
 
             console.log(`[Auth] Attempting to send OTP to ${cleanEmail}`);
-            const emailSent = await sendOTPEmail(cleanEmail, otp);
-            if (!emailSent) {
-                console.error("[Auth] Failed to send OTP email. Check credentials.");
-            } else {
-                console.log("[Auth] OTP email sent successfully.");
-            }
+            // Non-blocking email send to prevent timeout
+            sendOTPEmail(cleanEmail, otp).then(sent => {
+                if(!sent) console.error("[Auth] Failed to send OTP email (Background).");
+                else console.log("[Auth] OTP email sent successfully (Background).");
+            }).catch(e => console.error("[Auth] Background Email Error:", e));
         } catch(err) {
             console.error("[Auth] OTP generation/sending error:", err);
         }
@@ -153,11 +152,11 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         user.emailHash = identifierHash;
         if (!user.emailEncrypted) user.emailEncrypted = encrypt(cleanIdentifier);
         user.email = undefined; // Clear plain text email
-
+        
         // FORCE VERIFICATION FOR LEGACY USERS
         // Since this is a migration event, we assume they haven't done OTP verification yet.
-        user.isVerified = false;
-
+        user.isVerified = false; 
+        
         await user.save();
     }
 
@@ -184,7 +183,9 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
             user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
             await user.save(); // Must save new OTP
 
-            await sendOTPEmail(cleanIdentifier.includes('@') ? cleanIdentifier : (decrypt(user.emailEncrypted) || user.email || ""), otp);
+            const emailTarget = cleanIdentifier.includes('@') ? cleanIdentifier : (decrypt(user.emailEncrypted) || user.email || "");
+            // Non-blocking
+            sendOTPEmail(emailTarget, otp).catch(e => console.error("[Auth] Background Email Error:", e));
 
             return (res as any).status(200).json({
                 requiresVerification: true,
@@ -228,7 +229,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           user.lastUsageDate = today;
           needsSave = true;
       }
-
+      
       // Only update lastVisit if date changed to avoid writing on every login
       const lastVisitTime = new Date(user.lastVisit).getTime();
       const todayTime = today.getTime();

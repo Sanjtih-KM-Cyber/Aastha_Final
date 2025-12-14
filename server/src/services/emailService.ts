@@ -13,6 +13,9 @@ const transporter = nodemailer.createTransport({
 });
 
 export const sendOTPEmail = async (to: string, otp: string) => {
+  // DEV: Log OTP immediately for debugging/fallback
+  console.log(`[OTP-DEV] Generated OTP for ${to}: ${otp}`);
+
   try {
     const mailOptions = {
       from: `"Aastha Sanctuary" <${process.env.EMAIL_USER}>`,
