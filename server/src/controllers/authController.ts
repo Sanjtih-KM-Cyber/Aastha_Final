@@ -603,7 +603,8 @@ export const resendOTP = async (req: Request, res: Response) => {
         user.otpExpires = otpExpires;
         await user.save();
 
-        await sendOTPEmail(cleanEmail, otp);
+        // Non-blocking send to prevent timeout
+        sendOTPEmail(cleanEmail, otp).catch(e => console.error("[Auth] Background Email Error:", e));
 
         (res as any).status(200).json({ message: 'Code resent' });
     } catch (e) {
