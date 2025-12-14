@@ -29,6 +29,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regDiaryPassword, setRegDiaryPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegDiaryPassword, setShowRegDiaryPassword] = useState(false);
   const [secQ1, setSecQ1] = useState(SECURITY_QUESTIONS[0]);
   const [secA1, setSecA1] = useState('');
   
@@ -44,6 +46,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
     e.preventDefault(); setIsLoading(true); setError('');
     try { 
         const res = await login(identifier, password); 
+        // Check verification flag in success response
         if (res && res.requiresVerification) {
             navigate('/verify', { state: { email: res.email } });
         } else {
@@ -51,9 +54,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
         }
     } 
     catch (err: any) { 
-        // If the error response contains the verification flag (e.g. from axios interceptor or direct 200 with flag)
-        if (err.response?.data?.requiresVerification) {
-             navigate('/verify', { state: { email: err.response.data.email } });
+        // Also check if the verification flag came back in an error-like response (though we use 200 for verification needed)
+        if (err.requiresVerification || err.response?.data?.requiresVerification) {
+             const email = err.email || err.response?.data?.email;
+             navigate('/verify', { state: { email } });
         } else {
              setError(err.response?.data?.message || 'Login failed.'); 
         }
@@ -67,7 +71,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
       const res = await register({
           name: regName, 
           email: regEmail, 
-          username: regUsername, // Compulsory Username
+          username: regUsername,
           password: regPassword, 
           diaryPassword: regDiaryPassword,
           securityQuestions: [{ question: secQ1, answer: secA1 }]
@@ -78,7 +82,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
       } else {
           navigate('/sanctuary');
       }
-    } catch (err: any) { setError(err.response?.data?.message || 'Registration failed.'); } 
+    } catch (err: any) {
+        if (err.requiresVerification || err.response?.data?.requiresVerification) {
+            const email = err.email || err.response?.data?.email;
+            navigate('/verify', { state: { email } });
+        } else {
+            setError(err.response?.data?.message || 'Registration failed.');
+        }
+    }
     finally { setIsLoading(false); }
   };
 
@@ -119,8 +130,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
                     {/* FIX: Changed input type from email to text and updated placeholder to allow username */}
                     <input type="text" placeholder="Email or Username" value={identifier} onChange={e => setIdentifier(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-teal-500/50" required />
                     <div className="relative">
-                        <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-teal-500/50" required />
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-3 text-white/40"><Eye size={18}/></button>
+                        <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-teal-500/50 pr-10" required />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/40 hover:text-white z-10">
+                            <Eye size={18}/>
+                        </button>
                     </div>
                     <button type="button" onClick={() => setMode('forgot-init')} className="text-xs text-teal-400 hover:underline block text-right">Forgot Password?</button>
                     <button disabled={isLoading} className="w-full bg-gradient-to-r from-teal-600 to-violet-600 py-3 rounded-xl text-white font-medium">{isLoading ? <Loader2 className="animate-spin mx-auto"/> : 'Enter Sanctuary'}</button>
@@ -133,10 +146,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
                     <input type="text" placeholder="Full Name" value={regName} onChange={e => setRegName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" required />
                     <input type="text" placeholder="Username (Unique)" value={regUsername} onChange={e => setRegUsername(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" required />
                     <input type="email" placeholder="Email" value={regEmail} onChange={e => setRegEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" required />
-                    <input type="password" placeholder="Password" value={regPassword} onChange={e => setRegPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" required />
+
+                    <div className="relative">
+                        <input type={showRegPassword ? "text" : "password"} placeholder="Password" value={regPassword} onChange={e => setRegPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white pr-10" required />
+                        <button type="button" onClick={() => setShowRegPassword(!showRegPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/40 hover:text-white z-10">
+                            <Eye size={18}/>
+                        </button>
+                    </div>
+
                     <div className="p-3 bg-white/5 rounded-xl border border-white/10">
                         <p className="text-xs text-white/50 mb-2 flex items-center gap-1"><BookLock size={12}/> Diary Encryption Password</p>
-                        <input type="password" placeholder="Diary Password" value={regDiaryPassword} onChange={e => setRegDiaryPassword(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white" required />
+                        <div className="relative">
+                            <input type={showRegDiaryPassword ? "text" : "password"} placeholder="Diary Password" value={regDiaryPassword} onChange={e => setRegDiaryPassword(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white pr-10" required />
+                            <button type="button" onClick={() => setShowRegDiaryPassword(!showRegDiaryPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/40 hover:text-white z-10">
+                                <Eye size={16}/>
+                            </button>
+                        </div>
                     </div>
                     <div className="p-3 bg-white/5 rounded-xl border border-white/10">
                          <p className="text-xs text-white/50 mb-2 flex items-center gap-1"><Shield size={12}/> Security Question (For Recovery)</p>

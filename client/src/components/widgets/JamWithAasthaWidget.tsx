@@ -34,6 +34,7 @@ type LoopMode = 'off' | 'all' | 'one' | 'custom';
 
 const LANGUAGES = ["English", "Hindi", "Tamil", "Telugu", "Punjabi", "Malayalam", "Kannada", "Bengali", "Marathi"];
 const MOOD_TAGS = ["Happy", "Sad", "Calm", "Energetic", "Romantic", "Focus", "Melancholy", "Party", "Lo-Fi"];
+const GENRES = ["Lo-Fi", "Hip-Hop", "Pop", "Retro", "90s", "Modern", "Indie", "R&B", "Jazz", "Classical", "Rock", "Bollywood", "Acoustic", "EDM", "Ambient"];
 
 // --- Reusable Stepper Component ---
 interface StepperProps {
@@ -133,6 +134,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   // Generator State (Multi-Select)
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [targetDuration, setTargetDuration] = useState<number>(30); // minutes
   
   // Loop Engine State
@@ -357,27 +359,34 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       setShowConfigModal(false);
       setIsSearching(true);
       
+      // Clear queue explicitly to avoid "stuck" state
+      setQueue([]);
+
       const langsToSend = selectedLanguages.length > 0 ? selectedLanguages : ["English"];
       
       try {
           const res = await api.post('/ai/generate-vibe', { 
               languages: langsToSend,
               moods: selectedMoods,
-              duration: targetDuration // Send duration to backend (even if backend logic for duration isn't fully complex yet)
+              genres: selectedGenres,
+              duration: targetDuration
           });
           const tracks = res.data;
           
           if (tracks && tracks.length > 0) {
               setQueue(tracks);
               setCurrentIndex(0);
-              loadAndPlay(tracks[0]);
-              setCurrentLoopCount(1);
+              // Small delay to ensure player is ready and state updated
+              setTimeout(() => {
+                  loadAndPlay(tracks[0]);
+                  setCurrentLoopCount(1);
+              }, 100);
           } else {
               alert("Could not generate a vibe. Try manual search.");
           }
       } catch (e) {
           console.error("Vibe Gen Error:", e);
-          alert("Failed to generate vibe.");
+          alert("Failed to generate vibe. Aastha might be busy.");
       } finally {
           setIsSearching(false);
       }
@@ -460,6 +469,27 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                                             `}
                                         >
                                             {tag}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Genres */}
+                            <div>
+                                <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Genre (Multi-Select)</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {GENRES.map(genre => (
+                                        <button
+                                            key={genre}
+                                            onClick={() => toggleSelection(selectedGenres, genre, setSelectedGenres)}
+                                            className={`
+                                                px-3 py-1.5 rounded-full text-xs font-medium transition-all border
+                                                ${selectedGenres.includes(genre)
+                                                    ? 'bg-purple-500/20 text-purple-200 border-purple-500/50'
+                                                    : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10'}
+                                            `}
+                                        >
+                                            {genre}
                                         </button>
                                     ))}
                                 </div>
