@@ -1,22 +1,23 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Standard Gmail/SMTP Transporter
-const transporter = nodemailer.createTransport({
-  service: 'gmail', // Or use host/port if not gmail
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, // App Password if 2FA is on
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY || 're_123456789'); // Fallback prevents crash if key missing locally
 
 export const sendOTPEmail = async (to: string, otp: string) => {
+  // DEV: Log OTP immediately for debugging/fallback
+  console.log(`[OTP-DEV] Generated OTP for ${to}: ${otp}`);
+
+  if (!process.env.RESEND_API_KEY) {
+      console.warn("[Email Service] No RESEND_API_KEY found. Email will NOT be sent. Use console log above.");
+      return false;
+  }
+
   try {
-    const mailOptions = {
-      from: `"Aastha Sanctuary" <${process.env.EMAIL_USER}>`,
-      to,
+    const { data, error } = await resend.emails.send({
+      from: 'Aastha <onboarding@resend.dev>', // Default Resend Testing Domain
+      to: [to], // Resend Free Tier only sends to your own email unless you verify a domain
       subject: 'Your Verification Code - Aastha',
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f6f8;">
@@ -32,10 +33,14 @@ export const sendOTPEmail = async (to: string, otp: string) => {
           </div>
         </div>
       `,
-    };
+    });
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log("OTP Email sent: %s", info.messageId);
+    if (error) {
+        console.error("Resend API Error:", error);
+        return false;
+    }
+
+    console.log("OTP Email sent via Resend:", data?.id);
     return true;
   } catch (error) {
     console.error("Error sending OTP email:", error);

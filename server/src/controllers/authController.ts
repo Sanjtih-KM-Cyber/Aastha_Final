@@ -95,10 +95,26 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     });
 
     if (user) {
-        // --- OTP DISABLED: Auto-Verify & Login ---
+        // --- PASSIVE VERIFICATION MODE ---
+        // Users are verified by default to bypass email restrictions
         user.isVerified = true;
-        await user.save();
 
+        try {
+            const otp = generateOTP();
+            user.otpCode = await bcrypt.hash(otp, 10);
+            user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+            await user.save();
+
+            console.log(`[Auth] Attempting to send welcome/OTP email to ${cleanEmail}`);
+            // Non-blocking email send (Passive)
+            sendOTPEmail(cleanEmail, otp).catch(e => console.error("[Auth] Background Email Error:", e));
+        } catch(err) {
+            console.error("[Auth] OTP generation/sending error:", err);
+            // Save anyway if OTP generation fails
+            await user.save();
+        }
+
+        // --- DIRECT LOGIN RESPONSE ---
         const token = generateToken((user._id as any).toString());
         const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
         (res as any).cookie('jwt', token, {
@@ -108,19 +124,23 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
             maxAge: 30 * 24 * 60 * 60 * 1000
         });
 
-        (res as any).status(201).json({
+        (res as any).status(200).json({
             _id: user._id,
             name: user.name,
             email: decrypt(user.emailEncrypted) || user.email,
-            username: user.username,
-            hasDiarySetup: false,
+            username: user.username || undefined,
+            requireUsername: !user.username,
+            hasDiarySetup: !!user.diaryPasswordHash,
             isPro: user.isPro,
-            credits: 10,
-            streak: 1,
+            credits: user.isPro ? 9999 : (10 - (user.dailyPremiumUsage || 0)),
+            streak: user.streak,
             avatar: user.avatar,
             wallpaper: user.wallpaper,
+            persona: user.persona || 'aastha',
             createdAt: user.createdAt,
-            encryptionSalt: user.encryptionSalt
+            encryptionSalt: user.encryptionSalt,
+            securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question })),
+            message: 'Account created successfully.'
         });
     }
   } catch (error) {
@@ -157,6 +177,11 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         user.emailHash = identifierHash;
         if (!user.emailEncrypted) user.emailEncrypted = encrypt(cleanIdentifier);
         user.email = undefined; // Clear plain text email
+
+        // FORCE VERIFICATION FOR LEGACY USERS
+        // Since this is a migration event, we assume they haven't done OTP verification yet.
+        user.isVerified = false;
+
         await user.save();
     }
 
@@ -175,22 +200,21 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     // 1. Authenticate Password
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
       
-        // --- OTP DISABLED: Auto-verify if not verified ---
+        // --- PASSIVE VERIFICATION MODE ---
+        // We do NOT block unverified users anymore.
+        // If they are not verified, we just let them in.
         if (!user.isVerified) {
-             user.isVerified = true;
+             user.isVerified = true; // Auto-verify on login for now
              await user.save();
         }
 
-      // Check Mandatory Username for Legacy Users
-      if (!user.username) {
-          // We don't block login, but we signal the frontend to force username creation
-          // But wait, the user said "make the old users... to also giving the username".
-          // If we block login, they can't save it (unless we have a specific endpoint).
-          // We will send a special flag 'requireUsername: true'
-      }
+        let needsSave = false;
 
       // 2. Handle missing fields (Self-healing legacy user data)
-      if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email); 
+      if (!user.emailEncrypted && user.email) {
+          user.emailEncrypted = encrypt(user.email);
+          needsSave = true;
+      }
       
       // Auto-generate username for legacy users
       if (!user.username) {
@@ -198,14 +222,16 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           const baseName = user.name ? user.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 10) : 'user';
           user.username = `${baseName}${randomSuffix}`;
           user.usernameEncrypted = encrypt(user.username);
+          needsSave = true;
       } else if (!user.usernameEncrypted) {
           user.usernameEncrypted = encrypt(user.username);
+          needsSave = true;
       }
 
-      if (!user.streak) user.streak = 1; 
-      if (!user.lastVisit) user.lastVisit = new Date(); 
-      if (user.dailyPremiumUsage === undefined) user.dailyPremiumUsage = 0;
-      if (user.isPro === undefined) user.isPro = false;
+      if (!user.streak) { user.streak = 1; needsSave = true; }
+      if (!user.lastVisit) { user.lastVisit = new Date(); needsSave = true; }
+      if (user.dailyPremiumUsage === undefined) { user.dailyPremiumUsage = 0; needsSave = true; }
+      if (user.isPro === undefined) { user.isPro = false; needsSave = true; }
 
       // 3. Daily Reset Check
       const today = new Date();
@@ -215,9 +241,19 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           lastUsage.getFullYear() !== today.getFullYear()) {
           user.dailyPremiumUsage = 0;
           user.lastUsageDate = today;
+          needsSave = true;
       }
-      user.lastVisit = today; // Update visit date for streak
-      await user.save();
+
+      // Only update lastVisit if date changed to avoid writing on every login
+      const lastVisitTime = new Date(user.lastVisit).getTime();
+      const todayTime = today.getTime();
+      // Only update if difference > 1 minute to prevent spam updates
+      if (Math.abs(todayTime - lastVisitTime) > 60000) {
+          user.lastVisit = today;
+          needsSave = true;
+      }
+
+      if (needsSave) await user.save();
 
       // 4. Generate Token & Respond
       const token = generateToken((user._id as any).toString());
@@ -581,7 +617,8 @@ export const resendOTP = async (req: Request, res: Response) => {
         user.otpExpires = otpExpires;
         await user.save();
 
-        await sendOTPEmail(cleanEmail, otp);
+        // Non-blocking send to prevent timeout
+        sendOTPEmail(cleanEmail, otp).catch(e => console.error("[Auth] Background Email Error:", e));
 
         (res as any).status(200).json({ message: 'Code resent' });
     } catch (e) {
