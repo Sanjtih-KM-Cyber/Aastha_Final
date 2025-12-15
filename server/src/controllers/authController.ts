@@ -97,8 +97,8 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     if (user) {
         // --- PASSIVE VERIFICATION MODE ---
         // Users are verified by default to bypass email restrictions
-        user.isVerified = true;
-
+        user.isVerified = true; 
+        
         try {
             const otp = generateOTP();
             user.otpCode = await bcrypt.hash(otp, 10);
@@ -126,10 +126,10 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 
         (res as any).status(200).json({
             _id: user._id,
-            name: user.name,
-            email: decrypt(user.emailEncrypted) || user.email,
+            name: user.name, 
+            email: decrypt(user.emailEncrypted) || user.email, 
             username: user.username || undefined,
-            requireUsername: !user.username,
+            requireUsername: !user.username, 
             hasDiarySetup: !!user.diaryPasswordHash,
             isPro: user.isPro,
             credits: user.isPro ? 9999 : (10 - (user.dailyPremiumUsage || 0)),
@@ -177,11 +177,11 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         user.emailHash = identifierHash;
         if (!user.emailEncrypted) user.emailEncrypted = encrypt(cleanIdentifier);
         user.email = undefined; // Clear plain text email
-
+        
         // FORCE VERIFICATION FOR LEGACY USERS
         // Since this is a migration event, we assume they haven't done OTP verification yet.
-        user.isVerified = false;
-
+        user.isVerified = false; 
+        
         await user.save();
     }
 
@@ -243,7 +243,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           user.lastUsageDate = today;
           needsSave = true;
       }
-
+      
       // Only update lastVisit if date changed to avoid writing on every login
       const lastVisitTime = new Date(user.lastVisit).getTime();
       const todayTime = today.getTime();
