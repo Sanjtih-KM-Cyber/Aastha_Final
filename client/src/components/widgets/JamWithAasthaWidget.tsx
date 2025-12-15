@@ -142,6 +142,13 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const [loopTarget, setLoopTarget] = useState(2);
   const [currentLoopCount, setCurrentLoopCount] = useState(1);
   
+  // Ref to track latest state for YouTube Event Listener (Closure Fix)
+  const stateRef = useRef({ loopMode, loopTarget, currentLoopCount, currentIndex, queue });
+
+  useEffect(() => {
+      stateRef.current = { loopMode, loopTarget, currentLoopCount, currentIndex, queue };
+  }, [loopMode, loopTarget, currentLoopCount, currentIndex, queue]);
+
   const playerRef = useRef<any>(null);
   const progressInterval = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -201,6 +208,9 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   };
 
   const handleTrackEnd = () => {
+      // Use Ref to get fresh values inside the event callback
+      const { loopMode, loopTarget, currentLoopCount, currentIndex, queue } = stateRef.current;
+
       if (loopMode === 'one') {
           playerRef.current.seekTo(0);
           playerRef.current.playVideo();
@@ -210,14 +220,32 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               playerRef.current.seekTo(0);
               playerRef.current.playVideo();
           } else {
-              setCurrentLoopCount(1); 
-              playNext();
+              setCurrentLoopCount(1);
+              // Logic for Next Track (manually implemented to use Ref data)
+              if (queue.length > 0) {
+                  const nextIndex = (currentIndex + 1) % queue.length;
+                  setCurrentIndex(nextIndex);
+                  loadAndPlay(queue[nextIndex]);
+              }
           }
       } else if (loopMode === 'all') {
-          playNext();
+          // Play Next logic
+          if (queue.length > 0) {
+              const nextIndex = (currentIndex + 1) % queue.length;
+              setCurrentIndex(nextIndex);
+              loadAndPlay(queue[nextIndex]);
+              setCurrentLoopCount(1);
+          }
       } else {
-          if (currentIndex < queue.length - 1) playNext();
-          else setIsPlaying(false);
+          // Loop Mode Off
+          if (currentIndex < queue.length - 1) {
+              const nextIndex = currentIndex + 1;
+              setCurrentIndex(nextIndex);
+              loadAndPlay(queue[nextIndex]);
+              setCurrentLoopCount(1);
+          } else {
+              setIsPlaying(false);
+          }
       }
   };
 
