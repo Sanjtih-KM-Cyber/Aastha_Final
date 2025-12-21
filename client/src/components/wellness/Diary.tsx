@@ -18,7 +18,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { userService, DiaryEntryDTO } from '../../services/userService';
 import { deriveKey } from '../../utils/encryptionUtils';
 
-// --- Types ---
 interface DiaryProps {
   isOpen: boolean;
   onClose: () => void;
@@ -36,7 +35,6 @@ interface CalendarDay {
   isSelected: boolean;
 }
 
-// --- Helper Functions ---
 const toDateString = (date: Date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -51,9 +49,6 @@ const addDays = (date: Date, days: number) => {
 const getFormattedDate = (date: Date) => date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 const getShortDate = (dateStr: string) => new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
-// --- Sub-Components ---
-
-/** Lock Screen */
 const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string; setError: (err: string) => void; }> = ({ onUnlock, error, setError }) => {
   const { currentTheme } = useTheme();
   const [input, setInput] = useState('');
@@ -82,7 +77,6 @@ const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string
   );
 };
 
-/** Paper Page */
 const PaperPage: React.FC<{ 
   date: Date;
   title: string;
@@ -105,7 +99,6 @@ const PaperPage: React.FC<{
         backgroundSize: '100% 2rem', backgroundAttachment: 'local'
       }}
     >
-      {/* Header */}
       <div className="pt-8 px-8 pb-4 flex justify-between items-end border-b border-transparent">
         <div className="flex flex-col w-full">
            <span className="text-xs font-mono text-gray-400 uppercase tracking-widest mb-1">{getFormattedDate(date)}</span>
@@ -117,7 +110,6 @@ const PaperPage: React.FC<{
         </div>
       </div>
 
-      {/* Content */}
       <div className="flex-1 relative overflow-y-auto custom-scrollbar pl-14 pr-8 pb-8 pt-2">
         {isEditing ? (
           <textarea value={content} onChange={(e) => onContentChange(e.target.value)} placeholder="Write your thoughts here..." className="w-full h-full bg-transparent border-none outline-none resize-none text-gray-700 text-lg leading-[2rem] font-serif" spellCheck={false} />
@@ -128,7 +120,6 @@ const PaperPage: React.FC<{
         )}
       </div>
 
-      {/* Actions */}
       {!readOnly && (
         <div className="absolute bottom-6 right-8 flex items-center gap-3 z-20">
            {isEditing ? (
@@ -146,33 +137,26 @@ const PaperPage: React.FC<{
   );
 };
 
-// --- Main Component ---
-
 export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
   const { user, encryptionKey, setEncryptionKeyManual } = useAuth();
   const { encrypt, decrypt } = useEncryption();
   const { currentTheme } = useTheme();
 
-  // State
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [authError, setAuthError] = useState('');
   const [entriesMap, setEntriesMap] = useState<Record<string, DiaryEntryDTO>>({});
   const [isLoading, setIsLoading] = useState(false);
   
-  // Navigation
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [activeDate, setActiveDate] = useState(new Date());
   
-  // Animation
   const [isFlipping, setIsFlipping] = useState<'next' | 'prev' | null>(null);
   
-  // Editor State
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editMode, setEditMode] = useState<DiaryMode>('view');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Mobile Check
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -191,7 +175,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
     if (isOpen && isUnlocked) fetchEntries();
   }, [isOpen, isUnlocked, user]);
 
-  // When date changes, load data into editor state
   useEffect(() => {
       const dateKey = toDateString(activeDate);
       const entry = entriesMap[dateKey];
@@ -206,13 +189,10 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       }
   }, [activeDate, entriesMap]);
 
-  // --- Actions ---
-
   const fetchEntries = async () => {
     setIsLoading(true);
     try {
       const data = await userService.getDiaryEntries();
-      
       const map: Record<string, DiaryEntryDTO> = {};
       data.forEach(entry => {
           try {
@@ -235,7 +215,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   const handleUnlock = (password: string) => {
     if (!user) return;
     const derived = deriveKey(password, user.email);
-    
     if (encryptionKey && derived !== encryptionKey) {
        setAuthError("Incorrect Password");
        return;
@@ -247,25 +226,20 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
   const handleSaveEntry = async () => {
     if (!editContent.trim()) return;
-    
     setIsSaving(true);
     try {
       const titleToSave = editTitle.trim() || "Untitled";
       const encTitle = encrypt(titleToSave);
       const encContent = encrypt(editContent);
-      
       const saved = await userService.saveDiaryEntry({
         title: encTitle,
         content: encContent,
         tags: ['journal'],
         date: activeDate.toISOString()
       });
-      
       const newEntry = { ...saved, title: titleToSave, content: editContent, createdAt: activeDate.toISOString() };
-      
       setEntriesMap(prev => ({ ...prev, [toDateString(activeDate)]: newEntry }));
       setEditMode('view');
-      
     } catch (e) {
       console.error("Save error", e);
       alert("Failed to save entry.");
@@ -278,8 +252,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
     setActiveDate(new Date());
     setEditMode('edit');
   };
-
-  // --- Navigation ---
 
   const changeMonth = (offset: number) => {
       const newDate = new Date(currentMonth);
@@ -303,31 +275,24 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       setActiveDate(newDate);
   };
 
-  // Animation Helpers
   const dMinus1 = addDays(activeDate, -1);
   const dPlus1 = addDays(activeDate, 1);
 
-  // Calendar Logic
   const getCalendarDays = (): (CalendarDay | null)[] => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
-    
     const resultDays: (CalendarDay | null)[] = [];
     const paddingDays = firstDay.getDay(); 
-    
     for (let i = 0; i < paddingDays; i++) resultDays.push(null);
-
     const todayStr = toDateString(new Date());
-
     for (let d = 1; d <= lastDay.getDate(); d++) {
        const dateObj = new Date(year, month, d);
        const dateStr = toDateString(dateObj);
        const hasEntry = !!entriesMap[dateStr];
        const isToday = todayStr === dateStr;
        const isSelected = toDateString(activeDate) === dateStr;
-       
        resultDays.push({
          date: dateObj,
          isCurrentMonth: true,
@@ -341,7 +306,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
   const calendarGrid = getCalendarDays();
 
-  // --- RENDER ---
   return (
     <DraggableWindow 
       isOpen={isOpen} onClose={onClose} title="Personal Journal"
@@ -355,7 +319,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
         ) : (
             <div className={`relative w-full h-full flex shadow-2xl ${isMobile ? '' : 'rounded-r-lg perspective-2000 w-[95%] h-[90%]'}`}>
                 
-                {/* Mobile Header Bar (Shift Dates) */}
                 {isMobile && (
                     <div className="absolute top-0 left-0 right-0 h-14 bg-[#fdfdf6] border-b border-gray-200 z-50 flex items-center justify-between px-4">
                         <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-black/5 rounded-full"><ChevronLeft className="text-gray-600" /></button>
@@ -364,7 +327,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                     </div>
                 )}
 
-                {/* Desktop Controls Overlay */}
                 {!isMobile && (
                   <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white z-50">
                       <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronLeft/></button>
@@ -373,22 +335,17 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                   </div>
                 )}
 
-                {/* BOOK CONTAINER */}
                 <div className={`relative flex w-full h-full bg-[#2a2a2a] ${isMobile ? '' : 'rounded-lg shadow-2xl'}`} style={isMobile ? {} : { perspective: '2500px', transformStyle: 'preserve-3d' }}>
                     
-                    {/* Loading Overlay */}
                     {isLoading && (
                         <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-lg pointer-events-none">
                             <Loader2 className="animate-spin text-white/80" size={32} />
                         </div>
                     )}
 
-                    {/* STATIC LAYER */}
                     <div className="absolute inset-0 flex">
-                        {/* Left Page (Calendar) - HIDDEN ON MOBILE */}
                         {!isMobile && (
                           <div className="w-1/2 h-full border-r border-[#ccc] overflow-hidden rounded-l-lg bg-[#fdfdf6] flex flex-col">
-                              {/* ... Existing Desktop Calendar UI ... */}
                               <div className="p-6 pb-2 flex items-center justify-between border-b border-gray-200/50">
                                   <h3 className="font-serif text-2xl font-bold text-gray-800 flex items-center gap-2">
                                       <BookOpen size={22} style={{ color: currentTheme.primaryColor }} /> Index
@@ -445,8 +402,17 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                           </div>
                         )}
 
-                        {/* Right Page (Editor) - FULL WIDTH ON MOBILE */}
-                        <div className={`${isMobile ? 'w-full pt-14' : 'w-1/2 border-l border-[#ccc] rounded-r-lg'} h-full overflow-hidden bg-[#fdfdf6]`}>
+                        <motion.div
+                          className={`${isMobile ? 'w-full pt-14' : 'w-1/2 border-l border-[#ccc] rounded-r-lg'} h-full overflow-hidden bg-[#fdfdf6]`}
+                          drag={isMobile ? "x" : false}
+                          dragConstraints={{ left: 0, right: 0 }}
+                          dragElastic={0.2}
+                          onDragEnd={(e, { offset }) => {
+                              const swipeThreshold = 50;
+                              if (offset.x > swipeThreshold) changeDay(-1);
+                              if (offset.x < -swipeThreshold) changeDay(1);
+                          }}
+                        >
                              <PaperPage 
                                 date={isFlipping === 'next' ? dPlus1 : activeDate}
                                 title={isFlipping === 'next' ? entriesMap[toDateString(dPlus1)]?.title || '' : (editMode === 'view' ? entriesMap[toDateString(activeDate)]?.title : editTitle)}
@@ -456,10 +422,9 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                                 onTitleChange={setEditTitle} onContentChange={setEditContent} onSave={handleSaveEntry} onEdit={() => setEditMode('edit')} onCancel={() => setEditMode('view')} onMoodChange={() => {}}
                                 readOnly={isFlipping !== null}
                              />
-                        </div>
+                        </motion.div>
                     </div>
 
-                    {/* FLIPPING LAYER (Disabled for Simplicity on Mobile or kept for effect? Let's keep minimal transition logic if mobile, or just instant switch) */}
                     {!isMobile && (
                       <AnimatePresence mode="sync" onExitComplete={() => setIsFlipping(null)}>
                         {isFlipping === 'next' && (
@@ -480,7 +445,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                                 </div>
                              </motion.div>
                         )}
-                        {/* Prev Logic same as before... */}
                          {isFlipping === 'prev' && (
                              <motion.div
                                 key="flip-prev"
