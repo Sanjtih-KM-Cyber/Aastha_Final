@@ -18,7 +18,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { userService, DiaryEntryDTO } from '../../services/userService';
 import { deriveKey } from '../../utils/encryptionUtils';
 
-// --- Types ---
 interface DiaryProps {
   isOpen: boolean;
   onClose: () => void;
@@ -36,9 +35,7 @@ interface CalendarDay {
   isSelected: boolean;
 }
 
-// --- Helper Functions ---
 const toDateString = (date: Date) => {
-  // Use a reliable conversion that respects the local Date object's state
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
@@ -52,9 +49,6 @@ const addDays = (date: Date, days: number) => {
 const getFormattedDate = (date: Date) => date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 const getShortDate = (dateStr: string) => new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
-// --- Sub-Components ---
-
-/** Lock Screen */
 const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string; setError: (err: string) => void; }> = ({ onUnlock, error, setError }) => {
   const { currentTheme } = useTheme();
   const [input, setInput] = useState('');
@@ -83,7 +77,6 @@ const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string
   );
 };
 
-/** Paper Page */
 const PaperPage: React.FC<{ 
   date: Date;
   title: string;
@@ -106,7 +99,6 @@ const PaperPage: React.FC<{
         backgroundSize: '100% 2rem', backgroundAttachment: 'local'
       }}
     >
-      {/* Header */}
       <div className="pt-8 px-8 pb-4 flex justify-between items-end border-b border-transparent">
         <div className="flex flex-col w-full">
            <span className="text-xs font-mono text-gray-400 uppercase tracking-widest mb-1">{getFormattedDate(date)}</span>
@@ -118,7 +110,6 @@ const PaperPage: React.FC<{
         </div>
       </div>
 
-      {/* Content */}
       <div className="flex-1 relative overflow-y-auto custom-scrollbar pl-14 pr-8 pb-8 pt-2">
         {isEditing ? (
           <textarea value={content} onChange={(e) => onContentChange(e.target.value)} placeholder="Write your thoughts here..." className="w-full h-full bg-transparent border-none outline-none resize-none text-gray-700 text-lg leading-[2rem] font-serif" spellCheck={false} />
@@ -129,7 +120,6 @@ const PaperPage: React.FC<{
         )}
       </div>
 
-      {/* Actions */}
       {!readOnly && (
         <div className="absolute bottom-6 right-8 flex items-center gap-3 z-20">
            {isEditing ? (
@@ -147,31 +137,37 @@ const PaperPage: React.FC<{
   );
 };
 
-// --- Main Component ---
-
 export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
   const { user, encryptionKey, setEncryptionKeyManual } = useAuth();
   const { encrypt, decrypt } = useEncryption();
   const { currentTheme } = useTheme();
 
-  // State
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [authError, setAuthError] = useState('');
   const [entriesMap, setEntriesMap] = useState<Record<string, DiaryEntryDTO>>({});
   const [isLoading, setIsLoading] = useState(false);
   
-  // Navigation
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [activeDate, setActiveDate] = useState(new Date());
   
-  // Animation
   const [isFlipping, setIsFlipping] = useState<'next' | 'prev' | null>(null);
   
-  // Editor State
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editMode, setEditMode] = useState<DiaryMode>('view');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Swipe State
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     if (isOpen && user) {
@@ -181,9 +177,8 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
   useEffect(() => {
     if (isOpen && isUnlocked) fetchEntries();
-  }, [isOpen, isUnlocked, user]); // Added user dependency to ensure fetch on auth ready
+  }, [isOpen, isUnlocked, user]);
 
-  // When date changes, load data into editor state
   useEffect(() => {
       const dateKey = toDateString(activeDate);
       const entry = entriesMap[dateKey];
@@ -198,13 +193,10 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       }
   }, [activeDate, entriesMap]);
 
-  // --- Actions ---
-
   const fetchEntries = async () => {
     setIsLoading(true);
     try {
       const data = await userService.getDiaryEntries();
-      
       const map: Record<string, DiaryEntryDTO> = {};
       data.forEach(entry => {
           try {
@@ -227,7 +219,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   const handleUnlock = (password: string) => {
     if (!user) return;
     const derived = deriveKey(password, user.email);
-    
     if (encryptionKey && derived !== encryptionKey) {
        setAuthError("Incorrect Password");
        return;
@@ -238,27 +229,21 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   };
 
   const handleSaveEntry = async () => {
-    // Fix: Allow saving if only content is present. Title is optional.
     if (!editContent.trim()) return;
-    
     setIsSaving(true);
     try {
-      const titleToSave = editTitle.trim() || "Untitled"; // Default Title
+      const titleToSave = editTitle.trim() || "Untitled";
       const encTitle = encrypt(titleToSave);
       const encContent = encrypt(editContent);
-      
       const saved = await userService.saveDiaryEntry({
         title: encTitle,
         content: encContent,
         tags: ['journal'],
         date: activeDate.toISOString()
       });
-      
       const newEntry = { ...saved, title: titleToSave, content: editContent, createdAt: activeDate.toISOString() };
-      
       setEntriesMap(prev => ({ ...prev, [toDateString(activeDate)]: newEntry }));
       setEditMode('view');
-      
     } catch (e) {
       console.error("Save error", e);
       alert("Failed to save entry.");
@@ -268,11 +253,9 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   };
 
   const createNewEntry = () => {
-    setActiveDate(new Date()); // Go to today
+    setActiveDate(new Date());
     setEditMode('edit');
   };
-
-  // --- Navigation ---
 
   const changeMonth = (offset: number) => {
       const newDate = new Date(currentMonth);
@@ -296,33 +279,24 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       setActiveDate(newDate);
   };
 
-  // Animation Helpers
-  const dMinus2 = addDays(activeDate, -2);
   const dMinus1 = addDays(activeDate, -1);
-  const dCurrent = activeDate;
   const dPlus1 = addDays(activeDate, 1);
 
-  // Calendar Logic
   const getCalendarDays = (): (CalendarDay | null)[] => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
-    
     const resultDays: (CalendarDay | null)[] = [];
     const paddingDays = firstDay.getDay(); 
-    
     for (let i = 0; i < paddingDays; i++) resultDays.push(null);
-
     const todayStr = toDateString(new Date());
-
     for (let d = 1; d <= lastDay.getDate(); d++) {
        const dateObj = new Date(year, month, d);
        const dateStr = toDateString(dateObj);
        const hasEntry = !!entriesMap[dateStr];
        const isToday = todayStr === dateStr;
        const isSelected = toDateString(activeDate) === dateStr;
-       
        resultDays.push({
          date: dateObj,
          isCurrentMonth: true,
@@ -336,6 +310,27 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
   const calendarGrid = getCalendarDays();
 
+  // Swipe Handlers
+  const onTouchStart = (e: React.TouchEvent) => {
+      setTouchEnd(null);
+      setTouchStart(e.targetTouches[0].clientX);
+  }
+  const onTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
+  const onTouchEnd = () => {
+      if (!touchStart || !touchEnd) return;
+      const distance = touchStart - touchEnd;
+      const isLeftSwipe = distance > 50; // Swiped Left -> Go Next (Future)
+      const isRightSwipe = distance < -50; // Swiped Right -> Go Prev (Past)
+
+      // Add slight delay to prevent accidental double swipes
+      if (!isFlipping) {
+          if (isLeftSwipe) changeDay(1);
+          if (isRightSwipe) changeDay(-1);
+      }
+      setTouchStart(null);
+      setTouchEnd(null);
+  }
+
   return (
     <DraggableWindow 
       isOpen={isOpen} onClose={onClose} title="Personal Journal"
@@ -347,92 +342,98 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
         {!isUnlocked ? (
           <DiaryLockScreen onUnlock={handleUnlock} error={authError} setError={setAuthError} />
         ) : (
-            <div className="relative w-[95%] h-[90%] flex shadow-2xl rounded-r-lg perspective-2000">
+            <div className={`relative w-full h-full flex shadow-2xl ${isMobile ? '' : 'rounded-r-lg perspective-2000 w-[95%] h-[90%]'}`}>
                 
-                {/* Controls Overlay */}
-                <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white z-50">
-                    <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronLeft/></button>
-                    <span className="font-mono text-sm w-32 text-center">{getFormattedDate(activeDate).split(',')[1]}</span>
-                    <button onClick={() => changeDay(1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronRight/></button>
-                </div>
+                {isMobile && (
+                    <div className="absolute top-0 left-0 right-0 h-14 bg-[#fdfdf6] border-b border-gray-200 z-50 flex items-center justify-between px-4">
+                        <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-black/5 rounded-full"><ChevronLeft className="text-gray-600" /></button>
+                        <span className="font-serif font-bold text-gray-800">{getFormattedDate(activeDate)}</span>
+                        <button onClick={() => changeDay(1)} disabled={!!isFlipping} className="p-2 hover:bg-black/5 rounded-full"><ChevronRight className="text-gray-600" /></button>
+                    </div>
+                )}
 
-                {/* BOOK CONTAINER */}
-                <div className="relative flex w-full h-full shadow-2xl bg-[#2a2a2a] rounded-lg" style={{ perspective: '2500px', transformStyle: 'preserve-3d' }}>
+                {!isMobile && (
+                  <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white z-50">
+                      <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronLeft/></button>
+                      <span className="font-mono text-sm w-32 text-center">{getFormattedDate(activeDate).split(',')[1]}</span>
+                      <button onClick={() => changeDay(1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronRight/></button>
+                  </div>
+                )}
+
+                <div className={`relative flex w-full h-full bg-[#2a2a2a] ${isMobile ? '' : 'rounded-lg shadow-2xl'}`} style={isMobile ? {} : { perspective: '2500px', transformStyle: 'preserve-3d' }}>
                     
-                    {/* Loading Overlay */}
                     {isLoading && (
                         <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-lg pointer-events-none">
                             <Loader2 className="animate-spin text-white/80" size={32} />
                         </div>
                     )}
 
-                    {/* STATIC LAYER */}
                     <div className="absolute inset-0 flex">
-                        {/* Left Static Page (Calendar) */}
-                        <div className="w-1/2 h-full border-r border-[#ccc] overflow-hidden rounded-l-lg bg-[#fdfdf6] flex flex-col">
-                            
-                            <div className="p-6 pb-2 flex items-center justify-between border-b border-gray-200/50">
-                                <h3 className="font-serif text-2xl font-bold text-gray-800 flex items-center gap-2">
-                                    <BookOpen size={22} style={{ color: currentTheme.primaryColor }} /> Index
-                                </h3>
-                                <div className="flex gap-2">
-                                    <button onClick={() => fetchEntries()} className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500"><RefreshCw size={14}/></button>
-                                    <button onClick={createNewEntry} className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-gray-400 hover:bg-gray-200 transition-colors">+ New</button>
-                                </div>
-                            </div>
+                        {!isMobile && (
+                          <div className="w-1/2 h-full border-r border-[#ccc] overflow-hidden rounded-l-lg bg-[#fdfdf6] flex flex-col">
+                              {/* Desktop Calendar Logic (Unchanged) */}
+                              <div className="p-6 pb-2 flex items-center justify-between border-b border-gray-200/50">
+                                  <h3 className="font-serif text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                      <BookOpen size={22} style={{ color: currentTheme.primaryColor }} /> Index
+                                  </h3>
+                                  <div className="flex gap-2">
+                                      <button onClick={() => fetchEntries()} className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500"><RefreshCw size={14}/></button>
+                                      <button onClick={createNewEntry} className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-gray-400 hover:bg-gray-200 transition-colors">+ New</button>
+                                  </div>
+                              </div>
+                              <div className="px-6 py-4">
+                                  <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 border border-gray-200 shadow-sm">
+                                      <div className="flex justify-between items-center mb-4">
+                                          <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-gray-200 rounded-full text-gray-600"><ChevronLeft size={16} /></button>
+                                          <span className="text-sm font-bold uppercase tracking-widest text-gray-800">
+                                              {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                          </span>
+                                          <button onClick={() => changeMonth(1)} className="p-1 hover:bg-gray-200 rounded-full text-gray-600"><ChevronRight size={16} /></button>
+                                      </div>
+                                      <div className="grid grid-cols-7 gap-1 mb-2">
+                                          {['Su','Mo','Tu','We','Th','Fr','Sa'].map((d, i) => <span key={i} className="text-center text-[10px] font-bold text-gray-400 uppercase">{d}</span>)}
+                                      </div>
+                                      <div className="grid grid-cols-7 gap-1 place-items-center">
+                                          {calendarGrid.map((day, idx) => {
+                                              if (!day) return <div key={`empty-${idx}`} className="w-8 h-8" />;
+                                              return (
+                                                  <button
+                                                      key={`day-${idx}`}
+                                                      onClick={() => handleCalendarClick(day.date.getDate())}
+                                                      className={`
+                                                          w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all relative
+                                                          ${day.isSelected ? 'bg-gray-800 text-white shadow-lg scale-110 z-10' : ''}
+                                                          ${!day.isSelected && day.hasEntry ? 'bg-white border border-gray-300 text-gray-800 hover:border-gray-400' : ''}
+                                                          ${!day.isSelected && !day.hasEntry ? 'text-gray-400 hover:bg-gray-200/50' : ''}
+                                                          ${day.isToday && !day.isSelected ? 'ring-1 ring-offset-1 ring-teal-400' : ''}
+                                                      `}
+                                                  >
+                                                      {day.date.getDate()}
+                                                      {day.hasEntry && !day.isSelected && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-teal-400" />}
+                                                  </button>
+                                              );
+                                          })}
+                                      </div>
+                                  </div>
+                              </div>
+                              <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-3 custom-scrollbar">
+                                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Recent Memories</h4>
+                                  {Object.values(entriesMap).slice(0, 5).map((entry, i) => (
+                                      <div key={i} onClick={() => { if(entry.createdAt) setActiveDate(new Date(entry.createdAt)) }} className="p-3 rounded-lg bg-white/40 hover:bg-white/80 cursor-pointer transition-colors border border-transparent hover:border-gray-300">
+                                          <div className="flex justify-between"><span className="font-bold text-sm">{entry.title || 'Untitled'}</span><span className="text-[10px] text-gray-500">{getShortDate(entry.createdAt || '')}</span></div>
+                                          <p className="text-xs text-gray-500 line-clamp-1 mt-1">{entry.content}</p>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                        )}
 
-                            {/* Calendar */}
-                            <div className="px-6 py-4">
-                                <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 border border-gray-200 shadow-sm">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-gray-200 rounded-full text-gray-600"><ChevronLeft size={16} /></button>
-                                        <span className="text-sm font-bold uppercase tracking-widest text-gray-800">
-                                            {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                                        </span>
-                                        <button onClick={() => changeMonth(1)} className="p-1 hover:bg-gray-200 rounded-full text-gray-600"><ChevronRight size={16} /></button>
-                                    </div>
-                                    <div className="grid grid-cols-7 gap-1 mb-2">
-                                        {['Su','Mo','Tu','We','Th','Fr','Sa'].map((d, i) => <span key={i} className="text-center text-[10px] font-bold text-gray-400 uppercase">{d}</span>)}
-                                    </div>
-                                    <div className="grid grid-cols-7 gap-1 place-items-center">
-                                        {calendarGrid.map((day, idx) => {
-                                            if (!day) return <div key={`empty-${idx}`} className="w-8 h-8" />;
-                                            return (
-                                                <button
-                                                    key={`day-${idx}`}
-                                                    onClick={() => handleCalendarClick(day.date.getDate())}
-                                                    className={`
-                                                        w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all relative
-                                                        ${day.isSelected ? 'bg-gray-800 text-white shadow-lg scale-110 z-10' : ''}
-                                                        ${!day.isSelected && day.hasEntry ? 'bg-white border border-gray-300 text-gray-800 hover:border-gray-400' : ''}
-                                                        ${!day.isSelected && !day.hasEntry ? 'text-gray-400 hover:bg-gray-200/50' : ''}
-                                                        ${day.isToday && !day.isSelected ? 'ring-1 ring-offset-1 ring-teal-400' : ''}
-                                                    `}
-                                                >
-                                                    {day.date.getDate()}
-                                                    {day.hasEntry && !day.isSelected && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-teal-400" />}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            {/* List */}
-                            <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-3 custom-scrollbar">
-                                <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Recent Memories</h4>
-                                {Object.values(entriesMap).slice(0, 5).map((entry, i) => (
-                                    <div key={i} onClick={() => { if(entry.createdAt) setActiveDate(new Date(entry.createdAt)) }} className="p-3 rounded-lg bg-white/40 hover:bg-white/80 cursor-pointer transition-colors border border-transparent hover:border-gray-300">
-                                        <div className="flex justify-between"><span className="font-bold text-sm">{entry.title || 'Untitled'}</span><span className="text-[10px] text-gray-500">{getShortDate(entry.createdAt || '')}</span></div>
-                                        <p className="text-xs text-gray-500 line-clamp-1 mt-1">{entry.content}</p>
-                                    </div>
-                                ))}
-                            </div>
-
-                        </div>
-
-                        {/* Right Static Page (Current Editor) */}
-                        <div className="w-1/2 h-full border-l border-[#ccc] overflow-hidden rounded-r-lg bg-[#fdfdf6]">
+                        <div
+                          className={`${isMobile ? 'w-full pt-14' : 'w-1/2 border-l border-[#ccc] rounded-r-lg'} h-full overflow-hidden bg-[#fdfdf6]`}
+                          onTouchStart={isMobile ? onTouchStart : undefined}
+                          onTouchMove={isMobile ? onTouchMove : undefined}
+                          onTouchEnd={isMobile ? onTouchEnd : undefined}
+                        >
                              <PaperPage 
                                 date={isFlipping === 'next' ? dPlus1 : activeDate}
                                 title={isFlipping === 'next' ? entriesMap[toDateString(dPlus1)]?.title || '' : (editMode === 'view' ? entriesMap[toDateString(activeDate)]?.title : editTitle)}
@@ -445,8 +446,9 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                         </div>
                     </div>
 
-                    {/* FLIPPING LAYER */}
-                    <AnimatePresence mode="sync" onExitComplete={() => setIsFlipping(null)}>
+                    {!isMobile && (
+                      <AnimatePresence mode="sync" onExitComplete={() => setIsFlipping(null)}>
+                        {/* Page Flip Animations (Unchanged) */}
                         {isFlipping === 'next' && (
                              <motion.div
                                 key="flip-next"
@@ -465,7 +467,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                                 </div>
                              </motion.div>
                         )}
-                        {isFlipping === 'prev' && (
+                         {isFlipping === 'prev' && (
                              <motion.div
                                 key="flip-prev"
                                 initial={{ rotateY: -180 }} animate={{ rotateY: 0 }}
@@ -483,11 +485,14 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                                 </div>
                              </motion.div>
                         )}
-                    </AnimatePresence>
+                      </AnimatePresence>
+                    )}
 
-                    <div className="absolute left-1/2 top-0 bottom-0 w-16 -ml-8 z-40 flex justify-center">
-                        <div className="w-[2px] h-full bg-[#1a1a1a] shadow-[0_0_10px_rgba(0,0,0,0.5)]" />
-                    </div>
+                    {!isMobile && (
+                        <div className="absolute left-1/2 top-0 bottom-0 w-16 -ml-8 z-40 flex justify-center">
+                            <div className="w-[2px] h-full bg-[#1a1a1a] shadow-[0_0_10px_rgba(0,0,0,0.5)]" />
+                        </div>
+                    )}
                 </div>
             </div>
         )}

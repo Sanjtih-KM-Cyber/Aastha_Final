@@ -26,12 +26,13 @@ interface WellnessHubProps {
 }
 
 const WIDGETS = [
-  { id: 'diary', label: 'Journal', icon: Book, color: 'text-teal-200', desc: 'Reflect on your day' },
-  { id: 'mood', label: 'Mood Tracker', icon: Smile, color: 'text-yellow-200', desc: 'Track your emotions' },
-  { id: 'breathing', label: 'Breathing', icon: Wind, color: 'text-cyan-200', desc: 'Calm your mind' },
-  { id: 'jam', label: 'Jam Session', icon: Music, color: 'text-violet-200', desc: 'Listen together' },
-  { id: 'soundscape', label: 'Soundscapes', icon: Sliders, color: 'text-emerald-200', desc: 'Ambient sounds' },
-  { id: 'pomodoro', label: 'Deep Focus', icon: Clock, color: 'text-rose-200', desc: 'Stay productive' },
+  { id: 'diary', label: 'Journal', icon: Book, color: 'text-teal-300', barColor: 'bg-teal-400', glow: 'shadow-teal-500/20', from: 'from-teal-500/20', desc: 'Reflect on your day' },
+  { id: 'mood', label: 'Mood', icon: Smile, color: 'text-amber-300', barColor: 'bg-amber-400', glow: 'shadow-amber-500/20', from: 'from-amber-500/20', desc: 'Track your emotions' },
+  { id: 'breathing', label: 'Breathing', icon: Wind, color: 'text-cyan-300', barColor: 'bg-cyan-400', glow: 'shadow-cyan-500/20', from: 'from-cyan-500/20', desc: 'Calm your mind' },
+  { id: 'jam', label: 'Music', icon: Music, color: 'text-violet-300', barColor: 'bg-violet-400', glow: 'shadow-violet-500/20', from: 'from-violet-500/20', desc: 'Listen together' },
+  { id: 'soundscape', label: 'Sounds', icon: Sliders, color: 'text-emerald-300', barColor: 'bg-emerald-400', glow: 'shadow-emerald-500/20', from: 'from-emerald-500/20', desc: 'Ambient noise' },
+  { id: 'pomodoro', label: 'Focus', icon: Clock, color: 'text-rose-300', barColor: 'bg-rose-400', glow: 'shadow-rose-500/20', from: 'from-rose-500/20', desc: 'Deep work timer' },
+  { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-300', barColor: 'bg-slate-400', glow: 'shadow-slate-500/20', from: 'from-slate-500/20', desc: 'Configure Aastha' },
 ];
 
 export const WellnessHub: React.FC<WellnessHubProps> = ({ 
@@ -44,9 +45,10 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
   const { user } = useAuth();
   const { currentTheme } = useTheme();
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const carouselRef = useRef<HTMLDivElement>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [mobileCardIndex, setMobileCardIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   // Responsive Check
   useEffect(() => {
@@ -64,121 +66,151 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
     return "Good Evening";
   };
 
-  // Click Outside Logic (Mobile Only) - Only for standard Sidebar if somehow rendered
+  // Scroll Listener for Carousel Index
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+        const index = Math.round(el.scrollLeft / el.offsetWidth);
+        setActiveIndex(index);
+    };
+    el.addEventListener('scroll', handleScroll);
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [isMobileOpen]);
+
+  // Click Outside Logic
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (isMobileOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node) && !isMobile) {
-        onCloseMobile();
-      }
+      // Only close if clicking the backdrop, not the carousel itself (though backdrop covers all)
+      // Actually, standard modal behavior is fine.
     };
-    
-    if (isMobileOpen && !isMobile) {
-        document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isMobileOpen, onCloseMobile, isMobile]);
+  }, []);
 
-  // Framer Motion Variants
+  const handleWidgetClick = (widget: typeof WIDGETS[0]) => {
+      if (widget.id === 'settings') {
+          onOpenSettings();
+      } else {
+          onToggleWidget(widget.id);
+      }
+      onCloseMobile();
+  };
+
+  const jumpToWidget = (index: number) => {
+      if (carouselRef.current) {
+          carouselRef.current.scrollTo({
+              left: index * carouselRef.current.offsetWidth,
+              behavior: 'smooth'
+          });
+      }
+  };
+
   const sidebarVariants = {
     closed: { x: "-100%", opacity: 0 },
     open: { x: 0, opacity: 1 },
-    desktop: { x: 0, opacity: 1, width: isCollapsed ? 80 : 280 }
+    desktop: { x: 0, opacity: 1, width: isCollapsed ? 80 : 280 },
   };
 
-  // --- MOBILE CARD CAROUSEL LOGIC ---
-  const handleNextCard = () => {
-    setMobileCardIndex((prev) => (prev + 1) % WIDGETS.length);
-  };
-
-  const handlePrevCard = () => {
-    setMobileCardIndex((prev) => (prev - 1 + WIDGETS.length) % WIDGETS.length);
-  };
-
-  // Swipe Handlers (Simple Touch)
-  const touchStartX = useRef<number | null>(null);
-  const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-      if (!touchStartX.current) return;
-      const touchEndX = e.changedTouches[0].clientX;
-      const diff = touchStartX.current - touchEndX;
-      if (Math.abs(diff) > 50) { // Threshold
-          if (diff > 0) handleNextCard(); // Swipe Left -> Next
-          else handlePrevCard(); // Swipe Right -> Prev
-      }
-      touchStartX.current = null;
-  };
-
+  // --- MOBILE RENDER: WIDGET UNIVERSE (Carousel) ---
   if (isMobile) {
-      // Logic for mobile is now handled by MobileNavBar triggering onToggleWidget directly via Bottom Sheet logic
-      // OR by opening this Card Deck if the user explicitly opens "Toolkit".
-      // We keep the Card Deck as the "Menu View".
-
       return (
         <AnimatePresence>
             {isMobileOpen && (
-                <motion.div
-                    initial={{ opacity: 0, y: '100%' }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: '100%' }}
-                    className="fixed inset-0 z-[60] bg-black flex flex-col"
-                >
-                    {/* Header */}
-                    <div className="h-16 flex items-center justify-between px-6 border-b border-white/5 bg-black/50 backdrop-blur-xl">
-                        <span className="font-serif text-xl text-white">Toolkit</span>
-                        <button onClick={onCloseMobile} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/60"><X size={20} /></button>
-                    </div>
+                // Z-60: Sits between Chat Content (Z-10) and Fixed Controls (Z-70)
+                <div className="fixed inset-0 z-[60] flex flex-col pointer-events-auto">
+                    {/* 1. Frosted Backdrop (Dims chat, leaves controls visible) */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.3 }}
+                        onClick={onCloseMobile}
+                        className="absolute inset-0 bg-black/80 backdrop-blur-md"
+                    />
 
-                    {/* Card Carousel Content */}
-                    <div className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-
-                        {/* Greeting (Optional Context) */}
-                        <div className="absolute top-8 text-center w-full">
-                            <h2 className="text-white/40 text-sm font-medium uppercase tracking-widest">Select a Tool</h2>
-                        </div>
-
-                        {/* Card */}
-                        <div
-                            className="relative w-full max-w-sm aspect-[3/4] perspective-1000 mt-8"
-                            onTouchStart={handleTouchStart}
-                            onTouchEnd={handleTouchEnd}
-                        >
-                            <AnimatePresence mode='wait'>
-                                <motion.div
-                                    key={mobileCardIndex}
-                                    initial={{ opacity: 0, x: 100, scale: 0.9 }}
-                                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                                    exit={{ opacity: 0, x: -100, scale: 0.9 }}
-                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                                    className="absolute inset-0 bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-[2rem] p-8 flex flex-col items-center justify-center shadow-2xl backdrop-blur-2xl"
+                    {/* 2. Content Container - Padded to fit between Header and Input */}
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+                        className="relative z-10 flex flex-col h-full w-full pt-20 pb-24"
+                    >
+                        {/* Top Bar: Progress Indicators */}
+                        <div className="px-6 pb-4 flex gap-1.5 z-20">
+                            {WIDGETS.map((w, i) => (
+                                <button
+                                    key={w.id}
+                                    onClick={() => jumpToWidget(i)}
+                                    className="flex-1 h-1.5 rounded-full overflow-hidden bg-white/10 transition-all duration-300 relative group"
                                 >
-                                    <div className={`p-8 rounded-full bg-black/20 mb-8 shadow-inner`}>
-                                        {React.createElement(WIDGETS[mobileCardIndex].icon, { size: 64, className: WIDGETS[mobileCardIndex].color })}
-                                    </div>
-
-                                    <h3 className="text-3xl font-serif text-white mb-3 text-center">{WIDGETS[mobileCardIndex].label}</h3>
-                                    <p className="text-white/50 text-center mb-10 text-lg leading-relaxed">{WIDGETS[mobileCardIndex].desc}</p>
-
-                                    <button
-                                        onClick={() => { onToggleWidget(WIDGETS[mobileCardIndex].id); onCloseMobile(); }}
-                                        className="w-full py-4 rounded-xl bg-white text-black font-bold text-lg hover:scale-105 active:scale-95 transition-all shadow-lg"
-                                    >
-                                        Open
-                                    </button>
-                                </motion.div>
-                            </AnimatePresence>
-                        </div>
-
-                        {/* Pagination Dots */}
-                        <div className="flex gap-3 mt-8">
-                            {WIDGETS.map((_, idx) => (
-                                <div
-                                    key={idx}
-                                    className={`h-1.5 rounded-full transition-all duration-300 ${idx === mobileCardIndex ? 'bg-white w-8' : 'bg-white/20 w-1.5'}`}
-                                />
+                                    <div
+                                        className={`absolute inset-0 transition-all duration-500 ${activeIndex === i ? w.barColor : 'opacity-0'}`}
+                                    />
+                                </button>
                             ))}
                         </div>
-                    </div>
-                </motion.div>
+
+                        {/* Header Text (Visual only, controls are on Z-70) */}
+                        <div className="px-8 mb-4 flex justify-between items-center text-white">
+                            <h2 className="text-sm font-medium opacity-50 uppercase tracking-widest">Your Sanctuary</h2>
+                            {/* Close button is technically redundant as backdrop click closes, but good for affordance */}
+                            <button onClick={onCloseMobile} className="p-2 -mr-2 text-white/50 hover:text-white rounded-full">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Carousel */}
+                        <div
+                            ref={carouselRef}
+                            className="flex-1 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide px-6 items-center"
+                        >
+                            {WIDGETS.map((widget, i) => {
+                                const isActive = i === activeIndex;
+                                return (
+                                    <div
+                                        key={widget.id}
+                                        className="w-full shrink-0 snap-center px-2 flex items-center justify-center h-full"
+                                    >
+                                        <div
+                                            onClick={() => handleWidgetClick(widget)}
+                                            className={`
+                                                w-full h-full max-h-[60vh] relative overflow-hidden rounded-[2.5rem]
+                                                bg-[#151515]/90 backdrop-blur-3xl border border-white/10 shadow-2xl
+                                                flex flex-col items-center justify-center
+                                                transition-transform duration-500
+                                                ${isActive ? 'scale-100 opacity-100' : 'scale-90 opacity-40'}
+                                            `}
+                                        >
+                                            {/* Ambient Glow Background */}
+                                            <div className={`absolute inset-0 bg-gradient-to-br ${widget.from} to-transparent opacity-20`} />
+                                            <div className={`absolute top-0 inset-x-0 h-32 bg-gradient-to-b ${widget.from} to-transparent opacity-10`} />
+
+                                            {/* Icon */}
+                                            <div className={`
+                                                w-24 h-24 rounded-full flex items-center justify-center mb-8
+                                                bg-black/20 shadow-inner border border-white/5 relative z-10
+                                            `}>
+                                                <div className={`absolute inset-0 rounded-full opacity-20 ${widget.barColor} blur-xl animate-pulse`} />
+                                                <widget.icon size={48} className={widget.color} />
+                                            </div>
+
+                                            {/* Text */}
+                                            <h3 className="text-3xl font-serif text-white mb-3 relative z-10">{widget.label}</h3>
+                                            <p className="text-white/50 text-sm max-w-[200px] text-center leading-relaxed relative z-10">{widget.desc}</p>
+
+                                            {/* Action Button */}
+                                            <div className="mt-10 px-8 py-3 rounded-full bg-white/10 border border-white/10 text-white font-medium text-sm hover:bg-white/20 transition-colors relative z-10">
+                                                Tap to Open
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </motion.div>
+                </div>
             )}
         </AnimatePresence>
       );
@@ -248,6 +280,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
           {!isCollapsed && <p className="px-4 text-[10px] uppercase tracking-widest text-white/30 font-bold mb-2">Toolkit</p>}
           
           {WIDGETS.map((widget) => {
+            if (widget.id === 'settings') return null; // Skip Settings here as it is in footer
             const isActive = activeWidgets[widget.id];
             return (
               <button

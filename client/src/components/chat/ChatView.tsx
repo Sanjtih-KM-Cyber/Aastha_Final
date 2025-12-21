@@ -25,7 +25,6 @@ interface ChatViewProps {
   isMobile?: boolean;
 }
 
-// --- Dynamic API URL Helper ---
 const getApiUrl = (endpoint: string) => {
   const envUrl = import.meta.env.VITE_API_URL;
   if (envUrl) {
@@ -65,14 +64,11 @@ const compressImage = (file: File): Promise<string> => {
     });
 };
 
-// Helper to map color names to Theme IDs or Hex codes
 const mapColorToTheme = (colorName: string): string => {
     const lower = colorName.toLowerCase().trim();
-    // Predefined Theme IDs
     const themes = ['aurora', 'sunset', 'ocean', 'midnight'];
     if (themes.includes(lower)) return lower;
 
-    // Common Color Map
     const colorMap: Record<string, string> = {
         'blue': '#3b82f6',
         'red': '#ef4444',
@@ -89,11 +85,7 @@ const mapColorToTheme = (colorName: string): string => {
     };
 
     if (colorMap[lower]) return colorMap[lower];
-
-    // If it's a hex code, return it
     if (lower.startsWith('#')) return lower;
-
-    // Default to a safe theme if unknown
     return 'aurora';
 };
 
@@ -104,7 +96,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   
   const botName = user?.persona === 'aarav' ? 'Aastik' : 'Aastha';
 
-  // --- State Management ---
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -115,18 +106,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [countdownNum, setCountdownNum] = useState(3);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   
-  // Interactions
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
 
-  // Search
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ msgId: string, matchIndex: number }[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
-  // Voice & Dictation
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isDictating, setIsDictating] = useState(false); 
@@ -134,19 +122,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem('user_tts_enabled') === 'true');
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(() => localStorage.getItem('user_voice_uri'));
   
-  // Credits & Mode
   const [localCredits, setLocalCredits] = useState(user?.credits || 0);
   const [modelMode, setModelMode] = useState<'pro' | 'eco'>(user?.credits && user.credits > 0 ? 'pro' : 'eco');
   const [isStandardMode, setIsStandardMode] = useState(false);
   
-  // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedTagsRef = useRef<Set<string>>(new Set());
 
-  // ... (Effects for Credits, History, Voice, Speech Recog - Unchanged) ...
   useEffect(() => {
       if (user) {
           const credits = user.credits || 0;
@@ -230,7 +215,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     }
   }, [isDictating]);
 
-  // --- Handlers ---
   const startListening = () => { if (recognitionRef.current && !isListening) { try { setTranscript(''); recognitionRef.current.start(); } catch (e) { console.error("Speech start failed", e); } } };
   const stopListening = () => { if (recognitionRef.current && isListening) recognitionRef.current.stop(); };
   
@@ -299,7 +283,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  // --- Main Send Logic ---
   const handleSend = async (e?: React.FormEvent, overrideInput?: string) => {
     e?.preventDefault();
     const textToSend = overrideInput || input;
@@ -386,25 +369,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const processMagicTags = (text: string) => {
-    // 1. Tag Extraction (Side Effects Only)
-    // Match any tag like <color>...</color> or <open_widget/>
     const tagRegex = /<[^>]+>/g;
     const matches = text.match(tagRegex);
 
     if (matches) {
         matches.forEach(tag => {
-            if (processedTagsRef.current.has(tag)) return; // Execute once
+            if (processedTagsRef.current.has(tag)) return;
 
             const lowerTag = tag.toLowerCase();
 
-            // --- Theme/Color Handling ---
             if (lowerTag.startsWith('<color>')) {
-                 // Wait, the tag in match array is just <color> or </color>?
-                 // Regex <[^>]+> matches <color> AND </color> separately if content is between.
-                 // We need to extract the content for color.
-                 // Let's use a specific regex for the full block for Color only.
             }
-            // For Color specifically, we need the Value between tags
             const colorMatch = /<color>([\s\S]*?)<\/color>/i.exec(text);
             if (colorMatch) {
                 const fullBlock = colorMatch[0];
@@ -415,7 +390,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      if (!showCountdown) {
                         setShowCountdown(true);
                         setCountdownNum(3);
-                        setTargetFlashColor(mappedColor.startsWith('#') ? mappedColor : '#ffffff'); // Use mapped color for flash if hex
+                        setTargetFlashColor(mappedColor.startsWith('#') ? mappedColor : '#ffffff');
 
                         const timer = setInterval(() => {
                             setCountdownNum(prev => {
@@ -425,9 +400,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                     setShowFlash(true);
                                     setTimeout(() => {
                                         setTheme(mappedColor);
-                                        // Longer flash out for "fill and go back" feel
                                         setTimeout(() => setShowFlash(false), 800);
-                                    }, 400); // Wait for flash to fully appear
+                                    }, 400);
                                     return 0;
                                 }
                                 return prev - 1;
@@ -435,13 +409,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         }, 1000);
                      }
                      processedTagsRef.current.add(fullBlock);
-                     // Also add the individual tags to prevent re-trigger if they match below
                      processedTagsRef.current.add('<color>');
                      processedTagsRef.current.add('</color>');
                 }
             }
 
-            // --- Widget Handling ---
             if (onOpenWidget) {
                 if (lowerTag.includes('recommend_breathing')) {
                      const m = lowerTag.match(/mode="([^"]+)"/i);
@@ -459,20 +431,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 if (lowerTag.includes('open_mood_tracker')) onOpenWidget('mood');
                 if (lowerTag.includes('open_pomodoro')) onOpenWidget('pomodoro');
                 if (lowerTag.includes('open_jam-with-aastha')) onOpenWidget('jam');
-                // Farewell logic could go here
             }
 
             processedTagsRef.current.add(tag);
         });
     }
 
-    // 2. Tag Stripping (Visual Cleanup)
-    // Remove <color>content</color> blocks entirely
     let cleanText = text.replace(/<color>[\s\S]*?<\/color>/gi, '');
-
-    // Remove all other tags <...>
     cleanText = cleanText.replace(/<[^>]+>/g, '');
-
     return cleanText;
   };
 
@@ -503,7 +469,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
   };
 
-  // --- Search Logic ---
   useEffect(() => {
       if (searchQuery.trim()) {
           const hits: { msgId: string, matchIndex: number }[] = [];
@@ -577,12 +542,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   return (
     <div className="relative w-full h-[100dvh] flex flex-col items-center overflow-hidden">
       
-      {/* 1. Background Ambience */}
-      <div className="absolute inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out" 
-           style={{ background: `radial-gradient(circle at 50% 30%, ${currentTheme.primaryColor}22 0%, #0a0e17 70%)` }} />
+      {/* Remove local background to fix "Abrupt Cutoff" behind sidebar. Let AppContainer handle it. */}
+      {/* <div className="absolute inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out"
+           style={{ background: `radial-gradient(circle at 50% 30%, ${currentTheme.primaryColor}22 0%, #0a0e17 70%)` }} /> */}
       <div className="absolute inset-0 z-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
 
-      {/* 2. Flash Effect & Countdown */}
       <AnimatePresence>
           {showCountdown && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 pointer-events-none">
@@ -609,7 +573,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           )}
       </AnimatePresence>
 
-      {/* 3. Full Screen Voice Mode Overlay */}
       <AnimatePresence>
         {isVoiceMode && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/90 backdrop-blur-3xl flex flex-col items-center justify-center">
@@ -629,19 +592,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         )}
       </AnimatePresence>
 
-      {/* 4. Header (Dynamic Island for Desktop / Glass Bar for Mobile) */}
-      <motion.div initial={{ y: -50 }} animate={{ y: 0 }} className={`absolute top-0 w-full z-30 pointer-events-none flex justify-center ${isMobile ? 'h-16 bg-black/40 backdrop-blur-xl border-b border-white/5 items-center px-4 pt-safe' : 'pt-6 px-4'}`}>
+      {/* MOBILE HEADER: Fixed Z-70 | DESKTOP HEADER: Absolute Z-30 */}
+      <motion.div
+        initial={{ y: -50 }}
+        animate={{ y: 0 }}
+        className={`${isMobile ? 'fixed top-0 z-[70]' : 'absolute top-0 z-30'} w-full pointer-events-none flex justify-center ${isMobile ? 'h-16 items-center px-4 pt-safe' : 'pt-6 px-4'}`}
+      >
          
-         {/* Mobile: Simple Left Title / Desktop: Menu Trigger */}
-         <div className={`pointer-events-auto ${isMobile ? 'flex-1' : 'absolute left-4 top-6 pt-safe'}`}>
-            {isMobile ? (
-                <span className="font-serif text-lg font-bold text-white tracking-tight">Sanctuary</span>
-            ) : (
-                <button onClick={onMobileMenuClick} className="p-2.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/10 text-white/70 md:hidden"><Menu size={20} /></button>
-            )}
+         <div className={`pointer-events-auto ${isMobile ? 'flex-1 flex justify-start' : 'absolute left-4 top-6 pt-safe'}`}>
+            <button onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 ${isMobile ? 'bg-black/5' : 'bg-black/20 md:hidden'}`}>
+                <Menu size={20} />
+            </button>
          </div>
 
-         {/* The Pill Search Bar (Hidden on Mobile Header to reduce clutter, or simplified) */}
          {!isMobile && (
             <div className="pointer-events-auto flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full pl-4 pr-2 py-2 shadow-2xl w-[280px] md:w-[400px] transition-all focus-within:w-[320px] md:focus-within:w-[450px] focus-within:bg-black/50 group mt-safe">
                 <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2" />
@@ -659,8 +622,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             </div>
          )}
 
-         {/* Right Controls */}
-         <div className={`pointer-events-auto flex items-center gap-3 ${isMobile ? '' : 'absolute right-4 top-6 pt-safe'}`}>
+         <div className={`pointer-events-auto flex items-center gap-3 ${isMobile ? 'flex justify-end' : 'absolute right-4 top-6 pt-safe'}`}>
              {!isMobile && (
                 <div className={`px-3 py-1.5 rounded-full backdrop-blur-xl border flex items-center gap-2 shadow-lg transition-colors hidden md:flex ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
                     {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-gray-400" fill="currentColor" />}
@@ -670,19 +632,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 </div>
              )}
              
-             <button onClick={toggleVoiceMode} className="w-10 h-10 rounded-full bg-black/30 border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all shadow-lg relative group">
+             <button onClick={toggleVoiceMode} className={`w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg relative group ${isMobile ? 'bg-black/10' : 'bg-black/30 hover:bg-white/10'}`}>
                 <Headphones size={18} />
              </button>
          </div>
       </motion.div>
 
-      {/* 5. Error Toast */}
       <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
-      {/* 6. Chat Area (Flex Layout) */}
       <div 
          ref={messagesContainerRef}
-         className={`flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide flex flex-col ${isMobile ? 'pt-20 pb-4' : 'pt-32 md:pt-28 pb-4'}`}
+         className={`flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide flex flex-col ${isMobile ? 'pt-24 pb-32' : 'pt-32 md:pt-28 pb-4'}`}
       >
          <div className="flex flex-col mt-auto pb-4 min-h-0">
              {renderMessages()}
@@ -690,14 +650,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          </div>
       </div>
 
-      {/* 7. Input Area (Static Footer) */}
-      <div className={`w-full px-4 pt-2 shrink-0 max-w-[700px] mx-auto z-30 ${isMobile ? 'pb-20' : 'pb-6'}`}>
+      {/* MOBILE INPUT: Fixed Z-70 | DESKTOP INPUT: Standard Flow */}
+      <div className={`w-full px-4 pt-2 shrink-0 max-w-[700px] mx-auto z-30 ${isMobile ? 'fixed bottom-0 left-0 right-0 z-[70] pb-4 px-4 bg-gradient-to-t from-black/80 to-transparent' : 'pb-6'}`}>
          <div className="flex flex-col gap-2">
             
-            {/* Contexts (Reply / Image) */}
             <AnimatePresence>
                 {replyingTo && (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center w-[95%] bg-black/60 backdrop-blur-xl border border-white/10 rounded-t-2xl border-b-0 p-3 flex justify-between items-center text-xs text-white/70">
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center w-[95%] bg-black/60 backdrop-blur-xl border border-white/10 rounded-t-2xl border-b-0 p-3 flex justify-between items-center text-xs text-white/70 shadow-lg">
                         <div className="flex items-center gap-2 truncate"><Reply size={12} className="text-white/40" /><span className="italic truncate max-w-[200px]">"{replyingTo}"</span></div>
                         <button onClick={() => setReplyingTo(null)} className="hover:text-white"><X size={14} /></button>
                     </motion.div>
@@ -710,10 +669,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 )}
             </AnimatePresence>
 
-            {/* Main Bar */}
-            <div className={`relative flex items-center gap-3 bg-[#0a0e17]/80 backdrop-blur-2xl border border-white/10 p-2 pr-2 pl-3 shadow-[0_0_40px_rgba(0,0,0,0.3)] transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
+            <div className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border border-white/5 p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
                 
-                {/* Left Tools */}
                 <div className="flex items-center gap-1">
                     <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStandardMode} className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}>
                         <ImageIcon size={20} />
@@ -725,7 +682,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     </button>
                 </div>
 
-                {/* Input Field */}
                 <form onSubmit={handleSend} className="flex-1 flex items-center relative h-full">
                     <textarea 
                         ref={textareaRef}
@@ -737,7 +693,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         rows={1}
                     />
                     
-                    {/* Emoji Picker */}
                     <div className="relative">
                         <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
                             <Smile size={20} />
@@ -749,8 +704,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                     emojiStyle={EmojiStyle.APPLE}
                                     onEmojiClick={(e) => {
                                         setInput(prev => prev + e.emoji);
-                                        // Optional: Keep picker open or close it
-                                        // setShowEmojiPicker(false);
                                     }}
                                     lazyLoadEmojis={true}
                                     width={300}
@@ -766,14 +719,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                         { name: 'Objects', category: 'objects' },
                                         { name: 'Symbols', category: 'symbols' },
                                         { name: 'Flags', category: 'flags' },
-                                    ] as any} // Cast to any if strict types complain about category names
+                                    ] as any}
                                 />
                             </div>
                         )}
                     </div>
                 </form>
 
-                {/* Send Button */}
                 <button 
                     onClick={(e) => handleSend(e)}
                     disabled={!input.trim() && !attachedImage} 
