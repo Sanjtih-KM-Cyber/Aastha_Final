@@ -26,12 +26,13 @@ interface WellnessHubProps {
 }
 
 const WIDGETS = [
-  { id: 'diary', label: 'Journal', icon: Book, color: 'text-teal-200', desc: 'Reflect on your day' },
-  { id: 'mood', label: 'Mood Tracker', icon: Smile, color: 'text-yellow-200', desc: 'Track your emotions' },
-  { id: 'breathing', label: 'Breathing', icon: Wind, color: 'text-cyan-200', desc: 'Calm your mind' },
-  { id: 'jam', label: 'Jam Session', icon: Music, color: 'text-violet-200', desc: 'Listen together' },
-  { id: 'soundscape', label: 'Soundscapes', icon: Sliders, color: 'text-emerald-200', desc: 'Ambient sounds' },
-  { id: 'pomodoro', label: 'Deep Focus', icon: Clock, color: 'text-rose-200', desc: 'Stay productive' },
+  { id: 'diary', label: 'Journal', icon: Book, color: 'text-teal-300', barColor: 'bg-teal-400', glow: 'shadow-teal-500/20', from: 'from-teal-500/20', desc: 'Reflect on your day' },
+  { id: 'mood', label: 'Mood', icon: Smile, color: 'text-amber-300', barColor: 'bg-amber-400', glow: 'shadow-amber-500/20', from: 'from-amber-500/20', desc: 'Track your emotions' },
+  { id: 'breathing', label: 'Breathing', icon: Wind, color: 'text-cyan-300', barColor: 'bg-cyan-400', glow: 'shadow-cyan-500/20', from: 'from-cyan-500/20', desc: 'Calm your mind' },
+  { id: 'jam', label: 'Music', icon: Music, color: 'text-violet-300', barColor: 'bg-violet-400', glow: 'shadow-violet-500/20', from: 'from-violet-500/20', desc: 'Listen together' },
+  { id: 'soundscape', label: 'Sounds', icon: Sliders, color: 'text-emerald-300', barColor: 'bg-emerald-400', glow: 'shadow-emerald-500/20', from: 'from-emerald-500/20', desc: 'Ambient noise' },
+  { id: 'pomodoro', label: 'Focus', icon: Clock, color: 'text-rose-300', barColor: 'bg-rose-400', glow: 'shadow-rose-500/20', from: 'from-rose-500/20', desc: 'Deep work timer' },
+  { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-300', barColor: 'bg-slate-400', glow: 'shadow-slate-500/20', from: 'from-slate-500/20', desc: 'Configure Aastha' },
 ];
 
 export const WellnessHub: React.FC<WellnessHubProps> = ({ 
@@ -44,9 +45,11 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
   const { user } = useAuth();
   const { currentTheme } = useTheme();
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const carouselRef = useRef<HTMLDivElement>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-
+  const [activeIndex, setActiveIndex] = useState(0);
+  
   // Responsive Check
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -63,115 +66,151 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
     return "Good Evening";
   };
 
-  // Click Outside Logic (Mobile Drawer)
+  // Scroll Listener for Carousel Index
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+        const index = Math.round(el.scrollLeft / el.offsetWidth);
+        setActiveIndex(index);
+    };
+    el.addEventListener('scroll', handleScroll);
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [isMobileOpen]);
+
+  // Click Outside Logic
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (isMobileOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node) && isMobile) {
-        onCloseMobile();
-      }
+      // Only close if clicking the backdrop, not the carousel itself (though backdrop covers all)
+      // Actually, standard modal behavior is fine.
     };
-    
-    if (isMobileOpen && isMobile) {
-        document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isMobileOpen, onCloseMobile, isMobile]);
+  }, []);
 
-  // Framer Motion Variants
+  const handleWidgetClick = (widget: typeof WIDGETS[0]) => {
+      if (widget.id === 'settings') {
+          onOpenSettings();
+      } else {
+          onToggleWidget(widget.id);
+      }
+      onCloseMobile();
+  };
+
+  const jumpToWidget = (index: number) => {
+      if (carouselRef.current) {
+          carouselRef.current.scrollTo({
+              left: index * carouselRef.current.offsetWidth,
+              behavior: 'smooth'
+          });
+      }
+  };
+
   const sidebarVariants = {
     closed: { x: "-100%", opacity: 0 },
     open: { x: 0, opacity: 1 },
     desktop: { x: 0, opacity: 1, width: isCollapsed ? 80 : 280 },
-    mobileClosed: { x: "-100%" },
-    mobileOpen: { x: 0 }
   };
 
-  // --- MOBILE RENDER (Side Drawer with Horizontal Swipe) ---
+  // --- MOBILE RENDER: WIDGET UNIVERSE (Carousel) ---
   if (isMobile) {
       return (
         <AnimatePresence>
             {isMobileOpen && (
-                <>
-                    {/* Backdrop */}
+                <div className="fixed inset-0 z-[60] flex flex-col">
+                    {/* 1. Frosted Backdrop (Freeze Effect) */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
+                        transition={{ duration: 0.3 }}
                         onClick={onCloseMobile}
-                        className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm"
+                        className="absolute inset-0 bg-black/60 backdrop-blur-md"
                     />
 
-                    {/* Drawer */}
-                    <motion.aside
-                        ref={sidebarRef}
-                        initial="mobileClosed"
-                        animate="mobileOpen"
-                        exit="mobileClosed"
-                        variants={sidebarVariants}
-                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className="fixed top-0 bottom-0 left-0 w-[85vw] z-[70] bg-[#1a1a1a] border-r border-white/10 flex flex-col shadow-2xl overflow-hidden"
+                    {/* 2. Content Container */}
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+                        className="relative z-10 flex flex-col h-full w-full pt-safe pb-safe"
                     >
-                        {/* Header */}
-                        <div className="p-6 border-b border-white/5 flex items-center justify-between">
-                             <div>
-                                <h1 className="font-serif text-2xl font-bold text-white tracking-tight">Toolkit</h1>
-                                <p className="text-xs text-white/40 mt-1 uppercase tracking-widest">{getGreeting()}</p>
-                             </div>
-                             <button onClick={onCloseMobile} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/60">
-                                <X size={20} />
-                             </button>
-                        </div>
-
-                        {/* Horizontal Swipe Carousel */}
-                        <div className="flex-1 flex items-center overflow-x-auto snap-x snap-mandatory px-6 py-8 gap-6 scrollbar-hide">
-                            {WIDGETS.map((widget) => (
-                                <div
-                                    key={widget.id}
-                                    className="snap-center shrink-0 w-full h-full flex items-center justify-center"
+                        {/* Top Bar: Progress Indicators */}
+                        <div className="px-6 pt-6 pb-4 flex gap-1.5 z-20">
+                            {WIDGETS.map((w, i) => (
+                                <button
+                                    key={w.id}
+                                    onClick={() => jumpToWidget(i)}
+                                    className="flex-1 h-1.5 rounded-full overflow-hidden bg-white/10 transition-all duration-300 relative group"
                                 >
-                                    <div className="w-full aspect-[3/4] bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-[2rem] p-8 flex flex-col items-center justify-center shadow-2xl relative overflow-hidden group">
-                                         {/* Background Glow */}
-                                         <div className={`absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-500 bg-gradient-to-tr from-${widget.color.split('-')[1]}-500/20 to-transparent`} />
-
-                                         <div className={`p-6 rounded-full bg-black/30 mb-6 shadow-inner relative z-10`}>
-                                            <widget.icon size={48} className={widget.color} />
-                                         </div>
-
-                                         <h3 className="text-2xl font-serif text-white mb-2 text-center relative z-10">{widget.label}</h3>
-                                         <p className="text-white/50 text-center text-sm mb-8 px-4 leading-relaxed relative z-10">{widget.desc}</p>
-
-                                         <button
-                                            onClick={() => { onToggleWidget(widget.id); onCloseMobile(); }}
-                                            className="w-full py-3 rounded-xl bg-white text-black font-bold hover:scale-105 active:scale-95 transition-all shadow-lg relative z-10"
-                                         >
-                                            Open
-                                         </button>
-                                    </div>
-                                </div>
+                                    <div 
+                                        className={`absolute inset-0 transition-all duration-500 ${activeIndex === i ? w.barColor : 'opacity-0'}`} 
+                                    />
+                                    {/* Hover hint */}
+                                    <div className={`absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity`} />
+                                </button>
                             ))}
                         </div>
 
-                        {/* Footer (Profile) */}
-                        <div className="p-6 border-t border-white/5 bg-black/20">
-                            <div className="flex items-center gap-3">
-                                {user?.avatar ? (
-                                    <img src={user.avatar} alt="Profile" className="w-10 h-10 rounded-full object-cover border border-white/10" />
-                                ) : (
-                                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white bg-white/10">
-                                        {user?.name?.charAt(0) || 'U'}
-                                    </div>
-                                )}
-                                <div className="flex-1">
-                                    <p className="text-sm font-bold text-white">{user?.name}</p>
-                                    <button onClick={() => { onCloseMobile(); onOpenSettings(); }} className="text-xs text-white/50 flex items-center gap-1 hover:text-white mt-0.5">
-                                        <Settings size={10} /> Settings
-                                    </button>
-                                </div>
-                            </div>
+                        {/* Header Text */}
+                        <div className="px-8 mb-4 flex justify-between items-center text-white">
+                            <h2 className="text-sm font-medium opacity-50 uppercase tracking-widest">Your Sanctuary</h2>
+                            <button onClick={onCloseMobile} className="p-2 -mr-2 text-white/50 hover:text-white rounded-full">
+                                <X size={20} />
+                            </button>
                         </div>
 
-                    </motion.aside>
-                </>
+                        {/* Carousel */}
+                        <div 
+                            ref={carouselRef}
+                            className="flex-1 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide px-6 pb-12 items-center"
+                        >
+                            {WIDGETS.map((widget, i) => {
+                                const isActive = i === activeIndex;
+                                return (
+                                    <div 
+                                        key={widget.id} 
+                                        className="w-full shrink-0 snap-center px-2 flex items-center justify-center h-[75vh]"
+                                    >
+                                        <div 
+                                            onClick={() => handleWidgetClick(widget)}
+                                            className={`
+                                                w-full h-full max-h-[500px] relative overflow-hidden rounded-[2.5rem] 
+                                                bg-[#151515]/90 backdrop-blur-3xl border border-white/10 shadow-2xl
+                                                flex flex-col items-center justify-center
+                                                transition-transform duration-500
+                                                ${isActive ? 'scale-100 opacity-100' : 'scale-90 opacity-40'}
+                                            `}
+                                        >
+                                            {/* Ambient Glow Background */}
+                                            <div className={`absolute inset-0 bg-gradient-to-br ${widget.from} to-transparent opacity-20`} />
+                                            <div className={`absolute top-0 inset-x-0 h-32 bg-gradient-to-b ${widget.from} to-transparent opacity-10`} />
+
+                                            {/* Icon */}
+                                            <div className={`
+                                                w-24 h-24 rounded-full flex items-center justify-center mb-8
+                                                bg-black/20 shadow-inner border border-white/5 relative z-10
+                                            `}>
+                                                <div className={`absolute inset-0 rounded-full opacity-20 ${widget.barColor} blur-xl animate-pulse`} />
+                                                <widget.icon size={48} className={widget.color} />
+                                            </div>
+
+                                            {/* Text */}
+                                            <h3 className="text-3xl font-serif text-white mb-3 relative z-10">{widget.label}</h3>
+                                            <p className="text-white/50 text-sm max-w-[200px] text-center leading-relaxed relative z-10">{widget.desc}</p>
+                                            
+                                            {/* Action Button */}
+                                            <div className="mt-10 px-8 py-3 rounded-full bg-white/10 border border-white/10 text-white font-medium text-sm hover:bg-white/20 transition-colors relative z-10">
+                                                Tap to Open
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </motion.div>
+                </div>
             )}
         </AnimatePresence>
       );
@@ -241,6 +280,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
           {!isCollapsed && <p className="px-4 text-[10px] uppercase tracking-widest text-white/30 font-bold mb-2">Toolkit</p>}
           
           {WIDGETS.map((widget) => {
+            if (widget.id === 'settings') return null; // Skip Settings here as it is in footer
             const isActive = activeWidgets[widget.id];
             return (
               <button

@@ -21,27 +21,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onCopy,
   searchQuery,
   isStreaming,
-  currentMatchIndex = -1 // -1 means no active match in this message
+  currentMatchIndex = -1
 }: MessageBubbleProps & { currentMatchIndex?: number }) => {
   const isUser = role === 'user';
   const { currentTheme } = useTheme();
   const [isHovered, setIsHovered] = useState(false);
 
-  // Highlighting logic
   const renderContent = (text: string) => {
       if (!searchQuery) return text;
-
-      // Note: splitting by regex captures separators, so 'test match test'.split(/(match)/) -> ['test ', 'match', ' test']
-      // We need to count *occurrences* of the search term as we map
       let occurrenceCount = 0;
-      
       const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const parts = text.split(new RegExp(`(${escapedQuery})`, 'gi'));
       return parts.map((part, index) => {
           if (part.toLowerCase() === searchQuery.toLowerCase()) {
               const isActive = occurrenceCount === currentMatchIndex;
               occurrenceCount++;
-              
               return (
                 <span
                     key={index}
@@ -55,7 +49,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       });
   };
 
-  // Format time
   const timeString = timestamp
     ? new Date(timestamp).toLocaleTimeString([], {
         hour: '2-digit',
@@ -66,14 +59,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const displayContent =
     isStreaming && content === '' ? '...' : content;
 
-  // Copy handler
   const handleCopyClick = () => {
     if (onCopy && typeof content === 'string') {
       onCopy(content);
     }
   };
 
-  // Reply handler (fixed)
   const handleReplyClick = () => {
     if (onReply) onReply(content);
   };
@@ -83,13 +74,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       initial={{ opacity: 0, y: 10, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className={`group flex w-full mb-4 relative ${
+      className={`group flex w-full mb-6 relative ${
         isUser ? 'justify-end' : 'justify-start'
       }`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Avatar (AI only) */}
       {!isUser && (
         <div className="flex-shrink-0 mr-3 self-end hidden md:block">
           <div
@@ -104,29 +94,28 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         </div>
       )}
 
-      {/* Message bubble */}
       <div className="relative max-w-[90%] md:max-w-[70%]">
         <div
           className={`
-            relative px-4 py-3 md:px-6 md:py-3.5 text-sm md:text-base leading-snug backdrop-blur-xl shadow-sm
+            relative px-4 py-3 md:px-6 md:py-3.5 text-sm md:text-base leading-snug backdrop-blur-xl shadow-none
             ${
               isUser
-                ? 'rounded-[18px] rounded-br-none text-white border border-white/10 bg-white/10'
-                : 'rounded-[18px] rounded-bl-none text-white border border-white/10'
+                ? 'rounded-[20px] rounded-br-none text-white border border-white/5 bg-white/5'
+                : 'rounded-[20px] rounded-bl-none text-white border border-white/5'
             }
           `}
           style={
             !isUser
               ? {
-                  background: `linear-gradient(135deg, ${currentTheme.primaryColor}15, ${currentTheme.primaryColor}05)`,
-                  borderLeft: `2px solid ${currentTheme.primaryColor}60`,
+                  background: `linear-gradient(135deg, ${currentTheme.primaryColor}10, ${currentTheme.primaryColor}00)`,
+                  borderLeft: `2px solid ${currentTheme.primaryColor}40`,
                 }
               : {}
           }
         >
           <div className="space-y-1">
             {displayContent.split('\n').map((line, i) => (
-              <p key={i} className="my-0 leading-snug break-words whitespace-pre-wrap">
+              <p key={i} className="my-0 leading-snug break-words whitespace-pre-wrap text-white/90 font-light">
                 {renderContent(line)}
               </p>
             ))}
@@ -145,7 +134,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
 
           <div
-            className={`text-[10px] mt-2 opacity-40 font-medium ${
+            className={`text-[10px] mt-2 opacity-30 font-medium ${
               isUser ? 'text-right' : 'text-left'
             }`}
           >
@@ -153,7 +142,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         </div>
 
-        {/* Hover action buttons */}
         <AnimatePresence>
           {isHovered && !isStreaming && (
             <motion.div

@@ -157,6 +157,10 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   const [editMode, setEditMode] = useState<DiaryMode>('view');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Swipe State
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -173,7 +177,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
   useEffect(() => {
     if (isOpen && isUnlocked) fetchEntries();
-  }, [isOpen, isUnlocked, user]);
+  }, [isOpen, isUnlocked, user]); 
 
   useEffect(() => {
       const dateKey = toDateString(activeDate);
@@ -228,7 +232,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
     if (!editContent.trim()) return;
     setIsSaving(true);
     try {
-      const titleToSave = editTitle.trim() || "Untitled";
+      const titleToSave = editTitle.trim() || "Untitled"; 
       const encTitle = encrypt(titleToSave);
       const encContent = encrypt(editContent);
       const saved = await userService.saveDiaryEntry({
@@ -249,7 +253,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   };
 
   const createNewEntry = () => {
-    setActiveDate(new Date());
+    setActiveDate(new Date()); 
     setEditMode('edit');
   };
 
@@ -306,6 +310,21 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
   const calendarGrid = getCalendarDays();
 
+  // Swipe Handlers
+  const onTouchStart = (e: React.TouchEvent) => {
+      setTouchEnd(null); 
+      setTouchStart(e.targetTouches[0].clientX);
+  }
+  const onTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
+  const onTouchEnd = () => {
+      if (!touchStart || !touchEnd) return;
+      const distance = touchStart - touchEnd;
+      const isLeftSwipe = distance > 50; // Swiped Left -> Go Next
+      const isRightSwipe = distance < -50; // Swiped Right -> Go Prev
+      if (isLeftSwipe) changeDay(1); 
+      if (isRightSwipe) changeDay(-1); 
+  }
+
   return (
     <DraggableWindow 
       isOpen={isOpen} onClose={onClose} title="Personal Journal"
@@ -346,6 +365,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                     <div className="absolute inset-0 flex">
                         {!isMobile && (
                           <div className="w-1/2 h-full border-r border-[#ccc] overflow-hidden rounded-l-lg bg-[#fdfdf6] flex flex-col">
+                              {/* Desktop Calendar Logic (Unchanged) */}
                               <div className="p-6 pb-2 flex items-center justify-between border-b border-gray-200/50">
                                   <h3 className="font-serif text-2xl font-bold text-gray-800 flex items-center gap-2">
                                       <BookOpen size={22} style={{ color: currentTheme.primaryColor }} /> Index
@@ -402,16 +422,11 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                           </div>
                         )}
 
-                        <motion.div
+                        <div 
                           className={`${isMobile ? 'w-full pt-14' : 'w-1/2 border-l border-[#ccc] rounded-r-lg'} h-full overflow-hidden bg-[#fdfdf6]`}
-                          drag={isMobile ? "x" : false}
-                          dragConstraints={{ left: 0, right: 0 }}
-                          dragElastic={0.2}
-                          onDragEnd={(e, { offset }) => {
-                              const swipeThreshold = 50;
-                              if (offset.x > swipeThreshold) changeDay(-1);
-                              if (offset.x < -swipeThreshold) changeDay(1);
-                          }}
+                          onTouchStart={isMobile ? onTouchStart : undefined}
+                          onTouchMove={isMobile ? onTouchMove : undefined}
+                          onTouchEnd={isMobile ? onTouchEnd : undefined}
                         >
                              <PaperPage 
                                 date={isFlipping === 'next' ? dPlus1 : activeDate}
@@ -422,11 +437,12 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                                 onTitleChange={setEditTitle} onContentChange={setEditContent} onSave={handleSaveEntry} onEdit={() => setEditMode('edit')} onCancel={() => setEditMode('view')} onMoodChange={() => {}}
                                 readOnly={isFlipping !== null}
                              />
-                        </motion.div>
+                        </div>
                     </div>
 
                     {!isMobile && (
                       <AnimatePresence mode="sync" onExitComplete={() => setIsFlipping(null)}>
+                        {/* Page Flip Animations (Unchanged) */}
                         {isFlipping === 'next' && (
                              <motion.div
                                 key="flip-next"
