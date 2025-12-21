@@ -97,18 +97,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       <div className="relative max-w-[90%] md:max-w-[70%]">
         <div
           className={`
-            relative px-4 py-3 md:px-6 md:py-3.5 text-sm md:text-base leading-snug backdrop-blur-xl shadow-none
+            relative px-4 py-3 md:px-6 md:py-3.5 text-sm md:text-base leading-snug backdrop-blur-xl shadow-lg
             ${
               isUser
-                ? 'rounded-[20px] rounded-br-none text-white border border-white/5 bg-white/5'
-                : 'rounded-[20px] rounded-bl-none text-white border border-white/5'
+                ? 'rounded-[20px] rounded-br-none text-white border border-white/10 bg-black/40' // Darker, more contrast for user
+                : 'rounded-[20px] rounded-bl-none text-white border border-white/10 bg-black/30' // Semi-opaque for bot
             }
           `}
           style={
             !isUser
               ? {
-                  background: `linear-gradient(135deg, ${currentTheme.primaryColor}10, ${currentTheme.primaryColor}00)`,
-                  borderLeft: `2px solid ${currentTheme.primaryColor}40`,
+                  // Mix theme color with dark overlay for readability + branding
+                  background: `linear-gradient(135deg, ${currentTheme.primaryColor}20, #00000060)`,
+                  borderLeft: `2px solid ${currentTheme.primaryColor}`,
                 }
               : {}
           }

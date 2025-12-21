@@ -2,6 +2,8 @@ import dotenv from 'dotenv';
 dotenv.config(); // Must be first to ensure env vars are loaded before imports
 
 import express, { Request, Response, NextFunction } from 'express';
+import { createServer } from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
@@ -23,6 +25,58 @@ if (missingVars.length > 0) {
 connectDB();
 
 const app = express();
+const server = createServer(app);
+
+// --- REAL-TIME SYNC ENGINE ---
+const wss = new WebSocketServer({ server, path: '/ws' });
+// Support multiple devices per user: userId -> Set<WebSocket>
+const clients = new Map<string, Set<WebSocket>>();
+
+wss.on('connection', (ws, req) => {
+    // Extract userId from query params
+    const url = new URL(req.url || '', `http://${req.headers.host}`);
+    const userId = url.searchParams.get('userId');
+
+    if (userId) {
+        // Add to client set
+        if (!clients.has(userId)) {
+            clients.set(userId, new Set());
+        }
+        clients.get(userId)?.add(ws);
+
+        console.log(`[WS] Client connected: ${userId}. Active devices: ${clients.get(userId)?.size}`);
+
+        ws.on('message', (message) => {
+            try {
+                const data = JSON.parse(message.toString());
+                console.log(`[WS] Broadcast from ${userId}:`, data.type);
+
+                // Broadcast to ALL other devices belonging to this user
+                const userSockets = clients.get(userId);
+                if (userSockets) {
+                    userSockets.forEach(client => {
+                        if (client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify(data));
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('[WS] Error processing message', e);
+            }
+        });
+
+        ws.on('close', () => {
+            console.log(`[WS] Client disconnected: ${userId}`);
+            const userSockets = clients.get(userId);
+            if (userSockets) {
+                userSockets.delete(ws);
+                if (userSockets.size === 0) {
+                    clients.delete(userId);
+                }
+            }
+        });
+    }
+});
 
 // --- DEFENSE IN DEPTH ---
 app.disable('x-powered-by'); // Hide the Tech Stack
@@ -75,7 +129,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 const PORT = Number(process.env.PORT) || 5000;
-app.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
 

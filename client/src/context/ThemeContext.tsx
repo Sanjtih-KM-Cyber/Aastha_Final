@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
+import { useSync } from './SyncContext'; // FIX: Import Sync Hook
 
 export interface Theme {
   id: string;
@@ -13,7 +14,7 @@ export interface Theme {
 interface ThemeContextType {
   currentTheme: Theme;
   wallpaper: string | null;
-  setTheme: (themeId: string) => void;
+  setTheme: (themeId: string, fromSync?: boolean) => void;
   setWallpaper: (file: File | null) => void;
   resetTheme: () => void;
 }
@@ -30,6 +31,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { emit } = useSync(); // FIX: Get emit function
 
   const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('user_theme_id');
@@ -65,12 +67,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (currentTheme.id === 'custom') localStorage.setItem('user_custom_theme_color', currentTheme.primaryColor);
   }, [currentTheme]);
 
-  const setTheme = (themeId: string) => {
+  const setTheme = (themeId: string, fromSync = false) => {
     if (themeId.startsWith('#')) {
       setCurrentTheme({ ...defaultThemes.custom, primaryColor: themeId, id: 'custom', gradient: `from-[${themeId}]/20 to-black/50` });
     } else {
       const key = themeId.toLowerCase();
       if (defaultThemes[key]) setCurrentTheme(defaultThemes[key]);
+    }
+
+    // FIX: Emit event if not triggered by sync
+    if (!fromSync) {
+        emit('THEME_UPDATE', { theme: themeId });
     }
   };
 

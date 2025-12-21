@@ -119,7 +119,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [isListening, setIsListening] = useState(false);
   const [isDictating, setIsDictating] = useState(false); 
   const [transcript, setTranscript] = useState('');
-  const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem('user_tts_enabled') === 'true');
+  // Fix: Default to FALSE for TTS if not set
+  const [ttsEnabled, setTtsEnabled] = useState(() => {
+      const saved = localStorage.getItem('user_tts_enabled');
+      return saved === 'true'; // If null (first visit), returns false.
+  });
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(() => localStorage.getItem('user_voice_uri'));
   
   const [localCredits, setLocalCredits] = useState(user?.credits || 0);
@@ -374,7 +378,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
     if (matches) {
         matches.forEach(tag => {
-            if (processedTagsRef.current.has(tag)) return; 
+            if (processedTagsRef.current.has(tag)) return;
 
             const lowerTag = tag.toLowerCase();
 
@@ -390,7 +394,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      if (!showCountdown) {
                         setShowCountdown(true);
                         setCountdownNum(3);
-                        setTargetFlashColor(mappedColor.startsWith('#') ? mappedColor : '#ffffff'); 
+                        setTargetFlashColor(mappedColor.startsWith('#') ? mappedColor : '#ffffff');
 
                         const timer = setInterval(() => {
                             setCountdownNum(prev => {
@@ -401,7 +405,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                     setTimeout(() => {
                                         setTheme(mappedColor);
                                         setTimeout(() => setShowFlash(false), 800);
-                                    }, 400); 
+                                    }, 400);
                                     return 0;
                                 }
                                 return prev - 1;
@@ -543,7 +547,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     <div className="relative w-full h-[100dvh] flex flex-col items-center overflow-hidden">
       
       {/* Remove local background to fix "Abrupt Cutoff" behind sidebar. Let AppContainer handle it. */}
-      {/* <div className="absolute inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out" 
+      {/* <div className="absolute inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out"
            style={{ background: `radial-gradient(circle at 50% 30%, ${currentTheme.primaryColor}22 0%, #0a0e17 70%)` }} /> */}
       <div className="absolute inset-0 z-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
 
@@ -593,9 +597,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       </AnimatePresence>
 
       {/* MOBILE HEADER: Fixed Z-70 | DESKTOP HEADER: Absolute Z-30 */}
-      <motion.div 
-        initial={{ y: -50 }} 
-        animate={{ y: 0 }} 
+      <motion.div
+        initial={{ y: -50 }}
+        animate={{ y: 0 }}
         className={`${isMobile ? 'fixed top-0 z-[70]' : 'absolute top-0 z-30'} w-full pointer-events-none flex justify-center ${isMobile ? 'h-16 items-center px-4 pt-safe' : 'pt-6 px-4'}`}
       >
          
