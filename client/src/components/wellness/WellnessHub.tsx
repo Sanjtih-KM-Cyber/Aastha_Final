@@ -46,7 +46,6 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [mobileCardIndex, setMobileCardIndex] = useState(0);
 
   // Responsive Check
   useEffect(() => {
@@ -64,15 +63,15 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
     return "Good Evening";
   };
 
-  // Click Outside Logic (Mobile Only) - Only for standard Sidebar if somehow rendered
+  // Click Outside Logic (Mobile Drawer)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (isMobileOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node) && !isMobile) {
+      if (isMobileOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node) && isMobile) {
         onCloseMobile();
       }
     };
     
-    if (isMobileOpen && !isMobile) {
+    if (isMobileOpen && isMobile) {
         document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -82,103 +81,97 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
   const sidebarVariants = {
     closed: { x: "-100%", opacity: 0 },
     open: { x: 0, opacity: 1 },
-    desktop: { x: 0, opacity: 1, width: isCollapsed ? 80 : 280 }
+    desktop: { x: 0, opacity: 1, width: isCollapsed ? 80 : 280 },
+    mobileClosed: { x: "-100%" },
+    mobileOpen: { x: 0 }
   };
 
-  // --- MOBILE CARD CAROUSEL LOGIC ---
-  const handleNextCard = () => {
-    setMobileCardIndex((prev) => (prev + 1) % WIDGETS.length);
-  };
-
-  const handlePrevCard = () => {
-    setMobileCardIndex((prev) => (prev - 1 + WIDGETS.length) % WIDGETS.length);
-  };
-
-  // Swipe Handlers (Simple Touch)
-  const touchStartX = useRef<number | null>(null);
-  const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-      if (!touchStartX.current) return;
-      const touchEndX = e.changedTouches[0].clientX;
-      const diff = touchStartX.current - touchEndX;
-      if (Math.abs(diff) > 50) { // Threshold
-          if (diff > 0) handleNextCard(); // Swipe Left -> Next
-          else handlePrevCard(); // Swipe Right -> Prev
-      }
-      touchStartX.current = null;
-  };
-
+  // --- MOBILE RENDER (Side Drawer with Horizontal Swipe) ---
   if (isMobile) {
-      // Logic for mobile is now handled by MobileNavBar triggering onToggleWidget directly via Bottom Sheet logic
-      // OR by opening this Card Deck if the user explicitly opens "Toolkit".
-      // We keep the Card Deck as the "Menu View".
-
       return (
         <AnimatePresence>
             {isMobileOpen && (
-                <motion.div
-                    initial={{ opacity: 0, y: '100%' }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: '100%' }}
-                    className="fixed inset-0 z-[60] bg-black flex flex-col"
-                >
-                    {/* Header */}
-                    <div className="h-16 flex items-center justify-between px-6 border-b border-white/5 bg-black/50 backdrop-blur-xl">
-                        <span className="font-serif text-xl text-white">Toolkit</span>
-                        <button onClick={onCloseMobile} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/60"><X size={20} /></button>
-                    </div>
+                <>
+                    {/* Backdrop */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={onCloseMobile}
+                        className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm"
+                    />
 
-                    {/* Card Carousel Content */}
-                    <div className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-
-                        {/* Greeting (Optional Context) */}
-                        <div className="absolute top-8 text-center w-full">
-                            <h2 className="text-white/40 text-sm font-medium uppercase tracking-widest">Select a Tool</h2>
+                    {/* Drawer */}
+                    <motion.aside
+                        ref={sidebarRef}
+                        initial="mobileClosed"
+                        animate="mobileOpen"
+                        exit="mobileClosed"
+                        variants={sidebarVariants}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        className="fixed top-0 bottom-0 left-0 w-[85vw] z-[70] bg-[#1a1a1a] border-r border-white/10 flex flex-col shadow-2xl overflow-hidden"
+                    >
+                        {/* Header */}
+                        <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                             <div>
+                                <h1 className="font-serif text-2xl font-bold text-white tracking-tight">Toolkit</h1>
+                                <p className="text-xs text-white/40 mt-1 uppercase tracking-widest">{getGreeting()}</p>
+                             </div>
+                             <button onClick={onCloseMobile} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/60">
+                                <X size={20} />
+                             </button>
                         </div>
 
-                        {/* Card */}
-                        <div
-                            className="relative w-full max-w-sm aspect-[3/4] perspective-1000 mt-8"
-                            onTouchStart={handleTouchStart}
-                            onTouchEnd={handleTouchEnd}
-                        >
-                            <AnimatePresence mode='wait'>
-                                <motion.div
-                                    key={mobileCardIndex}
-                                    initial={{ opacity: 0, x: 100, scale: 0.9 }}
-                                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                                    exit={{ opacity: 0, x: -100, scale: 0.9 }}
-                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                                    className="absolute inset-0 bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-[2rem] p-8 flex flex-col items-center justify-center shadow-2xl backdrop-blur-2xl"
-                                >
-                                    <div className={`p-8 rounded-full bg-black/20 mb-8 shadow-inner`}>
-                                        {React.createElement(WIDGETS[mobileCardIndex].icon, { size: 64, className: WIDGETS[mobileCardIndex].color })}
-                                    </div>
-
-                                    <h3 className="text-3xl font-serif text-white mb-3 text-center">{WIDGETS[mobileCardIndex].label}</h3>
-                                    <p className="text-white/50 text-center mb-10 text-lg leading-relaxed">{WIDGETS[mobileCardIndex].desc}</p>
-
-                                    <button
-                                        onClick={() => { onToggleWidget(WIDGETS[mobileCardIndex].id); onCloseMobile(); }}
-                                        className="w-full py-4 rounded-xl bg-white text-black font-bold text-lg hover:scale-105 active:scale-95 transition-all shadow-lg"
-                                    >
-                                        Open
-                                    </button>
-                                </motion.div>
-                            </AnimatePresence>
-                        </div>
-
-                        {/* Pagination Dots */}
-                        <div className="flex gap-3 mt-8">
-                            {WIDGETS.map((_, idx) => (
+                        {/* Horizontal Swipe Carousel */}
+                        <div className="flex-1 flex items-center overflow-x-auto snap-x snap-mandatory px-6 py-8 gap-6 scrollbar-hide">
+                            {WIDGETS.map((widget) => (
                                 <div
-                                    key={idx}
-                                    className={`h-1.5 rounded-full transition-all duration-300 ${idx === mobileCardIndex ? 'bg-white w-8' : 'bg-white/20 w-1.5'}`}
-                                />
+                                    key={widget.id}
+                                    className="snap-center shrink-0 w-full h-full flex items-center justify-center"
+                                >
+                                    <div className="w-full aspect-[3/4] bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-[2rem] p-8 flex flex-col items-center justify-center shadow-2xl relative overflow-hidden group">
+                                         {/* Background Glow */}
+                                         <div className={`absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-500 bg-gradient-to-tr from-${widget.color.split('-')[1]}-500/20 to-transparent`} />
+
+                                         <div className={`p-6 rounded-full bg-black/30 mb-6 shadow-inner relative z-10`}>
+                                            <widget.icon size={48} className={widget.color} />
+                                         </div>
+
+                                         <h3 className="text-2xl font-serif text-white mb-2 text-center relative z-10">{widget.label}</h3>
+                                         <p className="text-white/50 text-center text-sm mb-8 px-4 leading-relaxed relative z-10">{widget.desc}</p>
+
+                                         <button
+                                            onClick={() => { onToggleWidget(widget.id); onCloseMobile(); }}
+                                            className="w-full py-3 rounded-xl bg-white text-black font-bold hover:scale-105 active:scale-95 transition-all shadow-lg relative z-10"
+                                         >
+                                            Open
+                                         </button>
+                                    </div>
+                                </div>
                             ))}
                         </div>
-                    </div>
-                </motion.div>
+
+                        {/* Footer (Profile) */}
+                        <div className="p-6 border-t border-white/5 bg-black/20">
+                            <div className="flex items-center gap-3">
+                                {user?.avatar ? (
+                                    <img src={user.avatar} alt="Profile" className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                                ) : (
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white bg-white/10">
+                                        {user?.name?.charAt(0) || 'U'}
+                                    </div>
+                                )}
+                                <div className="flex-1">
+                                    <p className="text-sm font-bold text-white">{user?.name}</p>
+                                    <button onClick={() => { onCloseMobile(); onOpenSettings(); }} className="text-xs text-white/50 flex items-center gap-1 hover:text-white mt-0.5">
+                                        <Settings size={10} /> Settings
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </motion.aside>
+                </>
             )}
         </AnimatePresence>
       );
