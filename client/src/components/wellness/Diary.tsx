@@ -38,7 +38,6 @@ interface CalendarDay {
 
 // --- Helper Functions ---
 const toDateString = (date: Date) => {
-  // Use a reliable conversion that respects the local Date object's state
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
@@ -173,6 +172,15 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   const [editMode, setEditMode] = useState<DiaryMode>('view');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Mobile Check
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   useEffect(() => {
     if (isOpen && user) {
        if (!user.hasDiarySetup) setIsUnlocked(true); 
@@ -181,7 +189,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
   useEffect(() => {
     if (isOpen && isUnlocked) fetchEntries();
-  }, [isOpen, isUnlocked, user]); // Added user dependency to ensure fetch on auth ready
+  }, [isOpen, isUnlocked, user]);
 
   // When date changes, load data into editor state
   useEffect(() => {
@@ -238,12 +246,11 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   };
 
   const handleSaveEntry = async () => {
-    // Fix: Allow saving if only content is present. Title is optional.
     if (!editContent.trim()) return;
     
     setIsSaving(true);
     try {
-      const titleToSave = editTitle.trim() || "Untitled"; // Default Title
+      const titleToSave = editTitle.trim() || "Untitled";
       const encTitle = encrypt(titleToSave);
       const encContent = encrypt(editContent);
       
@@ -268,7 +275,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   };
 
   const createNewEntry = () => {
-    setActiveDate(new Date()); // Go to today
+    setActiveDate(new Date());
     setEditMode('edit');
   };
 
@@ -297,9 +304,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   };
 
   // Animation Helpers
-  const dMinus2 = addDays(activeDate, -2);
   const dMinus1 = addDays(activeDate, -1);
-  const dCurrent = activeDate;
   const dPlus1 = addDays(activeDate, 1);
 
   // Calendar Logic
@@ -336,6 +341,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
   const calendarGrid = getCalendarDays();
 
+  // --- RENDER ---
   return (
     <DraggableWindow 
       isOpen={isOpen} onClose={onClose} title="Personal Journal"
@@ -347,17 +353,28 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
         {!isUnlocked ? (
           <DiaryLockScreen onUnlock={handleUnlock} error={authError} setError={setAuthError} />
         ) : (
-            <div className="relative w-[95%] h-[90%] flex shadow-2xl rounded-r-lg perspective-2000">
+            <div className={`relative w-full h-full flex shadow-2xl ${isMobile ? '' : 'rounded-r-lg perspective-2000 w-[95%] h-[90%]'}`}>
                 
-                {/* Controls Overlay */}
-                <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white z-50">
-                    <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronLeft/></button>
-                    <span className="font-mono text-sm w-32 text-center">{getFormattedDate(activeDate).split(',')[1]}</span>
-                    <button onClick={() => changeDay(1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronRight/></button>
-                </div>
+                {/* Mobile Header Bar (Shift Dates) */}
+                {isMobile && (
+                    <div className="absolute top-0 left-0 right-0 h-14 bg-[#fdfdf6] border-b border-gray-200 z-50 flex items-center justify-between px-4">
+                        <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-black/5 rounded-full"><ChevronLeft className="text-gray-600" /></button>
+                        <span className="font-serif font-bold text-gray-800">{getFormattedDate(activeDate)}</span>
+                        <button onClick={() => changeDay(1)} disabled={!!isFlipping} className="p-2 hover:bg-black/5 rounded-full"><ChevronRight className="text-gray-600" /></button>
+                    </div>
+                )}
+
+                {/* Desktop Controls Overlay */}
+                {!isMobile && (
+                  <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white z-50">
+                      <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronLeft/></button>
+                      <span className="font-mono text-sm w-32 text-center">{getFormattedDate(activeDate).split(',')[1]}</span>
+                      <button onClick={() => changeDay(1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronRight/></button>
+                  </div>
+                )}
 
                 {/* BOOK CONTAINER */}
-                <div className="relative flex w-full h-full shadow-2xl bg-[#2a2a2a] rounded-lg" style={{ perspective: '2500px', transformStyle: 'preserve-3d' }}>
+                <div className={`relative flex w-full h-full bg-[#2a2a2a] ${isMobile ? '' : 'rounded-lg shadow-2xl'}`} style={isMobile ? {} : { perspective: '2500px', transformStyle: 'preserve-3d' }}>
                     
                     {/* Loading Overlay */}
                     {isLoading && (
@@ -368,71 +385,68 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
                     {/* STATIC LAYER */}
                     <div className="absolute inset-0 flex">
-                        {/* Left Static Page (Calendar) */}
-                        <div className="w-1/2 h-full border-r border-[#ccc] overflow-hidden rounded-l-lg bg-[#fdfdf6] flex flex-col">
-                            
-                            <div className="p-6 pb-2 flex items-center justify-between border-b border-gray-200/50">
-                                <h3 className="font-serif text-2xl font-bold text-gray-800 flex items-center gap-2">
-                                    <BookOpen size={22} style={{ color: currentTheme.primaryColor }} /> Index
-                                </h3>
-                                <div className="flex gap-2">
-                                    <button onClick={() => fetchEntries()} className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500"><RefreshCw size={14}/></button>
-                                    <button onClick={createNewEntry} className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-gray-400 hover:bg-gray-200 transition-colors">+ New</button>
-                                </div>
-                            </div>
+                        {/* Left Page (Calendar) - HIDDEN ON MOBILE */}
+                        {!isMobile && (
+                          <div className="w-1/2 h-full border-r border-[#ccc] overflow-hidden rounded-l-lg bg-[#fdfdf6] flex flex-col">
+                              {/* ... Existing Desktop Calendar UI ... */}
+                              <div className="p-6 pb-2 flex items-center justify-between border-b border-gray-200/50">
+                                  <h3 className="font-serif text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                      <BookOpen size={22} style={{ color: currentTheme.primaryColor }} /> Index
+                                  </h3>
+                                  <div className="flex gap-2">
+                                      <button onClick={() => fetchEntries()} className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500"><RefreshCw size={14}/></button>
+                                      <button onClick={createNewEntry} className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-gray-400 hover:bg-gray-200 transition-colors">+ New</button>
+                                  </div>
+                              </div>
+                              <div className="px-6 py-4">
+                                  <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 border border-gray-200 shadow-sm">
+                                      <div className="flex justify-between items-center mb-4">
+                                          <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-gray-200 rounded-full text-gray-600"><ChevronLeft size={16} /></button>
+                                          <span className="text-sm font-bold uppercase tracking-widest text-gray-800">
+                                              {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                          </span>
+                                          <button onClick={() => changeMonth(1)} className="p-1 hover:bg-gray-200 rounded-full text-gray-600"><ChevronRight size={16} /></button>
+                                      </div>
+                                      <div className="grid grid-cols-7 gap-1 mb-2">
+                                          {['Su','Mo','Tu','We','Th','Fr','Sa'].map((d, i) => <span key={i} className="text-center text-[10px] font-bold text-gray-400 uppercase">{d}</span>)}
+                                      </div>
+                                      <div className="grid grid-cols-7 gap-1 place-items-center">
+                                          {calendarGrid.map((day, idx) => {
+                                              if (!day) return <div key={`empty-${idx}`} className="w-8 h-8" />;
+                                              return (
+                                                  <button
+                                                      key={`day-${idx}`}
+                                                      onClick={() => handleCalendarClick(day.date.getDate())}
+                                                      className={`
+                                                          w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all relative
+                                                          ${day.isSelected ? 'bg-gray-800 text-white shadow-lg scale-110 z-10' : ''}
+                                                          ${!day.isSelected && day.hasEntry ? 'bg-white border border-gray-300 text-gray-800 hover:border-gray-400' : ''}
+                                                          ${!day.isSelected && !day.hasEntry ? 'text-gray-400 hover:bg-gray-200/50' : ''}
+                                                          ${day.isToday && !day.isSelected ? 'ring-1 ring-offset-1 ring-teal-400' : ''}
+                                                      `}
+                                                  >
+                                                      {day.date.getDate()}
+                                                      {day.hasEntry && !day.isSelected && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-teal-400" />}
+                                                  </button>
+                                              );
+                                          })}
+                                      </div>
+                                  </div>
+                              </div>
+                              <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-3 custom-scrollbar">
+                                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Recent Memories</h4>
+                                  {Object.values(entriesMap).slice(0, 5).map((entry, i) => (
+                                      <div key={i} onClick={() => { if(entry.createdAt) setActiveDate(new Date(entry.createdAt)) }} className="p-3 rounded-lg bg-white/40 hover:bg-white/80 cursor-pointer transition-colors border border-transparent hover:border-gray-300">
+                                          <div className="flex justify-between"><span className="font-bold text-sm">{entry.title || 'Untitled'}</span><span className="text-[10px] text-gray-500">{getShortDate(entry.createdAt || '')}</span></div>
+                                          <p className="text-xs text-gray-500 line-clamp-1 mt-1">{entry.content}</p>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                        )}
 
-                            {/* Calendar */}
-                            <div className="px-6 py-4">
-                                <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 border border-gray-200 shadow-sm">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-gray-200 rounded-full text-gray-600"><ChevronLeft size={16} /></button>
-                                        <span className="text-sm font-bold uppercase tracking-widest text-gray-800">
-                                            {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                                        </span>
-                                        <button onClick={() => changeMonth(1)} className="p-1 hover:bg-gray-200 rounded-full text-gray-600"><ChevronRight size={16} /></button>
-                                    </div>
-                                    <div className="grid grid-cols-7 gap-1 mb-2">
-                                        {['Su','Mo','Tu','We','Th','Fr','Sa'].map((d, i) => <span key={i} className="text-center text-[10px] font-bold text-gray-400 uppercase">{d}</span>)}
-                                    </div>
-                                    <div className="grid grid-cols-7 gap-1 place-items-center">
-                                        {calendarGrid.map((day, idx) => {
-                                            if (!day) return <div key={`empty-${idx}`} className="w-8 h-8" />;
-                                            return (
-                                                <button
-                                                    key={`day-${idx}`}
-                                                    onClick={() => handleCalendarClick(day.date.getDate())}
-                                                    className={`
-                                                        w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all relative
-                                                        ${day.isSelected ? 'bg-gray-800 text-white shadow-lg scale-110 z-10' : ''}
-                                                        ${!day.isSelected && day.hasEntry ? 'bg-white border border-gray-300 text-gray-800 hover:border-gray-400' : ''}
-                                                        ${!day.isSelected && !day.hasEntry ? 'text-gray-400 hover:bg-gray-200/50' : ''}
-                                                        ${day.isToday && !day.isSelected ? 'ring-1 ring-offset-1 ring-teal-400' : ''}
-                                                    `}
-                                                >
-                                                    {day.date.getDate()}
-                                                    {day.hasEntry && !day.isSelected && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-teal-400" />}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            {/* List */}
-                            <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-3 custom-scrollbar">
-                                <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Recent Memories</h4>
-                                {Object.values(entriesMap).slice(0, 5).map((entry, i) => (
-                                    <div key={i} onClick={() => { if(entry.createdAt) setActiveDate(new Date(entry.createdAt)) }} className="p-3 rounded-lg bg-white/40 hover:bg-white/80 cursor-pointer transition-colors border border-transparent hover:border-gray-300">
-                                        <div className="flex justify-between"><span className="font-bold text-sm">{entry.title || 'Untitled'}</span><span className="text-[10px] text-gray-500">{getShortDate(entry.createdAt || '')}</span></div>
-                                        <p className="text-xs text-gray-500 line-clamp-1 mt-1">{entry.content}</p>
-                                    </div>
-                                ))}
-                            </div>
-
-                        </div>
-
-                        {/* Right Static Page (Current Editor) */}
-                        <div className="w-1/2 h-full border-l border-[#ccc] overflow-hidden rounded-r-lg bg-[#fdfdf6]">
+                        {/* Right Page (Editor) - FULL WIDTH ON MOBILE */}
+                        <div className={`${isMobile ? 'w-full pt-14' : 'w-1/2 border-l border-[#ccc] rounded-r-lg'} h-full overflow-hidden bg-[#fdfdf6]`}>
                              <PaperPage 
                                 date={isFlipping === 'next' ? dPlus1 : activeDate}
                                 title={isFlipping === 'next' ? entriesMap[toDateString(dPlus1)]?.title || '' : (editMode === 'view' ? entriesMap[toDateString(activeDate)]?.title : editTitle)}
@@ -445,8 +459,9 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                         </div>
                     </div>
 
-                    {/* FLIPPING LAYER */}
-                    <AnimatePresence mode="sync" onExitComplete={() => setIsFlipping(null)}>
+                    {/* FLIPPING LAYER (Disabled for Simplicity on Mobile or kept for effect? Let's keep minimal transition logic if mobile, or just instant switch) */}
+                    {!isMobile && (
+                      <AnimatePresence mode="sync" onExitComplete={() => setIsFlipping(null)}>
                         {isFlipping === 'next' && (
                              <motion.div
                                 key="flip-next"
@@ -465,7 +480,8 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                                 </div>
                              </motion.div>
                         )}
-                        {isFlipping === 'prev' && (
+                        {/* Prev Logic same as before... */}
+                         {isFlipping === 'prev' && (
                              <motion.div
                                 key="flip-prev"
                                 initial={{ rotateY: -180 }} animate={{ rotateY: 0 }}
@@ -483,11 +499,14 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                                 </div>
                              </motion.div>
                         )}
-                    </AnimatePresence>
+                      </AnimatePresence>
+                    )}
 
-                    <div className="absolute left-1/2 top-0 bottom-0 w-16 -ml-8 z-40 flex justify-center">
-                        <div className="w-[2px] h-full bg-[#1a1a1a] shadow-[0_0_10px_rgba(0,0,0,0.5)]" />
-                    </div>
+                    {!isMobile && (
+                        <div className="absolute left-1/2 top-0 bottom-0 w-16 -ml-8 z-40 flex justify-center">
+                            <div className="w-[2px] h-full bg-[#1a1a1a] shadow-[0_0_10px_rgba(0,0,0,0.5)]" />
+                        </div>
+                    )}
                 </div>
             </div>
         )}

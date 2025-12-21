@@ -629,19 +629,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         )}
       </AnimatePresence>
 
-      {/* 4. Header (Dynamic Island for Desktop / Glass Bar for Mobile) */}
-      <motion.div initial={{ y: -50 }} animate={{ y: 0 }} className={`absolute top-0 w-full z-30 pointer-events-none flex justify-center ${isMobile ? 'h-16 bg-black/40 backdrop-blur-xl border-b border-white/5 items-center px-4 pt-safe' : 'pt-6 px-4'}`}>
+      {/* 4. Header (Dynamic Island for Desktop / Transparent Bar for Mobile) */}
+      <motion.div initial={{ y: -50 }} animate={{ y: 0 }} className={`absolute top-0 w-full z-30 pointer-events-none flex justify-center ${isMobile ? 'h-16 items-center px-4 pt-safe' : 'pt-6 px-4'}`}>
          
-         {/* Mobile: Simple Left Title / Desktop: Menu Trigger */}
-         <div className={`pointer-events-auto ${isMobile ? 'flex-1' : 'absolute left-4 top-6 pt-safe'}`}>
-            {isMobile ? (
-                <span className="font-serif text-lg font-bold text-white tracking-tight">Sanctuary</span>
-            ) : (
-                <button onClick={onMobileMenuClick} className="p-2.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/10 text-white/70 md:hidden"><Menu size={20} /></button>
-            )}
+         {/* Mobile: Hamburger Menu (Left) */}
+         <div className={`pointer-events-auto ${isMobile ? 'flex-1 flex justify-start' : 'absolute left-4 top-6 pt-safe'}`}>
+            <button onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-xl border border-white/10 text-white/70 ${isMobile ? 'bg-black/10' : 'bg-black/20 md:hidden'}`}>
+                <Menu size={20} />
+            </button>
          </div>
 
-         {/* The Pill Search Bar (Hidden on Mobile Header to reduce clutter, or simplified) */}
+         {/* The Pill Search Bar (Hidden on Mobile Header) */}
          {!isMobile && (
             <div className="pointer-events-auto flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full pl-4 pr-2 py-2 shadow-2xl w-[280px] md:w-[400px] transition-all focus-within:w-[320px] md:focus-within:w-[450px] focus-within:bg-black/50 group mt-safe">
                 <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2" />
@@ -659,8 +657,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             </div>
          )}
 
-         {/* Right Controls */}
-         <div className={`pointer-events-auto flex items-center gap-3 ${isMobile ? '' : 'absolute right-4 top-6 pt-safe'}`}>
+         {/* Right Controls (Headphones) */}
+         <div className={`pointer-events-auto flex items-center gap-3 ${isMobile ? 'flex justify-end' : 'absolute right-4 top-6 pt-safe'}`}>
              {!isMobile && (
                 <div className={`px-3 py-1.5 rounded-full backdrop-blur-xl border flex items-center gap-2 shadow-lg transition-colors hidden md:flex ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
                     {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-gray-400" fill="currentColor" />}
@@ -670,7 +668,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 </div>
              )}
              
-             <button onClick={toggleVoiceMode} className="w-10 h-10 rounded-full bg-black/30 border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all shadow-lg relative group">
+             <button onClick={toggleVoiceMode} className={`w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg relative group ${isMobile ? 'bg-black/10' : 'bg-black/30 hover:bg-white/10'}`}>
                 <Headphones size={18} />
              </button>
          </div>
@@ -682,7 +680,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       {/* 6. Chat Area (Flex Layout) */}
       <div 
          ref={messagesContainerRef}
-         className={`flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide flex flex-col ${isMobile ? 'pt-20 pb-4' : 'pt-32 md:pt-28 pb-4'}`}
+         className={`flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide flex flex-col ${isMobile ? 'pt-20 pb-24' : 'pt-32 md:pt-28 pb-4'}`}
       >
          <div className="flex flex-col mt-auto pb-4 min-h-0">
              {renderMessages()}
@@ -690,14 +688,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          </div>
       </div>
 
-      {/* 7. Input Area (Static Footer) */}
-      <div className={`w-full px-4 pt-2 shrink-0 max-w-[700px] mx-auto z-30 ${isMobile ? 'pb-20' : 'pb-6'}`}>
+      {/* 7. Input Area */}
+      <div className={`w-full px-4 pt-2 shrink-0 max-w-[700px] mx-auto z-30 ${isMobile ? 'fixed bottom-4 left-4 right-4 w-[calc(100%-2rem)] max-w-none' : 'pb-6'}`}>
          <div className="flex flex-col gap-2">
             
             {/* Contexts (Reply / Image) */}
             <AnimatePresence>
                 {replyingTo && (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center w-[95%] bg-black/60 backdrop-blur-xl border border-white/10 rounded-t-2xl border-b-0 p-3 flex justify-between items-center text-xs text-white/70">
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center w-[95%] bg-black/60 backdrop-blur-xl border border-white/10 rounded-t-2xl border-b-0 p-3 flex justify-between items-center text-xs text-white/70 shadow-lg">
                         <div className="flex items-center gap-2 truncate"><Reply size={12} className="text-white/40" /><span className="italic truncate max-w-[200px]">"{replyingTo}"</span></div>
                         <button onClick={() => setReplyingTo(null)} className="hover:text-white"><X size={14} /></button>
                     </motion.div>
@@ -749,8 +747,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                     emojiStyle={EmojiStyle.APPLE}
                                     onEmojiClick={(e) => {
                                         setInput(prev => prev + e.emoji);
-                                        // Optional: Keep picker open or close it
-                                        // setShowEmojiPicker(false);
                                     }}
                                     lazyLoadEmojis={true}
                                     width={300}
@@ -766,7 +762,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                         { name: 'Objects', category: 'objects' },
                                         { name: 'Symbols', category: 'symbols' },
                                         { name: 'Flags', category: 'flags' },
-                                    ] as any} // Cast to any if strict types complain about category names
+                                    ] as any}
                                 />
                             </div>
                         )}
