@@ -111,15 +111,15 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
       {isOpen && (
         <motion.div
           ref={containerRef}
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          initial={isMobile ? { y: '100%' } : { opacity: 0, scale: 0.95, y: 10 }}
           animate={isMobile ? {
             opacity: 1,
-            y: isMinimized ? 'calc(100% - 60px)' : 0, // Bottom sheet behavior
+            y: isMinimized ? 'calc(100% - 60px)' : 0,
             scale: 1,
             width: '100%',
-            height: '92%', // Leave top gap for context
+            height: '92%', // Sheet-like height
             left: 0,
-            top: 'auto',
+            top: '8%', // Start from 8% down
             bottom: 0,
             borderRadius: '24px 24px 0 0',
             x: 0
@@ -135,14 +135,27 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             bottom: 'auto',
             borderRadius: '12px'
           }}
-          exit={isMobile ? { y: '100%', opacity: 0 } : { opacity: 0, scale: 0.95, y: 10 }}
+          exit={isMobile ? { y: '100%', opacity: 1 } : { opacity: 0, scale: 0.95, y: 10 }}
           transition={{ type: "spring", damping: 30, stiffness: 400 }}
-          drag={!isMobile} // Disable drag on mobile
+
+          // Drag Logic
+          drag={isMobile ? "y" : true} // Allow Y drag on mobile for closing
           dragControls={dragControls}
           dragMomentum={false}
-          dragListener={false} 
+          dragListener={isMobile ? true : false} // On mobile, drag whole window. On Desktop, only header.
+          dragConstraints={isMobile ? { top: 0, bottom: 0 } : undefined} // Snap back on mobile
+          dragElastic={isMobile ? { top: 0, bottom: 0.5 } : undefined} // Resist dragging up
+          onDragEnd={(e, { offset, velocity }) => {
+              if (isMobile) {
+                  // Swipe down threshold
+                  if (offset.y > 150 || velocity.y > 200) {
+                      onClose();
+                  }
+              }
+          }}
           onPointerDown={onFocus}
-          className={`fixed flex flex-col overflow-hidden ${isMobile ? '' : 'cursor-auto'}`}
+
+          className={`fixed flex flex-col overflow-hidden ${isMobile ? 'touch-none' : 'cursor-auto'}`}
           style={{ 
             zIndex: zIndex,
             position: 'fixed'
@@ -151,39 +164,40 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           <div className={`
              relative w-full h-full flex flex-col
              rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.6)] 
-             border border-white/10 bg-[#0a0e17]/90 backdrop-blur-2xl ring-1 ring-white/5
+             border border-white/10 bg-[#0a0e17]/95 backdrop-blur-2xl ring-1 ring-white/5
              transition-colors duration-300
              ${className}
+             ${isMobile ? 'rounded-t-3xl border-b-0' : ''}
           `}>
             
             {/* --- Window Header (Drag Target) --- */}
             <div 
               onPointerDown={(e) => !isMobile && dragControls.start(e)}
-              className={`h-12 flex items-center justify-between px-3 border-b border-white/5 select-none shrink-0 bg-white/5 ${isMobile ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
+              className={`h-12 flex items-center justify-between px-3 border-b border-white/5 select-none shrink-0 bg-white/5 ${isMobile ? 'cursor-grab active:cursor-grabbing py-6' : 'cursor-grab active:cursor-grabbing'}`}
             >
                {/* Mobile Pull Handle */}
                {isMobile && (
-                   <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 rounded-full bg-white/20" />
+                   <div className="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1.5 rounded-full bg-white/20" />
                )}
                {/* Controls */}
               <div className="flex items-center gap-2 z-10">
                 <button 
                   onClick={handleClose}
-                  className="group w-3 h-3 rounded-full bg-red-500/20 hover:bg-red-500 border border-red-500/50 flex items-center justify-center transition-all"
+                  className="group w-6 h-6 rounded-full bg-red-500/20 hover:bg-red-500 border border-red-500/50 flex items-center justify-center transition-all md:w-3 md:h-3"
                 >
-                    <X size={8} className="opacity-0 group-hover:opacity-100 text-black/60" />
+                    <X size={12} className="opacity-100 md:opacity-0 md:group-hover:opacity-100 text-red-200 md:text-black/60 md:size-[8px]" />
                 </button>
                 <button 
                   onClick={toggleMinimize} 
-                  className="group w-3 h-3 rounded-full bg-yellow-400/20 hover:bg-yellow-400 border border-yellow-400/50 flex items-center justify-center transition-all"
+                  className="group w-6 h-6 rounded-full bg-yellow-400/20 hover:bg-yellow-400 border border-yellow-400/50 flex items-center justify-center transition-all md:w-3 md:h-3"
                 >
-                    <Minus size={8} className="opacity-0 group-hover:opacity-100 text-black/60" />
+                    <Minus size={12} className="opacity-100 md:opacity-0 md:group-hover:opacity-100 text-yellow-200 md:text-black/60 md:size-[8px]" />
                 </button>
               </div>
               
               {/* Title */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                 <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/50">
+                 <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/50 pt-2 md:pt-0">
                     {title}
                  </span>
               </div>
