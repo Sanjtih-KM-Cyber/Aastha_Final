@@ -319,10 +319,16 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   const onTouchEnd = () => {
       if (!touchStart || !touchEnd) return;
       const distance = touchStart - touchEnd;
-      const isLeftSwipe = distance > 50; // Swiped Left -> Go Next
-      const isRightSwipe = distance < -50; // Swiped Right -> Go Prev
-      if (isLeftSwipe) changeDay(1); 
-      if (isRightSwipe) changeDay(-1); 
+      const isLeftSwipe = distance > 50; // Swiped Left -> Go Next (Future)
+      const isRightSwipe = distance < -50; // Swiped Right -> Go Prev (Past)
+      
+      // Add slight delay to prevent accidental double swipes
+      if (!isFlipping) {
+          if (isLeftSwipe) changeDay(1); 
+          if (isRightSwipe) changeDay(-1); 
+      }
+      setTouchStart(null);
+      setTouchEnd(null);
   }
 
   return (

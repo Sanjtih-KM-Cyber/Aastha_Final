@@ -542,8 +542,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   return (
     <div className="relative w-full h-[100dvh] flex flex-col items-center overflow-hidden">
       
-      <div className="absolute inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out" 
-           style={{ background: `radial-gradient(circle at 50% 30%, ${currentTheme.primaryColor}22 0%, #0a0e17 70%)` }} />
+      {/* Remove local background to fix "Abrupt Cutoff" behind sidebar. Let AppContainer handle it. */}
+      {/* <div className="absolute inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out" 
+           style={{ background: `radial-gradient(circle at 50% 30%, ${currentTheme.primaryColor}22 0%, #0a0e17 70%)` }} /> */}
       <div className="absolute inset-0 z-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
 
       <AnimatePresence>
@@ -591,7 +592,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         )}
       </AnimatePresence>
 
-      <motion.div initial={{ y: -50 }} animate={{ y: 0 }} className={`absolute top-0 w-full z-30 pointer-events-none flex justify-center ${isMobile ? 'h-16 items-center px-4 pt-safe' : 'pt-6 px-4'}`}>
+      {/* MOBILE HEADER: Fixed Z-70 | DESKTOP HEADER: Absolute Z-30 */}
+      <motion.div 
+        initial={{ y: -50 }} 
+        animate={{ y: 0 }} 
+        className={`${isMobile ? 'fixed top-0 z-[70]' : 'absolute top-0 z-30'} w-full pointer-events-none flex justify-center ${isMobile ? 'h-16 items-center px-4 pt-safe' : 'pt-6 px-4'}`}
+      >
          
          <div className={`pointer-events-auto ${isMobile ? 'flex-1 flex justify-start' : 'absolute left-4 top-6 pt-safe'}`}>
             <button onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 ${isMobile ? 'bg-black/5' : 'bg-black/20 md:hidden'}`}>
@@ -636,7 +642,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       <div 
          ref={messagesContainerRef}
-         className={`flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide flex flex-col ${isMobile ? 'pt-20 pb-24' : 'pt-32 md:pt-28 pb-4'}`}
+         className={`flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide flex flex-col ${isMobile ? 'pt-24 pb-32' : 'pt-32 md:pt-28 pb-4'}`}
       >
          <div className="flex flex-col mt-auto pb-4 min-h-0">
              {renderMessages()}
@@ -644,7 +650,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          </div>
       </div>
 
-      <div className={`w-full px-4 pt-2 shrink-0 max-w-[700px] mx-auto z-30 ${isMobile ? 'fixed bottom-4 left-4 right-4 w-[calc(100%-2rem)] max-w-none' : 'pb-6'}`}>
+      {/* MOBILE INPUT: Fixed Z-70 | DESKTOP INPUT: Standard Flow */}
+      <div className={`w-full px-4 pt-2 shrink-0 max-w-[700px] mx-auto z-30 ${isMobile ? 'fixed bottom-0 left-0 right-0 z-[70] pb-4 px-4 bg-gradient-to-t from-black/80 to-transparent' : 'pb-6'}`}>
          <div className="flex flex-col gap-2">
             
             <AnimatePresence>

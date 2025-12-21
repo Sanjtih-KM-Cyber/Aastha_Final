@@ -34,14 +34,14 @@ export const Sanctuary: React.FC = () => {
   const [widgetConfigs, setWidgetConfigs] = useState<Record<string, any>>({});
 
   // State to track z-indices of windows
-  // Start at 60 to be above the WellnessHub Sidebar (z-50)
+  // Widgets layer starts at 40 (above Sidebar's 20)
   const [zIndices, setZIndices] = useState<Record<string, number>>({
-    diary: 60,
-    pomodoro: 60,
-    jam: 60,
-    soundscape: 60,
-    breathing: 60,
-    mood: 60,
+    diary: 50,
+    pomodoro: 50,
+    jam: 50,
+    soundscape: 50,
+    breathing: 50,
+    mood: 50,
   });
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -50,7 +50,7 @@ export const Sanctuary: React.FC = () => {
   const bringToFront = (key: string) => {
     setZIndices(prev => {
         const values = Object.values(prev);
-        const maxZ = values.length > 0 ? Math.max(...values) : 60;
+        const maxZ = values.length > 0 ? Math.max(...values) : 50;
         
         // Always increment maxZ to ensure this specific window becomes the highest
         return { ...prev, [key]: maxZ + 1 };
@@ -84,7 +84,7 @@ export const Sanctuary: React.FC = () => {
   return (
     <div className="relative w-full h-screen flex bg-transparent overflow-hidden">
       
-      {/* 1. Left Sidebar (Wellness Hub) - z-50 */}
+      {/* 1. Left Sidebar (Wellness Hub) - Navigation Layer (z-20) */}
       <WellnessHub 
         onToggleWidget={toggleWidget} 
         activeWidgets={widgets} 
@@ -93,8 +93,8 @@ export const Sanctuary: React.FC = () => {
         onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
 
-      {/* 2. Main Area (Chat) - Base Layer */}
-      <main className="flex-1 relative md:ml-72 h-full transition-all duration-300">
+      {/* 2. Main Area (Chat) - Base Layer (z-10) */}
+      <main className="flex-1 relative md:ml-72 h-full transition-all duration-300 z-10">
          <ChatView 
             onMobileMenuClick={() => setIsMobileMenuOpen(true)} 
             onOpenWidget={openWidget}
@@ -102,9 +102,8 @@ export const Sanctuary: React.FC = () => {
          />
       </main>
 
-      {/* 3. Floating Widget Ecosystem - Focus Layer (z-60+) */}
-      {/* Container zIndex is 30, but children are fixed with higher zIndex */}
-      <div style={{ position: 'absolute', pointerEvents: 'none', inset: 0, zIndex: 30 }}>
+      {/* 3. Floating Widget Ecosystem - Widget Layer (z-40+) */}
+      <div style={{ position: 'absolute', pointerEvents: 'none', inset: 0, zIndex: 40 }}>
           <div style={{ pointerEvents: 'auto' }}>
               <Diary 
                 isOpen={widgets.diary} 

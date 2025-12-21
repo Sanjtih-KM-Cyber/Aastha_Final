@@ -116,27 +116,28 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
       return (
         <AnimatePresence>
             {isMobileOpen && (
-                <div className="fixed inset-0 z-[60] flex flex-col">
-                    {/* 1. Frosted Backdrop (Freeze Effect) */}
+                // Z-60: Sits between Chat Content (Z-10) and Fixed Controls (Z-70)
+                <div className="fixed inset-0 z-[60] flex flex-col pointer-events-auto">
+                    {/* 1. Frosted Backdrop (Dims chat, leaves controls visible) */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.3 }}
                         onClick={onCloseMobile}
-                        className="absolute inset-0 bg-black/60 backdrop-blur-md"
+                        className="absolute inset-0 bg-black/80 backdrop-blur-md"
                     />
 
-                    {/* 2. Content Container */}
+                    {/* 2. Content Container - Padded to fit between Header and Input */}
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-                        className="relative z-10 flex flex-col h-full w-full pt-safe pb-safe"
+                        className="relative z-10 flex flex-col h-full w-full pt-20 pb-24" 
                     >
                         {/* Top Bar: Progress Indicators */}
-                        <div className="px-6 pt-6 pb-4 flex gap-1.5 z-20">
+                        <div className="px-6 pb-4 flex gap-1.5 z-20">
                             {WIDGETS.map((w, i) => (
                                 <button
                                     key={w.id}
@@ -146,15 +147,14 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                     <div 
                                         className={`absolute inset-0 transition-all duration-500 ${activeIndex === i ? w.barColor : 'opacity-0'}`} 
                                     />
-                                    {/* Hover hint */}
-                                    <div className={`absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity`} />
                                 </button>
                             ))}
                         </div>
 
-                        {/* Header Text */}
+                        {/* Header Text (Visual only, controls are on Z-70) */}
                         <div className="px-8 mb-4 flex justify-between items-center text-white">
                             <h2 className="text-sm font-medium opacity-50 uppercase tracking-widest">Your Sanctuary</h2>
+                            {/* Close button is technically redundant as backdrop click closes, but good for affordance */}
                             <button onClick={onCloseMobile} className="p-2 -mr-2 text-white/50 hover:text-white rounded-full">
                                 <X size={20} />
                             </button>
@@ -163,19 +163,19 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                         {/* Carousel */}
                         <div 
                             ref={carouselRef}
-                            className="flex-1 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide px-6 pb-12 items-center"
+                            className="flex-1 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide px-6 items-center"
                         >
                             {WIDGETS.map((widget, i) => {
                                 const isActive = i === activeIndex;
                                 return (
                                     <div 
                                         key={widget.id} 
-                                        className="w-full shrink-0 snap-center px-2 flex items-center justify-center h-[75vh]"
+                                        className="w-full shrink-0 snap-center px-2 flex items-center justify-center h-full"
                                     >
                                         <div 
                                             onClick={() => handleWidgetClick(widget)}
                                             className={`
-                                                w-full h-full max-h-[500px] relative overflow-hidden rounded-[2.5rem] 
+                                                w-full h-full max-h-[60vh] relative overflow-hidden rounded-[2.5rem] 
                                                 bg-[#151515]/90 backdrop-blur-3xl border border-white/10 shadow-2xl
                                                 flex flex-col items-center justify-center
                                                 transition-transform duration-500
