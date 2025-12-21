@@ -49,7 +49,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-
+  
   // Responsive Check
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -134,7 +134,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-                        className="relative z-10 flex flex-col h-full w-full pt-20 pb-24"
+                        className="relative z-10 flex flex-col h-full w-full pt-20 pb-24" 
                     >
                         {/* Top Bar: Progress Indicators */}
                         <div className="px-6 pb-4 flex gap-1.5 z-20">
@@ -144,8 +144,8 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                     onClick={() => jumpToWidget(i)}
                                     className="flex-1 h-1.5 rounded-full overflow-hidden bg-white/10 transition-all duration-300 relative group"
                                 >
-                                    <div
-                                        className={`absolute inset-0 transition-all duration-500 ${activeIndex === i ? w.barColor : 'opacity-0'}`}
+                                    <div 
+                                        className={`absolute inset-0 transition-all duration-500 ${activeIndex === i ? w.barColor : 'opacity-0'}`} 
                                     />
                                 </button>
                             ))}
@@ -161,21 +161,21 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                         </div>
 
                         {/* Carousel */}
-                        <div
+                        <div 
                             ref={carouselRef}
                             className="flex-1 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide px-6 items-center"
                         >
                             {WIDGETS.map((widget, i) => {
                                 const isActive = i === activeIndex;
                                 return (
-                                    <div
-                                        key={widget.id}
+                                    <div 
+                                        key={widget.id} 
                                         className="w-full shrink-0 snap-center px-2 flex items-center justify-center h-full"
                                     >
-                                        <div
+                                        <div 
                                             onClick={() => handleWidgetClick(widget)}
                                             className={`
-                                                w-full h-full max-h-[60vh] relative overflow-hidden rounded-[2.5rem]
+                                                w-full h-full max-h-[60vh] relative overflow-hidden rounded-[2.5rem] 
                                                 bg-[#151515]/90 backdrop-blur-3xl border border-white/10 shadow-2xl
                                                 flex flex-col items-center justify-center
                                                 transition-transform duration-500
@@ -198,7 +198,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                             {/* Text */}
                                             <h3 className="text-3xl font-serif text-white mb-3 relative z-10">{widget.label}</h3>
                                             <p className="text-white/50 text-sm max-w-[200px] text-center leading-relaxed relative z-10">{widget.desc}</p>
-
+                                            
                                             {/* Action Button */}
                                             <div className="mt-10 px-8 py-3 rounded-full bg-white/10 border border-white/10 text-white font-medium text-sm hover:bg-white/20 transition-colors relative z-10">
                                                 Tap to Open
