@@ -8,6 +8,8 @@ import { Sanctuary } from './pages/Sanctuary';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { EncryptionProvider } from './context/EncryptionContext';
+import { SyncProvider } from './context/SyncContext';
+import { SyncBridge } from './components/SyncBridge'; // Bridge
 import { useSecurity } from './hooks/useSecurity';
 
 // Protected Route Wrapper
@@ -59,13 +61,19 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <EncryptionProvider>
-        <ThemeProvider>
-          <Router>
-            <AppContainer>
-              <AppRoutes />
-            </AppContainer>
-          </Router>
-        </ThemeProvider>
+        {/* SyncProvider is independent and provides socket infrastructure */}
+        <SyncProvider>
+          {/* ThemeProvider manages state but also consumes Sync via Bridge */}
+          <ThemeProvider>
+             {/* Bridge connects Sync events to Theme updates */}
+             <SyncBridge />
+             <Router>
+              <AppContainer>
+                <AppRoutes />
+              </AppContainer>
+            </Router>
+          </ThemeProvider>
+        </SyncProvider>
       </EncryptionProvider>
     </AuthProvider>
   );

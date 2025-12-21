@@ -40,7 +40,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem('user_tts_enabled') === 'true');
+  // Fix: Default to FALSE for TTS if not set
+  const [ttsEnabled, setTtsEnabled] = useState(() => {
+      const saved = localStorage.getItem('user_tts_enabled');
+      return saved === 'true'; // If null, returns false.
+  });
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(localStorage.getItem('user_voice_uri'));
 

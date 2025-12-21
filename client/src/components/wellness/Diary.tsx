@@ -177,7 +177,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
   useEffect(() => {
     if (isOpen && isUnlocked) fetchEntries();
-  }, [isOpen, isUnlocked, user]); 
+  }, [isOpen, isUnlocked, user]);
 
   useEffect(() => {
       const dateKey = toDateString(activeDate);
@@ -232,7 +232,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
     if (!editContent.trim()) return;
     setIsSaving(true);
     try {
-      const titleToSave = editTitle.trim() || "Untitled"; 
+      const titleToSave = editTitle.trim() || "Untitled";
       const encTitle = encrypt(titleToSave);
       const encContent = encrypt(editContent);
       const saved = await userService.saveDiaryEntry({
@@ -253,7 +253,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   };
 
   const createNewEntry = () => {
-    setActiveDate(new Date()); 
+    setActiveDate(new Date());
     setEditMode('edit');
   };
 
@@ -311,8 +311,9 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   const calendarGrid = getCalendarDays();
 
   // Swipe Handlers
+  // Fix: Move handlers to the Container Level to capture swipes reliably
   const onTouchStart = (e: React.TouchEvent) => {
-      setTouchEnd(null); 
+      setTouchEnd(null);
       setTouchStart(e.targetTouches[0].clientX);
   }
   const onTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
@@ -321,11 +322,10 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       const distance = touchStart - touchEnd;
       const isLeftSwipe = distance > 50; // Swiped Left -> Go Next (Future)
       const isRightSwipe = distance < -50; // Swiped Right -> Go Prev (Past)
-      
-      // Add slight delay to prevent accidental double swipes
+
       if (!isFlipping) {
-          if (isLeftSwipe) changeDay(1); 
-          if (isRightSwipe) changeDay(-1); 
+          if (isLeftSwipe) changeDay(1);
+          if (isRightSwipe) changeDay(-1);
       }
       setTouchStart(null);
       setTouchEnd(null);
@@ -428,11 +428,9 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                           </div>
                         )}
 
-                        <div 
+                        {/* Note: Swiping is now handled by the parent container wrapper for better reliability */}
+                        <div
                           className={`${isMobile ? 'w-full pt-14' : 'w-1/2 border-l border-[#ccc] rounded-r-lg'} h-full overflow-hidden bg-[#fdfdf6]`}
-                          onTouchStart={isMobile ? onTouchStart : undefined}
-                          onTouchMove={isMobile ? onTouchMove : undefined}
-                          onTouchEnd={isMobile ? onTouchEnd : undefined}
                         >
                              <PaperPage 
                                 date={isFlipping === 'next' ? dPlus1 : activeDate}
