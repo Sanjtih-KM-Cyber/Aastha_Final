@@ -337,7 +337,12 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       initialWidth={900} initialHeight={650} defaultPosition={{ x: 100, y: 80 }}
       zIndex={zIndex || 20} onFocus={onFocus || (() => {})}
     >
-      <div className="flex h-full w-full bg-[#222] text-gray-800 relative overflow-hidden rounded-b-xl shadow-inner font-sans items-center justify-center">
+      <div
+        className="flex h-full w-full bg-[#222] text-gray-800 relative overflow-hidden rounded-b-xl shadow-inner font-sans items-center justify-center"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
         
         {!isUnlocked ? (
           <DiaryLockScreen onUnlock={handleUnlock} error={authError} setError={setAuthError} />

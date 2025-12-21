@@ -227,7 +227,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
       animate="desktop"
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
       className={`
-        fixed top-0 bottom-0 left-0 z-50
+        fixed top-0 bottom-0 left-0 z-20
         h-full
         bg-black/40 backdrop-blur-2xl border-r border-white/10
         flex flex-col

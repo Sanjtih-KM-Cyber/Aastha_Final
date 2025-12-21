@@ -103,7 +103,7 @@ export const Sanctuary: React.FC = () => {
       </main>
 
       {/* 3. Floating Widget Ecosystem - Widget Layer (z-40+) */}
-      <div style={{ position: 'absolute', pointerEvents: 'none', inset: 0, zIndex: 40 }}>
+      <div style={{ position: 'absolute', pointerEvents: 'none', inset: 0 }}>
           <div style={{ pointerEvents: 'auto' }}>
               <Diary 
                 isOpen={widgets.diary} 
