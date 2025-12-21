@@ -382,8 +382,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
             const lowerTag = tag.toLowerCase();
 
-            if (lowerTag.startsWith('<color>')) {
-            }
             const colorMatch = /<color>([\s\S]*?)<\/color>/i.exec(text);
             if (colorMatch) {
                 const fullBlock = colorMatch[0];

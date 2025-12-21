@@ -123,7 +123,10 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
                 )}
 
                 {/* Window Controls */}
-                <div className="flex items-center gap-2 pointer-events-auto">
+                <div
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="flex items-center gap-2 pointer-events-auto"
+                >
                     {/* Minimize (Optional) */}
                     {/* <button className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all"><Minus size={14} /></button> */}
 
