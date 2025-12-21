@@ -374,7 +374,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
     if (matches) {
         matches.forEach(tag => {
-            if (processedTagsRef.current.has(tag)) return;
+            if (processedTagsRef.current.has(tag)) return; 
 
             const lowerTag = tag.toLowerCase();
 
@@ -390,7 +390,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      if (!showCountdown) {
                         setShowCountdown(true);
                         setCountdownNum(3);
-                        setTargetFlashColor(mappedColor.startsWith('#') ? mappedColor : '#ffffff');
+                        setTargetFlashColor(mappedColor.startsWith('#') ? mappedColor : '#ffffff'); 
 
                         const timer = setInterval(() => {
                             setCountdownNum(prev => {
@@ -401,7 +401,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                     setTimeout(() => {
                                         setTheme(mappedColor);
                                         setTimeout(() => setShowFlash(false), 800);
-                                    }, 400);
+                                    }, 400); 
                                     return 0;
                                 }
                                 return prev - 1;
