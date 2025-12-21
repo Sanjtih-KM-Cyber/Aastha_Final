@@ -41,6 +41,10 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Resize State
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeStartRef = useRef<{x: number, y: number, w: number, h: number} | null>(null);
+
   useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth < 768;
@@ -58,6 +62,41 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [initialWidth, initialHeight]);
+
+  // Resize Handlers
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    resizeStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      w: size.width,
+      h: size.height
+    };
+
+    // Attach global listeners for smooth resizing even if cursor leaves the handle
+    document.addEventListener('pointermove', handleResizeMove);
+    document.addEventListener('pointerup', stopResize);
+  };
+
+  const handleResizeMove = (e: PointerEvent) => {
+    if (!resizeStartRef.current) return;
+    const dx = e.clientX - resizeStartRef.current.x;
+    const dy = e.clientY - resizeStartRef.current.y;
+
+    setSize({
+      width: Math.max(minWidth, resizeStartRef.current.w + dx),
+      height: Math.max(minHeight, resizeStartRef.current.h + dy)
+    });
+  };
+
+  const stopResize = () => {
+    setIsResizing(false);
+    resizeStartRef.current = null;
+    document.removeEventListener('pointermove', handleResizeMove);
+    document.removeEventListener('pointerup', stopResize);
+  };
 
   const handleClose = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -89,7 +128,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           }}
           exit={{ opacity: 0, scale: 0.9, y: 20 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          drag={!isMobile}
+          drag={!isMobile && !isResizing} // Disable drag while resizing
           dragControls={dragControls}
           dragMomentum={false}
           dragListener={false}
@@ -128,7 +167,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
                   className="flex items-center gap-2 pointer-events-auto"
                 >
                     {/* Minimize (Optional) */}
-                    {/* <button className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all"><Minus size={14} /></button> */}
+                    <button className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all"><Minus size={14} /></button>
 
                     <button
                       onClick={handleClose}
@@ -146,6 +185,27 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             <div className={`flex-1 flex flex-col h-full w-full ${isMobile ? 'pt-16' : ''}`}>
                {children}
             </div>
+
+            {/* --- Resize Handles (Desktop Only) --- */}
+            {!isMobile && (
+              <>
+                 {/* Bottom Right Corner */}
+                 <div
+                   onPointerDown={startResize}
+                   className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-50 hover:bg-white/10 rounded-tl-lg"
+                 />
+                 {/* Right Edge */}
+                 <div
+                   onPointerDown={startResize}
+                   className="absolute top-10 bottom-6 right-0 w-2 cursor-ew-resize z-40 hover:bg-white/5"
+                 />
+                 {/* Bottom Edge */}
+                 <div
+                   onPointerDown={startResize}
+                   className="absolute bottom-0 left-10 right-6 h-2 cursor-ns-resize z-40 hover:bg-white/5"
+                 />
+              </>
+            )}
 
           </div>
         </motion.div>
