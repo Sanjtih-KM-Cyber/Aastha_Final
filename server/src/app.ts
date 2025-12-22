@@ -86,11 +86,14 @@ app.set('trust proxy', 1);
 // Accept a list of origins (add your domains)
 const allowedOrigins = [
   'http://localhost:3000',
-  'http://localhost:5173', // Vite default
+  'http://localhost:5173',
   'http://127.0.0.1:3000',
-  'https://aasthafv2.vercel.app', // Explicitly allow the frontend
+  'https://aasthafv2.vercel.app',   // optional: keep for testing
+  'https://aasthaai.site',          // ✅ NEW DOMAIN
+  'https://www.aasthaai.site',      // ✅ WWW
   process.env.FRONTEND_URL || '',
 ];
+
 
 app.use(cors({
   origin: (origin, callback) => {
