@@ -8,7 +8,6 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Initialize Razorpay
-// Note: Types for Razorpay might not be available in all environments, defaulting to any if needed or standard instantiation
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID || '',
   key_secret: process.env.RAZORPAY_KEY_SECRET || ''
@@ -19,11 +18,16 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
 
+    // FIX: Shortened receipt ID. 
+    // "rcpt_" (5 chars) + Date (13 chars) = 18 chars. 
+    // This is safe. The old version was ~46 chars (Limit is 40).
+    const shortReceiptId = `rcpt_${Date.now()}`;
+
     // CRITICAL PRICING: ₹49.00
     const options = {
-      amount: 4900, // paise
+      amount: 4900, // paise (49 INR)
       currency: "INR",
-      receipt: `receipt_${Date.now()}_${req.user._id}`,
+      receipt: shortReceiptId, 
       notes: {
         userId: req.user._id.toString(),
         plan: "early_bird_pro"
@@ -43,7 +47,9 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
 
   } catch (error: any) {
     console.error("Razorpay Order Error:", error);
-    (res as any).status(500).json({ message: "Payment initialization failed" });
+    // Send the actual error description to frontend for easier debugging
+    const errorMessage = error.error?.description || "Payment initialization failed";
+    (res as any).status(500).json({ message: errorMessage });
   }
 };
 
