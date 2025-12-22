@@ -105,7 +105,13 @@ const PaperPage: React.FC<{
         <div className="flex flex-col w-full">
            <span className="text-xs font-mono text-gray-400 uppercase tracking-widest mb-1">{getFormattedDate(date)}</span>
            {isEditing ? (
-             <input value={title} onChange={(e) => onTitleChange(e.target.value)} placeholder="Title (Optional)..." className="text-2xl font-serif font-bold bg-transparent border-none outline-none text-gray-800 placeholder-gray-300 w-full" />
+             <input
+               value={title}
+               onChange={(e) => onTitleChange(e.target.value)}
+               onPointerDown={(e) => e.stopPropagation()}
+               placeholder="Title (Optional)..."
+               className="text-2xl font-serif font-bold bg-transparent border-none outline-none text-gray-800 placeholder-gray-300 w-full"
+             />
            ) : (
              <h2 className="text-2xl font-serif font-bold text-gray-800 leading-tight">{title || "Untitled Entry"}</h2>
            )}
@@ -114,7 +120,14 @@ const PaperPage: React.FC<{
 
       <div className="flex-1 relative overflow-y-auto custom-scrollbar pl-14 pr-8 pb-8 pt-2">
         {isEditing ? (
-          <textarea value={content} onChange={(e) => onContentChange(e.target.value)} placeholder="Write your thoughts here..." className="w-full h-full bg-transparent border-none outline-none resize-none text-gray-700 text-lg leading-[2rem] font-serif" spellCheck={false} />
+          <textarea
+             value={content}
+             onChange={(e) => onContentChange(e.target.value)}
+             onPointerDown={(e) => e.stopPropagation()}
+             placeholder="Write your thoughts here..."
+             className="w-full h-full bg-transparent border-none outline-none resize-none text-gray-700 text-lg leading-[2rem] font-serif"
+             spellCheck={false}
+          />
         ) : (
           <div className="w-full min-h-full text-gray-800 text-lg leading-[2rem] font-serif whitespace-pre-wrap">
             {content || <span className="text-gray-300 italic">No content for this day.</span>}
@@ -139,7 +152,6 @@ const PaperPage: React.FC<{
   );
 };
 
-// Reusable Calendar Component (Desktop Pane & Mobile Modal)
 const CalendarView: React.FC<{
   currentMonth: Date;
   onMonthChange: (offset: number) => void;
@@ -150,7 +162,7 @@ const CalendarView: React.FC<{
   setActiveDate: (date: Date) => void;
   onCreateNew: () => void;
   onRefresh: () => void;
-  isMobile?: boolean; // Controls specific styling tweaks
+  isMobile?: boolean;
 }> = ({
   currentMonth, onMonthChange, calendarGrid, onDayClick,
   entriesMap, activeDate, setActiveDate, onCreateNew, onRefresh, isMobile
@@ -160,7 +172,6 @@ const CalendarView: React.FC<{
   return (
     <div className={`flex flex-col h-full ${isMobile ? '' : 'bg-[#fdfdf6]'}`}>
 
-      {/* Header (Desktop Only) */}
       {!isMobile && (
         <div className="p-6 pb-2 flex items-center justify-between border-b border-gray-200/50">
            <h3 className="font-serif text-2xl font-bold text-gray-800 flex items-center gap-2">
@@ -173,11 +184,9 @@ const CalendarView: React.FC<{
         </div>
       )}
 
-      {/* Calendar Grid Container */}
       <div className={isMobile ? 'pb-4' : 'px-6 py-4'}>
         <div className={`${isMobile ? 'bg-transparent' : 'bg-white/60 backdrop-blur-sm rounded-2xl p-4 border border-gray-200 shadow-sm'}`}>
 
-            {/* Month Navigation */}
             <div className="flex justify-between items-center mb-4 px-2">
                 <button onClick={() => onMonthChange(-1)} className="p-2 hover:bg-gray-200 rounded-full text-gray-600"><ChevronLeft size={isMobile ? 20 : 16} /></button>
                 <span className={`font-bold uppercase tracking-widest text-gray-800 ${isMobile ? 'text-lg' : 'text-sm'}`}>
@@ -186,14 +195,12 @@ const CalendarView: React.FC<{
                 <button onClick={() => onMonthChange(1)} className="p-2 hover:bg-gray-200 rounded-full text-gray-600"><ChevronRight size={isMobile ? 20 : 16} /></button>
             </div>
 
-            {/* Days Header */}
             <div className="grid grid-cols-7 gap-1 mb-2">
                 {['Su','Mo','Tu','We','Th','Fr','Sa'].map((d, i) => (
                    <span key={i} className={`text-center font-bold text-gray-400 uppercase ${isMobile ? 'text-xs' : 'text-[10px]'}`}>{d}</span>
                 ))}
             </div>
 
-            {/* Days Grid */}
             <div className={`grid grid-cols-7 gap-1 place-items-center ${isMobile ? 'gap-y-4' : ''}`}>
                 {calendarGrid.map((day, idx) => {
                     if (!day) return <div key={`empty-${idx}`} className={isMobile ? 'w-10 h-10' : 'w-8 h-8'} />;
@@ -219,7 +226,6 @@ const CalendarView: React.FC<{
         </div>
       </div>
 
-      {/* Recent Memories List (Desktop Only) */}
       {!isMobile && (
         <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-3 custom-scrollbar">
             <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Recent Memories</h4>
@@ -256,7 +262,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   const [editMode, setEditMode] = useState<DiaryMode>('view');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Swipe State
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
@@ -377,7 +382,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
       setActiveDate(newDate);
       if (isMobile) {
-         setIsCalendarModalOpen(false); // Close modal on mobile selection
+         setIsCalendarModalOpen(false);
       }
   };
 
@@ -412,7 +417,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
   const calendarGrid = getCalendarDays();
 
-  // Swipe Handlers
   const onTouchStart = (e: React.TouchEvent) => {
       setTouchEnd(null);
       setTouchStart(e.targetTouches[0].clientX);
@@ -473,14 +477,11 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                 <AnimatePresence>
                   {isMobile && isCalendarModalOpen && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
-                       {/* Backdrop */}
                        <motion.div
                           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                           onClick={() => setIsCalendarModalOpen(false)}
                           className="absolute inset-0 bg-black/60 backdrop-blur-sm"
                        />
-
-                       {/* Card */}
                        <motion.div
                           initial={{ scale: 0.9, opacity: 0, y: 20 }}
                           animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -519,7 +520,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                   )}
                 </AnimatePresence>
 
-
                 {!isMobile && (
                   <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white z-50">
                       <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronLeft/></button>
@@ -539,7 +539,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                     <div className="absolute inset-0 flex">
                         {!isMobile && (
                           <div className="w-1/2 h-full border-r border-[#ccc] overflow-hidden rounded-l-lg bg-[#fdfdf6] flex flex-col">
-                              {/* Desktop Calendar Logic - Reused Component */}
                               <CalendarView
                                   currentMonth={currentMonth}
                                   onMonthChange={changeMonth}
@@ -555,7 +554,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                           </div>
                         )}
 
-                        {/* Note: Swiping is now handled by the parent container wrapper for better reliability */}
                         <div
                           className={`${isMobile ? 'w-full pt-14' : 'w-1/2 border-l border-[#ccc] rounded-r-lg'} h-full overflow-hidden bg-[#fdfdf6]`}
                         >
@@ -573,7 +571,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
                     {!isMobile && (
                       <AnimatePresence mode="sync" onExitComplete={() => setIsFlipping(null)}>
-                        {/* Page Flip Animations (Unchanged) */}
                         {isFlipping === 'next' && (
                              <motion.div
                                 key="flip-next"

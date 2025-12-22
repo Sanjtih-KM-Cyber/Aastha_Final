@@ -46,6 +46,8 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
   const { currentTheme } = useTheme();
   const sidebarRef = useRef<HTMLDivElement>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
+  const itemsRef = useRef<(HTMLDivElement | null)[]>([]);
+
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -58,7 +60,6 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Time-based Greeting
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return "Good Morning";
@@ -66,26 +67,32 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
     return "Good Evening";
   };
 
-  // Scroll Listener for Carousel Index
   useEffect(() => {
-    const el = carouselRef.current;
-    if (!el) return;
+    if (!isMobileOpen || !carouselRef.current) return;
 
-    const handleScroll = () => {
-        const index = Math.round(el.scrollLeft / el.offsetWidth);
-        setActiveIndex(index);
-    };
-    el.addEventListener('scroll', handleScroll);
-    return () => el.removeEventListener('scroll', handleScroll);
-  }, [isMobileOpen]);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = itemsRef.current.indexOf(entry.target as HTMLDivElement);
+            if (index !== -1) {
+              setActiveIndex(index);
+            }
+          }
+        });
+      },
+      {
+        root: carouselRef.current,
+        threshold: 0.6,
+      }
+    );
 
-  // Click Outside Logic
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      // Only close if clicking the backdrop, not the carousel itself (though backdrop covers all)
-      // Actually, standard modal behavior is fine.
-    };
-  }, []);
+    itemsRef.current.forEach((el) => {
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [isMobileOpen, isMobile]);
 
   const handleWidgetClick = (widget: typeof WIDGETS[0]) => {
       if (widget.id === 'settings') {
@@ -97,11 +104,8 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
   };
 
   const jumpToWidget = (index: number) => {
-      if (carouselRef.current) {
-          carouselRef.current.scrollTo({
-              left: index * carouselRef.current.offsetWidth,
-              behavior: 'smooth'
-          });
+      if (itemsRef.current[index]) {
+          itemsRef.current[index]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
       }
   };
 
@@ -111,14 +115,11 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
     desktop: { x: 0, opacity: 1, width: isCollapsed ? 80 : 280 },
   };
 
-  // --- MOBILE RENDER: WIDGET UNIVERSE (Carousel) ---
   if (isMobile) {
       return (
         <AnimatePresence>
             {isMobileOpen && (
-                // Z-60: Sits between Chat Content (Z-10) and Fixed Controls (Z-70)
                 <div className="fixed inset-0 z-[60] flex flex-col pointer-events-auto">
-                    {/* 1. Frosted Backdrop (Dims chat, leaves controls visible) */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -128,7 +129,6 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                         className="absolute inset-0 bg-black/80 backdrop-blur-md"
                     />
 
-                    {/* 2. Content Container - Padded to fit between Header and Input */}
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -136,7 +136,6 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                         transition={{ type: "spring", bounce: 0, duration: 0.4 }}
                         className="relative z-10 flex flex-col h-full w-full pt-20 pb-24"
                     >
-                        {/* Top Bar: Progress Indicators */}
                         <div className="px-6 pb-4 flex gap-1.5 z-20">
                             {WIDGETS.map((w, i) => (
                                 <button
@@ -151,27 +150,26 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                             ))}
                         </div>
 
-                        {/* Header Text (Visual only, controls are on Z-70) */}
                         <div className="px-8 mb-4 flex justify-between items-center text-white">
                             <h2 className="text-sm font-medium opacity-50 uppercase tracking-widest">Your Sanctuary</h2>
-                            {/* Close button is technically redundant as backdrop click closes, but good for affordance */}
                             <button onClick={onCloseMobile} className="p-2 -mr-2 text-white/50 hover:text-white rounded-full">
                                 <X size={20} />
                             </button>
                         </div>
 
-                        {/* Carousel */}
                         <div
                             ref={carouselRef}
-                            className="flex-1 flex overflow-x-auto snap-x snap-mandatory snap-stop-always scrollbar-hide px-6 items-center"
-                            style={{ scrollSnapStop: 'always' }} // Force one-by-one scrolling
+                            className="flex-1 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide px-6 items-center"
+                            style={{ scrollSnapStop: 'always' }}
                         >
                             {WIDGETS.map((widget, i) => {
                                 const isActive = i === activeIndex;
                                 return (
                                     <div
                                         key={widget.id}
+                                        ref={(el) => (itemsRef.current[i] = el)}
                                         className="w-full shrink-0 snap-center px-2 flex items-center justify-center h-full"
+                                        style={{ scrollSnapStop: 'always' }}
                                     >
                                         <div
                                             onClick={() => handleWidgetClick(widget)}
@@ -182,14 +180,12 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                                 transition-all duration-500 ease-out
                                                 ${isActive
                                                     ? 'scale-100 opacity-100 blur-0 grayscale-0'
-                                                    : 'scale-95 opacity-50 blur-[2px] grayscale-[50%]'}
+                                                    : 'scale-90 opacity-50 blur-[1px] grayscale-[30%]'}
                                             `}
                                         >
-                                            {/* Ambient Glow Background */}
                                             <div className={`absolute inset-0 bg-gradient-to-br ${widget.from} to-transparent opacity-20`} />
                                             <div className={`absolute top-0 inset-x-0 h-32 bg-gradient-to-b ${widget.from} to-transparent opacity-10`} />
 
-                                            {/* Icon */}
                                             <div className={`
                                                 w-24 h-24 rounded-full flex items-center justify-center mb-8
                                                 bg-black/20 shadow-inner border border-white/5 relative z-10
@@ -198,11 +194,9 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                                 <widget.icon size={48} className={widget.color} />
                                             </div>
 
-                                            {/* Text */}
                                             <h3 className="text-3xl font-serif text-white mb-3 relative z-10">{widget.label}</h3>
                                             <p className="text-white/50 text-sm max-w-[200px] text-center leading-relaxed relative z-10">{widget.desc}</p>
 
-                                            {/* Action Button */}
                                             <div className="mt-10 px-8 py-3 rounded-full bg-white/10 border border-white/10 text-white font-medium text-sm hover:bg-white/20 transition-colors relative z-10">
                                                 Tap to Open
                                             </div>
@@ -219,7 +213,6 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
       );
   }
 
-  // --- DESKTOP SIDEBAR (UNCHANGED) ---
   return (
     <motion.aside
       ref={sidebarRef}
@@ -237,7 +230,6 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
         md:flex hidden
       `}
     >
-        {/* --- Header: Greeting & Status --- */}
         <div className={`p-6 pb-4 transition-all duration-300 flex flex-col ${isCollapsed ? 'items-center' : ''}`}>
           <div className={`flex items-center gap-3 mb-6 ${isCollapsed ? 'justify-center' : ''}`}>
             <div 
@@ -262,7 +254,6 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
             </motion.div>
           )}
 
-          {/* Streak Badge */}
           <div 
              className={`flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5 ${isCollapsed ? 'justify-center w-10 h-10 p-0' : 'w-fit'}`}
              title="Daily Streak"
@@ -278,12 +269,11 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
           </div>
         </div>
 
-        {/* --- Navigation: Widgets --- */}
         <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto custom-scrollbar">
           {!isCollapsed && <p className="px-4 text-[10px] uppercase tracking-widest text-white/30 font-bold mb-2">Toolkit</p>}
           
           {WIDGETS.map((widget) => {
-            if (widget.id === 'settings') return null; // Skip Settings here as it is in footer
+            if (widget.id === 'settings') return null;
             const isActive = activeWidgets[widget.id];
             return (
               <button
@@ -298,7 +288,6 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                 `}
                 title={isCollapsed ? widget.label : undefined}
               >
-                {/* Active Indicator Bar */}
                 {isActive && (
                   <motion.div 
                     layoutId="active-bar"
@@ -320,7 +309,6 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
           })}
         </nav>
 
-        {/* --- Footer: Profile & Toggle --- */}
         <div className="p-4 mt-auto border-t border-white/5 bg-black/20">
           
           {!isCollapsed ? (
@@ -360,7 +348,6 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
               </button>
           )}
 
-          {/* Collapse Button */}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="w-full flex items-center justify-center py-2 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-colors"
