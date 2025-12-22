@@ -566,7 +566,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
             style={{ background: `linear-gradient(180deg, ${currentTheme.primaryColor}40, #111827)` }}
         >
             {/* Input Bar */}
-            <div className="w-full relative z-20 mb-6">
+            <div className="w-full relative z-20 mb-6 mt-8">
                 <form onSubmit={handleSearch} className="relative flex gap-2">
                     <div className="relative flex-1">
                         <input 
