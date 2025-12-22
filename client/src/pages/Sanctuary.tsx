@@ -8,8 +8,10 @@ import { Soundscape } from '../components/widgets/Soundscape';
 import { BreathingWidget } from '../components/widgets/BreathingWidget';
 import { MoodTracker } from '../components/widgets/MoodTracker';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
+import { useSync } from '../context/SyncContext';
 
 export const Sanctuary: React.FC = () => {
+  const { emit, subscribe } = useSync();
   // Mobile Sidebar State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -57,11 +59,27 @@ export const Sanctuary: React.FC = () => {
     });
   };
 
+  // Sync Listeners
+  useEffect(() => {
+    const unsubWidgets = subscribe('WIDGET_UPDATE', (payload: any) => {
+        if (payload.widgets) setWidgets(payload.widgets);
+        if (payload.zIndices) setZIndices(payload.zIndices);
+    });
+
+    // Sync Settings Logic could go here or in SyncBridge, but Widget state is local to Sanctuary
+    return () => {
+        unsubWidgets();
+    };
+  }, [subscribe]);
+
   const toggleWidget = (key: string) => {
     setWidgets(prev => {
         const isOpen = !prev[key];
+        const newWidgets = { ...prev, [key]: isOpen };
         if (isOpen) bringToFront(key);
-        return { ...prev, [key]: isOpen };
+
+        emit('WIDGET_UPDATE', { widgets: newWidgets }); // Sync
+        return newWidgets;
     });
   };
 
@@ -70,15 +88,21 @@ export const Sanctuary: React.FC = () => {
         setWidgetConfigs(prev => ({ ...prev, [key]: config }));
     }
     if (!widgets[key]) {
-        setWidgets(prev => ({ ...prev, [key]: true }));
+        const newWidgets = { ...widgets, [key]: true };
+        setWidgets(newWidgets);
         bringToFront(key);
+        emit('WIDGET_UPDATE', { widgets: newWidgets }); // Sync
     } else {
         bringToFront(key);
     }
   };
 
   const closeWidget = (key: string) => {
-    setWidgets(prev => ({ ...prev, [key]: false }));
+    setWidgets(prev => {
+        const newWidgets = { ...prev, [key]: false };
+        emit('WIDGET_UPDATE', { widgets: newWidgets }); // Sync
+        return newWidgets;
+    });
   };
 
   return (
