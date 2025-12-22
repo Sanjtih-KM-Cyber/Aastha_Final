@@ -16,8 +16,9 @@ export const sendOTPEmail = async (to: string, otp: string) => {
 
   try {
     const { data, error } = await resend.emails.send({
-      from: 'Aastha <onboarding@resend.dev>', // Default Resend Testing Domain
-      to: [to], // Resend Free Tier only sends to your own email unless you verify a domain
+      from: 'Aastha <noreply@aasthaai.site>',
+      reply_to: 'aasthafv.ai@gmail.com',
+      to: [to],
       subject: 'Your Verification Code - Aastha',
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f6f8;">

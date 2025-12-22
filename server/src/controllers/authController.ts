@@ -7,7 +7,6 @@ import Diary from '../models/Diary';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { encrypt, decrypt } from '../utils/serverEncryption';
 import { sendOTPEmail } from '../services/emailService';
-// REMOVED: import { decrypt as clientDecrypt } from '../utils/encryptionUtils'; // Cannot resolve
 
 const hashEmail = (email: string) => {
     return crypto.createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
@@ -27,7 +26,6 @@ const generateOTP = () => {
 // --- REGISTER ---
 export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Re-added username back to body destructuring
     const { name, email, username, password, diaryPassword, securityQuestions } = (req as any).body;
 
     if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string' || typeof username !== 'string') {
@@ -35,7 +33,6 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
         return;
     }
 
-    // Enforce Username for New Users
     if (!name || !email || !password || !username) {
       (res as any).status(400).json({ message: 'Please add all required fields (including Username)' });
       return;
@@ -60,9 +57,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
         }
     }
 
-    // Client-Side Encryption Salt (Random UUID for new users)
     const encryptionSalt = crypto.randomUUID();
-
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
     let hashedDiaryPassword = undefined;
@@ -77,70 +72,45 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     }
 
     const user = await User.create({
-      name: name, // Plain
-      email: cleanEmail, // Storing plain email to satisfy legacy unique index constraints
-      emailHash: emailHash, // SHA-256 Hash
-      username: cleanUsername, // Plain Index
+      name: name,
+      email: cleanEmail,
+      emailHash: emailHash,
+      username: cleanUsername,
       emailEncrypted: encrypt(email),
-      usernameEncrypted: cleanUsername ? encrypt(username) : undefined, // Encrypted
+      usernameEncrypted: cleanUsername ? encrypt(username) : undefined,
       encryptionSalt: encryptionSalt,
-      
       passwordHash: hashedPassword,
       diaryPasswordHash: hashedDiaryPassword,
       securityQuestions: processedSecurityQuestions,
       isPro: false,
       dailyPremiumUsage: 0,
       streak: 1, 
-      lastVisit: new Date()
+      lastVisit: new Date(),
+
+      // --- STRICT VERIFICATION MODE ---
+      isVerified: false
     });
 
     if (user) {
-        // --- PASSIVE VERIFICATION MODE ---
-        // Users are verified by default to bypass email restrictions
-        user.isVerified = true; 
-        
         try {
             const otp = generateOTP();
             user.otpCode = await bcrypt.hash(otp, 10);
             user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
             await user.save();
 
-            console.log(`[Auth] Attempting to send welcome/OTP email to ${cleanEmail}`);
-            // Non-blocking email send (Passive)
+            console.log(`[Auth] Strict Registration: Sending OTP to ${cleanEmail}`);
+            // Fire-and-forget email sending
             sendOTPEmail(cleanEmail, otp).catch(e => console.error("[Auth] Background Email Error:", e));
         } catch(err) {
             console.error("[Auth] OTP generation/sending error:", err);
-            // Save anyway if OTP generation fails
-            await user.save();
         }
 
-        // --- DIRECT LOGIN RESPONSE ---
-        const token = generateToken((user._id as any).toString());
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
-        (res as any).cookie('jwt', token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? 'none' : 'lax',
-            maxAge: 30 * 24 * 60 * 60 * 1000
-        });
-
-        (res as any).status(200).json({
-            _id: user._id,
-            name: user.name, 
-            email: decrypt(user.emailEncrypted) || user.email, 
-            username: user.username || undefined,
-            requireUsername: !user.username, 
-            hasDiarySetup: !!user.diaryPasswordHash,
-            isPro: user.isPro,
-            credits: user.isPro ? 9999 : (10 - (user.dailyPremiumUsage || 0)),
-            streak: user.streak,
-            avatar: user.avatar,
-            wallpaper: user.wallpaper,
-            persona: user.persona || 'aastha',
-            createdAt: user.createdAt,
-            encryptionSalt: user.encryptionSalt,
-            securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question })),
-            message: 'Account created successfully.'
+        // --- STRICT RESPONSE ---
+        // Do NOT set cookie. Do NOT return user data.
+        (res as any).status(201).json({
+            message: 'Account created. Verification required.',
+            requiresVerification: true,
+            email: cleanEmail
         });
     }
   } catch (error) {
@@ -162,7 +132,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     const cleanIdentifier = identifier.toLowerCase().trim();
     const identifierHash = hashEmail(cleanIdentifier);
 
-    // LOOKUP: Search by 'emailHash', legacy 'email', or 'username'
+    // LOOKUP
     let user = await User.findOne({
       $or: [
         { emailHash: identifierHash },
@@ -172,16 +142,11 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     });
 
     // --- MIGRATION ON LOGIN ---
-    // If found by legacy email but no hash, migrate
     if (user && user.email === cleanIdentifier && !user.emailHash) {
         user.emailHash = identifierHash;
         if (!user.emailEncrypted) user.emailEncrypted = encrypt(cleanIdentifier);
-        user.email = undefined; // Clear plain text email
-        
-        // FORCE VERIFICATION FOR LEGACY USERS
-        // Since this is a migration event, we assume they haven't done OTP verification yet.
-        user.isVerified = false; 
-        
+        user.email = undefined;
+        user.isVerified = false; // Force verification for legacy
         await user.save();
     }
 
@@ -200,23 +165,41 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     // 1. Authenticate Password
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
       
-        // --- PASSIVE VERIFICATION MODE ---
-        // We do NOT block unverified users anymore.
-        // If they are not verified, we just let them in.
+        // --- STRICT VERIFICATION CHECK ---
         if (!user.isVerified) {
-             user.isVerified = true; // Auto-verify on login for now
+             console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}. Sending OTP.`);
+
+             const otp = generateOTP();
+             user.otpCode = await bcrypt.hash(otp, 10);
+             user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
              await user.save();
+
+             // Determine email to send to
+             // If user logged in with username, we need the underlying email.
+             // We can decrypt `emailEncrypted` OR use the legacy `email` field if it exists temporarily.
+             // Ideally we use decrypt(user.emailEncrypted).
+             const userEmail = decrypt(user.emailEncrypted) || user.email || cleanIdentifier;
+
+             // Send Email
+             sendOTPEmail(userEmail, otp).catch(e => console.error("[Auth] Login OTP Error:", e));
+
+             (res as any).status(403).json({
+                 message: 'Verification code sent.',
+                 requiresVerification: true,
+                 email: userEmail
+             });
+             return;
         }
 
-        let needsSave = false;
+      // --- PROCEED TO LOGIN ---
+      let needsSave = false;
 
-      // 2. Handle missing fields (Self-healing legacy user data)
+      // Self-healing legacy user data
       if (!user.emailEncrypted && user.email) {
           user.emailEncrypted = encrypt(user.email);
           needsSave = true;
       }
       
-      // Auto-generate username for legacy users
       if (!user.username) {
           const randomSuffix = Math.floor(1000 + Math.random() * 9000);
           const baseName = user.name ? user.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 10) : 'user';
@@ -233,7 +216,6 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       if (user.dailyPremiumUsage === undefined) { user.dailyPremiumUsage = 0; needsSave = true; }
       if (user.isPro === undefined) { user.isPro = false; needsSave = true; }
 
-      // 3. Daily Reset Check
       const today = new Date();
       const lastUsage = new Date(user.lastUsageDate || user.createdAt);
       if (lastUsage.getDate() !== today.getDate() || 
@@ -244,10 +226,8 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           needsSave = true;
       }
       
-      // Only update lastVisit if date changed to avoid writing on every login
       const lastVisitTime = new Date(user.lastVisit).getTime();
       const todayTime = today.getTime();
-      // Only update if difference > 1 minute to prevent spam updates
       if (Math.abs(todayTime - lastVisitTime) > 60000) {
           user.lastVisit = today;
           needsSave = true;
@@ -255,10 +235,9 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
 
       if (needsSave) await user.save();
 
-      // 4. Generate Token & Respond
       const token = generateToken((user._id as any).toString());
-
       const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+
       (res as any).cookie('jwt', token, {
         httpOnly: true,
         secure: isProduction,
@@ -269,22 +248,21 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       (res as any).json({
         _id: user._id,
         name: user.name, 
-            email: decrypt(user.emailEncrypted) || user.email, 
+        email: decrypt(user.emailEncrypted) || user.email,
         username: user.username || undefined,
-            requireUsername: !user.username, 
+        requireUsername: !user.username,
         hasDiarySetup: !!user.diaryPasswordHash,
         isPro: user.isPro,
         credits: user.isPro ? 9999 : (10 - (user.dailyPremiumUsage || 0)),
         streak: user.streak,
         avatar: user.avatar,
         wallpaper: user.wallpaper,
-            persona: user.persona || 'aastha',
+        persona: user.persona || 'aastha',
         createdAt: user.createdAt,
         encryptionSalt: user.encryptionSalt,
-        securityQuestions: user.securityQuestions?.map(q => ({ question: q.question }))
+        securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
       });
     } else {
-      // Password or User not found
       (res as any).status(401).json({ message: 'Invalid credentials' });
     }
   } catch (error) {
@@ -307,8 +285,6 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     const user = await User.findById(req.user._id);
     if (!user) return (res as any).status(404).json({ message: 'User not found' });
 
-    // PII Self-Healing / Field Initialization
-    // If user somehow missed login migration
     if (user.email && !user.emailHash) {
         user.emailHash = hashEmail(user.email);
         if (!user.emailEncrypted) user.emailEncrypted = encrypt(user.email);
@@ -318,7 +294,6 @@ export const getMe = async (req: AuthRequest, res: Response) => {
 
     if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email);
     
-    // Auto-generate username for legacy users
     if (!user.username) {
         const randomSuffix = Math.floor(1000 + Math.random() * 9000);
         const baseName = user.name ? user.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 10) : 'user';
@@ -333,7 +308,6 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     if (user.dailyPremiumUsage === undefined) user.dailyPremiumUsage = 0;
     if (user.isPro === undefined) user.isPro = false;
     
-    // Streak Logic & Daily Usage Reset
     const now = new Date();
     const lastUsage = new Date(user.lastUsageDate || user.createdAt);
     if (lastUsage.getDate() !== now.getDate() || 
@@ -398,11 +372,9 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
         if (username) {
             const cleanUsername = username.toLowerCase().trim();
             if (cleanUsername !== user.username) {
-                // Check if new username is available
                 const exists = await User.findOne({ username: cleanUsername, _id: { $ne: user._id } });
                 if (exists) return (res as any).status(400).json({ message: 'Username taken' });
                 
-                // Save both plain index and encrypted (if needed)
                 user.username = cleanUsername;
                 user.usernameEncrypted = encrypt(username);
             }
@@ -431,8 +403,6 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
         (res as any).status(500).json({ message: 'Error updating profile' }); 
     }
 };
-
-// --- UTILS (Rest remains the same) ---
 
 export const upgradeToPro = async (req: AuthRequest, res: Response) => {
     try {
@@ -471,14 +441,6 @@ export const initiateReset = async (req: Request, res: Response) => {
     if (!user || !user.securityQuestions || user.securityQuestions.length === 0) {
       return (res as any).status(404).json({ message: 'Account not found or no security questions set.' }); 
     }
-    
-    // FIX: Send the question specifically chosen by the user. 
-    // Currently, registration only supports setting one question, so index [0] is correct IF the user sets it properly.
-    // However, if the array has multiple (future proof), we might need to send a specific one or let user choose.
-    // For now, index 0 is the only one. 
-    // To fix "it shows only the first one", we ensure we return the question TEXT stored in the DB.
-    // If the user feels it's the "first one" from a list, it means they chose index 0 from the dropdown.
-    // But we are returning what is SAVED. 
     
     (res as any).status(200).json({ question: user.securityQuestions[0].question });
   } catch (error) { (res as any).status(500).json({ message: 'Server Error' }); }
@@ -539,7 +501,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
         });
 
         if (!user) return (res as any).status(404).json({ message: 'User not found' });
-        if (user.isVerified) return (res as any).status(200).json({ message: 'Already verified' }); // Idempotent
+        if (user.isVerified) return (res as any).status(200).json({ message: 'Already verified' });
 
         if (!user.otpCode || !user.otpExpires) {
             return (res as any).status(400).json({ message: 'No OTP requested.' });
@@ -559,7 +521,6 @@ export const verifyOTP = async (req: Request, res: Response) => {
         user.otpCode = undefined;
         user.otpExpires = undefined;
         
-        // Handle migration fields if missing
         if (!user.streak) user.streak = 1; 
         if (!user.lastVisit) user.lastVisit = new Date(); 
         
@@ -617,7 +578,6 @@ export const resendOTP = async (req: Request, res: Response) => {
         user.otpExpires = otpExpires;
         await user.save();
 
-        // Non-blocking send to prevent timeout
         sendOTPEmail(cleanEmail, otp).catch(e => console.error("[Auth] Background Email Error:", e));
 
         (res as any).status(200).json({ message: 'Code resent' });
@@ -627,7 +587,6 @@ export const resendOTP = async (req: Request, res: Response) => {
     }
 };
 
-// Re-encrypt diary entries with new password (preserving data)
 export const changeDiaryPassword = async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
@@ -636,26 +595,10 @@ export const changeDiaryPassword = async (req: AuthRequest, res: Response) => {
         const user = await User.findById(req.user._id);
         if (!user || !user.diaryPasswordHash) return (res as any).status(400).json({ message: 'Diary setup not found.' });
 
-        // 1. Verify Old Password
         const isValid = await bcrypt.compare(oldPassword, user.diaryPasswordHash);
         if (!isValid) return (res as any).status(401).json({ message: 'Incorrect old password.' });
 
-        // 2. Fetch all entries
-        const entries = await Diary.find({ user: req.user._id });
-
-        // 3. Re-encryption Loop (Decrypt Old -> Encrypt New)
-        // Note: Since this functionality is not yet implemented client-side for "Change Password",
-        // we revert to the previous "Nuclear Reset" safe state or handle it properly.
-        // However, the requested task does not include implementing the full re-encryption loop.
-        // We will remove the "stream of consciousness" comments and revert the unrequested change to avoid data corruption.
-
-        // Original logic was likely strict, so we simply return an error that this feature requires a reset for now,
-        // OR we leave it as a placeholder. Given the "Stop-Ship" nature, let's just clean up the comments.
-
-        // Reverting to a safe error or previous state (assuming previous state was non-existent or "Reset").
-        // Since I can't see the exact original state easily without undoing, I will make this endpoint return an error
-        // to prevent misuse until fully implemented.
-
+        // Not implemented (Re-encryption logic required)
         return (res as any).status(501).json({ message: 'Password change not supported. Please use Reset (Data Wipe) for security.' });
 
     } catch (e) {
