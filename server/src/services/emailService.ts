@@ -17,7 +17,8 @@ export const sendOTPEmail = async (to: string, otp: string) => {
   try {
     const { data, error } = await resend.emails.send({
       from: 'Aastha <noreply@aasthaai.site>',
-      reply_to: 'aasthafv.ai@gmail.com',
+      // FIX: Changed 'reply_to' to 'replyTo' to match Resend API types
+      replyTo: 'aasthafv.ai@gmail.com',
       to: [to],
       subject: 'Your Verification Code - Aastha',
       html: `
