@@ -10,7 +10,9 @@ import {
   ChevronRight, 
   AlertCircle,
   RefreshCw,
-  PenLine
+  PenLine,
+  Calendar,
+  X
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useEncryption } from '../../context/EncryptionContext';
@@ -137,6 +139,102 @@ const PaperPage: React.FC<{
   );
 };
 
+// Reusable Calendar Component (Desktop Pane & Mobile Modal)
+const CalendarView: React.FC<{
+  currentMonth: Date;
+  onMonthChange: (offset: number) => void;
+  calendarGrid: (CalendarDay | null)[];
+  onDayClick: (day: number) => void;
+  entriesMap: Record<string, DiaryEntryDTO>;
+  activeDate: Date;
+  setActiveDate: (date: Date) => void;
+  onCreateNew: () => void;
+  onRefresh: () => void;
+  isMobile?: boolean; // Controls specific styling tweaks
+}> = ({
+  currentMonth, onMonthChange, calendarGrid, onDayClick,
+  entriesMap, activeDate, setActiveDate, onCreateNew, onRefresh, isMobile
+}) => {
+  const { currentTheme } = useTheme();
+
+  return (
+    <div className={`flex flex-col h-full ${isMobile ? '' : 'bg-[#fdfdf6]'}`}>
+
+      {/* Header (Desktop Only) */}
+      {!isMobile && (
+        <div className="p-6 pb-2 flex items-center justify-between border-b border-gray-200/50">
+           <h3 className="font-serif text-2xl font-bold text-gray-800 flex items-center gap-2">
+               <BookOpen size={22} style={{ color: currentTheme.primaryColor }} /> Index
+           </h3>
+           <div className="flex gap-2">
+               <button onClick={onRefresh} className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500"><RefreshCw size={14}/></button>
+               <button onClick={onCreateNew} className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-gray-400 hover:bg-gray-200 transition-colors">+ New</button>
+           </div>
+        </div>
+      )}
+
+      {/* Calendar Grid Container */}
+      <div className={isMobile ? 'pb-4' : 'px-6 py-4'}>
+        <div className={`${isMobile ? 'bg-transparent' : 'bg-white/60 backdrop-blur-sm rounded-2xl p-4 border border-gray-200 shadow-sm'}`}>
+
+            {/* Month Navigation */}
+            <div className="flex justify-between items-center mb-4 px-2">
+                <button onClick={() => onMonthChange(-1)} className="p-2 hover:bg-gray-200 rounded-full text-gray-600"><ChevronLeft size={isMobile ? 20 : 16} /></button>
+                <span className={`font-bold uppercase tracking-widest text-gray-800 ${isMobile ? 'text-lg' : 'text-sm'}`}>
+                    {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </span>
+                <button onClick={() => onMonthChange(1)} className="p-2 hover:bg-gray-200 rounded-full text-gray-600"><ChevronRight size={isMobile ? 20 : 16} /></button>
+            </div>
+
+            {/* Days Header */}
+            <div className="grid grid-cols-7 gap-1 mb-2">
+                {['Su','Mo','Tu','We','Th','Fr','Sa'].map((d, i) => (
+                   <span key={i} className={`text-center font-bold text-gray-400 uppercase ${isMobile ? 'text-xs' : 'text-[10px]'}`}>{d}</span>
+                ))}
+            </div>
+
+            {/* Days Grid */}
+            <div className={`grid grid-cols-7 gap-1 place-items-center ${isMobile ? 'gap-y-4' : ''}`}>
+                {calendarGrid.map((day, idx) => {
+                    if (!day) return <div key={`empty-${idx}`} className={isMobile ? 'w-10 h-10' : 'w-8 h-8'} />;
+                    return (
+                        <button
+                            key={`day-${idx}`}
+                            onClick={() => onDayClick(day.date.getDate())}
+                            className={`
+                                rounded-full flex items-center justify-center font-medium transition-all relative
+                                ${isMobile ? 'w-10 h-10 text-sm' : 'w-8 h-8 text-xs'}
+                                ${day.isSelected ? 'bg-gray-800 text-white shadow-lg scale-110 z-10' : ''}
+                                ${!day.isSelected && day.hasEntry ? 'bg-white border border-gray-300 text-gray-800 hover:border-gray-400' : ''}
+                                ${!day.isSelected && !day.hasEntry ? 'text-gray-400 hover:bg-gray-200/50' : ''}
+                                ${day.isToday && !day.isSelected ? 'ring-1 ring-offset-1 ring-teal-400' : ''}
+                            `}
+                        >
+                            {day.date.getDate()}
+                            {day.hasEntry && !day.isSelected && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-teal-400" />}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+      </div>
+
+      {/* Recent Memories List (Desktop Only) */}
+      {!isMobile && (
+        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-3 custom-scrollbar">
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Recent Memories</h4>
+            {Object.values(entriesMap).slice(0, 5).map((entry, i) => (
+                <div key={i} onClick={() => { if(entry.createdAt) setActiveDate(new Date(entry.createdAt)) }} className="p-3 rounded-lg bg-white/40 hover:bg-white/80 cursor-pointer transition-colors border border-transparent hover:border-gray-300">
+                    <div className="flex justify-between"><span className="font-bold text-sm">{entry.title || 'Untitled'}</span><span className="text-[10px] text-gray-500">{getShortDate(entry.createdAt || '')}</span></div>
+                    <p className="text-xs text-gray-500 line-clamp-1 mt-1">{entry.content}</p>
+                </div>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
   const { user, encryptionKey, setEncryptionKeyManual } = useAuth();
   const { encrypt, decrypt } = useEncryption();
@@ -151,6 +249,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   const [activeDate, setActiveDate] = useState(new Date());
   
   const [isFlipping, setIsFlipping] = useState<'next' | 'prev' | null>(null);
+  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
   
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
@@ -277,6 +376,9 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   const handleCalendarClick = (day: number) => {
       const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
       setActiveDate(newDate);
+      if (isMobile) {
+         setIsCalendarModalOpen(false); // Close modal on mobile selection
+      }
   };
 
   const dMinus1 = addDays(activeDate, -1);
@@ -311,7 +413,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   const calendarGrid = getCalendarDays();
 
   // Swipe Handlers
-  // Fix: Move handlers to the Container Level to capture swipes reliably
   const onTouchStart = (e: React.TouchEvent) => {
       setTouchEnd(null);
       setTouchStart(e.targetTouches[0].clientX);
@@ -320,8 +421,8 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   const onTouchEnd = () => {
       if (!touchStart || !touchEnd) return;
       const distance = touchStart - touchEnd;
-      const isLeftSwipe = distance > 50; // Swiped Left -> Go Next (Future)
-      const isRightSwipe = distance < -50; // Swiped Right -> Go Prev (Past)
+      const isLeftSwipe = distance > 50;
+      const isRightSwipe = distance < -50;
 
       if (!isFlipping) {
           if (isLeftSwipe) changeDay(1);
@@ -349,13 +450,75 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
         ) : (
             <div className={`relative w-full h-full flex shadow-2xl ${isMobile ? '' : 'rounded-r-lg perspective-2000 w-[95%] h-[90%]'}`}>
                 
+                {/* --- MOBILE HEADER (Calendar Icon, Arrows, Date) --- */}
                 {isMobile && (
                     <div className="absolute top-0 left-0 right-0 h-14 bg-[#fdfdf6] border-b border-gray-200 z-50 flex items-center justify-between px-4">
                         <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-black/5 rounded-full"><ChevronLeft className="text-gray-600" /></button>
-                        <span className="font-serif font-bold text-gray-800">{getFormattedDate(activeDate)}</span>
+
+                        <div className="flex items-center gap-2">
+                           <span className="font-serif font-bold text-gray-800">{getFormattedDate(activeDate)}</span>
+                           <button
+                             onClick={() => setIsCalendarModalOpen(true)}
+                             className="p-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors"
+                           >
+                             <Calendar size={16} />
+                           </button>
+                        </div>
+
                         <button onClick={() => changeDay(1)} disabled={!!isFlipping} className="p-2 hover:bg-black/5 rounded-full"><ChevronRight className="text-gray-600" /></button>
                     </div>
                 )}
+
+                {/* --- MOBILE CALENDAR MODAL --- */}
+                <AnimatePresence>
+                  {isMobile && isCalendarModalOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+                       {/* Backdrop */}
+                       <motion.div
+                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                          onClick={() => setIsCalendarModalOpen(false)}
+                          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                       />
+
+                       {/* Card */}
+                       <motion.div
+                          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                          animate={{ scale: 1, opacity: 1, y: 0 }}
+                          exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                          className="relative w-full max-w-sm bg-[#fdfdf6] rounded-2xl shadow-2xl p-6 overflow-hidden"
+                       >
+                           <div className="flex justify-between items-center mb-4">
+                              <h3 className="font-serif text-xl font-bold text-gray-800 flex items-center gap-2">
+                                <Calendar size={20} /> Select Date
+                              </h3>
+                              <button onClick={() => setIsCalendarModalOpen(false)} className="p-1 rounded-full hover:bg-black/5">
+                                <X size={20} className="text-gray-500" />
+                              </button>
+                           </div>
+
+                           <CalendarView
+                              currentMonth={currentMonth}
+                              onMonthChange={changeMonth}
+                              calendarGrid={calendarGrid}
+                              onDayClick={handleCalendarClick}
+                              entriesMap={entriesMap}
+                              activeDate={activeDate}
+                              setActiveDate={setActiveDate}
+                              onCreateNew={createNewEntry}
+                              onRefresh={fetchEntries}
+                              isMobile={true}
+                           />
+
+                           <div className="mt-4 pt-4 border-t border-gray-200 flex justify-center">
+                              <button onClick={() => { setActiveDate(new Date()); setIsCalendarModalOpen(false); }} className="text-sm font-bold text-teal-600 uppercase tracking-widest">
+                                Jump to Today
+                              </button>
+                           </div>
+                       </motion.div>
+                    </div>
+                  )}
+                </AnimatePresence>
+
 
                 {!isMobile && (
                   <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white z-50">
@@ -376,60 +539,19 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                     <div className="absolute inset-0 flex">
                         {!isMobile && (
                           <div className="w-1/2 h-full border-r border-[#ccc] overflow-hidden rounded-l-lg bg-[#fdfdf6] flex flex-col">
-                              {/* Desktop Calendar Logic (Unchanged) */}
-                              <div className="p-6 pb-2 flex items-center justify-between border-b border-gray-200/50">
-                                  <h3 className="font-serif text-2xl font-bold text-gray-800 flex items-center gap-2">
-                                      <BookOpen size={22} style={{ color: currentTheme.primaryColor }} /> Index
-                                  </h3>
-                                  <div className="flex gap-2">
-                                      <button onClick={() => fetchEntries()} className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500"><RefreshCw size={14}/></button>
-                                      <button onClick={createNewEntry} className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-gray-400 hover:bg-gray-200 transition-colors">+ New</button>
-                                  </div>
-                              </div>
-                              <div className="px-6 py-4">
-                                  <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 border border-gray-200 shadow-sm">
-                                      <div className="flex justify-between items-center mb-4">
-                                          <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-gray-200 rounded-full text-gray-600"><ChevronLeft size={16} /></button>
-                                          <span className="text-sm font-bold uppercase tracking-widest text-gray-800">
-                                              {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                                          </span>
-                                          <button onClick={() => changeMonth(1)} className="p-1 hover:bg-gray-200 rounded-full text-gray-600"><ChevronRight size={16} /></button>
-                                      </div>
-                                      <div className="grid grid-cols-7 gap-1 mb-2">
-                                          {['Su','Mo','Tu','We','Th','Fr','Sa'].map((d, i) => <span key={i} className="text-center text-[10px] font-bold text-gray-400 uppercase">{d}</span>)}
-                                      </div>
-                                      <div className="grid grid-cols-7 gap-1 place-items-center">
-                                          {calendarGrid.map((day, idx) => {
-                                              if (!day) return <div key={`empty-${idx}`} className="w-8 h-8" />;
-                                              return (
-                                                  <button
-                                                      key={`day-${idx}`}
-                                                      onClick={() => handleCalendarClick(day.date.getDate())}
-                                                      className={`
-                                                          w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all relative
-                                                          ${day.isSelected ? 'bg-gray-800 text-white shadow-lg scale-110 z-10' : ''}
-                                                          ${!day.isSelected && day.hasEntry ? 'bg-white border border-gray-300 text-gray-800 hover:border-gray-400' : ''}
-                                                          ${!day.isSelected && !day.hasEntry ? 'text-gray-400 hover:bg-gray-200/50' : ''}
-                                                          ${day.isToday && !day.isSelected ? 'ring-1 ring-offset-1 ring-teal-400' : ''}
-                                                      `}
-                                                  >
-                                                      {day.date.getDate()}
-                                                      {day.hasEntry && !day.isSelected && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-teal-400" />}
-                                                  </button>
-                                              );
-                                          })}
-                                      </div>
-                                  </div>
-                              </div>
-                              <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-3 custom-scrollbar">
-                                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Recent Memories</h4>
-                                  {Object.values(entriesMap).slice(0, 5).map((entry, i) => (
-                                      <div key={i} onClick={() => { if(entry.createdAt) setActiveDate(new Date(entry.createdAt)) }} className="p-3 rounded-lg bg-white/40 hover:bg-white/80 cursor-pointer transition-colors border border-transparent hover:border-gray-300">
-                                          <div className="flex justify-between"><span className="font-bold text-sm">{entry.title || 'Untitled'}</span><span className="text-[10px] text-gray-500">{getShortDate(entry.createdAt || '')}</span></div>
-                                          <p className="text-xs text-gray-500 line-clamp-1 mt-1">{entry.content}</p>
-                                      </div>
-                                  ))}
-                              </div>
+                              {/* Desktop Calendar Logic - Reused Component */}
+                              <CalendarView
+                                  currentMonth={currentMonth}
+                                  onMonthChange={changeMonth}
+                                  calendarGrid={calendarGrid}
+                                  onDayClick={handleCalendarClick}
+                                  entriesMap={entriesMap}
+                                  activeDate={activeDate}
+                                  setActiveDate={setActiveDate}
+                                  onCreateNew={createNewEntry}
+                                  onRefresh={fetchEntries}
+                                  isMobile={false}
+                              />
                           </div>
                         )}
 

@@ -150,35 +150,44 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             <div 
               onPointerDown={(e) => !isMobile && dragControls.start(e)}
               className={`
-                 absolute top-0 left-0 right-0 z-50 flex items-center justify-end px-4
-                 ${isMobile ? 'h-16 bg-black/20 backdrop-blur-sm' : 'h-16 cursor-grab active:cursor-grabbing touch-none'}
+                 absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-4
+                 ${isMobile ? 'h-16 bg-black/20 backdrop-blur-sm' : 'h-12 cursor-grab active:cursor-grabbing touch-none'}
               `}
             >
-                {/* Title (Mobile Only - Optional Context) */}
-                {isMobile && (
-                    <div className="absolute left-6 font-serif text-white/80 text-lg pointer-events-none">
-                        {title}
-                    </div>
-                )}
-
-                {/* Window Controls */}
+                {/* macOS Controls (Left) */}
                 <div
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="flex items-center gap-2 pointer-events-auto"
+                   onPointerDown={(e) => e.stopPropagation()}
+                   className="flex items-center gap-2 group pointer-events-auto pl-2"
                 >
-                    {/* Minimize (Optional) */}
-                    <button className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all"><Minus size={14} /></button>
-
+                    {/* Red (Close) */}
                     <button
-                      onClick={handleClose}
-                      className={`
-                        flex items-center justify-center text-white/50 hover:text-white transition-all border border-white/5
-                        ${isMobile ? 'w-10 h-10 rounded-full bg-black/40 backdrop-blur-md' : 'w-8 h-8 rounded-full bg-black/20 hover:bg-white/20 backdrop-blur-md'}
-                      `}
+                       onClick={handleClose}
+                       className="w-3 h-3 rounded-full flex items-center justify-center bg-[#FF5F57] border border-transparent active:brightness-90 transition-all"
+                       title="Close"
                     >
-                        <X size={isMobile ? 20 : 14} />
+                        <X size={8} className="text-black/60 opacity-0 group-hover:opacity-100 transition-opacity" strokeWidth={3} />
                     </button>
+
+                    {/* Yellow (Minimize) */}
+                    <button
+                       className="w-3 h-3 rounded-full flex items-center justify-center bg-[#FEBC2E] border border-transparent active:brightness-90 transition-all"
+                       title="Minimize"
+                    >
+                        <Minus size={8} className="text-black/60 opacity-0 group-hover:opacity-100 transition-opacity" strokeWidth={3} />
+                    </button>
+
+                    {/* Green (Maximize) - Omitted intentionally, but spacing preserved if needed? User said "Strict Constraint: Implement ONLY Red and Yellow" */}
                 </div>
+
+                {/* Title (Centered) */}
+                <div className="absolute inset-x-0 mx-auto text-center pointer-events-none flex items-center justify-center h-full">
+                    <span className="font-serif text-white/60 text-sm font-medium tracking-wide">
+                        {title}
+                    </span>
+                </div>
+
+                {/* Spacer for Right Side to Balance Layout */}
+                <div className="w-12" />
             </div>
 
             {/* --- Window Content --- */}

@@ -163,7 +163,8 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                         {/* Carousel */}
                         <div
                             ref={carouselRef}
-                            className="flex-1 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide px-6 items-center"
+                            className="flex-1 flex overflow-x-auto snap-x snap-mandatory snap-stop-always scrollbar-hide px-6 items-center"
+                            style={{ scrollSnapStop: 'always' }} // Force one-by-one scrolling
                         >
                             {WIDGETS.map((widget, i) => {
                                 const isActive = i === activeIndex;
@@ -181,7 +182,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                                 transition-all duration-500 ease-out
                                                 ${isActive
                                                     ? 'scale-100 opacity-100 blur-0 grayscale-0'
-                                                    : 'scale-95 opacity-60 blur-[1px] grayscale-[50%]'}
+                                                    : 'scale-95 opacity-50 blur-[2px] grayscale-[50%]'}
                                             `}
                                         >
                                             {/* Ambient Glow Background */}
