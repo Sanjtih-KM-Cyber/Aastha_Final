@@ -167,13 +167,12 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       
         // --- STRICT VERIFICATION CHECK ---
         if (!user.isVerified) {
-             console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}. Checking existing OTP.`);
-
              const userEmail = decrypt(user.emailEncrypted) || user.email || cleanIdentifier;
+             console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}.`);
 
              // Check if existing OTP is still valid (prevent race condition with Register flow)
              if (user.otpExpires && user.otpExpires > new Date()) {
-                 console.log(`[Auth] Existing OTP still valid for ${cleanIdentifier}. Skipping regeneration.`);
+                 console.log(`[Auth] Existing OTP valid until ${user.otpExpires.toISOString()}. Skipping regeneration.`);
                  (res as any).status(403).json({
                      message: 'Verification pending. Please check your email.',
                      requiresVerification: true,
@@ -183,10 +182,12 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
              }
 
              // Only generate NEW OTP if expired or missing
-             console.log(`[Auth] Generating NEW OTP for ${cleanIdentifier}.`);
+             console.log(`[Auth] OTP expired or missing. Generating NEW OTP for ${cleanIdentifier}.`);
              const otp = generateOTP();
              user.otpCode = await bcrypt.hash(otp, 10);
              user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+             // We MUST save here to persist the new OTP
              await user.save();
 
              // Send Email
@@ -200,7 +201,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
              return;
         }
 
-      // --- PROCEED TO LOGIN ---
+      // --- PROCEED TO LOGIN (Verified Users Only) ---
       let needsSave = false;
 
       // Self-healing legacy user data
