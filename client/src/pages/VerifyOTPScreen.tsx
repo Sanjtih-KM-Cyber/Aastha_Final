@@ -100,7 +100,10 @@ export const VerifyOTPScreen: React.FC = () => {
           window.location.href = '/sanctuary';
 
       } catch (err: any) {
-          setError(err.response?.data?.message || 'Verification failed');
+          console.error("Verification Error:", err);
+          const msg = err.response?.data?.message || err.message || 'Verification failed';
+          const status = err.response?.status ? ` (${err.response.status})` : '';
+          setError(`${msg}${status}`);
           setLoading(false);
       }
   };

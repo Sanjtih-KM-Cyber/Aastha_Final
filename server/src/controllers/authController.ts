@@ -23,6 +23,10 @@ const generateOTP = () => {
     return crypto.randomInt(100000, 1000000).toString();
 };
 
+const escapeRegex = (text: string) => {
+    return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+};
+
 // --- REGISTER ---
 export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -136,7 +140,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     let user = await User.findOne({
       $or: [
         { emailHash: identifierHash },
-        { email: cleanIdentifier },
+        { email: { $regex: new RegExp(`^${escapeRegex(cleanIdentifier)}$`, 'i') } },
         { username: cleanIdentifier }
       ]
     });
@@ -167,18 +171,28 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       
         // --- STRICT VERIFICATION CHECK ---
         if (!user.isVerified) {
-             console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}. Sending OTP.`);
+             const userEmail = decrypt(user.emailEncrypted) || user.email || cleanIdentifier;
+             console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}.`);
 
+             // Check if existing OTP is still valid (prevent race condition with Register flow)
+             if (user.otpExpires && user.otpExpires > new Date()) {
+                 console.log(`[Auth] Existing OTP valid until ${user.otpExpires.toISOString()}. Skipping regeneration.`);
+                 (res as any).status(403).json({
+                     message: 'Verification pending. Please check your email.',
+                     requiresVerification: true,
+                     email: userEmail
+                 });
+                 return;
+             }
+
+             // Only generate NEW OTP if expired or missing
+             console.log(`[Auth] OTP expired or missing. Generating NEW OTP for ${cleanIdentifier}.`);
              const otp = generateOTP();
              user.otpCode = await bcrypt.hash(otp, 10);
              user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-             await user.save();
 
-             // Determine email to send to
-             // If user logged in with username, we need the underlying email.
-             // We can decrypt `emailEncrypted` OR use the legacy `email` field if it exists temporarily.
-             // Ideally we use decrypt(user.emailEncrypted).
-             const userEmail = decrypt(user.emailEncrypted) || user.email || cleanIdentifier;
+             // We MUST save here to persist the new OTP
+             await user.save();
 
              // Send Email
              sendOTPEmail(userEmail, otp).catch(e => console.error("[Auth] Login OTP Error:", e));
@@ -191,7 +205,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
              return;
         }
 
-      // --- PROCEED TO LOGIN ---
+      // --- PROCEED TO LOGIN (Verified Users Only) ---
       let needsSave = false;
 
       // Self-healing legacy user data
@@ -496,8 +510,13 @@ export const verifyOTP = async (req: Request, res: Response) => {
         const cleanEmail = email.toLowerCase().trim();
         const emailHash = hashEmail(cleanEmail);
 
+        // Lookup using Hash OR Regex for legacy mixed-case emails
+        console.log(`[Auth] Verifying OTP for ${cleanEmail}. Hash: ${emailHash}`);
         const user = await User.findOne({ 
-            $or: [{ emailHash }, { email: cleanEmail }]
+            $or: [
+                { emailHash },
+                { email: { $regex: new RegExp(`^${escapeRegex(cleanEmail)}$`, 'i') } }
+            ]
         });
 
         if (!user) return (res as any).status(404).json({ message: 'User not found' });
@@ -511,7 +530,13 @@ export const verifyOTP = async (req: Request, res: Response) => {
             return (res as any).status(400).json({ message: 'OTP expired.' });
         }
 
-        const isValid = await bcrypt.compare(otp, user.otpCode);
+        // Ensure OTP is string
+        const otpString = String(otp);
+        console.log(`[Auth] Verifying OTP for ${cleanEmail}. Input: ${otpString}`);
+
+        const isValid = await bcrypt.compare(otpString, user.otpCode);
+        console.log(`[Auth] OTP Verification Result: ${isValid}`);
+
         if (!isValid) {
             return (res as any).status(400).json({ message: 'Invalid code.' });
         }
@@ -565,7 +590,10 @@ export const resendOTP = async (req: Request, res: Response) => {
         const emailHash = hashEmail(cleanEmail);
 
         const user = await User.findOne({ 
-             $or: [{ emailHash }, { email: cleanEmail }]
+             $or: [
+                 { emailHash },
+                 { email: { $regex: new RegExp(`^${escapeRegex(cleanEmail)}$`, 'i') } }
+             ]
         });
 
         if (!user) return (res as any).status(404).json({ message: 'User not found' });
