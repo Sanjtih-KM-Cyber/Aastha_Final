@@ -167,18 +167,27 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       
         // --- STRICT VERIFICATION CHECK ---
         if (!user.isVerified) {
-             console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}. Sending OTP.`);
+             console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}. Checking existing OTP.`);
 
+             const userEmail = decrypt(user.emailEncrypted) || user.email || cleanIdentifier;
+
+             // Check if existing OTP is still valid (prevent race condition with Register flow)
+             if (user.otpExpires && user.otpExpires > new Date()) {
+                 console.log(`[Auth] Existing OTP still valid for ${cleanIdentifier}. Skipping regeneration.`);
+                 (res as any).status(403).json({
+                     message: 'Verification pending. Please check your email.',
+                     requiresVerification: true,
+                     email: userEmail
+                 });
+                 return;
+             }
+
+             // Only generate NEW OTP if expired or missing
+             console.log(`[Auth] Generating NEW OTP for ${cleanIdentifier}.`);
              const otp = generateOTP();
              user.otpCode = await bcrypt.hash(otp, 10);
              user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
              await user.save();
-
-             // Determine email to send to
-             // If user logged in with username, we need the underlying email.
-             // We can decrypt `emailEncrypted` OR use the legacy `email` field if it exists temporarily.
-             // Ideally we use decrypt(user.emailEncrypted).
-             const userEmail = decrypt(user.emailEncrypted) || user.email || cleanIdentifier;
 
              // Send Email
              sendOTPEmail(userEmail, otp).catch(e => console.error("[Auth] Login OTP Error:", e));
