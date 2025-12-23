@@ -23,6 +23,10 @@ const generateOTP = () => {
     return crypto.randomInt(100000, 1000000).toString();
 };
 
+const escapeRegex = (text: string) => {
+    return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+};
+
 // --- REGISTER ---
 export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -506,8 +510,12 @@ export const verifyOTP = async (req: Request, res: Response) => {
         const cleanEmail = email.toLowerCase().trim();
         const emailHash = hashEmail(cleanEmail);
 
+        // Lookup using Hash OR Regex for legacy mixed-case emails
         const user = await User.findOne({ 
-            $or: [{ emailHash }, { email: cleanEmail }]
+            $or: [
+                { emailHash },
+                { email: { $regex: new RegExp(`^${escapeRegex(cleanEmail)}$`, 'i') } }
+            ]
         });
 
         if (!user) return (res as any).status(404).json({ message: 'User not found' });
@@ -521,7 +529,13 @@ export const verifyOTP = async (req: Request, res: Response) => {
             return (res as any).status(400).json({ message: 'OTP expired.' });
         }
 
-        const isValid = await bcrypt.compare(otp, user.otpCode);
+        // Ensure OTP is string
+        const otpString = String(otp);
+        console.log(`[Auth] Verifying OTP for ${cleanEmail}. Input: ${otpString}`);
+
+        const isValid = await bcrypt.compare(otpString, user.otpCode);
+        console.log(`[Auth] OTP Verification Result: ${isValid}`);
+
         if (!isValid) {
             return (res as any).status(400).json({ message: 'Invalid code.' });
         }
@@ -575,7 +589,10 @@ export const resendOTP = async (req: Request, res: Response) => {
         const emailHash = hashEmail(cleanEmail);
 
         const user = await User.findOne({ 
-             $or: [{ emailHash }, { email: cleanEmail }]
+             $or: [
+                 { emailHash },
+                 { email: { $regex: new RegExp(`^${escapeRegex(cleanEmail)}$`, 'i') } }
+             ]
         });
 
         if (!user) return (res as any).status(404).json({ message: 'User not found' });
