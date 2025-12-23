@@ -140,7 +140,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     let user = await User.findOne({
       $or: [
         { emailHash: identifierHash },
-        { email: cleanIdentifier },
+        { email: { $regex: new RegExp(`^${escapeRegex(cleanIdentifier)}$`, 'i') } },
         { username: cleanIdentifier }
       ]
     });
@@ -173,7 +173,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         if (!user.isVerified) {
              const userEmail = decrypt(user.emailEncrypted) || user.email || cleanIdentifier;
              console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}.`);
-
+             
              // Check if existing OTP is still valid (prevent race condition with Register flow)
              if (user.otpExpires && user.otpExpires > new Date()) {
                  console.log(`[Auth] Existing OTP valid until ${user.otpExpires.toISOString()}. Skipping regeneration.`);
@@ -190,7 +190,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
              const otp = generateOTP();
              user.otpCode = await bcrypt.hash(otp, 10);
              user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-
+             
              // We MUST save here to persist the new OTP
              await user.save();
 
@@ -510,11 +510,13 @@ export const verifyOTP = async (req: Request, res: Response) => {
         const cleanEmail = email.toLowerCase().trim();
         const emailHash = hashEmail(cleanEmail);
 
-        // Lookup using Hash OR Regex for legacy mixed-case emails
+        // Lookup using Hash OR Regex for legacy mixed-case emails OR Username
+        console.log(`[Auth] Verifying OTP for ${cleanEmail}. Hash: ${emailHash}`);
         const user = await User.findOne({ 
             $or: [
-                { emailHash },
-                { email: { $regex: new RegExp(`^${escapeRegex(cleanEmail)}$`, 'i') } }
+                { emailHash }, 
+                { email: { $regex: new RegExp(`^${escapeRegex(cleanEmail)}$`, 'i') } },
+                { username: cleanEmail }
             ]
         });
 
@@ -535,7 +537,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
 
         const isValid = await bcrypt.compare(otpString, user.otpCode);
         console.log(`[Auth] OTP Verification Result: ${isValid}`);
-
+        
         if (!isValid) {
             return (res as any).status(400).json({ message: 'Invalid code.' });
         }
@@ -590,8 +592,9 @@ export const resendOTP = async (req: Request, res: Response) => {
 
         const user = await User.findOne({ 
              $or: [
-                 { emailHash },
-                 { email: { $regex: new RegExp(`^${escapeRegex(cleanEmail)}$`, 'i') } }
+                 { emailHash }, 
+                 { email: { $regex: new RegExp(`^${escapeRegex(cleanEmail)}$`, 'i') } },
+                 { username: cleanEmail }
              ]
         });
 
