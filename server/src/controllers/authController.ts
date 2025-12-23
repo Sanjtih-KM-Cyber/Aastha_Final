@@ -170,9 +170,10 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
       
         // --- STRICT VERIFICATION CHECK ---
-        if (!user.isVerified) {
+        // Ensure even legacy users who are migrated or just logging in MUST be verified
+        if (user.isVerified !== true) {
              const userEmail = decrypt(user.emailEncrypted) || user.email || cleanIdentifier;
-             console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}.`);
+             console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}. isVerified: ${user.isVerified}`);
 
              // Check if existing OTP is still valid (prevent race condition with Register flow)
              if (user.otpExpires && user.otpExpires > new Date()) {
