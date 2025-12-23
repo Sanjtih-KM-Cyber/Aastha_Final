@@ -146,6 +146,8 @@ export const VerifyOTPScreen: React.FC = () => {
                     <p className="text-white/50 text-sm">
                         We sent a code to <br/>
                         <span className="text-white font-medium">{email}</span>
+                        <br />
+                        <span className="text-white/40 text-xs">(Check your spam folder)</span>
                     </p>
                 </div>
 

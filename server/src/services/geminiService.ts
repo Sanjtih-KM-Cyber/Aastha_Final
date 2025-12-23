@@ -58,8 +58,13 @@ const getGeminiClient = (isPro: boolean = false) => {
   return new GoogleGenAI({ apiKey: randomKey });
 };
 
-// --- CHAT STREAMING (Logic remains the same) ---
-export async function* streamGemini(history: ChatMessage[], systemPrompt: string, isPro: boolean) {
+// --- CHAT STREAMING ---
+export async function* streamGemini(
+    history: ChatMessage[],
+    systemPrompt: string,
+    isPro: boolean,
+    maxTokens?: number
+) {
   const contents: Content[] = [];
   let hasImage = false;
 
@@ -87,7 +92,7 @@ export async function* streamGemini(history: ChatMessage[], systemPrompt: string
   }
 
   // Use stable model
-  const modelName = 'gemini-2.5-flash';
+  const modelName = 'gemini-1.5-flash';
   
   try {
     const client = getGeminiClient(isPro);
@@ -96,8 +101,11 @@ export async function* streamGemini(history: ChatMessage[], systemPrompt: string
       contents: contents,
       config: {
         systemInstruction: systemPrompt,
-        temperature: 0.6,
-        // REMOVED: frequencyPenalty & presencePenalty (Not supported in Gemini 2.5 Flash)
+        generationConfig: {
+            temperature: 0.6,
+            maxOutputTokens: maxTokens,
+            // REMOVED: frequencyPenalty & presencePenalty (Not supported in Gemini Flash)
+        }
       }
     });
 
@@ -109,6 +117,50 @@ export async function* streamGemini(history: ChatMessage[], systemPrompt: string
     yield " [Aastha is having trouble connecting to her premium senses. Please try again.]";
   }
 }
+
+// --- MEMORY SUMMARY ENGINE ---
+export const generateSummary = async (chatHistory: ChatMessage[], previousSummary: string): Promise<string> => {
+    // Uses the Free Pool (cheap summarization)
+    const client = getGeminiClient(false);
+
+    try {
+        const textData = chatHistory.map(m => {
+            const role = m.role === 'user' ? 'User' : 'Aastha';
+            const content = typeof m.content === 'string' ? m.content : '[Multimedia]';
+            return `${role}: ${content}`;
+        }).join('\n');
+
+        const response = await client.models.generateContent({
+            model: 'gemini-1.5-flash',
+            contents: `
+                Read this chat conversation and update the "Memory Summary" for the user.
+
+                Previous Summary:
+                "${previousSummary}"
+
+                Task:
+                1. Identify new key facts (names, goals, likes, dislikes).
+                2. Capture emotional patterns or recurring struggles.
+                3. Note their preferred communication style (short/long, formal/casual).
+                4. Merge this with the Previous Summary to create a concise, updated profile (max 200 words).
+
+                Chat Log:
+                ${textData}
+            `,
+            config: {
+                generationConfig: {
+                    maxOutputTokens: 300,
+                    temperature: 0.3
+                }
+            }
+        });
+
+        return response.text?.trim() || previousSummary;
+    } catch (e) {
+        console.error("Memory Summary Error:", e);
+        return previousSummary;
+    }
+};
 
 // --- AI MAGIC FUNCTIONS (Uses Pro Client for reliability) ---
 
