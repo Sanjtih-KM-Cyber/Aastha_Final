@@ -92,7 +92,7 @@ export async function* streamGemini(
   }
 
   // Use stable model
-  const modelName = 'gemini-2.0-flash-exp';
+  const modelName = 'gemini-2.5-flash';
   
   try {
     const client = getGeminiClient(isPro);
@@ -131,7 +131,7 @@ export const generateSummary = async (chatHistory: ChatMessage[], previousSummar
         }).join('\n');
 
         const response = await client.models.generateContent({
-            model: 'gemini-2.0-flash-exp',
+            model: 'gemini-2.5-flash',
             contents: `
                 Read this chat conversation and update the "Memory Summary" for the user.
 
