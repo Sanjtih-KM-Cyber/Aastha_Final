@@ -12,7 +12,9 @@ import {
   resetDiaryNuclear,
   changeDiaryPassword,
   updateProfile,
-  upgradeToPro
+  upgradeToPro,
+  verifyOTP,
+  resendOTP
 } from '../controllers/authController';
 import { createOrder, verifyPayment } from '../controllers/paymentController';
 import { protect } from '../middleware/authMiddleware';
@@ -21,6 +23,8 @@ const router = express.Router();
 
 router.post('/register', registerUser);
 router.post('/login', loginUser);
+router.post('/verify-otp', verifyOTP);
+router.post('/resend-otp', resendOTP);
 router.get('/logout', logoutUser);                // GET logout (matching frontend)
 router.post('/verify-diary', protect, verifyDiaryPassword);
 router.get('/verify', protect, getMe);
