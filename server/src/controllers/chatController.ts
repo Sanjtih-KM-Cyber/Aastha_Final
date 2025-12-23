@@ -256,8 +256,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         chatSession.messages.push({ role: 'assistant', content: encrypt(fullAiResponse), timestamp: new Date() });
         await chatSession.save();
 
-        // Background Memory Update (Every ~10 messages)
-        if (chatSession.messages.length % 10 === 0) {
+        // Background Memory Update (Every ~5 messages)
+        if (chatSession.messages.length % 5 === 0) {
              // Fire and forget
              generateSummary(
                  // Send last 50 messages for context
