@@ -88,12 +88,15 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     if (!user) throw new Error("User not found");
 
     // --- FIX: SELF-HEALING FOR LEGACY USERS ---
+    // If the schema was updated but this user is old, they might miss the encrypted fields.
+    // We generate them now to prevent the "ValidatorError" on save.
     if (!user.emailEncrypted && user.email) {
         user.emailEncrypted = encrypt(user.email);
     }
     if (user.username && !user.usernameEncrypted) {
         user.usernameEncrypted = encrypt(user.username);
     }
+    // -------------------------------------------
 
     // 1. Daily Reset Logic
     const today = new Date();
