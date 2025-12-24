@@ -14,12 +14,14 @@ const RED_FLAG_KEYWORDS = [
   "आत्महत्या", "मरना चाहता हूँ", "quit life", "better off dead"
 ];
 
-const EMERGENCY_RESPONSE = `I'm so sorry you're feeling this way. I'm an AI, so I can't provide the help you need right now, but your life matters.
+const EMERGENCY_RESPONSE = `I hear how much pain you're in, and I want you to be safe. I can't provide professional help, but there are people who really want to support you right now.
 
-Please reach out to the KIRAN National Helpline at **1800-599-0019** (24/7).
-You can also call **9152987821** (iCall Psychosocial Helpline).
+Please reach out to them:
+- **KIRAN Helpline (24/7):** 1800-599-0019
+- **iCall:** 9152987821
+- **Emergency:** 112
 
-There are people who want to support you. Please talk to them.`;
+Your life matters. Please make that call.`;
 
 const is_red_flag = (message: string): boolean => {
     return RED_FLAG_KEYWORDS.some(keyword => message.toLowerCase().includes(keyword));
@@ -30,7 +32,7 @@ type EmotionalState = 'NEUTRAL' | 'LOW' | 'DISTRESSED' | 'CRISIS';
 
 const classifyEmotion = (message: string): EmotionalState => {
     const text = message.toLowerCase();
-
+    
     // 1. Crisis
     if (is_red_flag(text)) return 'CRISIS';
 
@@ -91,9 +93,10 @@ PERSONA SAFETY & IDENTITY DEFENSE:
 Facts: {{userFacts}}
 
 **LANGUAGE & TONE:**
--   **Style:** Casual, warm, and natural. Start in English (Indian English).
--   **Regional:** If user speaks regional (Hindi/Tamil/etc), use **Roman script** (Hinglish) and ensure grammatical correctness. Speak naturally.
--   **Brevity:** Keep responses conversational.
+-   **Style:** Conversational, direct, and authentic. Like a real human friend.
+-   **No Sugarcoating:** Do NOT use excessive adjectives or flowery language. Avoid constant validation or "therapist speak".
+-   **Regional:** If user speaks regional (Hindi/Tamil/etc), use **Roman script** (Hinglish) and ensure grammatical correctness.
+-   **Brevity:** Keep responses conversational and concise.
 -   **No Repetition:** **DO NOT** repeat the user's message back to them.
 
 **UI COMMANDS (Output at END):**
@@ -157,7 +160,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     // 1. Emotional Analysis
     const emotion = classifyEmotion(message || "");
-
+    
     // 2. Token Limit Logic (Response Control)
     let maxTokens = 150; // Default Short
     if (emotion === 'DISTRESSED' || emotion === 'CRISIS') maxTokens = 400; // Allow depth
@@ -177,7 +180,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     const usage = user.dailyPremiumUsage || 0;
     const isPro = user.isPro || false;
     let provider = 'GEMINI';
-
+    
     if (!isPro && usage >= 10) {
         provider = 'GROQ'; // Fallback for free users over limit
     } else if (!isPro) {
@@ -242,7 +245,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     })}\n\n`);
 
     const stream = provider === 'GEMINI' 
-        ? streamGemini(messagesToSend, finalSystemPrompt, isPro, maxTokens)
+        ? streamGemini(messagesToSend, finalSystemPrompt, isPro, maxTokens) 
         : streamGroq(messagesToSend, finalSystemPrompt, maxTokens);
 
     for await (const chunk of stream) {
