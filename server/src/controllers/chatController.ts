@@ -38,12 +38,12 @@ const classifyEmotion = (message: string): EmotionalState => {
 
     // 2. Distressed (Keywords for overwhelmed/breaking)
     const distressWords = [
-        'crying', 'broken', 'alone', 'panic', 'scared', 'hurt', 'fail', 'pain',
-        'lost', 'tears', 'heavy', 'tired of everything',
+        'crying', 'broken', 'alone', 'panic', 'scared', 'hurt', 'fail', 'pain', 
+        'lost', 'tears', 'heavy', 'tired of everything', 
         'sad', 'depressed', 'unhappy', 'grief', 'mourning',
         'feeling low', 'feeling down' // Specific phrases for "low" to avoid substring matches
     ];
-
+    
     // Check if whole words or phrases match
     if (distressWords.some(w => text.includes(w))) return 'DISTRESSED';
 
