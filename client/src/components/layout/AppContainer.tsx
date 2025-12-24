@@ -40,24 +40,24 @@ export const AppContainer: React.FC<AppContainerProps> = ({ children }) => {
           </motion.div>
         ) : (
           <>
-            {/* Breathing Aurora Blobs - Colors linked to Theme */}
+            {/* Breathing Aurora Blobs - Colors linked to Theme - SLOWED DOWN FOR PERFORMANCE */}
             <motion.div 
               animate={{ 
-                scale: [1, 1.2, 1],
-                opacity: [0.3, 0.5, 0.3],
-                x: [0, 20, 0],
+                scale: [1, 1.05, 1], // Reduced scale range
+                opacity: [0.3, 0.4, 0.3], // Reduced opacity flux
+                x: [0, 10, 0], // Reduced movement
               }}
-              transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+              transition={{ duration: 25, repeat: Infinity, ease: "linear" }} // Much slower duration (less updates)
               className="absolute top-[-10%] left-[-10%] w-[70vw] h-[70vw] rounded-full blur-[120px] mix-blend-screen will-change-transform opacity-30"
               style={{ backgroundColor: currentTheme.primaryColor }}
             />
             
             <motion.div 
               animate={{ 
-                scale: [1, 1.1, 1],
-                x: [0, -30, 0],
+                scale: [1, 1.05, 1],
+                x: [0, -15, 0],
               }}
-              transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+              transition={{ duration: 30, repeat: Infinity, ease: "linear" }} // Much slower duration
               className={`absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] rounded-full blur-[120px] mix-blend-screen will-change-transform opacity-20 bg-gradient-to-t ${currentTheme.gradient}`}
             />
           </>
@@ -71,10 +71,10 @@ export const AppContainer: React.FC<AppContainerProps> = ({ children }) => {
       <AnimatePresence mode="wait">
         <motion.div
           key={location.pathname}
-          initial={{ opacity: 0, filter: 'blur(5px)' }}
+          initial={{ opacity: 0, filter: 'blur(2px)' }}
           animate={{ opacity: 1, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, filter: 'blur(5px)' }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
+          exit={{ opacity: 0, filter: 'blur(2px)' }}
+          transition={{ duration: 0.15, ease: "easeOut" }} // Snappy fast transition
           className="relative z-10 w-full h-full min-h-screen flex flex-col"
         >
           {children}
