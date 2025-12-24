@@ -193,3 +193,25 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     res.end();
   }
 };
+
+export const getChatHistory = async (req: AuthRequest, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  try {
+    const chatSession = await Chat.findOne({ user: req.user._id });
+
+    const messages = chatSession
+      ? chatSession.messages.slice(-50).map(m => ({
+          ...(m as any).toObject(),
+          content: decrypt(m.content),
+        }))
+      : [];
+
+    res.json(messages);
+  } catch (error) {
+    console.error('[ChatHistory] Failed:', error);
+    res.status(500).json({ message: 'Failed to load history' });
+  }
+};
