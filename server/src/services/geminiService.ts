@@ -101,11 +101,8 @@ export async function* streamGemini(
       contents: contents,
       config: {
         systemInstruction: systemPrompt,
-        generationConfig: {
-            temperature: 0.6,
-            maxOutputTokens: maxTokens,
-            // REMOVED: frequencyPenalty & presencePenalty (Not supported in Gemini Flash)
-        }
+        temperature: 0.6,
+        maxOutputTokens: maxTokens,
       }
     });
 
@@ -148,10 +145,8 @@ export const generateSummary = async (chatHistory: ChatMessage[], previousSummar
                 ${textData}
             `,
             config: {
-                generationConfig: {
-                    maxOutputTokens: 300,
-                    temperature: 0.3
-                }
+                maxOutputTokens: 300,
+                temperature: 0.3
             }
         });
 
