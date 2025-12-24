@@ -27,7 +27,7 @@ export interface ChatMessage {
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
 }
 
-export async function* streamGroq(history: ChatMessage[], systemPrompt: string) {
+export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
   // 1. Check for images. Groq (Llama 3) is text-only.
   const hasImage = history.some(msg => Array.isArray(msg.content) && msg.content.some(c => c.type === 'image_url'));
   
@@ -63,7 +63,7 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string) 
           messages: messages,
           model: model,
           temperature: 0.6,
-          max_tokens: 1024,
+          max_tokens: maxTokens || 1024,
           frequency_penalty: 0.5,
           stream: true,
       });

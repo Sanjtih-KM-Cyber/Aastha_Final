@@ -57,6 +57,9 @@ export interface IUser extends Document {
 
   // AI Persona
   persona?: 'aastha' | 'aarav'; 
+
+  // Memory
+  memorySummary?: string;
 }
 
 const securityQuestionSchema = new Schema({
@@ -116,7 +119,10 @@ const userSchema = new Schema<IUser>({
   otpExpires: { type: Date },
 
   // AI Persona Preference (Default: Aastha/Female)
-  persona: { type: String, enum: ['aastha', 'aarav'], default: 'aastha' }
+  persona: { type: String, enum: ['aastha', 'aarav'], default: 'aastha' },
+
+  // Memory
+  memorySummary: { type: String, default: "" }
 }, {
   timestamps: true,
 });
