@@ -20,7 +20,7 @@ export const AppContainer: React.FC<AppContainerProps> = ({ children }) => {
   // Performance Optimization: Check for low-power mode or mobile
   // Simplified background for non-wallpaper state: Static gradient instead of animation
   // We remove the framer-motion loops entirely for the default state to save GPU/CPU.
-
+  
   return (
     <div className="relative min-h-screen font-sans text-white bg-midnight overflow-hidden selection:bg-teal-500/30">
       
@@ -45,12 +45,12 @@ export const AppContainer: React.FC<AppContainerProps> = ({ children }) => {
         ) : (
           <>
             {/* Static Gradient Blobs (Zero Animation Overhead) */}
-            <div
+            <div 
               className="absolute top-[-10%] left-[-10%] w-[70vw] h-[70vw] rounded-full blur-[120px] mix-blend-screen opacity-30"
               style={{ backgroundColor: currentTheme.primaryColor }}
             />
             
-            <div
+            <div 
               className={`absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] rounded-full blur-[120px] mix-blend-screen opacity-20 bg-gradient-to-t ${currentTheme.gradient}`}
             />
           </>

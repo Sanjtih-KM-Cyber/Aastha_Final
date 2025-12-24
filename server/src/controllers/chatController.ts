@@ -32,7 +32,7 @@ type EmotionalState = 'NEUTRAL' | 'LOW' | 'DISTRESSED' | 'CRISIS';
 
 const classifyEmotion = (message: string): EmotionalState => {
     const text = message.toLowerCase();
-
+    
     // 1. Crisis
     if (is_red_flag(text)) return 'CRISIS';
 
@@ -160,7 +160,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     // 1. Emotional Analysis
     const emotion = classifyEmotion(message || "");
-
+    
     // 2. Token Limit Logic (Response Control)
     let maxTokens = 150; // Default Short
     if (emotion === 'DISTRESSED' || emotion === 'CRISIS') maxTokens = 400; // Allow depth
@@ -180,7 +180,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     const usage = user.dailyPremiumUsage || 0;
     const isPro = user.isPro || false;
     let provider = 'GEMINI';
-
+    
     if (!isPro && usage >= 10) {
         provider = 'GROQ'; // Fallback for free users over limit
     } else if (!isPro) {
@@ -245,7 +245,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     })}\n\n`);
 
     const stream = provider === 'GEMINI' 
-        ? streamGemini(messagesToSend, finalSystemPrompt, isPro, maxTokens)
+        ? streamGemini(messagesToSend, finalSystemPrompt, isPro, maxTokens) 
         : streamGroq(messagesToSend, finalSystemPrompt, maxTokens);
 
     for await (const chunk of stream) {
