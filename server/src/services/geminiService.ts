@@ -111,7 +111,7 @@ export async function* streamGemini(
     }
   } catch (error: any) {
     console.error("Gemini Stream Error:", error?.message || error);
-    yield " [Aastha is having trouble connecting to her premium senses. Please try again.]";
+    yield " [Aastha is taking a moment to reconnect. Please try again.]";
   }
 }
 

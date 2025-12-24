@@ -74,6 +74,6 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       }
   } catch (error) {
       console.error("Groq Error:", error);
-      yield " [Connection unstable. Please try again.]";
+      yield " [Aastha is taking a moment to reconnect. Please try again.]";
   }
 }
