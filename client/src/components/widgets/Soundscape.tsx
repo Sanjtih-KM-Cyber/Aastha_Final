@@ -24,15 +24,16 @@ interface SoundscapeProps {
   preset?: string; // e.g. "rain,thunder"
 }
 
+// RESTORED LOCAL PATHS DUE TO VERCEL STORE 403 ERROR
 const SOUNDS = [
-  { id: 'rain', label: 'Rain', color: '#60A5FA', path: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/rain.mp3' },
-  { id: 'forest', label: 'Forest', color: '#4ADE80', path: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/forest.mp3' },
-  { id: 'fire', label: 'Fire', color: '#F87171', path: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/fire.mp3' },
-  { id: 'ocean', label: 'Ocean', color: '#2DD4BF', path: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/ocean.mp3' },
-  { id: 'night', label: 'Night', color: '#818CF8', path: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/night.mp3' },
-  { id: 'wind', label: 'Wind', color: '#94A3B8', path: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/wind.mp3' },
-  { id: 'thunder', label: 'Storm', color: '#A78BFA', path: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/storm2.mp3' }, // Fixed path
-  { id: 'birds', label: 'Birds', color: '#FACC15', path: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/birds.mp3' }
+  { id: 'rain', label: 'Rain', color: '#60A5FA', path: '/sounds/rain.mp3' },
+  { id: 'forest', label: 'Forest', color: '#4ADE80', path: '/sounds/forest.mp3' },
+  { id: 'fire', label: 'Fire', color: '#F87171', path: '/sounds/fire.mp3' },
+  { id: 'ocean', label: 'Ocean', color: '#2DD4BF', path: '/sounds/ocean.mp3' },
+  { id: 'night', label: 'Night', color: '#818CF8', path: '/sounds/night.mp3' },
+  { id: 'wind', label: 'Wind', color: '#94A3B8', path: '/sounds/wind.mp3' },
+  { id: 'thunder', label: 'Storm', color: '#A78BFA', path: '/sounds/storm2.mp3' },
+  { id: 'birds', label: 'Birds', color: '#FACC15', path: '/sounds/birds.mp3' }
 ];
 
 export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex, onFocus, preset }) => {
@@ -57,7 +58,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
       if (!soundData) return null;
 
       const audio = new Audio(soundData.path);
-      audio.crossOrigin = "anonymous"; // Helpful for some CDN configs
+      // audio.crossOrigin = "anonymous"; // Not needed for local files
       
       // Error Handling (Crash Prevention)
       audio.onerror = () => {
@@ -405,7 +406,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                     <div>
                         <p className="text-xs text-red-200 font-medium">Safe Mode Active</p>
                         <p className="text-[10px] text-red-200/60 leading-relaxed">
-                            Some sounds failed to load (check network) and have been disabled to prevent crashes.
+                            Some sounds failed to load (check /public/sounds/) and have been disabled to prevent crashes.
                         </p>
                     </div>
                 </div>
