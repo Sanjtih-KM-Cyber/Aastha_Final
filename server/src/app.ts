@@ -5,6 +5,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
+import compression from 'compression'; // Performance boost
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import connectDB from './db'; // assume you have this
@@ -109,6 +110,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type','Authorization','X-Requested-With']
 }));
 
+app.use(compression()); // Compress all responses
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());

@@ -146,9 +146,12 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     });
 
     // --- MIGRATION ON LOGIN ---
-    if (user && user.email === cleanIdentifier && !user.emailHash) {
-        user.emailHash = identifierHash;
-        if (!user.emailEncrypted) user.emailEncrypted = encrypt(cleanIdentifier);
+    // If user has legacy plaintext email but no hash, migrate them (force verify)
+    if (user && user.email && !user.emailHash) {
+        const emailToMigrate = user.email.toLowerCase().trim();
+        user.emailHash = hashEmail(emailToMigrate);
+        if (!user.emailEncrypted) user.emailEncrypted = encrypt(emailToMigrate);
+
         user.email = undefined;
         user.isVerified = false; // Force verification for legacy
         await user.save();
@@ -170,9 +173,10 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
       
         // --- STRICT VERIFICATION CHECK ---
-        if (!user.isVerified) {
+        // Ensure even legacy users who are migrated or just logging in MUST be verified
+        if (user.isVerified !== true) {
              const userEmail = decrypt(user.emailEncrypted) || user.email || cleanIdentifier;
-             console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}.`);
+             console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}. isVerified: ${user.isVerified}`);
 
              // Check if existing OTP is still valid (prevent race condition with Register flow)
              if (user.otpExpires && user.otpExpires > new Date()) {
