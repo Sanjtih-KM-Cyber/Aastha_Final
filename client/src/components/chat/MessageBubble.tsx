@@ -27,6 +27,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const { currentTheme } = useTheme();
   const [isHovered, setIsHovered] = useState(false);
 
+  // Detect "Thinking" mode: Streaming is active but no text has arrived yet
+  const isThinking = isStreaming && (!content || content.length === 0);
+
   const renderContent = (text: string) => {
       if (!searchQuery) return text;
       let occurrenceCount = 0;
@@ -55,9 +58,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         minute: '2-digit',
       })
     : '';
-
-  const displayContent =
-    isStreaming && content === '' ? '...' : content;
 
   const handleCopyClick = () => {
     if (onCopy && typeof content === 'string') {
@@ -100,38 +100,38 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             relative px-4 py-3 md:px-6 md:py-3.5 text-sm md:text-base leading-snug backdrop-blur-xl shadow-lg
             ${
               isUser
-                ? 'rounded-[20px] rounded-br-none text-white border border-white/10 bg-black/40' // Darker, more contrast for user
-                : 'rounded-[20px] rounded-bl-none text-white border border-white/10 bg-black/30' // Semi-opaque for bot
+                ? 'rounded-[20px] rounded-br-none text-white border border-white/10 bg-black/40' // Darker for user
+                : 'rounded-[20px] rounded-bl-none text-white border border-white/10 bg-black/30' // Lighter for bot
             }
           `}
           style={
             !isUser
               ? {
-                  // Mix theme color with dark overlay for readability + branding
                   background: `linear-gradient(135deg, ${currentTheme.primaryColor}20, #00000060)`,
                   borderLeft: `2px solid ${currentTheme.primaryColor}`,
                 }
               : {}
           }
         >
-          <div className="space-y-1">
-            {displayContent.split('\n').map((line, i) => (
-              <p key={i} className="my-0 leading-snug break-words whitespace-pre-wrap text-white/90 font-light">
-                {renderContent(line)}
-              </p>
-            ))}
-          </div>
-
-          {isStreaming && content === '' && (
-            <div className="flex gap-1.5 items-center mt-2">
-              {[0, 0.2, 0.4].map((d) => (
-                <div
-                  key={d}
-                  className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce"
-                  style={{ animationDelay: `${d}s` }}
-                />
-              ))}
-            </div>
+          {isThinking ? (
+             // --- THINKING INDICATOR ---
+             <div className="flex items-center gap-3 h-6 px-1">
+                 <span className="text-xs text-white/50 font-medium tracking-wide">Thinking</span>
+                 <div className="flex gap-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: '0s' }} />
+                    <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: '0.2s' }} />
+                    <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: '0.4s' }} />
+                 </div>
+             </div>
+          ) : (
+             // --- NORMAL MESSAGE CONTENT ---
+             <div className="space-y-1">
+                {content.split('\n').map((line, i) => (
+                  <p key={i} className="my-0 leading-snug break-words whitespace-pre-wrap text-white/90 font-light">
+                    {renderContent(line)}
+                  </p>
+                ))}
+             </div>
           )}
 
           <div
@@ -144,7 +144,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         </div>
 
         <AnimatePresence>
-          {isHovered && !isStreaming && (
+          {isHovered && !isThinking && (
             <motion.div
               initial={{ opacity: 0, scale: 0.8, x: isUser ? -10 : 10 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
