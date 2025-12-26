@@ -109,7 +109,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  
+  // FIX: Changed to Array of Images
+  const [attachedImages, setAttachedImages] = useState<string[]>([]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ msgId: string, matchIndex: number }[]>([]);
@@ -252,19 +254,34 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
   useEffect(() => scrollToBottom(), [messages, isTyping]);
 
+  // FIX: Handle Multiple Images Selection
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (isStandardMode) { setError("Vision Analysis requires Premium Credits."); return; }
       const files = e.target.files;
       if (files && files.length > 0) {
           try {
-              const compressed = await compressImage(files[0]);
-              setAttachedImage(compressed);
+              const newImages: string[] = [];
+              // Process all selected files
+              for (let i = 0; i < files.length; i++) {
+                  // Limit to 3 images for simplicity/performance
+                  if (attachedImages.length + newImages.length >= 3) {
+                      setError("Maximum 3 images allowed at once.");
+                      break;
+                  }
+                  const compressed = await compressImage(files[i]);
+                  newImages.push(compressed);
+              }
+              setAttachedImages(prev => [...prev, ...newImages]);
           } catch (err) {
               console.error(err);
-              setError("Failed to process image.");
+              setError("Failed to process some images.");
           }
       }
       if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeAttachedImage = (index: number) => {
+      setAttachedImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const copyToClipboard = (text: string) => {
@@ -289,24 +306,29 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const handleSend = async (e?: React.FormEvent, overrideInput?: string) => {
     e?.preventDefault();
     const textToSend = overrideInput || input;
-    if (!textToSend.trim() && !attachedImage) return;
+    if (!textToSend.trim() && attachedImages.length === 0) return;
 
     let finalContent = textToSend;
     if (replyingTo) { finalContent = `> Replying to: "${replyingTo}"\n\n${textToSend}`; setReplyingTo(null); }
-    if (attachedImage) { finalContent = `[Image Attached] ${finalContent}`; }
+    
+    // Display marker for images in local bubble
+    if (attachedImages.length > 0) { 
+        finalContent = `[${attachedImages.length} Images Attached] ${finalContent}`; 
+    }
 
     const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
-    const newModelMessageId = Date.now().toString() + "-ai"; // Unique ID for assistant msg
+    const newModelMessageId = Date.now().toString() + "-ai"; 
 
-    // FIX: Add User AND Empty Assistant Message IMMEDIATELY
-    // This makes the "Thinking..." bubble appear instantly
     setMessages(prev => [
         ...prev, 
         userMsg,
         { role: 'assistant', content: '', timestamp: Date.now(), id: newModelMessageId }
     ]);
     
-    setInput(''); setAttachedImage(null); setShowEmojiPicker(false); setIsTyping(true); setError(null);
+    // Store images to send before clearing state
+    const imagesToSend = [...attachedImages];
+    
+    setInput(''); setAttachedImages([]); setShowEmojiPicker(false); setIsTyping(true); setError(null);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     try {
@@ -314,13 +336,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', 
-        body: JSON.stringify({ message: textToSend, image: attachedImage }), 
+        // FIX: Send 'images' array instead of single 'image'
+        body: JSON.stringify({ message: textToSend, images: imagesToSend }), 
       });
 
       if (!response.ok) {
           if (response.status === 401) { navigate('/login'); return; }
           const errData = await response.json().catch(() => ({}));
-          // Remove the thinking bubble if error
           setMessages(prev => prev.filter(m => m.id !== newModelMessageId));
           throw new Error(errData.message || `${botName} is unreachable.`);
       }
@@ -656,6 +678,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       <div className={`w-full px-4 pt-2 shrink-0 max-w-[700px] mx-auto z-30 ${isMobile ? 'fixed bottom-0 left-0 right-0 z-[70] pb-4 px-4 bg-gradient-to-t from-black/80 to-transparent' : 'pb-6'}`}>
          <div className="flex flex-col gap-2">
+            
             <AnimatePresence>
                 {replyingTo && (
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center w-[95%] bg-black/60 backdrop-blur-xl border border-white/10 rounded-t-2xl border-b-0 p-3 flex justify-between items-center text-xs text-white/70 shadow-lg">
@@ -663,20 +686,26 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         <button onClick={() => setReplyingTo(null)} className="hover:text-white"><X size={14} /></button>
                     </motion.div>
                 )}
-                {attachedImage && (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center relative group mb-1">
-                        <img src={attachedImage} alt="Attachment" className="h-24 rounded-xl border border-white/20 shadow-2xl" />
-                        <button onClick={() => setAttachedImage(null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors"><X size={12} /></button>
+                {attachedImages.length > 0 && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center w-[95%] flex gap-2 mb-1 overflow-x-auto scrollbar-hide">
+                        {attachedImages.map((img, idx) => (
+                            <div key={idx} className="relative group shrink-0">
+                                <img src={img} alt={`Attachment ${idx + 1}`} className="h-16 w-16 object-cover rounded-lg border border-white/20 shadow-md" />
+                                <button onClick={() => removeAttachedImage(idx)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-sm hover:bg-red-600 transition-colors"><X size={10} /></button>
+                            </div>
+                        ))}
                     </motion.div>
                 )}
             </AnimatePresence>
 
             <div className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border border-white/5 p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
                 <div className="flex items-center gap-1">
-                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStandardMode} className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStandardMode} className={`p-2.5 rounded-full transition-all relative ${attachedImages.length > 0 ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}>
                         <ImageIcon size={20} />
+                        {attachedImages.length > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-green-500 rounded-full border border-black/50"></span>}
                     </button>
-                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} capture="environment" />
+                    {/* FIX: Add 'multiple' attribute */}
+                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" multiple onChange={handleImageSelect} capture="environment" />
                     
                     <button onClick={toggleDictation} className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>
                         {isDictating ? <MicOff size={20} /> : <Mic size={20} />}
@@ -728,7 +757,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
                 <button 
                     onClick={(e) => handleSend(e)}
-                    disabled={!input.trim() && !attachedImage} 
+                    disabled={!input.trim() && attachedImages.length === 0} 
                     className="p-3.5 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-1" 
                     style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #4f46e5)` }}
                 >
