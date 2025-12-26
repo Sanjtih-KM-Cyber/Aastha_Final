@@ -26,8 +26,7 @@ export interface ChatMessage {
 }
 
 export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
-  // 1. Check for images
-  // Groq's Llama 3.1 8b is text-only. If the user sent an image, we must handle it gracefully.
+  // 1. Check for images (Groq Llama 3 is text-only usually)
   const hasImage = history.some(msg => Array.isArray(msg.content) && msg.content.some(c => c.type === 'image_url'));
   
   if (hasImage) {
