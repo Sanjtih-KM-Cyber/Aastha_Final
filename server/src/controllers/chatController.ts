@@ -1,6 +1,5 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
-// FIX: Added generateSummary import so memory works
 import { streamGemini, generateSummary } from '../services/geminiService';
 import { streamGroq, ChatMessage } from '../services/groqService';
 import User from '../models/User';
@@ -92,7 +91,7 @@ You are 'Aastik', a grounded, calm, and reliable campus wellness friend for {{us
 export const chatWithAI = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
 
-  const { message, image } = (req as any).body; 
+  const { message, images } = (req as any).body; 
   const userName = req.user.name;
   const userId = req.user._id;
 
@@ -153,14 +152,22 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let chatSession = await Chat.findOne({ user: userId });
     if (!chatSession) chatSession = await Chat.create({ user: userId, messages: [] });
 
-    const historyWindow: ChatMessage[] = chatSession.messages.slice(-10).map(m => ({
+    // Increased context window for smarter replies
+    const historyWindow: ChatMessage[] = chatSession.messages.slice(-30).map(m => ({
         role: m.role as 'user' | 'assistant',
         content: decrypt(m.content)
     }));
 
-    const newUserMsgContent: any = image 
-        ? [ { type: "text", text: message || "Describe this image." }, { type: "image_url", image_url: { url: image } } ]
-        : message;
+    // Handle Multiple Images
+    let newUserMsgContent: any;
+    if (images && Array.isArray(images) && images.length > 0) {
+        newUserMsgContent = [
+            { type: "text", text: message || "Analyze these images." },
+            ...images.map((img: string) => ({ type: "image_url", image_url: { url: img } }))
+        ];
+    } else {
+        newUserMsgContent = message;
+    }
     
     const messagesToSend: ChatMessage[] = [
         ...historyWindow,
@@ -181,7 +188,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     const factsString = user.facts.length > 0 ? user.facts.map((f: string) => `- ${f}`).join('\n') : "No facts yet.";
     
     let baseTemplate = AASTHA_PROMPT;
-    // FIX: Added 'as string' to fix Error TS2367
     if (user.persona === 'aarav' || (user.persona as string) === 'aastik') {
         baseTemplate = AASTIK_PROMPT;
     }
@@ -203,22 +209,23 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     // 7. Save History
-    const userContentToSave = image ? `[Image] ${message}` : message;
+    const imageLabel = images && images.length > 0 ? `[${images.length} Images] ` : '';
+    const userContentToSave = `${imageLabel}${message}`;
+    
     if (fullAiResponse.trim().length > 0 || userContentToSave.trim().length > 0) {
         chatSession.messages.push({ role: 'user', content: encrypt(userContentToSave), timestamp: new Date() });
         chatSession.messages.push({ role: 'assistant', content: encrypt(fullAiResponse), timestamp: new Date() });
         await chatSession.save();
     }
 
-    // FIX: Added Memory Update Logic (Runs every 10 messages)
-    if (chatSession.messages.length % 10 === 0) {
+    // FIX: Memory Update Interval changed to 5
+    if (chatSession.messages.length % 5 === 0) {
         try {
-            const recentHistory = chatSession.messages.slice(-20).map(m => ({
+            const recentHistory = chatSession.messages.slice(-10).map(m => ({
                 role: m.role as any,
                 content: decrypt(m.content)
             }));
             
-            // Run in background
             generateSummary(recentHistory, user.memorySummary || "")
                 .then(async (newSummary) => {
                     await User.findByIdAndUpdate(userId, { memorySummary: newSummary });
