@@ -1,45 +1,50 @@
-import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
 import User from '../models/User';
 
-// Extend Express Request to include User
 export interface AuthRequest extends Request {
   user?: any;
-}
-
-interface DecodedToken {
-  id: string;
-  iat: number;
-  exp: number;
 }
 
 export const protect = async (req: AuthRequest, res: Response, next: NextFunction) => {
   let token;
 
-  if ((req as any).cookies && (req as any).cookies.jwt) {
-    token = (req as any).cookies.jwt;
-  }
-
-  if (token) {
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret') as DecodedToken;
-      
-      // Attach user to request object
+      token = req.headers.authorization.split(' ')[1];
+      const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'default_secret');
+
       const user = await User.findById(decoded.id).select('-passwordHash');
       
       if (!user) {
-        (res as any).status(401).json({ message: 'Not authorized, user not found' });
-        return;
+          return (res as any).status(401).json({ message: 'Not authorized' });
       }
 
+      // --- FIX: CHECK PREMIUM EXPIRY (30 DAYS) ---
+      if (user.isPro && user.subscriptionDate) {
+          const now = new Date();
+          const subDate = new Date(user.subscriptionDate);
+          const diffTime = Math.abs(now.getTime() - subDate.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+          if (diffDays > 30) {
+              console.log(`User ${user._id} subscription expired (${diffDays} days). Revoking Pro.`);
+              user.isPro = false;
+              user.dailyPremiumUsage = 0; // Reset usage logic to standard
+              await user.save();
+          }
+      }
+      // -------------------------------------------
+
       req.user = user;
-      // Fix: Cast next to any to ensure it's callable despite strict type check issues
-      (next as any)();
+      next();
     } catch (error) {
       console.error(error);
       (res as any).status(401).json({ message: 'Not authorized, token failed' });
     }
-  } else {
+  }
+
+  if (!token) {
     (res as any).status(401).json({ message: 'Not authorized, no token' });
   }
 };
