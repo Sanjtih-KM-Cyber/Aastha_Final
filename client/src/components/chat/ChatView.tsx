@@ -119,10 +119,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [isListening, setIsListening] = useState(false);
   const [isDictating, setIsDictating] = useState(false); 
   const [transcript, setTranscript] = useState('');
-  // Fix: Default to FALSE for TTS if not set
   const [ttsEnabled, setTtsEnabled] = useState(() => {
       const saved = localStorage.getItem('user_tts_enabled');
-      return saved === 'true'; // If null (first visit), returns false.
+      return saved === 'true'; 
   });
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(() => localStorage.getItem('user_voice_uri'));
   
@@ -297,7 +296,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     if (attachedImage) { finalContent = `[Image Attached] ${finalContent}`; }
 
     const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
-    setMessages(prev => [...prev, userMsg]);
+    const newModelMessageId = Date.now().toString() + "-ai"; // Unique ID for assistant msg
+
+    // FIX: Add User AND Empty Assistant Message IMMEDIATELY
+    // This makes the "Thinking..." bubble appear instantly
+    setMessages(prev => [
+        ...prev, 
+        userMsg,
+        { role: 'assistant', content: '', timestamp: Date.now(), id: newModelMessageId }
+    ]);
     
     setInput(''); setAttachedImage(null); setShowEmojiPicker(false); setIsTyping(true); setError(null);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -313,15 +320,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       if (!response.ok) {
           if (response.status === 401) { navigate('/login'); return; }
           const errData = await response.json().catch(() => ({}));
+          // Remove the thinking bubble if error
+          setMessages(prev => prev.filter(m => m.id !== newModelMessageId));
           throw new Error(errData.message || `${botName} is unreachable.`);
       }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      const newModelMessageId = Date.now().toString();
       processedTagsRef.current.clear();
-
-      setMessages(prev => [...prev, { role: 'assistant', content: '', timestamp: Date.now(), id: newModelMessageId }]);
       
       let aiContentRaw = '';
       let buffer = '';
@@ -544,9 +550,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   return (
     <div className="relative w-full h-[100dvh] flex flex-col items-center overflow-hidden">
       
-      {/* Remove local background to fix "Abrupt Cutoff" behind sidebar. Let AppContainer handle it. */}
-      {/* <div className="absolute inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out"
-           style={{ background: `radial-gradient(circle at 50% 30%, ${currentTheme.primaryColor}22 0%, #0a0e17 70%)` }} /> */}
       <div className="absolute inset-0 z-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
 
       <AnimatePresence>
@@ -594,7 +597,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         )}
       </AnimatePresence>
 
-      {/* MOBILE HEADER: Fixed Z-70 | DESKTOP HEADER: Absolute Z-30 */}
       <motion.div
         initial={{ y: -50 }}
         animate={{ y: 0 }}
@@ -652,10 +654,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          </div>
       </div>
 
-      {/* MOBILE INPUT: Fixed Z-70 | DESKTOP INPUT: Standard Flow */}
       <div className={`w-full px-4 pt-2 shrink-0 max-w-[700px] mx-auto z-30 ${isMobile ? 'fixed bottom-0 left-0 right-0 z-[70] pb-4 px-4 bg-gradient-to-t from-black/80 to-transparent' : 'pb-6'}`}>
          <div className="flex flex-col gap-2">
-            
             <AnimatePresence>
                 {replyingTo && (
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center w-[95%] bg-black/60 backdrop-blur-xl border border-white/10 rounded-t-2xl border-b-0 p-3 flex justify-between items-center text-xs text-white/70 shadow-lg">
@@ -672,7 +672,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             </AnimatePresence>
 
             <div className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border border-white/5 p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
-                
                 <div className="flex items-center gap-1">
                     <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStandardMode} className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}>
                         <ImageIcon size={20} />
@@ -694,7 +693,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base font-light py-3 px-2 resize-none max-h-32 scrollbar-hide"
                         rows={1}
                     />
-                    
                     <div className="relative">
                         <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
                             <Smile size={20} />
