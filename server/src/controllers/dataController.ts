@@ -33,7 +33,6 @@ export const createDiaryEntry = async (req: AuthRequest, res: Response) => {
     if (!content) return (res as any).status(400).json({ message: 'Content is required.' });
     
     const finalTitle = title || "Untitled"; 
-    // ENCRYPTION HAPPENS HERE BEFORE SAVING
     const encTitle = encrypt(finalTitle);
     const encContent = encrypt(content);
     
@@ -76,7 +75,7 @@ export const deleteDiaryEntry = async (req: AuthRequest, res: Response) => {
 };
 
 
-// --- MOOD CONTROLLERS (FIXED) ---
+// --- MOOD CONTROLLERS ---
 
 export const getMoods = async (req: AuthRequest, res: Response) => {
   try {
@@ -84,7 +83,6 @@ export const getMoods = async (req: AuthRequest, res: Response) => {
     
     const moods = await Mood.find({ user: req.user._id }).sort({ timestamp: 1 });
     
-    // Decrypt labels for frontend display
     const decryptedMoods = moods.map(m => ({
         ...m.toObject(),
         mood: decrypt(m.mood) 
@@ -104,21 +102,18 @@ export const createMood = async (req: AuthRequest, res: Response) => {
     
     if (!mood) return (res as any).status(400).json({ message: 'Mood required' });
 
-    // ENCRYPTION HAPPENS HERE
     const encryptedMood = encrypt(mood);
 
-    // FIX: Always CREATE a new entry. Do not update/average.
-    // This allows multiple moods per day to be stored distinctively.
     const newEntry = await Mood.create({
         user: req.user._id,
-        mood: encryptedMood, // Stored as ciphertext
+        mood: encryptedMood, 
         score: score || 5,
         timestamp: new Date()
     });
     
     (res as any).status(201).json({
         ...newEntry.toObject(),
-        mood: mood // Return plain text to client
+        mood: mood 
     });
 
   } catch (error) {
@@ -127,7 +122,44 @@ export const createMood = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// --- VIDEO SEARCH CONTROLLER (TUNED FOR SONGS) ---
+
 export const searchVideos = async (req: AuthRequest, res: Response) => {
-    // ... (Keep existing searchVideos)
+  try {
+    if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+    const { q } = req.query;
+
+    if (!q) return (res as any).json([]);
+
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+        console.error("YOUTUBE_API_KEY is missing.");
+        return (res as any).json([]);
+    }
+
+    // Call YouTube Data API
+    const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+        params: {
+            part: 'snippet',
+            q: q,
+            type: 'video',
+            videoCategoryId: '10', // <--- THIS ID (10) FILTERS FOR MUSIC
+            key: apiKey,
+            maxResults: 15
+        }
+    });
+
+    const videos = response.data.items.map((item: any) => ({
+        id: item.id.videoId,
+        title: item.snippet.title,
+        artist: item.snippet.channelTitle,
+        thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url
+    }));
+
+    (res as any).json(videos);
+
+  } catch (error) {
+    console.error("Search Video Error:", error);
     (res as any).json([]);
+  }
 };
