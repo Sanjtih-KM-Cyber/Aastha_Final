@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
-import { streamGemini } from '../services/geminiService';
+// FIX: Added generateSummary import so memory works
+import { streamGemini, generateSummary } from '../services/geminiService';
 import { streamGroq, ChatMessage } from '../services/groqService';
 import User from '../models/User';
 import Chat from '../models/Chat';
@@ -179,10 +180,9 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // 5. SELECT SYSTEM PROMPT BASED ON PERSONA
     const factsString = user.facts.length > 0 ? user.facts.map((f: string) => `- ${f}`).join('\n') : "No facts yet.";
     
-    // Check user persona (Default to Aastha if not set or set to 'aastha')
-    // If user.persona is 'aarav', we use Aastik.
     let baseTemplate = AASTHA_PROMPT;
-    if (user.persona === 'aarav' || user.persona === 'aastik') {
+    // FIX: Added 'as string' to fix Error TS2367
+    if (user.persona === 'aarav' || (user.persona as string) === 'aastik') {
         baseTemplate = AASTIK_PROMPT;
     }
 
@@ -190,7 +190,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
       .replace(/{{userName}}/g, userName || 'Friend')
       .replace(/{{userFacts}}/g, factsString);
 
-    // 6. Start Streaming (Passes the EXACT prompt to either provider)
+    // 6. Start Streaming
     const stream = provider === 'GEMINI' 
         ? streamGemini(messagesToSend, finalSystemPrompt, user.isPro) 
         : streamGroq(messagesToSend, finalSystemPrompt);
@@ -208,6 +208,25 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         chatSession.messages.push({ role: 'user', content: encrypt(userContentToSave), timestamp: new Date() });
         chatSession.messages.push({ role: 'assistant', content: encrypt(fullAiResponse), timestamp: new Date() });
         await chatSession.save();
+    }
+
+    // FIX: Added Memory Update Logic (Runs every 10 messages)
+    if (chatSession.messages.length % 10 === 0) {
+        try {
+            const recentHistory = chatSession.messages.slice(-20).map(m => ({
+                role: m.role as any,
+                content: decrypt(m.content)
+            }));
+            
+            // Run in background
+            generateSummary(recentHistory, user.memorySummary || "")
+                .then(async (newSummary) => {
+                    await User.findByIdAndUpdate(userId, { memorySummary: newSummary });
+                })
+                .catch(err => console.error("Memory Update Failed:", err));
+        } catch (e) {
+            console.error("Memory Logic Error:", e);
+        }
     }
     
     (res as any).write('data: [DONE]\n\n');
