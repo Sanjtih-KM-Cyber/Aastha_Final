@@ -251,8 +251,6 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
     // Post-process to ensure URLs are constructed cleanly for the frontend
     // Some frontends expect {name, url} object
     if (results.length > 0) {
-       // If caller expects a single recommendation object (old interface), return the first one adaptable
-       // But usually this returns an array. Let's return the array for the new interface.
        return results.map((track: any) => ({
           name: track.title,
           url: `https://www.youtube.com/results?search_query=${encodeURIComponent(track.searchQuery || track.title + " Official Video")}`,
