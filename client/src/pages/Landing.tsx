@@ -1,11 +1,11 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Hero } from '../components/Hero';
 import { FloatingOS } from '../components/FloatingOS';
 import { TheShift } from '../components/TheShift';
 import { BentoGrid } from '../components/BentoGrid';
 import { FooterDoorway } from '../components/FooterDoorway';
 import { motion, useScroll, useTransform, useSpring, useMotionTemplate, useMotionValue } from 'framer-motion';
-import { ArrowRight, Sparkles, Activity, Heart, Shield, Cpu, Zap } from 'lucide-react';
+import { Sparkles, Activity, Heart } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 // --- Mouse Spotlight ---
@@ -50,10 +50,10 @@ const StackSection: React.FC<{
     const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
     const smoothProgress = useSpring(scrollYProgress, { damping: 20, stiffness: 100 });
     
-    // Reduced scale down to prevent cut-off
-    const scale = useTransform(smoothProgress, [0, 1], [1, 0.95]); 
-    const brightness = useTransform(smoothProgress, [0, 1], [1, 0.5]);
-    const y = useTransform(smoothProgress, [0, 1], ["0vh", "-5vh"]);
+    // Adjusted scale for mobile to prevent too much shrinking
+    const scale = useTransform(smoothProgress, [0, 1], [1, 0.98]); 
+    const brightness = useTransform(smoothProgress, [0, 1], [1, 0.6]);
+    const y = useTransform(smoothProgress, [0, 1], ["0vh", "-2vh"]);
 
     return (
         <div ref={ref} id={id} className="relative min-h-screen w-full z-0">
@@ -62,7 +62,7 @@ const StackSection: React.FC<{
                     style={{ scale, filter: `brightness(${brightness})`, y, zIndex: index }}
                     className={`relative w-full h-full flex flex-col justify-center items-center ${color} border-t border-white/5 shadow-[0_-50px_100px_-20px_rgba(0,0,0,0.5)]`}
                 >
-                    <div className="w-full max-w-[1600px] px-6 md:px-12 flex items-center justify-center h-full">
+                    <div className="w-full max-w-[1600px] px-4 md:px-12 flex items-center justify-center h-full py-20 md:py-0 overflow-y-auto md:overflow-visible">
                         {children}
                     </div>
                 </motion.div>
@@ -73,21 +73,22 @@ const StackSection: React.FC<{
 
 const InfiniteMarquee = () => {
     return (
-        <div className="w-full py-24 bg-black border-y border-white/10 overflow-hidden relative z-20 flex items-center">
+        <div className="w-full py-12 md:py-24 bg-black border-y border-white/10 overflow-hidden relative z-20 flex items-center">
             <div className="absolute inset-0 bg-gradient-to-r from-black via-transparent to-black z-10 pointer-events-none" />
             <motion.div 
-                className="flex gap-32 whitespace-nowrap"
+                className="flex gap-16 md:gap-32 whitespace-nowrap"
                 animate={{ x: ["0%", "-50%"] }}
                 transition={{ repeat: Infinity, ease: "linear", duration: 40 }}
             >
                 {[...Array(4)].map((_, i) => (
-                    <div key={i} className="flex gap-32 items-center text-white/10 font-serif text-7xl md:text-9xl tracking-tighter select-none">
+                    // FIX: Made text smaller on mobile (text-4xl) to fit screen better
+                    <div key={i} className="flex gap-8 md:gap-32 items-center text-white/10 font-serif text-4xl md:text-9xl tracking-tighter select-none">
                         <span>Digital Sanctuary</span>
-                        <Sparkles size={64} className="text-teal-900" />
+                        <Sparkles size={32} className="text-teal-900 md:w-16 md:h-16" />
                         <span>Safe Space</span>
-                        <Heart size={64} className="text-violet-900" />
+                        <Heart size={32} className="text-violet-900 md:w-16 md:h-16" />
                         <span>No Judgement</span>
-                        <Activity size={64} className="text-rose-900" />
+                        <Activity size={32} className="text-rose-900 md:w-16 md:h-16" />
                     </div>
                 ))}
             </motion.div>
@@ -107,25 +108,28 @@ export const Landing: React.FC = () => {
     <>
       <MouseSpotlight />
       
-      <nav className="fixed top-0 left-0 right-0 z-50 flex justify-between items-center px-6 py-6 md:px-12 mix-blend-difference text-white">
-        <div className="font-serif text-2xl font-bold tracking-tighter cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Aastha.</div>
+      <nav className="fixed top-0 left-0 right-0 z-50 flex justify-between items-center px-6 py-4 md:py-6 md:px-12 mix-blend-difference text-white">
+        <div className="font-serif text-xl md:text-2xl font-bold tracking-tighter cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Aastha.</div>
         <div className="hidden md:flex gap-10 text-sm font-medium opacity-80">
           <a href="#" className="hover:opacity-100 transition-opacity">Manifesto</a>
           <a href="#features-section" onClick={scrollToFeatures} className="hover:opacity-100 transition-opacity">Features</a>
         </div>
-        <button onClick={() => navigate('/login')} className="text-xs font-bold uppercase tracking-widest border border-white/30 px-8 py-3 rounded-full hover:bg-white hover:text-black transition-all duration-300">Enter Sanctuary</button>
+        <button onClick={() => navigate('/login')} className="text-[10px] md:text-xs font-bold uppercase tracking-widest border border-white/30 px-6 py-2 md:px-8 md:py-3 rounded-full hover:bg-white hover:text-black transition-all duration-300">Enter</button>
       </nav>
 
       <div className="relative bg-midnight text-white">
-        <div className="sticky top-0 h-screen z-0 flex flex-col justify-center items-center bg-midnight"><Hero /></div>
+        {/* Hero Section - sticky removed on mobile to prevent scrolling issues if hero is tall */}
+        <div className="relative md:sticky top-0 h-screen z-0 flex flex-col justify-center items-center bg-midnight overflow-hidden">
+            <Hero />
+        </div>
 
-        <div className="relative z-10 mt-[-5vh]"> 
+        <div className="relative z-10 mt-0 md:mt-[-5vh]"> 
             {/* 1. Features */}
             <StackSection index={1} id="features-section" color="bg-[#0B0F17]">
-                <div className="w-full flex flex-col items-center justify-center">
-                    <div className="text-center mb-16">
-                         <span className="text-violet-400 text-xs font-bold uppercase tracking-widest mb-4 block">Architecture</span>
-                         <h2 className="font-serif text-5xl md:text-7xl">Designed for Serenity</h2>
+                <div className="w-full flex flex-col items-center justify-center pt-10 md:pt-0">
+                    <div className="text-center mb-8 md:mb-16">
+                         <span className="text-violet-400 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 md:mb-4 block">Architecture</span>
+                         <h2 className="font-serif text-4xl md:text-7xl">Designed for Serenity</h2>
                     </div>
                     <BentoGrid />
                 </div>
@@ -139,7 +143,6 @@ export const Landing: React.FC = () => {
             {/* 3. OS Demo */}
             <StackSection index={3} color="bg-[#0a0e17]">
                 <div className="w-full h-full flex flex-col items-center justify-center">
-                   {/* FIX: Removed duplicate header. FloatingOS already has this text. */}
                    <FloatingOS />
                 </div>
             </StackSection>
