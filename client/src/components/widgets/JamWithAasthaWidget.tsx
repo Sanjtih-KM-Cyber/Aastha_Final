@@ -216,20 +216,27 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           playerRef.current.playVideo();
       } else if (loopMode === 'custom') {
           if (currentLoopCount < loopTarget) {
+              // Still in the loop cycle for THIS song
               setCurrentLoopCount(prev => prev + 1);
               playerRef.current.seekTo(0);
               playerRef.current.playVideo();
           } else {
+              // Loop finished for this song
               setCurrentLoopCount(1);
-              // Logic for Next Track (manually implemented to use Ref data)
-              if (queue.length > 0) {
-                  const nextIndex = (currentIndex + 1) % queue.length;
+              setLoopMode('off'); // Reset to Normal Play mode for the NEXT song
+
+              if (currentIndex < queue.length - 1) {
+                  // Move to next song
+                  const nextIndex = currentIndex + 1;
                   setCurrentIndex(nextIndex);
                   loadAndPlay(queue[nextIndex]);
+              } else {
+                  // This was the last song, stop playback
+                  setIsPlaying(false);
               }
           }
       } else if (loopMode === 'all') {
-          // Play Next logic
+          // Play Next logic, looping back to start if needed
           if (queue.length > 0) {
               const nextIndex = (currentIndex + 1) % queue.length;
               setCurrentIndex(nextIndex);
@@ -237,13 +244,14 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               setCurrentLoopCount(1);
           }
       } else {
-          // Loop Mode Off
+          // Loop Mode Off (Normal)
           if (currentIndex < queue.length - 1) {
               const nextIndex = currentIndex + 1;
               setCurrentIndex(nextIndex);
               loadAndPlay(queue[nextIndex]);
               setCurrentLoopCount(1);
           } else {
+              // End of playlist
               setIsPlaying(false);
           }
       }
@@ -293,11 +301,8 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       if (!query.trim()) return;
       setIsSearching(true);
       try {
+          // Using your backend search endpoint
           const res = await api.get(`/data/videos/search?q=${encodeURIComponent(query)}`);
-          // Check if res.data is array or wrapped object. Assuming array based on usage.
-          // If the backend returns { items: [...] } adjust accordingly.
-          // Previous code assumed res.data is the array or res.data[0]. 
-          // Let's assume res.data is the array of tracks.
           
           if (Array.isArray(res.data) && res.data.length > 0) {
               const newTrack = res.data[0]; // Take top result
@@ -305,9 +310,6 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               setQueue(prev => {
                 // If queue is empty, play immediately
                 if (prev.length === 0) {
-                    // Need to wait for render update or use ref? 
-                    // loadAndPlay relies on playerRef which is persistent.
-                    // But we need to update state first.
                     setTimeout(() => loadAndPlay(newTrack), 100);
                     return [newTrack];
                 }
@@ -315,11 +317,9 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                 return [...prev, newTrack];
               });
               
-              // If we were empty, index is 0.
               if (queue.length === 0) setCurrentIndex(0);
               
           } else {
-              // Fallback or Alert?
               console.warn("No results found for query:", query);
           }
       } catch (e) { console.error("Search failed", e); } 
@@ -336,17 +336,12 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       if (index < currentIndex) {
           setCurrentIndex(prev => prev - 1);
       } else if (index === currentIndex) {
-          // If we removed current track, stop or play next?
-          // Simple logic: if queue empty, stop. Else load new current.
           if (queue.length <= 1) {
              setIsPlaying(false);
              setCurrentIndex(0);
           } else {
-             // Try to stay on index or go to next available
              const nextIdx = index >= queue.length - 1 ? 0 : index;
              setCurrentIndex(nextIdx);
-             // We might need to reload player if active track removed
-             // But for now let's keep it simple (user might need to click play)
           }
       }
   };
