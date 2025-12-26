@@ -12,46 +12,46 @@ if (groqKeys.length === 0) {
   console.warn("Warning: No GROQ_API_KEYS found. Basic chat mode may fail.");
 }
 
-// Simple round-robin or random key selection
 const getGroqClient = () => {
   const randomKey = groqKeys.length > 0 
     ? groqKeys[Math.floor(Math.random() * groqKeys.length)] 
     : 'dummy_key_missing';
-  
   return new Groq({ apiKey: randomKey });
 };
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
-  // Content can be a simple string OR an array (for multimodal structures, though Groq Llama 3 only takes text)
+  // Content can be string or array (for multimodal inputs handled by Gemini)
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
 }
 
 export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
-  // 1. Check for images. Groq (Llama 3) is text-only.
+  // 1. Check for images
+  // Groq's Llama 3.1 8b is text-only. If the user sent an image, we must handle it gracefully.
   const hasImage = history.some(msg => Array.isArray(msg.content) && msg.content.some(c => c.type === 'image_url'));
   
   if (hasImage) {
-      yield "I apologize, but I cannot see images right now. Please describe the image to me so I can help.";
+      yield "I apologize, but I cannot see images while in Standard Mode (Groq). Please switch to Premium or describe the image to me.";
       return;
   }
 
   // 2. Select Model
   const model = "llama-3.1-8b-instant";
 
-  // 3. Format Messages for Groq
-  // FIX: Removed the appended "STANDARD MODE (Llama 3)" text. 
-  // Now it uses ONLY your system prompt as the source of truth.
+  // 3. Construct Messages
+  // IMPORTANT: The systemPrompt from the controller (containing Aastha/Aastik persona & Glish rules) 
+  // MUST be the first message.
   const messages: any[] = [
       { role: 'system', content: systemPrompt }
   ];
 
+  // 4. Append History
   for (const msg of history) {
       if (typeof msg.content === 'string') {
           messages.push({ role: msg.role, content: msg.content });
       } else {
-          // If content is array, extract just the text parts
-          const textPart = msg.content.find(c => c.type === 'text')?.text || "";
+          // If content is array (but no images found earlier), extract just the text parts
+          const textPart = (msg.content as any[]).find(c => c.type === 'text')?.text || "";
           if (textPart) messages.push({ role: msg.role, content: textPart });
       }
   }
@@ -62,9 +62,8 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       const completion = await groqClient.chat.completions.create({
           messages: messages,
           model: model,
-          temperature: 0.6,
+          temperature: 0.6, // Slightly creative but stable
           max_tokens: maxTokens || 1024,
-          frequency_penalty: 0.5,
           stream: true,
       });
 
@@ -72,8 +71,8 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
           const content = chunk.choices[0]?.delta?.content || "";
           if (content) yield content;
       }
-  } catch (error) {
+  } catch (error: any) {
       console.error("Groq Error:", error);
-      yield " [Aastha is taking a moment to reconnect. Please try again.]";
+      yield " [Standard Mode connection issue. Please try again.]";
   }
 }
