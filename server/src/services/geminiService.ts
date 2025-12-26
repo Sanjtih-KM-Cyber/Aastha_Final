@@ -28,7 +28,6 @@ const initKeys = () => {
         return;
     }
 
-    // Allocate 60% of keys to the FREE pool initially
     const FREE_POOL_SHARE = 0.60;
     const FREE_POOL_SIZE = Math.ceil(N * FREE_POOL_SHARE);
 
@@ -101,7 +100,7 @@ export async function* streamGemini(
       contents: contents,
       config: {
         systemInstruction: systemPrompt,
-        temperature: 0.6,
+        temperature: 0.85, // FIX: Increased creativity to avoid repetition
         maxOutputTokens: maxTokens,
       }
     });
@@ -119,7 +118,7 @@ export async function* streamGemini(
 // 3. MEMORY SUMMARY ENGINE
 // ==========================================
 export const generateSummary = async (chatHistory: ChatMessage[], previousSummary: string): Promise<string> => {
-    const client = getGeminiClient(false); // Free pool
+    const client = getGeminiClient(false); 
 
     try {
         const textData = chatHistory.map(m => {
@@ -187,7 +186,6 @@ export const extractThemeFromImage = async (base64Image: string): Promise<any> =
 };
 
 export const extractColorsFromImage = async (base64Image: string, mimeType: string): Promise<string[] | null> => {
-    // Adapter for controller calling convention
     try {
         const result = await extractThemeFromImage(base64Image);
         return [result.primaryColor, result.accentColor, "#FFFFFF", "#000000", result.primaryColor]; 
@@ -209,7 +207,6 @@ export const analyzeSentiment = async (text: string): Promise<string> => {
     }
 };
 
-// --- UPDATED MUSIC ENGINE (Smart Search + Official Channels) ---
 export const getMusicRecommendation = async (prompt: string, userHistory: string[] = []): Promise<any> => {
   const client = getGeminiClient(true);
   
@@ -248,8 +245,6 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
 
     const results = JSON.parse(response.text || '[]');
     
-    // Post-process to ensure URLs are constructed cleanly for the frontend
-    // Some frontends expect {name, url} object
     if (results.length > 0) {
        return results.map((track: any) => ({
           name: track.title,
