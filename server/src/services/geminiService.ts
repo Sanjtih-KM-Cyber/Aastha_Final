@@ -4,9 +4,10 @@ import { ChatMessage } from './groqService';
 
 dotenv.config();
 
-// --- KEY ROTATION & SPLITTING ENGINE ---
+// ==========================================
+// 1. KEY ROTATION & SPLITTING ENGINE
+// ==========================================
 
-// Lazy-load keys to avoid import-order race conditions
 let freeTierKeys: string[] = [];
 let proTierKeys: string[] = [];
 let keysInitialized = false;
@@ -22,7 +23,7 @@ const initKeys = () => {
     const N = allGeminiKeys.length;
 
     if (N === 0) {
-        console.error("FATAL ERROR: No GEMINI_API_KEYS found in environment variables. AI features will be unavailable.");
+        console.error("FATAL ERROR: No GEMINI_API_KEYS found. AI features will be unavailable.");
         keysInitialized = true;
         return;
     }
@@ -40,25 +41,27 @@ const initKeys = () => {
         proTierKeys = allGeminiKeys;
     }
 
-    console.log(`[AI SERVICE] Total Keys: ${N}. PRO Pool Size: ${proTierKeys.length} (40%). FREE Pool Size: ${freeTierKeys.length} (60%).`);
+    console.log(`[AI SERVICE] Total Keys: ${N}. PRO Pool: ${proTierKeys.length}. FREE Pool: ${freeTierKeys.length}.`);
     keysInitialized = true;
 };
 
 const getGeminiClient = (isPro: boolean = false) => {
-  initKeys(); // Ensure keys are loaded
+  initKeys(); 
 
   const pool = isPro ? proTierKeys : freeTierKeys;
   
   if (!pool || pool.length === 0) {
       console.warn("Gemini Client requested but no keys available.");
-      return new GoogleGenAI({ apiKey: 'MISSING_API_KEY_HANDLED_GRACEFULLY' });
+      return new GoogleGenAI({ apiKey: 'MISSING_KEY' });
   }
 
   const randomKey = pool[Math.floor(Math.random() * pool.length)];
   return new GoogleGenAI({ apiKey: randomKey });
 };
 
-// --- CHAT STREAMING ---
+// ==========================================
+// 2. CHAT STREAMING (Adapter for Controller)
+// ==========================================
 export async function* streamGemini(
     history: ChatMessage[],
     systemPrompt: string,
@@ -66,10 +69,9 @@ export async function* streamGemini(
     maxTokens?: number
 ) {
   const contents: Content[] = [];
-  let hasImage = false;
 
   for (const msg of history) {
-    if (msg.role === 'system') continue;
+    if (msg.role === 'system') continue; 
     const role = msg.role === 'assistant' ? 'model' : 'user';
     const parts: Part[] = [];
 
@@ -80,7 +82,6 @@ export async function* streamGemini(
         if (item.type === 'text' && item.text) {
           parts.push({ text: item.text });
         } else if (item.type === 'image_url' && item.image_url?.url) {
-          hasImage = true;
           const matches = item.image_url.url.match(/^data:(.+);base64,(.+)$/);
           if (matches) {
             parts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
@@ -91,7 +92,6 @@ export async function* streamGemini(
     if (parts.length > 0) contents.push({ role, parts });
   }
 
-  // Use stable model
   const modelName = 'gemini-2.5-flash';
   
   try {
@@ -115,14 +115,15 @@ export async function* streamGemini(
   }
 }
 
-// --- MEMORY SUMMARY ENGINE ---
+// ==========================================
+// 3. MEMORY SUMMARY ENGINE
+// ==========================================
 export const generateSummary = async (chatHistory: ChatMessage[], previousSummary: string): Promise<string> => {
-    // Uses the Free Pool (cheap summarization)
-    const client = getGeminiClient(false);
+    const client = getGeminiClient(false); // Free pool
 
     try {
         const textData = chatHistory.map(m => {
-            const role = m.role === 'user' ? 'User' : 'Aastha';
+            const role = m.role === 'user' ? 'User' : 'AI';
             const content = typeof m.content === 'string' ? m.content : '[Multimedia]';
             return `${role}: ${content}`;
         }).join('\n');
@@ -130,24 +131,12 @@ export const generateSummary = async (chatHistory: ChatMessage[], previousSummar
         const response = await client.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `
-                Read this chat conversation and update the "Memory Summary" for the user.
-
-                Previous Summary:
-                "${previousSummary}"
-
-                Task:
-                1. Identify new key facts (names, goals, likes, dislikes).
-                2. Capture emotional patterns or recurring struggles.
-                3. Note their preferred communication style (short/long, formal/casual).
-                4. Merge this with the Previous Summary to create a concise, updated profile (max 200 words).
-
-                Chat Log:
-                ${textData}
+                Read this chat conversation and update the "Memory Summary".
+                Previous Summary: "${previousSummary}"
+                Task: Identify new facts (names, goals), patterns, and communication style. Merge with previous summary (max 200 words).
+                Chat Log: ${textData}
             `,
-            config: {
-                maxOutputTokens: 300,
-                temperature: 0.3
-            }
+            config: { maxOutputTokens: 300, temperature: 0.3 }
         });
 
         return response.text?.trim() || previousSummary;
@@ -157,13 +146,14 @@ export const generateSummary = async (chatHistory: ChatMessage[], previousSummar
     }
 };
 
-// --- AI MAGIC FUNCTIONS (Uses Pro Client for reliability) ---
+// ==========================================
+// 4. AI MAGIC FUNCTIONS
+// ==========================================
 
 export const extractThemeFromImage = async (base64Image: string): Promise<any> => {
   const matches = base64Image.match(/^data:(.+);base64,(.+)$/);
   if (!matches) throw new Error("Invalid image format");
 
-  // Use Pro pool for reliability 
   const client = getGeminiClient(true); 
   
   try {
@@ -172,7 +162,7 @@ export const extractThemeFromImage = async (base64Image: string): Promise<any> =
       contents: {
         parts: [
           { inlineData: { mimeType: matches[1], data: matches[2] } },
-          { text: "Extract the dominant primary color (Hex), a complementary accent color, and a creative name for this color palette based on the mood of the image." }
+          { text: "Extract the dominant primary color (Hex), a complementary accent color, and a creative name for this color palette." }
         ]
       },
       config: {
@@ -180,9 +170,9 @@ export const extractThemeFromImage = async (base64Image: string): Promise<any> =
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            primaryColor: { type: Type.STRING, description: "The dominant hex color" },
-            accentColor: { type: Type.STRING, description: "A matching accent hex color" },
-            themeName: { type: Type.STRING, description: "A creative name for the palette" }
+            primaryColor: { type: Type.STRING },
+            accentColor: { type: Type.STRING },
+            themeName: { type: Type.STRING }
           },
           required: ["primaryColor", "themeName"]
         }
@@ -196,15 +186,49 @@ export const extractThemeFromImage = async (base64Image: string): Promise<any> =
   }
 };
 
-export const getMusicRecommendation = async (mood: string, userHistory: string[]): Promise<any> => {
-  const client = getGeminiClient(true); // Priority feature
+export const extractColorsFromImage = async (base64Image: string, mimeType: string): Promise<string[] | null> => {
+    // Adapter for controller calling convention
+    try {
+        const result = await extractThemeFromImage(base64Image);
+        return [result.primaryColor, result.accentColor, "#FFFFFF", "#000000", result.primaryColor]; 
+    } catch {
+        return null;
+    }
+};
+
+export const analyzeSentiment = async (text: string): Promise<string> => {
+    const client = getGeminiClient(false);
+    try {
+        const response = await client.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Classify sentiment: Happy, Calm, Sad, Anxious, Neutral, Excited. Text: "${text}"`,
+        });
+        return response.text?.trim() || "Neutral";
+    } catch (error) {
+        return "Neutral";
+    }
+};
+
+// --- UPDATED MUSIC ENGINE (Smart Search + Official Channels) ---
+export const getMusicRecommendation = async (prompt: string, userHistory: string[] = []): Promise<any> => {
+  const client = getGeminiClient(true);
   
   try {
     const response = await client.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `Suggest 3 soothing songs for someone feeling "${mood}". 
-                 History: ${userHistory.join(', ')}. 
-                 Provide YouTube-searchable titles.`,
+      contents: `
+        You are an expert DJ AI.
+        User Request: "${prompt}"
+        User History: ${userHistory.join(', ')}
+
+        **INSTRUCTIONS:**
+        1. **Search Mode:** If the user asks for a SPECIFIC song (e.g., "Play Faint by Linkin Park"), return ONLY that song.
+        2. **Recommendation Mode:** If the user asks for a mood/suggestion (e.g., "I'm sad", "Play something pop"), return 3 distinct songs.
+        3. **QUALITY CONTROL (CRITICAL):** - You MUST append "Official Video" or "Official Audio" to the song title for the YouTube search query.
+           - This ensures we get proper music channels, NOT shorts or fan uploads.
+
+        Output JSON format.
+      `,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -212,8 +236,9 @@ export const getMusicRecommendation = async (mood: string, userHistory: string[]
           items: {
             type: Type.OBJECT,
             properties: {
-              title: { type: Type.STRING },
+              title: { type: Type.STRING, description: "Song Title - Artist" },
               artist: { type: Type.STRING },
+              searchQuery: { type: Type.STRING, description: "Title + Artist + 'Official Video'" },
               reason: { type: Type.STRING }
             }
           }
@@ -221,72 +246,59 @@ export const getMusicRecommendation = async (mood: string, userHistory: string[]
       }
     });
 
-    return JSON.parse(response.text || '[]');
+    const results = JSON.parse(response.text || '[]');
+    
+    // Post-process to ensure URLs are constructed cleanly for the frontend
+    // Some frontends expect {name, url} object
+    if (results.length > 0) {
+       // If caller expects a single recommendation object (old interface), return the first one adaptable
+       // But usually this returns an array. Let's return the array for the new interface.
+       return results.map((track: any) => ({
+          name: track.title,
+          url: `https://www.youtube.com/results?search_query=${encodeURIComponent(track.searchQuery || track.title + " Official Video")}`,
+          ...track
+       }));
+    }
+    return null;
+
   } catch (error) {
     console.error("Music Recommendation Error:", error);
-    throw error;
+    return null;
   }
 };
 
-// --- 4. DIARY ANALYSIS (For Mood Tracker) ---
 export const analyzeDiaryEntries = async (entries: any[]): Promise<any> => {
     const client = getGeminiClient(true);
     try {
         const textData = entries.map(e => `[${e.createdAt}]: ${e.content}`).join('\n\n');
-        
         const response = await client.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `
-                You are an empathetic psychologist AI. Read these diary entries from the past week.
-                
-                Task:
-                1. Identify the recurring emotional themes.
-                2. Spot any triggers or wins.
-                3. Write a warm, 3-4 sentence summary directly to the user about their week.
-                4. End with a short, actionable piece of advice or affirmation.
-                
-                Diary Content:
-                ${textData}
-            `,
+            contents: `Analyze these diary entries. Write a warm, empathetic 3-4 sentence summary and 1 piece of actionable advice.\n\n${textData}`,
             config: { 
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
-                    properties: {
-                        analysis: { type: Type.STRING, description: "The warm summary and advice paragraph." }
-                    }
+                    properties: { analysis: { type: Type.STRING } }
                 }
             }
         });
-
         return JSON.parse(response.text || '{}');
     } catch (error) {
         console.error("Diary Analysis Error:", error);
-        return { analysis: "Unable to analyze diary entries at this moment." };
+        return { analysis: "Unable to analyze right now." };
     }
 };
 
-// --- 5. CHAT ANALYSIS (For Mood Tracker) ---
 export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> => {
     const client = getGeminiClient(true);
     try {
         const textData = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
-        
         const response = await client.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `
-                You are an empathetic therapist AI. Analyze this recent chat history.
-                Provide a warm, 2-sentence summary of how the user seems to be feeling lately.
-                Then add one sentence of gentle advice.
-                
-                Chat History:
-                ${textData}
-            `
+            contents: `Analyze this chat history. Provide a warm 2-sentence emotional summary and 1 sentence of gentle advice.\n\n${textData}`
         });
-
         return response.text || "I need more conversations to understand you better.";
     } catch (error) {
-        console.error("Chat Analysis Error:", error);
         return "Unable to analyze chat at the moment.";
     }
 };
@@ -295,56 +307,31 @@ export const getVibePlaylist = async (chatHistory: any[], languages: string[], u
     const client = getGeminiClient(true);
     try {
         const textData = chatHistory.slice(-15).map(m => `${m.role}: ${m.content}`).join('\n');
-        const langString = languages.length > 0 ? languages.join(', ') : "English";
-        const moodOverride = userMoods.length > 0 
-            ? `The user explicitly feels: ${userMoods.join(', ')}. Prioritize this over the chat analysis.` 
-            : "";
-        
-        // Calculate song count based on duration (approx 4 mins per song)
-        // Default to 5 songs if no duration
-        const targetCount = duration ? Math.ceil(duration / 4) : 5;
-        // Cap it at reasonable limits to prevent context overflow or timeouts
-        const safeCount = Math.min(Math.max(targetCount, 3), 50); // Increased cap to 50 for longer sessions
-        
-        const randomSeed = Math.floor(Math.random() * 10000); // Add randomness
+        const count = duration ? Math.ceil(duration / 4) : 5;
+        const safeCount = Math.min(Math.max(count, 3), 30);
 
         const response = await client.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `
-                Analyze the recent chat history to understand the user's emotional state.
-                ${moodOverride}
+                Create a curated playlist of exactly ${safeCount} songs based on this chat context.
+                Languages: ${languages.join(',') || 'English'}.
+                Mood: ${userMoods.join(',')}.
                 
-                Based on this vibe, create a unique and curated playlist of EXACTLY ${safeCount} distinct songs to last for ${duration || 20} minutes.
-                Randomness Seed: ${randomSeed} (Use this to vary selections)
+                **CRITICAL RULE:** Only select songs that have "Official Music Videos" or "Official Audio" on YouTube. Avoid obscure tracks that only have low-quality uploads.
                 
-                RULES:
-                1. Mix songs from these languages: ${langString}.
-                2. Ensure the mood matches the user's state perfectly.
-                3. You MUST provide ${safeCount} songs. Do not provide less.
-                4. AVOID repeating the most generic top-chart songs. Dig deeper for hidden gems and varied artists.
-                5. Return ONLY a JSON array of strings in "Song Title - Artist" format.
+                Return simple strings: "Song Title - Artist"
                 
-                Chat Context:
+                Context:
                 ${textData}
             `,
             config: { 
                 responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.STRING
-                    }
-                }
+                responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } }
             }
         });
-
         const result = JSON.parse(response.text || '[]');
-        if (Array.isArray(result)) return result.map(String);
-        if ((result as any).songs) return (result as any).songs;
-        return [];
-
-    } catch (error: any) {
-        console.error("Vibe Gen Error:", error.message || error);
+        return Array.isArray(result) ? result : [];
+    } catch (error) {
         return ["Lo-Fi Beats - Lofi Girl"];
     }
 };
