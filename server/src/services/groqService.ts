@@ -21,7 +21,6 @@ const getGroqClient = () => {
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
-  // Content can be string or array (for multimodal inputs handled by Gemini)
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
 }
 
