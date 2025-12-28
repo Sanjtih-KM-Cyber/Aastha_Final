@@ -70,22 +70,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ---------- LISTEN FOR 401 ----------
   useEffect(() => {
     const handleUnauthorized = () => {
-      // Prevent redundant updates if already logged out
-      if (!state.isAuthenticated && !state.user) return;
-
-      console.log('Session expired, forcing logout state...');
-      setState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        encryptionKey: null
-      });
+        // INSTANTLY wipe user state. This allows the Router to see we are logged out.
+        setState(prev => ({ ...prev, user: null, isAuthenticated: false, isLoading: false, encryptionKey: null }));
     };
-
     window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
-  }, [state.isAuthenticated, state.user]);
-
+  }, []);
 
   // ---------- LOGIN ----------
   const login = async (identifier: string, password: string) => {
