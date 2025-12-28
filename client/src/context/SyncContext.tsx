@@ -16,21 +16,55 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const listenersRef = useRef<Map<string, Set<SyncListener>>>(new Map());
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    // STRICT CHECK: Do not attempt connection if user is missing or ID is undefined
+    if (!user || !user._id) {
+        if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+        }
+        setIsConnected(false);
+        return;
+    }
+
+    const userId = user._id; // Capture ID for closure
 
     // Determine WS URL
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname === 'localhost' ? 'localhost:5000' : window.location.host;
-    const wsUrl = `${protocol}//${host}/ws?userId=${user.id}`;
+    // Fix: In production, the API might be on a different domain than the frontend
+    // If using the same domain (relative), use window.location.host
+    // But if VITE_API_URL is set, we might need to parse it.
+    // For now, assuming relative path for monorepo or specific hardcoded fallback if strictly needed.
+    // Based on logs: wss://www.aasthaai.site/ws is failing.
+
+    // Safer host detection
+    let host = window.location.host;
+    if (window.location.hostname === 'localhost') {
+        host = 'localhost:5000';
+    } else if (import.meta.env.VITE_API_URL) {
+        // Attempt to extract host from API URL if possible, otherwise fallback to window.location
+        try {
+            const apiUrl = new URL(import.meta.env.VITE_API_URL);
+            host = apiUrl.host;
+        } catch (e) {
+            console.warn("[Sync] Could not parse VITE_API_URL for WebSocket, falling back to window location.");
+        }
+    }
+
+    const wsUrl = `${protocol}//${host}/ws?userId=${userId}`;
 
     const connect = () => {
+        // Prevent multiple connections
+        if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return;
+
         const ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
             console.log('[Sync] Connected');
             setIsConnected(true);
+            if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         };
 
         ws.onmessage = (event) => {
@@ -47,9 +81,14 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         ws.onclose = () => {
-            console.log('[Sync] Disconnected. Reconnecting...');
+            console.log('[Sync] Disconnected.');
             setIsConnected(false);
-            setTimeout(connect, 3000);
+            wsRef.current = null;
+
+            // Only reconnect if user is still logged in
+            if (user && user._id) {
+                reconnectTimeoutRef.current = setTimeout(connect, 3000);
+            }
         };
 
         ws.onerror = (err) => {
@@ -63,9 +102,13 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
     connect();
 
     return () => {
-        wsRef.current?.close();
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+        if (wsRef.current) {
+            wsRef.current.onclose = null; // Prevent reconnect loop on unmount
+            wsRef.current.close();
+        }
     };
-  }, [user]);
+  }, [user]); // Re-run if user changes
 
   const emit = (event: string, data: any) => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {

@@ -75,14 +75,20 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (defaultThemes[key]) setCurrentTheme(defaultThemes[key]);
     }
 
-    // FIX: Emit event if not triggered by sync
-    if (!fromSync) {
+    // FIX: Emit event if not triggered by sync AND user is authenticated
+    if (!fromSync && user) {
         emit('THEME_UPDATE', { theme: themeId });
     }
   };
 
   // Tries backend AI then falls back to local canvas sampling.
   const extractThemeFromImage = async (base64Image: string) => {
+    // Only attempt AI extraction if user is logged in, otherwise fallback local immediately
+    if (!user) {
+        fallbackLocalExtraction(base64Image);
+        return;
+    }
+
     try {
       // backend AI extraction endpoint (mounted under /api)
       const res = await api.post('/ai/theme', { image: base64Image });
@@ -93,7 +99,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         fallbackLocalExtraction(base64Image);
       }
     } catch (error: any) {
-      console.warn('AI theme extraction failed, falling back to local extraction', error);
+      // Silence 401 warnings here if they happen during a race condition
+      if (error.response && error.response.status === 401) {
+          // Do nothing, just fallback
+      } else {
+          console.warn('AI theme extraction failed, falling back to local extraction', error);
+      }
       fallbackLocalExtraction(base64Image);
     }
   };
@@ -115,7 +126,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setTheme(hex);
       };
       img.onerror = () => {
-        console.warn('Image load error for local theme extraction');
+        // console.warn('Image load error for local theme extraction');
       };
     } catch (err) {
       console.error('Fallback extraction error', err);
