@@ -59,7 +59,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
              const email = err.email || err.response?.data?.email;
              navigate('/verify', { state: { email } });
         } else {
-             setError(err.response?.data?.message || 'Login failed.'); 
+             // Enhanced Error Handling
+             if (err.response && err.response.data && err.response.data.message) {
+                 setError(err.response.data.message);
+             } else if (err.message === 'Network Error') {
+                 setError('Network Error: Please check your connection.');
+             } else if (err.code === 'ECONNABORTED') {
+                 setError('Request timed out. Please try again.');
+             } else {
+                 setError('Login failed. Please try again.');
+             }
         }
     } 
     finally { setIsLoading(false); }

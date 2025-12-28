@@ -56,13 +56,14 @@ const StackSection: React.FC<{
     const y = useTransform(smoothProgress, [0, 1], ["0vh", "-2vh"]);
 
     return (
-        <div ref={ref} id={id} className="relative min-h-screen w-full z-0">
-            <div className="sticky top-0 h-screen overflow-hidden flex items-center justify-center">
+        <div ref={ref} id={id} className="relative min-h-[100dvh] w-full z-0">
+            <div className="sticky top-0 h-[100dvh] overflow-hidden flex items-center justify-center">
                 <motion.div 
                     style={{ scale, filter: `brightness(${brightness})`, y, zIndex: index }}
                     className={`relative w-full h-full flex flex-col justify-center items-center ${color} border-t border-white/5 shadow-[0_-50px_100px_-20px_rgba(0,0,0,0.5)]`}
                 >
-                    <div className="w-full max-w-[1600px] px-4 md:px-12 flex items-center justify-center h-full py-20 md:py-0 overflow-y-auto md:overflow-visible">
+                    {/* Added better padding and scrolling for mobile content */}
+                    <div className="w-full max-w-[1600px] px-4 md:px-12 flex flex-col items-center justify-center h-full py-16 md:py-0 overflow-y-auto md:overflow-visible no-scrollbar">
                         {children}
                     </div>
                 </motion.div>
@@ -119,17 +120,17 @@ export const Landing: React.FC = () => {
 
       <div className="relative bg-midnight text-white">
         {/* Hero Section - sticky removed on mobile to prevent scrolling issues if hero is tall */}
-        <div className="relative md:sticky top-0 h-screen z-0 flex flex-col justify-center items-center bg-midnight overflow-hidden">
+        <div className="relative md:sticky top-0 h-[100dvh] z-0 flex flex-col justify-center items-center bg-midnight overflow-hidden">
             <Hero />
         </div>
 
         <div className="relative z-10 mt-0 md:mt-[-5vh]"> 
             {/* 1. Features */}
             <StackSection index={1} id="features-section" color="bg-[#0B0F17]">
-                <div className="w-full flex flex-col items-center justify-center pt-10 md:pt-0">
-                    <div className="text-center mb-8 md:mb-16">
+                <div className="w-full flex flex-col items-center justify-center pt-2 md:pt-0">
+                    <div className="text-center mb-6 md:mb-16">
                          <span className="text-violet-400 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2 md:mb-4 block">Architecture</span>
-                         <h2 className="font-serif text-4xl md:text-7xl">Designed for Serenity</h2>
+                         <h2 className="font-serif text-3xl md:text-7xl">Designed for Serenity</h2>
                     </div>
                     <BentoGrid />
                 </div>
