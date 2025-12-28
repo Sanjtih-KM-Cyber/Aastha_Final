@@ -1,4 +1,5 @@
 import axios from "axios";
+import { AUTH_UNAUTHORIZED_EVENT } from "../constants";
 
 // Helper to get the correct API URL
 const getBaseUrl = () => {
@@ -34,7 +35,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      console.warn("API Unauthorized");
+      console.warn("API Unauthorized - Dispatching Global Event");
+      window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
     }
     return Promise.reject(error);
   }

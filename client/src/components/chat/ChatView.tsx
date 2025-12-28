@@ -92,6 +92,7 @@ const mapColorToTheme = (colorName: string): string => {
 export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false }) => {
   const { user } = useAuth();
   const { setTheme, currentTheme } = useTheme();
+  // We remove navigate here because AuthContext handles redirects
   const navigate = useNavigate();
   
   const botName = user?.persona === 'aarav' ? 'Aastik' : 'Aastha';
@@ -110,7 +111,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  // FIX: Changed to Array of Images
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -152,7 +152,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          try {
              const res = await fetch(getApiUrl('/chat/history'), { credentials: 'include' });
              if (!res.ok) { 
-                 if (res.status === 401) { navigate('/login'); return; }
+                 // If 401, the interceptor/global event in api.ts will handle it.
+                 // We just stop here to avoid cluttering UI with error.
+                 if (res.status === 401) return;
                  throw new Error("Failed to fetch history"); 
              }
              const data = await res.json();
@@ -167,7 +169,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          }
      };
      if (user) fetchHistory();
-  }, [user, navigate]);
+  }, [user, botName]);
 
   useEffect(() => {
     const loadVoices = () => { window.speechSynthesis.getVoices(); };
@@ -254,16 +256,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
   useEffect(() => scrollToBottom(), [messages, isTyping]);
 
-  // FIX: Handle Multiple Images Selection
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (isStandardMode) { setError("Vision Analysis requires Premium Credits."); return; }
       const files = e.target.files;
       if (files && files.length > 0) {
           try {
               const newImages: string[] = [];
-              // Process all selected files
               for (let i = 0; i < files.length; i++) {
-                  // Limit to 3 images for simplicity/performance
                   if (attachedImages.length + newImages.length >= 3) {
                       setError("Maximum 3 images allowed at once.");
                       break;
@@ -311,7 +310,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     let finalContent = textToSend;
     if (replyingTo) { finalContent = `> Replying to: "${replyingTo}"\n\n${textToSend}`; setReplyingTo(null); }
     
-    // Display marker for images in local bubble
     if (attachedImages.length > 0) { 
         finalContent = `[${attachedImages.length} Images Attached] ${finalContent}`; 
     }
@@ -325,7 +323,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         { role: 'assistant', content: '', timestamp: Date.now(), id: newModelMessageId }
     ]);
     
-    // Store images to send before clearing state
     const imagesToSend = [...attachedImages];
     
     setInput(''); setAttachedImages([]); setShowEmojiPicker(false); setIsTyping(true); setError(null);
@@ -336,12 +333,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', 
-        // FIX: Send 'images' array instead of single 'image'
         body: JSON.stringify({ message: textToSend, images: imagesToSend }), 
       });
 
       if (!response.ok) {
-          if (response.status === 401) { navigate('/login'); return; }
+          // If 401, global handler will catch it. Just stop here.
+          if (response.status === 401) return;
           const errData = await response.json().catch(() => ({}));
           setMessages(prev => prev.filter(m => m.id !== newModelMessageId));
           throw new Error(errData.message || `${botName} is unreachable.`);

@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import api from '../services/api';
 import { AuthState, User } from '../types';
 import { deriveKey } from '../utils/encryptionUtils';
+import { AUTH_UNAUTHORIZED_EVENT } from '../constants';
 
 const getClientServerDecrypt = (ciphertext: string) => {
   try {
@@ -43,8 +44,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     encryptionKey: null,
   });
 
-  // Removed local api creation to use the imported 'api' from services/api.ts
-
   // ---------- CHECK AUTH ----------
   useEffect(() => {
     const checkAuth = async () => {
@@ -67,6 +66,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     checkAuth();
   }, []);
+
+  // ---------- LISTEN FOR 401 ----------
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      // Prevent redundant updates if already logged out
+      if (!state.isAuthenticated && !state.user) return;
+
+      console.log('Session expired, forcing logout state...');
+      setState({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        encryptionKey: null
+      });
+    };
+
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+  }, [state.isAuthenticated, state.user]);
+
 
   // ---------- LOGIN ----------
   const login = async (identifier: string, password: string) => {
