@@ -30,14 +30,29 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+// Route that redirects to Sanctuary if already logged in
+const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { isAuthenticated, isLoading } = useAuth();
+
+    if (isLoading) {
+      return <LoadingFallback />;
+    }
+
+    if (isAuthenticated) {
+      return <Navigate to="/sanctuary" replace />;
+    }
+
+    return <>{children}</>;
+};
+
 const AppRoutes = () => {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Auth />} />
-        <Route path="/verify" element={<VerifyOTPScreen />} />
+        {/* Public Routes - Wrapped to redirect if already auth */}
+        <Route path="/" element={<PublicOnlyRoute><Landing /></PublicOnlyRoute>} />
+        <Route path="/login" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
+        <Route path="/verify" element={<PublicOnlyRoute><VerifyOTPScreen /></PublicOnlyRoute>} />
 
         {/* Protected Routes */}
         <Route

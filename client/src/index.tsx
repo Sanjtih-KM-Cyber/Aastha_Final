@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "./index.css"; // Import the CSS file with Tailwind directives
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { EncryptionProvider } from "./context/EncryptionContext";
