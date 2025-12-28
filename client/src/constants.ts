@@ -38,3 +38,17 @@ export const POSITIVE_EMOJIS = ['✨', '🌿', '💪', '💜', '🔥', '🚀', '
 export const LANGUAGES = [
   "English", "Hindi", "Hinglish", "Spanish", "French", "German", "Japanese", "Mandarin"
 ];
+
+export const AUTH_UNAUTHORIZED_EVENT = 'auth:unauthorized';
+
+export const SOUND_URLS = {
+  birds: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/birds.mp3',
+  fire: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/fire.mp3',
+  forest: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/forest.mp3',
+  night: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/night.mp3',
+  ocean: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/ocean.mp3',
+  rain: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/rain.mp3',
+  storm2: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/storm2.mp3',
+  thunder: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/thunder.mp3',
+  wind: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/wind.mp3'
+};
