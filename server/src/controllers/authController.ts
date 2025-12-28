@@ -235,7 +235,9 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       if (user.isPro === undefined) { user.isPro = false; needsSave = true; }
 
       const today = new Date();
-      const lastUsage = new Date(user.lastUsageDate || user.createdAt);
+      // Ensure we have a valid date object for lastUsage
+      const lastUsage = new Date(user.lastUsageDate || user.createdAt || Date.now());
+
       if (lastUsage.getDate() !== today.getDate() || 
           lastUsage.getMonth() !== today.getMonth() || 
           lastUsage.getFullYear() !== today.getFullYear()) {
@@ -246,11 +248,13 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       
       const lastVisitTime = new Date(user.lastVisit).getTime();
       const todayTime = today.getTime();
+      // Only update lastVisit if more than 60s has passed to prevent spam writes
       if (Math.abs(todayTime - lastVisitTime) > 60000) {
           user.lastVisit = today;
           needsSave = true;
       }
 
+      // OPTIMIZATION: Consolidate updates into one save
       if (needsSave) await user.save();
 
       const token = generateToken((user._id as any).toString());

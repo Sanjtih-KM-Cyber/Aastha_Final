@@ -1,27 +1,26 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AppContainer } from './components/layout/AppContainer';
-import { Landing } from './pages/Landing';
-import { Auth } from './pages/Auth';
-import { VerifyOTPScreen } from './pages/VerifyOTPScreen';
-import { Sanctuary } from './pages/Sanctuary';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { EncryptionProvider } from './context/EncryptionContext';
 import { SyncProvider } from './context/SyncContext';
-import { SyncBridge } from './components/SyncBridge'; // Bridge
+import { SyncBridge } from './components/SyncBridge';
 import { useSecurity } from './hooks/useSecurity';
+import { LoadingFallback } from './components/LoadingFallback';
+
+// Lazy Load Pages
+const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
+const Auth = lazy(() => import('./pages/Auth').then(module => ({ default: module.Auth })));
+const VerifyOTPScreen = lazy(() => import('./pages/VerifyOTPScreen').then(module => ({ default: module.VerifyOTPScreen })));
+const Sanctuary = lazy(() => import('./pages/Sanctuary').then(module => ({ default: module.Sanctuary })));
 
 // Protected Route Wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="h-screen w-full flex items-center justify-center bg-black text-white font-serif">
-        Loading Sanctuary...
-      </div>
-    );
+    return <LoadingFallback />;
   }
 
   if (!isAuthenticated) {
@@ -33,25 +32,27 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 const AppRoutes = () => {
   return (
-    <Routes>
-      {/* Public Routes */}
-      <Route path="/" element={<Landing />} />
-      <Route path="/login" element={<Auth />} />
-      <Route path="/verify" element={<VerifyOTPScreen />} />
-      
-      {/* Protected Routes */}
-      <Route
-        path="/sanctuary"
-        element={
-          <ProtectedRoute>
-            <Sanctuary />
-          </ProtectedRoute>
-        }
-      />
-      
-      {/* Fallback */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <Suspense fallback={<LoadingFallback />}>
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Auth />} />
+        <Route path="/verify" element={<VerifyOTPScreen />} />
+
+        {/* Protected Routes */}
+        <Route
+          path="/sanctuary"
+          element={
+            <ProtectedRoute>
+              <Sanctuary />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 };
 
