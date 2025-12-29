@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
-import { SOUND_URLS } from '../../constants';
+import { SOUND_URLS } from '../../constants'; // IMPORTED CONSTANT
 import { 
   Volume2, 
   VolumeX,
@@ -22,10 +21,10 @@ interface SoundscapeProps {
   onClose: () => void;
   zIndex?: number;
   onFocus?: () => void;
-  preset?: string; // e.g. "rain,thunder"
+  preset?: string; 
 }
 
-// Updated to use Vercel Blob URLs from constants
+// Updated SOUNDS array to use Vercel Blob URLs
 const SOUNDS = [
   { id: 'rain', label: 'Rain', color: '#60A5FA', path: SOUND_URLS.rain },
   { id: 'forest', label: 'Forest', color: '#4ADE80', path: SOUND_URLS.forest },
@@ -33,7 +32,7 @@ const SOUNDS = [
   { id: 'ocean', label: 'Ocean', color: '#2DD4BF', path: SOUND_URLS.ocean },
   { id: 'night', label: 'Night', color: '#818CF8', path: SOUND_URLS.night },
   { id: 'wind', label: 'Wind', color: '#94A3B8', path: SOUND_URLS.wind },
-  { id: 'thunder', label: 'Storm', color: '#A78BFA', path: SOUND_URLS.storm2 }, // Mapped to storm2.mp3
+  { id: 'thunder', label: 'Storm', color: '#A78BFA', path: SOUND_URLS.thunder },
   { id: 'birds', label: 'Birds', color: '#FACC15', path: SOUND_URLS.birds }
 ];
 
@@ -42,7 +41,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
   
   // State
   const [masterVolume, setMasterVolume] = useState(0.5);
-  // Stores enabled sounds and their individual volume (0.0 - 1.0)
   const [activeLoops, setActiveLoops] = useState<Record<string, number>>({});
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [erroredSounds, setErroredSounds] = useState<Set<string>>(new Set());
@@ -59,13 +57,13 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
       if (!soundData) return null;
 
       const audio = new Audio(soundData.path);
-      audio.crossOrigin = "anonymous";
+      audio.crossOrigin = "anonymous"; 
       
       // Error Handling (Crash Prevention)
-      audio.onerror = () => {
-        console.warn(`Soundscape: Failed to load ${soundData.label} (${soundData.path})`);
+      audio.onerror = (e) => {
+        console.warn(`Soundscape: Failed to load ${soundData.label}`, e);
         setErroredSounds(prev => new Set(prev).add(id));
-        // Remove from active if it was playing
+        
         setActiveLoops(prev => {
             const newState = { ...prev };
             delete newState[id];
@@ -88,25 +86,20 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
       const isLooping = activeLoops.hasOwnProperty(id);
       const isPreviewing = previewId === id;
       
-      // Calculate target volume
       let targetVol = 0;
       if (isLooping) {
         targetVol = activeLoops[id] * masterVolume;
         audio.loop = true;
       } else if (isPreviewing) {
-        targetVol = 0.5 * masterVolume; // Fixed preview volume scaled by master
+        targetVol = 0.5 * masterVolume; 
         audio.loop = false;
       }
 
-      // Apply safe volume
       audio.volume = Math.max(0, Math.min(1, targetVol));
 
-      // Play/Pause Logic
       if ((isLooping || isPreviewing)) {
         if (audio.paused) {
             audio.play().catch(e => {
-                console.warn(`Autoplay blocked or playback error for ${id}`, e);
-                // If error is not a loading error (handled by onerror), it might be autoplay policy
                 if (isPreviewing) setPreviewId(null);
             });
         }
@@ -126,16 +119,13 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
 
           setActiveLoops(prev => {
               const newState = { ...prev };
-              // Deactivate others? Maybe not, just additive for now or reset?
-              // Let's reset to ensure "perfect vibe"
               Object.keys(newState).forEach(k => delete newState[k]);
 
               soundsToActivate.forEach(soundId => {
-                  // Find ID by partial match or exact match
                   const match = SOUNDS.find(s => s.id === soundId || s.label.toLowerCase() === soundId);
                   if (match) {
-                      newState[match.id] = 0.5; // Default volume
-                      getAudio(match.id); // Preload
+                      newState[match.id] = 0.5; 
+                      getAudio(match.id); 
                   }
               });
               return newState;
@@ -146,33 +136,22 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
   // Cleanup on unmount or close
   useEffect(() => {
     if (!isOpen) {
-        // Pause all
         Object.values(audioRefs.current).forEach(a => a.pause());
         setPreviewId(null);
     }
   }, [isOpen]);
 
-  // --- Handlers ---
+  // ... (Rest of component methods like toggleLoop, updateTrackVolume, handlePreview remain standard) ...
 
   const toggleLoop = (id: string) => {
     if (erroredSounds.has(id)) return;
-
     setActiveLoops(prev => {
       const isActive = prev.hasOwnProperty(id);
       const newState = { ...prev };
-      
-      if (isActive) {
-        delete newState[id];
-      } else {
-        // Start with 50% volume individual
-        newState[id] = 0.5;
-        // Ensure audio created
-        getAudio(id);
-      }
+      if (isActive) { delete newState[id]; } 
+      else { newState[id] = 0.5; getAudio(id); }
       return newState;
     });
-
-    // Cancel preview if we activate it properly
     if (previewId === id) {
         setPreviewId(null);
         if(previewTimeoutRef.current) clearTimeout(previewTimeoutRef.current);
@@ -180,35 +159,19 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
   };
 
   const updateTrackVolume = (id: string, val: number) => {
-    setActiveLoops(prev => ({
-      ...prev,
-      [id]: val
-    }));
+    setActiveLoops(prev => ({ ...prev, [id]: val }));
   };
 
   const handlePreview = (id: string) => {
     if (erroredSounds.has(id) || activeLoops.hasOwnProperty(id)) return;
-    
-    // Stop existing preview
     if (previewId && previewTimeoutRef.current) {
         clearTimeout(previewTimeoutRef.current);
         setPreviewId(null);
     }
-
-    // Stop if clicking same preview
-    if (previewId === id) {
-        setPreviewId(null);
-        return;
-    }
-
-    // Start new
+    if (previewId === id) { setPreviewId(null); return; }
     getAudio(id);
     setPreviewId(id);
-
-    // Auto stop after 5s
-    previewTimeoutRef.current = setTimeout(() => {
-        setPreviewId(null);
-    }, 5000);
+    previewTimeoutRef.current = setTimeout(() => { setPreviewId(null); }, 5000);
   };
 
   const activeCount = Object.keys(activeLoops).length;
@@ -225,6 +188,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
       onFocus={onFocus || (() => {})}
     >
       <div className="flex flex-col h-full w-full font-sans select-none">
+        {/* ... (UI JSX code same as provided previously) ... */}
         
         {/* --- TOP 35%: Master Control --- */}
         <div 
@@ -233,13 +197,10 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                 background: `linear-gradient(180deg, ${currentTheme.primaryColor}20, #111827)` 
             }}
         >
-            {/* Visualizer Rings */}
             <div className="relative mb-6">
                 <div className="w-20 h-20 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center relative z-10 shadow-2xl">
                     <Music size={32} className="text-white opacity-80" />
                 </div>
-                
-                {/* Pulse 1 */}
                 {activeCount > 0 && (
                     <motion.div 
                         animate={{ scale: [1, 1.5, 1], opacity: [0.6, 0, 0.6] }}
@@ -248,7 +209,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                         style={{ borderColor: currentTheme.primaryColor }}
                     />
                 )}
-                {/* Pulse 2 */}
                 {activeCount > 0 && (
                     <motion.div 
                         animate={{ scale: [1, 2, 1], opacity: [0.3, 0, 0.3] }}
@@ -258,7 +218,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                 )}
             </div>
 
-            {/* Master Volume */}
             <div className="w-full max-w-[200px] flex items-center gap-3 relative z-10">
                 <VolumeX size={16} className="text-white/40" />
                 <div className="flex-1 h-1.5 bg-black/40 rounded-full relative group cursor-pointer">
@@ -266,7 +225,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                         className="absolute inset-y-0 left-0 rounded-full transition-all duration-100" 
                         style={{ width: `${masterVolume * 100}%`, backgroundColor: currentTheme.primaryColor }} 
                     />
-                    {/* Thumb */}
                     <div 
                         className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
                         style={{ left: `${masterVolume * 100}%`, transform: 'translate(-50%, -50%)' }}
@@ -285,7 +243,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                 {activeCount === 0 ? 'Silence' : `${activeCount} Active Layers`}
             </p>
 
-            {/* Noise Texture */}
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay pointer-events-none" />
         </div>
 
@@ -312,7 +269,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                             `}
                         >
                             <div className="flex items-center p-3 gap-4">
-                                {/* Icon / Visual */}
                                 <div 
                                     className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shadow-inner shrink-0"
                                     style={{ backgroundColor: isActive ? `${sound.color}30` : 'rgba(255,255,255,0.05)' }}
@@ -330,8 +286,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                                         />
                                     )}
                                 </div>
-
-                                {/* Info */}
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between mb-1">
                                         <span className={`text-sm font-medium truncate ${isActive ? 'text-white' : 'text-white/60'}`}>
@@ -339,8 +293,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                                         </span>
                                         {isPreviewing && <span className="text-[9px] text-teal-400 animate-pulse">Previewing...</span>}
                                     </div>
-                                    
-                                    {/* Volume Slider (Only visible when active) */}
                                     {isActive && (
                                         <div className="flex items-center gap-2 h-4">
                                             <Sliders size={10} className="text-white/30" />
@@ -359,8 +311,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                                         </div>
                                     )}
                                 </div>
-
-                                {/* Actions */}
                                 <div className="flex items-center gap-2 shrink-0">
                                     {!isActive && !isError && (
                                         <button 
@@ -371,7 +321,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                                             <Ear size={16} />
                                         </button>
                                     )}
-                                    
                                     <button 
                                         onClick={() => toggleLoop(sound.id)}
                                         disabled={isError}
@@ -386,8 +335,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                                     </button>
                                 </div>
                             </div>
-                            
-                            {/* Subtle Activity Bar at bottom */}
                             {isActive && (
                                 <motion.div 
                                     layoutId={`bar-${sound.id}`}
@@ -399,8 +346,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                     );
                 })}
             </div>
-            
-            {/* Safe Mode Notice */}
             {erroredSounds.size > 0 && (
                 <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
                     <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
