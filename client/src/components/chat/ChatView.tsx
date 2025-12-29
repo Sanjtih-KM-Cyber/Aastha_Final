@@ -355,7 +355,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     }
   };
 
-  // --- 5. SEND LOGIC ---
+  // --- 5. SEND LOGIC (FIXED) ---
   const handleSend = async (e?: React.FormEvent, overrideInput?: string) => {
     if (e) e.preventDefault();
     
@@ -394,7 +394,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             'Authorization': `Bearer ${token}` 
         },
         credentials: 'include', 
-        body: JSON.stringify({ message: textToSend, image: attachedImage }), 
+        // ✅ FIX: Send finalContent (containing reply context) to the AI
+        body: JSON.stringify({ message: finalContent, image: attachedImage }), 
       });
 
       if (!streamResponse.ok) {
@@ -548,7 +549,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         <span className="bg-black/30 backdrop-blur-md border border-white/5 text-white/50 text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm">{dateLabel}</span>
                     </div>
                 )}
-                {/* On PC: Add padding bottom if it's the last message so it doesn't get covered */}
+                {/* PC Fix: Add padding bottom if it's the last message so it doesn't get covered */}
                 <div id={domId} className={`flex flex-col w-full shrink-0 ${idx === messages.length - 1 ? 'md:pb-8' : ''}`}>
                     <MessageBubble 
                         role={msg.role} 
@@ -594,10 +595,29 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   // Mobile: Flex Column (Strict Sections). PC: Absolute/Floating Overlay (Transparent).
   // ==================================================================================
   return (
-    <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden bg-black md:bg-transparent">
+    <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden">
       
-      {/* 1. GLOBAL BACKGROUNDS (Applied to both, Z-0) */}
-      <div className="absolute inset-0 z-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
+      {/* 1. GLOBAL BACKGROUNDS & WALLPAPER */}
+      {/* Positioned absolute, z-[-1] to stay behind everything */}
+      <div className="absolute inset-0 z-[-1] pointer-events-none">
+          {/* WALLPAPER LOGIC */}
+          {user?.wallpaper ? (
+              <div 
+                  className="w-full h-full bg-cover bg-center bg-no-repeat"
+                  style={{ backgroundImage: `url(${user.wallpaper})` }}
+              >
+                  {/* Dim overlay for readability */}
+                  <div className="absolute inset-0 bg-black/60" />
+              </div>
+          ) : (
+              // Fallback: Dark on Mobile, Transparent on PC (letting parent background show)
+              <div className="w-full h-full bg-[#0a0e17] md:bg-transparent" />
+          )}
+          
+          {/* Noise Texture Overlay */}
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
+      </div>
+
       <AnimatePresence>
           {showCountdown && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 pointer-events-none">
@@ -643,6 +663,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              <div className="flex-1 min-w-0 relative group flex justify-center">
                  <div className={`flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full px-3 py-2 shadow-2xl transition-all focus-within:bg-black/50 focus-within:border-white/20 w-full ${!isMobile ? 'md:w-[400px]' : ''}`}>
                     <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2 shrink-0" />
+                    
                     <input 
                         value={searchQuery} 
                         onChange={(e) => setSearchQuery(e.target.value)} 
@@ -650,6 +671,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         placeholder="Search..." 
                         className="bg-transparent border-none outline-none text-sm text-white w-full min-w-0 placeholder-white/20" 
                     />
+                    
                     {searchQuery && (
                         <div className="flex items-center gap-1 ml-1 border-l border-white/10 pl-1 shrink-0">
                             <span className="text-[10px] text-white/40 whitespace-nowrap min-w-[24px] text-center">
