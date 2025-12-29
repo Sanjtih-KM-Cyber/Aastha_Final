@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -17,10 +16,6 @@ export const AppContainer: React.FC<AppContainerProps> = ({ children }) => {
   // Only show wallpaper if set AND we are NOT on a public route
   const showWallpaper = wallpaper && !isPublicRoute;
 
-  // Performance Optimization: Check for low-power mode or mobile
-  // Simplified background for non-wallpaper state: Static gradient instead of animation
-  // We remove the framer-motion loops entirely for the default state to save GPU/CPU.
-  
   return (
     <div className="relative min-h-screen font-sans text-white bg-midnight overflow-hidden selection:bg-teal-500/30">
       
@@ -30,21 +25,17 @@ export const AppContainer: React.FC<AppContainerProps> = ({ children }) => {
         <div className="absolute inset-0 bg-midnight opacity-90" />
         
         {showWallpaper ? (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            className="absolute inset-0 z-0"
-          >
+          <div className="absolute inset-0 z-0 transition-opacity duration-1000 ease-in-out">
             <img 
               src={wallpaper!} 
               alt="Sanctuary Wallpaper" 
               className="w-full h-full object-cover opacity-60" 
             />
             <div className="absolute inset-0 bg-black/40 mix-blend-multiply" />
-          </motion.div>
+          </div>
         ) : (
           <>
-            {/* Static Gradient Blobs (Zero Animation Overhead) */}
+            {/* Static Gradient Blobs */}
             <div 
               className="absolute top-[-10%] left-[-10%] w-[70vw] h-[70vw] rounded-full blur-[120px] mix-blend-screen opacity-30"
               style={{ backgroundColor: currentTheme.primaryColor }}
@@ -61,18 +52,10 @@ export const AppContainer: React.FC<AppContainerProps> = ({ children }) => {
       </div>
 
       {/* --- Content Layer --- */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={location.pathname}
-          initial={{ opacity: 0, filter: 'blur(2px)' }}
-          animate={{ opacity: 1, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, filter: 'blur(2px)' }}
-          transition={{ duration: 0.15, ease: "easeOut" }} // Snappy fast transition
-          className="relative z-10 w-full h-full min-h-screen flex flex-col"
-        >
+      {/* Removed AnimatePresence to prevent Suspense/Routing conflicts requiring refresh */}
+      <div className="relative z-10 w-full h-full min-h-screen flex flex-col">
           {children}
-        </motion.div>
-      </AnimatePresence>
+      </div>
     </div>
   );
 };
