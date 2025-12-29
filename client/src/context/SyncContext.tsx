@@ -31,20 +31,27 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const userId = user._id; // Capture ID for closure
 
+    // 1. GET THE TOKEN (The Fix)
+    // We need to send the token in the URL because WebSockets don't support headers
+    let token = '';
+    try {
+        const storedInfo = localStorage.getItem('userInfo');
+        if (storedInfo) {
+            const parsed = JSON.parse(storedInfo);
+            token = parsed.token || '';
+        }
+    } catch (e) {
+        console.error("Error reading token for WS", e);
+    }
+
     // Determine WS URL
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Fix: In production, the API might be on a different domain than the frontend
-    // If using the same domain (relative), use window.location.host
-    // But if VITE_API_URL is set, we might need to parse it.
-    // For now, assuming relative path for monorepo or specific hardcoded fallback if strictly needed.
-    // Based on logs: wss://www.aasthaai.site/ws is failing.
-
+    
     // Safer host detection
     let host = window.location.host;
     if (window.location.hostname === 'localhost') {
         host = 'localhost:5000';
     } else if (import.meta.env.VITE_API_URL) {
-        // Attempt to extract host from API URL if possible, otherwise fallback to window.location
         try {
             const apiUrl = new URL(import.meta.env.VITE_API_URL);
             host = apiUrl.host;
@@ -53,12 +60,14 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }
 
-    const wsUrl = `${protocol}//${host}/ws?userId=${userId}`;
+    // 2. ATTACH TOKEN TO URL (The Fix)
+    const wsUrl = `${protocol}//${host}/ws?userId=${userId}&token=${token}`;
 
     const connect = () => {
         // Prevent multiple connections
         if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return;
 
+        console.log(`[Sync] Connecting to WS...`);
         const ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
@@ -70,6 +79,10 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ws.onmessage = (event) => {
             try {
                 const message = JSON.parse(event.data);
+                
+                // Debug log to see if the message is actually arriving
+                // console.log("[Sync] Received:", message);
+
                 const { type, payload } = message;
                 const typeListeners = listenersRef.current.get(type);
                 if (typeListeners) {
@@ -80,20 +93,21 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         };
 
-        ws.onclose = () => {
-            console.log('[Sync] Disconnected.');
+        ws.onclose = (event) => {
+            console.log(`[Sync] Disconnected. Code: ${event.code}`);
             setIsConnected(false);
             wsRef.current = null;
 
             // Only reconnect if user is still logged in
-            if (user && user._id) {
+            // Don't reconnect if the server kicked us for auth failure (often code 4000-4999)
+            if (user && user._id && event.code !== 4001) {
                 reconnectTimeoutRef.current = setTimeout(connect, 3000);
             }
         };
 
         ws.onerror = (err) => {
             console.error('[Sync] Error', err);
-            ws.close();
+            // Don't close here, let onclose handle cleanup
         };
 
         wsRef.current = ws;
