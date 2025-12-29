@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Menu, Headphones, AlertCircle, Smile, Copy, Reply, 
   Mic, MicOff, X, Zap, Leaf, Search, Image as ImageIcon,
-  ShieldAlert, Loader2
+  ShieldAlert, Loader2, ChevronUp, ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
@@ -10,7 +10,7 @@ import { MessageBubble } from './MessageBubble';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
-import { useSync } from '../../context/SyncContext'; // ✅ Added Sync Context
+import { useSync } from '../../context/SyncContext';
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -26,7 +26,7 @@ interface ChatViewProps {
   isMobile?: boolean;
 }
 
-// ... (Helper functions compressImage and mapColorToTheme stay the same) ...
+// --- UTILS ---
 const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -71,15 +71,14 @@ const mapColorToTheme = (colorName: string): string => {
 export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false }) => {
   const { user } = useAuth();
   const { setTheme, currentTheme } = useTheme();
-  const { subscribe } = useSync(); // ✅ Use the WebSocket we fixed
+  const { subscribe } = useSync();
   const navigate = useNavigate();
   
   const botName = user?.persona === 'aarav' ? 'Aastik' : 'Aastha';
 
-  // --- STABILITY STATES ---
+  // --- STATE ---
   const [isInitializing, setIsInitializing] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState('Connecting...');
-  
   const hasAttemptedInit = useRef(false);
   
   const [input, setInput] = useState('');
@@ -97,6 +96,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
 
+  // --- SEARCH STATE ---
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ msgId: string, matchIndex: number }[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
@@ -118,15 +118,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedTagsRef = useRef<Set<string>>(new Set());
 
-  // --- 0. WEBSOCKET LISTENER (For Live Updates) ---
+  // --- LOGIC: WebSocket & Init ---
   useEffect(() => {
-    // If backend sends a 'message' event via WebSocket, update UI
     const unsubscribe = subscribe('message', (data: any) => {
         if (data && data.content) {
-            // Check if we already have this message (deduplication)
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
-                // If the last message is an empty placeholder, fill it
                 if (lastMsg && lastMsg.role === 'assistant' && lastMsg.id === 'temp-ai') {
                      return [...prev.slice(0, -1), { ...lastMsg, content: data.content, id: data._id || Date.now().toString() }];
                 }
@@ -138,7 +135,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     return unsubscribe;
   }, [subscribe]);
 
-  // --- 1. CREDITS SYNC ---
   useEffect(() => {
       if (user) {
           const credits = user.credits || 0;
@@ -149,58 +145,89 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
   }, [user]);
 
-  // --- 2. INITIAL LOAD ---
   useEffect(() => {
      if (!user) return; 
      if (hasAttemptedInit.current) return;
      hasAttemptedInit.current = true;
 
      let isMounted = true;
-
      const initChat = async () => {
          setIsInitializing(true);
          setConnectionStatus(`Connecting to ${botName}...`);
-
          try {
              const { default: api } = await import('../../services/api');
              const res = await api.get('/chat/history');
-             
              if (isMounted) {
                  if (Array.isArray(res.data) && res.data.length > 0) {
                      setMessages(res.data);
                  } else {
-                     setMessages([{ 
-                         role: 'assistant', 
-                         content: `Hi ${user?.name || 'friend'}, I am ${botName}. How can I support you right now?`, 
-                         timestamp: Date.now() 
-                     }]);
+                     setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. How can I support you right now?`, timestamp: Date.now() }]);
                  }
              }
          } catch (e: any) { 
              console.error("Init failed:", e);
-             if (e.response && e.response.status === 401) {
-                 // Don't hard redirect immediately, check auth state first
-                 // window.location.href = '/login'; 
-                 return;
-             }
-             if (isMounted) {
-                 setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. I'm listening.`, timestamp: Date.now() }]);
-             }
+             if (isMounted) setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. I'm listening.`, timestamp: Date.now() }]);
          } finally {
              if (isMounted) {
-                 setTimeout(() => {
-                    scrollToBottom();
-                    setIsInitializing(false);
-                 }, 500);
+                 setTimeout(() => { scrollToBottom(); setIsInitializing(false); }, 500);
              }
          }
      };
-
      initChat();
      return () => { isMounted = false; };
   }, [user, navigate, botName]);
 
-  // --- 3. SPEECH SETUP (Existing code) ---
+  // --- LOGIC: Search ---
+  useEffect(() => {
+      if (searchQuery.trim()) {
+          const hits: { msgId: string, matchIndex: number }[] = [];
+          const lowerQuery = searchQuery.toLowerCase();
+          
+          messages.forEach((msg, idx) => {
+             const safeId = msg.id || `msg-${idx}`;
+             
+             if (msg.content) {
+                 const lowerContent = msg.content.toLowerCase();
+                 let pos = lowerContent.indexOf(lowerQuery);
+                 let localIndex = 0;
+                 
+                 while (pos !== -1) {
+                     hits.push({ msgId: safeId, matchIndex: localIndex });
+                     localIndex++;
+                     pos = lowerContent.indexOf(lowerQuery, pos + 1);
+                 }
+             }
+          });
+          setSearchResults(hits);
+          setCurrentMatchIndex(hits.length > 0 ? hits.length - 1 : 0);
+      } else { 
+          setSearchResults([]); 
+          setCurrentMatchIndex(0); 
+      }
+  }, [searchQuery, messages]);
+
+  useEffect(() => {
+      if (searchResults.length > 0 && searchResults[currentMatchIndex]) {
+          const { msgId } = searchResults[currentMatchIndex];
+          const el = document.getElementById(`msg-${msgId}`);
+          if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+      }
+  }, [currentMatchIndex, searchResults]);
+
+  const nextMatch = () => setCurrentMatchIndex(prev => (prev + 1) % searchResults.length);
+  const prevMatch = () => setCurrentMatchIndex(prev => (prev - 1 + searchResults.length) % searchResults.length);
+  
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+          e.preventDefault();
+          if (e.shiftKey) nextMatch(); 
+          else prevMatch();
+      }
+  };
+
+  // --- LOGIC: Voice & Helpers ---
   useEffect(() => {
     const loadVoices = () => { window.speechSynthesis.getVoices(); };
     loadVoices();
@@ -219,7 +246,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       recognition.onend = () => { setIsListening(false); };
       recognition.onerror = (event: any) => {
           if (event.error === 'not-allowed') {
-              setError("Microphone access denied. Please check browser settings.");
+              setError("Microphone access denied.");
               setIsVoiceMode(false);
           }
       };
@@ -249,7 +276,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     }
   }, [isDictating]);
 
-  // --- HELPERS ---
   const autoResizeTextarea = () => {
     if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
@@ -270,8 +296,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   
   const toggleVoiceMode = () => {
     // @ts-ignore
-    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) { setError("Your browser does not support Voice Mode."); return; }
-    if (isStandardMode) { alert("Voice Mode requires Premium Credits."); return; }
+    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) { setError("Browser not supported."); return; }
+    if (isStandardMode) { alert("Voice Mode requires Premium."); return; }
     if (isVoiceMode) { stopListening(); setIsVoiceMode(false); } else {
         if (isDictating) { setIsDictating(false); setIsVoiceMode(true); return; }
         setIsVoiceMode(true); startListening();
@@ -300,23 +326,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   useEffect(() => scrollToBottom(), [messages, isTyping]);
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (isStandardMode) { setError("Vision Analysis requires Premium Credits."); return; }
+      if (isStandardMode) { setError("Vision Analysis requires Premium."); return; }
       const files = e.target.files;
       if (files && files.length > 0) {
           try {
               const compressed = await compressImage(files[0]);
               setAttachedImage(compressed);
-          } catch (err) {
-              console.error(err);
-              setError("Failed to process image.");
-          }
+          } catch (err) { setError("Failed to process image."); }
       }
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const copyToClipboard = (text: string) => {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
-    else alert("Clipboard API unavailable.");
   };
   
   const handleReply = (content: string) => { setReplyingTo(content); textareaRef.current?.focus(); };
@@ -326,16 +348,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     autoResizeTextarea();
   };
 
+  // ✅ FIX: Mobile "Enter" key logic
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { 
+    // On Mobile: Do NOT prevent default. Let "Enter" create a new line.
+    // On Desktop: Prevent default and send, unless Shift is held.
+    if (!isMobile && e.key === 'Enter' && !e.shiftKey) { 
         e.preventDefault(); 
         handleSend(); 
     }
   };
 
-  // --- 4. SEND LOGIC (FIXED) ---
+  // --- SEND LOGIC ---
   const handleSend = async (e?: React.FormEvent, overrideInput?: string) => {
-    // ✅ 1. PREVENT DEFAULT FIRST
     if (e) e.preventDefault();
     
     const textToSend = overrideInput || input;
@@ -346,23 +370,20 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     if (attachedImage) { finalContent = `[Image Attached] ${finalContent}`; }
 
     const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
-    
-    // ✅ 2. OPTIMISTIC UI: Add User Msg AND Empty Bot Msg (Thinking Bubble)
     const tempBotId = Date.now().toString();
+    
     setMessages(prev => [
         ...prev, 
         userMsg,
-        { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId } // Empty content triggers "Thinking"
+        { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId } 
     ]);
     
     setInput(''); setAttachedImage(null); setShowEmojiPicker(false); 
-    setIsTyping(true); // ✅ This combined with empty content shows the bubble
+    setIsTyping(true); 
     setError(null);
     autoResizeTextarea();
 
     try {
-      // ✅ 3. GET TOKEN FOR FETCH
-      // We must attach the token manually because 'fetch' doesn't use the axios interceptor
       let token = '';
       try {
         const storedInfo = localStorage.getItem('userInfo');
@@ -373,7 +394,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` // ✅ FIX: Attach Token to prevent 401
+            'Authorization': `Bearer ${token}` 
         },
         credentials: 'include', 
         body: JSON.stringify({ message: textToSend, image: attachedImage }), 
@@ -381,10 +402,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       if (!streamResponse.ok) {
           setIsTyping(false);
-          // If still 401, only then redirect, but check first
           if (streamResponse.status === 401) { 
-               // Optional: Trigger global auth logout instead of hard redirect
-               // window.dispatchEvent(new Event('auth:unauthorized'));
                setError("Session expired. Please login again.");
                return; 
           }
@@ -422,8 +440,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         if (data.content) {
                             aiContentRaw += data.content;
                             const cleanContent = processMagicTags(aiContentRaw);
-                            
-                            // ✅ Update the specific placeholder message
                             setMessages(prev => prev.map(msg => {
                                 if (msg.id === tempBotId) {
                                     return { ...msg, content: cleanContent };
@@ -431,9 +447,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                 return msg;
                             }));
                         }
-                    } catch (e: any) { 
-                        // ignore parse errors for partial chunks
-                    }
+                    } catch (e: any) {}
                 }
             }
         }
@@ -444,68 +458,49 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
     } catch (error: any) {
       console.error(error);
-      // Remove the empty thinking bubble if error
       setMessages(prev => prev.filter(m => m.id !== tempBotId)); 
       setError(error.message || "Connection failed.");
-    } finally { 
-        setIsTyping(false); 
-    }
+    } finally { setIsTyping(false); }
   };
 
   const processMagicTags = (text: string) => {
     const tagRegex = /<[^>]+>/g;
     const matches = text.match(tagRegex);
-
     if (matches) {
         matches.forEach(tag => {
             if (processedTagsRef.current.has(tag)) return;
             const lowerTag = tag.toLowerCase();
-
             const colorMatch = /<color>([\s\S]*?)<\/color>/i.exec(text);
-            if (colorMatch) {
-                const fullBlock = colorMatch[0];
-                const colorValue = colorMatch[1].trim();
-
-                if (!processedTagsRef.current.has(fullBlock)) {
-                      const mappedColor = mapColorToTheme(colorValue);
-                      if (!showCountdown) {
-                        setShowCountdown(true);
-                        setCountdownNum(3);
-                        setTargetFlashColor(mappedColor.startsWith('#') ? mappedColor : '#ffffff');
-
-                        const timer = setInterval(() => {
-                            setCountdownNum(prev => {
-                                if (prev <= 1) {
-                                    clearInterval(timer);
-                                    setShowCountdown(false);
-                                    setShowFlash(true);
-                                    setTimeout(() => {
-                                        setTheme(mappedColor);
-                                        setTimeout(() => setShowFlash(false), 800);
-                                    }, 400);
-                                    return 0;
-                                }
-                                return prev - 1;
-                            });
-                        }, 1000);
-                      }
-                      processedTagsRef.current.add(fullBlock);
-                      processedTagsRef.current.add('<color>');
-                      processedTagsRef.current.add('</color>');
-                }
+            if (colorMatch && !processedTagsRef.current.has(colorMatch[0])) {
+                  const mappedColor = mapColorToTheme(colorMatch[1].trim());
+                  if (!showCountdown) {
+                    setShowCountdown(true);
+                    setCountdownNum(3);
+                    setTargetFlashColor(mappedColor.startsWith('#') ? mappedColor : '#ffffff');
+                    const timer = setInterval(() => {
+                        setCountdownNum(prev => {
+                            if (prev <= 1) {
+                                clearInterval(timer);
+                                setShowCountdown(false);
+                                setShowFlash(true);
+                                setTimeout(() => {
+                                    setTheme(mappedColor);
+                                    setTimeout(() => setShowFlash(false), 800);
+                                }, 400);
+                                return 0;
+                            }
+                            return prev - 1;
+                        });
+                    }, 1000);
+                  }
+                  processedTagsRef.current.add(colorMatch[0]);
+                  processedTagsRef.current.add('<color>');
+                  processedTagsRef.current.add('</color>');
             }
-
             if (onOpenWidget) {
-                if (lowerTag.includes('recommend_breathing')) {
-                      const m = lowerTag.match(/mode="([^"]+)"/i);
-                      onOpenWidget('breathing', { initialMode: m ? m[1] : undefined });
-                } else if (lowerTag.includes('open_breathing')) {
-                      onOpenWidget('breathing');
-                }
-                if (lowerTag.includes('open_soundscape')) {
-                    const m = lowerTag.match(/preset="([^"]+)"/i);
-                    onOpenWidget('soundscape', { preset: m ? m[1] : undefined });
-                }
+                if (lowerTag.includes('recommend_breathing')) { const m = lowerTag.match(/mode="([^"]+)"/i); onOpenWidget('breathing', { initialMode: m ? m[1] : undefined }); }
+                if (lowerTag.includes('open_breathing')) onOpenWidget('breathing');
+                if (lowerTag.includes('open_soundscape')) { const m = lowerTag.match(/preset="([^"]+)"/i); onOpenWidget('soundscape', { preset: m ? m[1] : undefined }); }
                 if (lowerTag.includes('open_diary')) onOpenWidget('diary');
                 if (lowerTag.includes('open_mood_tracker')) onOpenWidget('mood');
                 if (lowerTag.includes('open_pomodoro')) onOpenWidget('pomodoro');
@@ -514,7 +509,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             processedTagsRef.current.add(tag);
         });
     }
-
     let cleanText = text.replace(/<color>[\s\S]*?<\/color>/gi, '');
     cleanText = cleanText.replace(/<[^>]+>/g, '');
     return cleanText;
@@ -523,57 +517,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const speakMessage = (text: string) => {
     if ('speechSynthesis' in window) {
        window.speechSynthesis.cancel();
-       const cleanText = text
-         .replace(/[*#]/g, '')
-         .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
-
+       const cleanText = text.replace(/[*#]/g, '').replace(/[\u{1F600}-\u{1F64F}]/gu, '');
        const utterance = new SpeechSynthesisUtterance(cleanText);
        const voices = window.speechSynthesis.getVoices();
        let chosenVoice = voices.find(v => v.voiceURI === selectedVoiceURI) || voices.find(v => v.name.includes('Google US English'));
        if (chosenVoice) utterance.voice = chosenVoice;
-       utterance.onend = () => {
-           if (isVoiceMode) setTimeout(() => startListening(), 300);
-       };
+       utterance.onend = () => { if (isVoiceMode) setTimeout(() => startListening(), 300); };
        window.speechSynthesis.speak(utterance);
     }
   };
-
-  const getDateLabel = (timestamp: number) => {
-      const date = new Date(timestamp);
-      const today = new Date();
-      if (date.toDateString() === today.toDateString()) return 'Today';
-      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-      if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
-  };
-
-  useEffect(() => {
-      if (searchQuery.trim()) {
-          const hits: { msgId: string, matchIndex: number }[] = [];
-          messages.forEach(msg => {
-             const lowerContent = msg.content.toLowerCase();
-             const lowerQuery = searchQuery.toLowerCase();
-             const parts = lowerContent.split(lowerQuery);
-             const matchCount = parts.length - 1;
-             if (matchCount > 0 && msg.id) {
-                 for (let i = 0; i < matchCount; i++) hits.push({ msgId: msg.id, matchIndex: i });
-             }
-          });
-          setSearchResults(hits);
-          setCurrentMatchIndex(hits.length > 0 ? hits.length - 1 : 0);
-      } else { setSearchResults([]); setCurrentMatchIndex(0); }
-  }, [searchQuery, messages]);
-
-  useEffect(() => {
-      if (searchResults.length > 0 && searchResults[currentMatchIndex]) {
-          const { msgId } = searchResults[currentMatchIndex];
-          const el = document.getElementById(`msg-${msgId}`);
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-  }, [currentMatchIndex, searchResults]);
-
-  const nextMatch = () => setCurrentMatchIndex(prev => (prev + 1) % searchResults.length);
-  const prevMatch = () => setCurrentMatchIndex(prev => (prev - 1 + searchResults.length) % searchResults.length);
 
   const renderMessages = () => {
       let lastDateLabel = '';
@@ -581,25 +533,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           const dateLabel = getDateLabel(msg.timestamp || Date.now());
           const showSeparator = dateLabel !== lastDateLabel;
           lastDateLabel = dateLabel;
-          const domId = `msg-${msg.id || idx}`;
+          
+          const safeId = msg.id || `msg-${idx}`;
+          const domId = `msg-${safeId}`;
+          
           let currentMatchIndexInMessage = -1;
-
           if (searchResults.length > 0) {
               const currentMatch = searchResults[currentMatchIndex];
-              if (currentMatch && currentMatch.msgId === msg.id) {
-                  currentMatchIndexInMessage = currentMatch.matchIndex;
-              }
+              if (currentMatch && currentMatch.msgId === safeId) currentMatchIndexInMessage = currentMatch.matchIndex;
           }
           const isCurrentlyStreaming = isTyping && msg.role === 'assistant' && idx === messages.length - 1;
 
           return (
              <React.Fragment key={domId}>
                 {showSeparator && (
-                    <div className="flex justify-center my-8">
+                    <div className="flex justify-center my-8 shrink-0">
                         <span className="bg-black/30 backdrop-blur-md border border-white/5 text-white/50 text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm">{dateLabel}</span>
                     </div>
                 )}
-                <div id={domId} className="flex flex-col w-full">
+                <div id={domId} className="flex flex-col w-full shrink-0">
                     <MessageBubble 
                         role={msg.role} 
                         content={msg.content} 
@@ -620,58 +572,32 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   if (isInitializing) {
       return (
           <div className="flex flex-col items-center justify-center w-full h-[100dvh] bg-black text-white">
-              <motion.div 
-                animate={{ rotate: 360 }}
-                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                className="mb-4"
-              >
+              <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }} className="mb-4">
                   <Loader2 size={48} className="text-white/30" />
               </motion.div>
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-white/50 font-serif tracking-wider"
-              >
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-white/50 font-serif tracking-wider">
                 {connectionStatus}
               </motion.p>
           </div>
       );
   }
 
+  // === MAIN LAYOUT ===
   return (
-    <div className="relative w-full h-[100dvh] flex flex-col items-center overflow-hidden">
+    <div className="relative w-full h-[100dvh] flex flex-col bg-black overflow-hidden">
       
-      {/* Background Noise */}
+      {/* Background & Overlays */}
       <div className="absolute inset-0 z-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
-
-      {/* --- FLASH & COUNTDOWN EFFECTS --- */}
       <AnimatePresence>
           {showCountdown && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 pointer-events-none">
-                  <motion.div
-                    key={countdownNum}
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1.5, opacity: 1 }}
-                    exit={{ scale: 2, opacity: 0 }}
-                    className="text-white text-9xl font-bold font-serif"
-                  >
-                      {countdownNum}
-                  </motion.div>
+                  <motion.div key={countdownNum} initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1.5, opacity: 1 }} exit={{ scale: 2, opacity: 0 }} className="text-white text-9xl font-bold font-serif">{countdownNum}</motion.div>
               </motion.div>
           )}
           {showFlash && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 1.2 }}
-                transition={{ duration: 0.8, ease: "easeInOut" }}
-                className="fixed inset-0 z-[100] pointer-events-none"
-                style={{ backgroundColor: targetFlashColor }}
-              />
+              <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.2 }} transition={{ duration: 0.8, ease: "easeInOut" }} className="fixed inset-0 z-[100] pointer-events-none" style={{ backgroundColor: targetFlashColor }} />
           )}
       </AnimatePresence>
-
-      {/* --- VOICE MODE OVERLAY --- */}
       <AnimatePresence>
         {isVoiceMode && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/90 backdrop-blur-3xl flex flex-col items-center justify-center">
@@ -691,70 +617,65 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         )}
       </AnimatePresence>
 
-      {/* --- HEADER --- */}
-      <motion.div
-        initial={{ y: -50 }}
-        animate={{ y: 0 }}
-        className={`${isMobile ? 'fixed top-0 z-[70]' : 'absolute top-0 z-30'} w-full pointer-events-none flex justify-center ${isMobile ? 'h-16 items-center px-4 pt-safe' : 'pt-6 px-4'}`}
-      >
-          
-         <div className={`pointer-events-auto ${isMobile ? 'flex-1 flex justify-start' : 'absolute left-4 top-6 pt-safe'}`}>
-            <button onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 ${isMobile ? 'bg-black/5' : 'bg-black/20 md:hidden'}`}>
+      {/* --- SECTION 1: HEADER (Strict Flexbox) --- */}
+      <div className="shrink-0 w-full z-30 pt-safe px-4 pb-2 bg-gradient-to-b from-black/80 to-transparent pointer-events-auto">
+          <div className="flex items-center gap-3 h-14">
+             {/* LEFT: Menu */}
+             <button onClick={onMobileMenuClick} className="shrink-0 p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 bg-black/20">
                 <Menu size={20} />
-            </button>
-         </div>
+             </button>
 
-         {!isMobile && (
-            <div className="pointer-events-auto flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full pl-4 pr-2 py-2 shadow-2xl w-[280px] md:w-[400px] transition-all focus-within:w-[320px] md:focus-within:w-[450px] focus-within:bg-black/50 group mt-safe">
-                <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2" />
-                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..." className="bg-transparent border-none outline-none text-sm text-white w-full" />
-                {searchQuery && (
-                    <div className="flex items-center gap-1 ml-2 border-l border-white/10 pl-2">
-                        <span className="text-[10px] text-white/40 whitespace-nowrap">
-                            {searchResults.length > 0 ? `${currentMatchIndex + 1}/${searchResults.length}` : '0/0'}
-                        </span>
-                        <button onClick={prevMatch} disabled={searchResults.length === 0} className="p-1 text-white/50 hover:text-white"><span className="text-xs">▲</span></button>
-                        <button onClick={nextMatch} disabled={searchResults.length === 0} className="p-1 text-white/50 hover:text-white"><span className="text-xs">▼</span></button>
-                        <button onClick={() => setSearchQuery('')} className="p-1 text-white/30 hover:text-white ml-1"><X size={14}/></button>
-                    </div>
-                )}
-            </div>
-         )}
+             {/* CENTER: Search Bar (Flexible width) */}
+             <div className="flex-1 min-w-0 relative group">
+                 <div className="flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full px-3 py-2 shadow-2xl transition-all focus-within:bg-black/50 focus-within:border-white/20">
+                    <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2 shrink-0" />
+                    
+                    <input 
+                        value={searchQuery} 
+                        onChange={(e) => setSearchQuery(e.target.value)} 
+                        onKeyDown={handleSearchKeyDown}
+                        placeholder="Search..." 
+                        className="bg-transparent border-none outline-none text-sm text-white w-full min-w-0 placeholder-white/20" 
+                    />
+                    
+                    {searchQuery && (
+                        <div className="flex items-center gap-1 ml-1 border-l border-white/10 pl-1 shrink-0">
+                            <span className="text-[10px] text-white/40 whitespace-nowrap min-w-[24px] text-center">
+                                {searchResults.length > 0 ? `${currentMatchIndex + 1}/${searchResults.length}` : '0/0'}
+                            </span>
+                            <button onClick={prevMatch} disabled={searchResults.length === 0} className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded"><ChevronUp size={14} /></button>
+                            <button onClick={nextMatch} disabled={searchResults.length === 0} className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded"><ChevronDown size={14} /></button>
+                            <button onClick={() => setSearchQuery('')} className="p-1 text-white/30 hover:text-white ml-1 hover:bg-white/10 rounded"><X size={14}/></button>
+                        </div>
+                    )}
+                 </div>
+             </div>
 
-         <div className={`pointer-events-auto flex items-center gap-3 ${isMobile ? 'flex justify-end' : 'absolute right-4 top-6 pt-safe'}`}>
-             {!isMobile && (
-                <div className={`px-3 py-1.5 rounded-full backdrop-blur-xl border flex items-center gap-2 shadow-lg transition-colors hidden md:flex ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
-                    {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-gray-400" fill="currentColor" />}
-                    <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-gray-400'}`}>
-                        {!isStandardMode && localCredits > 100 ? '∞' : `${localCredits} Premium`}
-                    </span>
-                </div>
-             )}
-             
-             <button onClick={toggleVoiceMode} className={`w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg relative group ${isMobile ? 'bg-black/10' : 'bg-black/30 hover:bg-white/10'}`}>
+             {/* RIGHT: Headphones */}
+             <button onClick={toggleVoiceMode} className="shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg bg-black/30 hover:bg-white/10">
                 <Headphones size={18} />
              </button>
-         </div>
-      </motion.div>
-
+          </div>
+      </div>
+      
       {/* --- ERROR TOAST --- */}
-      <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
+      <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
-      {/* --- CHAT AREA --- */}
+      {/* --- SECTION 2: CHAT AREA (Scrollable) --- */}
       <div 
           ref={messagesContainerRef}
-          className={`flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide flex flex-col ${isMobile ? 'pt-24 pb-32' : 'pt-32 md:pt-28 pb-4'}`}
+          className="flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide min-h-0"
       >
-          <div className="flex flex-col mt-auto pb-4 min-h-0">
+          <div className="flex flex-col min-h-full justify-end pb-4">
+              <div className="h-4" /> 
               {renderMessages()}
               <div ref={messagesEndRef} />
           </div>
       </div>
 
-      {/* --- INPUT AREA --- */}
-      <div className={`w-full px-4 pt-2 shrink-0 max-w-[700px] mx-auto z-30 ${isMobile ? 'fixed bottom-0 left-0 right-0 z-[70] pb-4 px-4 bg-gradient-to-t from-black/80 to-transparent' : 'pb-6'}`}>
+      {/* --- SECTION 3: INPUT AREA (Fixed Bottom) --- */}
+      <div className="shrink-0 w-full px-4 pb-4 pt-2 z-30 max-w-[700px] mx-auto bg-gradient-to-t from-black via-black/80 to-transparent">
           <div className="flex flex-col gap-2">
-            
              <AnimatePresence>
                  {replyingTo && (
                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center w-[95%] bg-black/60 backdrop-blur-xl border border-white/10 rounded-t-2xl border-b-0 p-3 flex justify-between items-center text-xs text-white/70 shadow-lg">
@@ -771,7 +692,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              </AnimatePresence>
 
              <div className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border border-white/5 p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
-                 
                  <div className="flex items-center gap-1">
                      <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStandardMode} className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}>
                          <ImageIcon size={20} />
@@ -793,7 +713,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                          className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base font-light py-3 px-2 resize-none max-h-32 scrollbar-hide"
                          rows={1}
                      />
-                     
                      <div className="relative">
                          <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
                              <Smile size={20} />
@@ -803,36 +722,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                  <EmojiPicker
                                      theme={Theme.DARK}
                                      emojiStyle={EmojiStyle.APPLE}
-                                     onEmojiClick={(e) => {
-                                         setInput(prev => prev + e.emoji);
-                                     }}
+                                     onEmojiClick={(e) => { setInput(prev => prev + e.emoji); }}
                                      lazyLoadEmojis={true}
                                      width={300}
                                      height={400}
                                      searchDisabled={false}
                                      skinTonesDisabled={false}
-                                     categories={[
-                                         { name: 'Smileys', category: 'smileys_people' },
-                                         { name: 'Nature', category: 'animals_nature' },
-                                         { name: 'Food', category: 'food_drink' },
-                                         { name: 'Activities', category: 'activities' },
-                                         { name: 'Travel', category: 'travel_places' },
-                                         { name: 'Objects', category: 'objects' },
-                                         { name: 'Symbols', category: 'symbols' },
-                                         { name: 'Flags', category: 'flags' },
-                                     ] as any}
                                  />
                              </div>
                          )}
                      </div>
                  </form>
 
-                 <button 
-                     onClick={(e) => handleSend(e)}
-                     disabled={!input.trim() && !attachedImage} 
-                     className="p-3.5 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-1" 
-                     style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #4f46e5)` }}
-                 >
+                 <button onClick={(e) => handleSend(e)} disabled={!input.trim() && !attachedImage} className="p-3.5 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-1" style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #4f46e5)` }}>
                      <Send size={18} className="ml-0.5" fill="currentColor" />
                  </button>
              </div>
