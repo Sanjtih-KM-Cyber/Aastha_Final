@@ -39,7 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [state, setState] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
-    isLoading: true, // Starts true to block UI until check completes
+    isLoading: true,
     encryptionKey: null,
   });
 
@@ -60,18 +60,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
   }, []);
 
-  // ---------- CHECK AUTH (THE FIX FOR MANUAL REFRESH) ----------
+  // ---------- CHECK AUTH (FIXED FOR MANUAL REFRESH) ----------
   useEffect(() => {
     let isMounted = true;
 
     const checkAuth = async () => {
       try {
-        // 1. Create a timeout promise to prevent infinite loading
+        // 1. Create a timeout promise (5 seconds)
         const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error("Timeout")), 5000)
         );
 
         // 2. Race the API call against the timeout
+        // This ensures the app doesn't hang forever if the backend is sleeping
         const res: any = await Promise.race([
             api.get('/users/me'),
             timeoutPromise
@@ -82,16 +83,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 user: res.data,
                 isAuthenticated: true,
                 isLoading: false,
-                encryptionKey: state.encryptionKey // Preserve key if exists (rare on refresh)
+                encryptionKey: state.encryptionKey 
             });
         }
       } catch (error) {
-        // If 401, Timeout, or Network Error -> Just show Login Screen
+        // If 401, Timeout, or Network Error -> Show Login Screen
         if (isMounted) {
             setState({
                 user: null,
                 isAuthenticated: false,
-                isLoading: false, // CRITICAL: Ensure this always flips to false
+                isLoading: false, // CRITICAL: Always turn off loading
                 encryptionKey: null
             });
         }
@@ -106,32 +107,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ---------- LOGIN ----------
   const login = async (identifier: string, password: string) => {
     const cleanedIdentifier = identifier.toLowerCase().trim();
-    
-    // Ensure UI is not blocked if this fails
-    try {
-        const res = await api.post('/users/login', { identifier: cleanedIdentifier, password });
+    // No try/catch here so the UI can handle the specific error (e.g. "Wrong Password")
+    const res = await api.post('/users/login', { identifier: cleanedIdentifier, password });
 
-        if (res.data.requiresVerification) {
-            return res.data;
-        }
-
-        const user: User = res.data;
-        let key = null;
-        const salt = user.encryptionSalt || user.email;
-
-        if (!user.hasDiarySetup) key = deriveKey(password, salt);
-
-        setState({
-            user,
-            isAuthenticated: true,
-            isLoading: false,
-            encryptionKey: key,
-        });
-
-        return user;
-    } catch (e) {
-        throw e;
+    if (res.data.requiresVerification) {
+        return res.data;
     }
+
+    const user: User = res.data;
+    let key = null;
+    const salt = user.encryptionSalt || user.email;
+
+    if (!user.hasDiarySetup) key = deriveKey(password, salt);
+
+    setState({
+      user,
+      isAuthenticated: true,
+      isLoading: false,
+      encryptionKey: key,
+    });
+
+    return user;
   };
 
   // ---------- REGISTER ----------
@@ -174,7 +170,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setState(prev => ({ ...prev, encryptionKey: key }));
   };
 
-  // ---------- UPDATE USER (INSTANT) ----------
+  // ---------- UPDATE USER ----------
   const updateUser = (data: Partial<User>) => {
       setState(prev => ({
           ...prev,
@@ -193,10 +189,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return getClientServerDecrypt(state.user.emailEncrypted);
   }, [state.user]);
 
-  // ---------- LOGOUT (FIXED: Soft Logout) ----------
+  // ---------- LOGOUT (FIXED SOFT LOGOUT) ----------
   const logout = async () => {
     try {
-      // Fire and forget - don't let a slow server block the UI logout
+      // Fire and forget logout request
       api.get('/users/logout').catch(console.error);
     } finally {
       // Immediate UI update
@@ -206,8 +202,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading: false,
         encryptionKey: null,
       });
-      // We removed window.location.href here to prevent the "Manual Refresh" feel.
-      // Your App Router should detect !isAuthenticated and redirect to /login automatically.
     }
   };
 
