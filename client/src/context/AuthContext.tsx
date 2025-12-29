@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-// Use the pre-configured api instance to ensure consistent Base URL and credentials
 import api from '../services/api';
 import { AuthState, User } from '../types';
 import { deriveKey } from '../utils/encryptionUtils';
@@ -44,6 +43,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     encryptionKey: null,
   });
 
+  // ---------- GLOBAL AUTH EVENT LISTENER (FIX FOR REDIRECT LOOP) ----------
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setState(prev => ({
+        ...prev,
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        encryptionKey: null
+      }));
+    };
+
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+  }, []);
+
   // ---------- CHECK AUTH ----------
   useEffect(() => {
     const checkAuth = async () => {
@@ -67,30 +82,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkAuth();
   }, []);
 
-  // ---------- LISTEN FOR 401 ----------
-  useEffect(() => {
-    const handleUnauthorized = () => {
-        // INSTANTLY wipe user state. This allows the Router to see we are logged out.
-        setState(prev => ({ ...prev, user: null, isAuthenticated: false, isLoading: false, encryptionKey: null }));
-    };
-    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
-    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
-  }, []);
-
   // ---------- LOGIN ----------
   const login = async (identifier: string, password: string) => {
     const cleanedIdentifier = identifier.toLowerCase().trim();
     const res = await api.post('/users/login', { identifier: cleanedIdentifier, password });
 
-    // Handle Verification Flow
     if (res.data.requiresVerification) {
-        return res.data; // Don't set state, let UI handle redirection
+        return res.data;
     }
 
     const user: User = res.data;
-
     let key = null;
-    // Prefer encryptionSalt, fallback to email for legacy users
     const salt = user.encryptionSalt || user.email;
 
     if (!user.hasDiarySetup) key = deriveKey(password, salt);
@@ -109,15 +111,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (data: RegisterData) => {
     const res = await api.post('/users/register', data);
 
-    // Handle Verification Flow
     if (res.data.requiresVerification) {
         return res.data;
     }
 
     const user: User = res.data;
-
     const pwdToUse = data.diaryPassword || data.password;
-    // Use the returned salt from server, or fallback to email (shouldn't happen for new users)
     const salt = user.encryptionSalt || user.email;
     const key = deriveKey(pwdToUse, salt);
 
@@ -136,11 +135,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!state.user) return false;
 
     await api.post('/users/verify-diary', { diaryPassword: password });
-
-    // Use stored salt or email - no prompt needed!
     const salt = state.user.encryptionSalt || state.user.email;
-
     const key = deriveKey(password, salt);
+    
     setState(prev => ({ ...prev, encryptionKey: key }));
     return true;
   };
@@ -180,7 +177,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading: false,
         encryptionKey: null,
       });
-      // Force reload or redirect to ensure clean state
       window.location.href = '/login';
     }
   };
