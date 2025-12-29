@@ -2,15 +2,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Menu, Headphones, AlertCircle, Smile, Copy, Reply, 
   Mic, MicOff, X, Zap, Leaf, Search, Image as ImageIcon,
-  Sparkles, ShieldAlert
-} from 'lucide-react';
+  Sparkles, ShieldAlert, Loader2
+} from 'lucide-react'; // Added Loader2
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
 import { MessageBubble } from './MessageBubble';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
-import { AUTH_UNAUTHORIZED_EVENT } from '../../constants'; // IMPORTED CONSTANT
+import { AUTH_UNAUTHORIZED_EVENT } from '../../constants';
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -28,16 +28,13 @@ interface ChatViewProps {
 
 const getApiUrl = (endpoint: string) => {
   const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl) {
-    return `${envUrl}${endpoint}`;
-  }
+  if (envUrl) return `${envUrl}${endpoint}`;
   const host = window.location.hostname;
-  if (host === 'localhost' || host === '127.0.0.1') {
-      return `http://${host}:5000/api${endpoint}`;
-  }
+  if (host === 'localhost' || host === '127.0.0.1') return `http://${host}:5000/api${endpoint}`;
   return `https://aastha-final.onrender.com/api${endpoint}`;
 };
 
+// ... (Keep compressImage helper exactly as is)
 const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -65,26 +62,16 @@ const compressImage = (file: File): Promise<string> => {
     });
 };
 
+// ... (Keep mapColorToTheme helper exactly as is)
 const mapColorToTheme = (colorName: string): string => {
     const lower = colorName.toLowerCase().trim();
     const themes = ['aurora', 'sunset', 'ocean', 'midnight'];
     if (themes.includes(lower)) return lower;
-
     const colorMap: Record<string, string> = {
-        'blue': '#3b82f6',
-        'red': '#ef4444',
-        'green': '#22c55e',
-        'orange': '#f97316',
-        'purple': '#a855f7',
-        'pink': '#ec4899',
-        'yellow': '#eab308',
-        'teal': '#14b8a6',
-        'cyan': '#06b6d4',
-        'white': '#ffffff',
-        'black': '#000000',
-        'gray': '#6b7280'
+        'blue': '#3b82f6', 'red': '#ef4444', 'green': '#22c55e', 'orange': '#f97316',
+        'purple': '#a855f7', 'pink': '#ec4899', 'yellow': '#eab308', 'teal': '#14b8a6',
+        'cyan': '#06b6d4', 'white': '#ffffff', 'black': '#000000', 'gray': '#6b7280'
     };
-
     if (colorMap[lower]) return colorMap[lower];
     if (lower.startsWith('#')) return lower;
     return 'aurora';
@@ -97,6 +84,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   
   const botName = user?.persona === 'aarav' ? 'Aastik' : 'Aastha';
 
+  // --- STABILITY STATES ---
+  const [isInitializing, setIsInitializing] = useState(true); // NEW: Blocks UI until ready
+  const [connectionStatus, setConnectionStatus] = useState('Connecting...');
+  
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -120,10 +111,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [isListening, setIsListening] = useState(false);
   const [isDictating, setIsDictating] = useState(false); 
   const [transcript, setTranscript] = useState('');
-  const [ttsEnabled, setTtsEnabled] = useState(() => {
-      const saved = localStorage.getItem('user_tts_enabled');
-      return saved === 'true'; 
-  });
+  const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem('user_tts_enabled') === 'true');
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(() => localStorage.getItem('user_voice_uri'));
   
   const [localCredits, setLocalCredits] = useState(user?.credits || 0);
@@ -136,6 +124,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedTagsRef = useRef<Set<string>>(new Set());
 
+  // --- 1. CREDITS SYNC ---
   useEffect(() => {
       if (user) {
           const credits = user.credits || 0;
@@ -146,32 +135,59 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
   }, [user]);
 
+  // --- 2. BLOCKING INITIAL LOAD (THE FIX) ---
   useEffect(() => {
-     const fetchHistory = async () => {
+     const initChat = async () => {
+         if (!user) return; // Wait for AuthContext to be ready
+
+         setIsInitializing(true);
+         setConnectionStatus(`Connecting to ${botName}...`);
+
          try {
              const res = await fetch(getApiUrl('/chat/history'), { credentials: 'include' });
+             
              if (!res.ok) { 
                  if (res.status === 401) { 
-                    // FIX: Dispatch event instead of navigating
                     window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
                     return; 
                  }
                  throw new Error("Failed to fetch history"); 
              }
+
              const data = await res.json();
+             
              if (Array.isArray(data) && data.length > 0) {
                  setMessages(data);
-                 setTimeout(() => scrollToBottom(), 100);
              } else {
-                 setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. How can I support you right now?`, timestamp: Date.now() }]);
+                 setMessages([{ 
+                     role: 'assistant', 
+                     content: `Hi ${user?.name || 'friend'}, I am ${botName}. How can I support you right now?`, 
+                     timestamp: Date.now() 
+                 }]);
              }
+             
+             // Small delay to ensure render catches up before removing loader
+             setTimeout(() => {
+                scrollToBottom();
+                setIsInitializing(false);
+             }, 500);
+
          } catch (e) { 
-             setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. I'm ready to listen.`, timestamp: Date.now() }]);
+             console.error("Init failed:", e);
+             // Fallback so the app doesn't crash
+             setMessages([{ 
+                 role: 'assistant', 
+                 content: `Hi ${user?.name || 'friend'}, I am ${botName}. I'm here, though my memory of our past chats is fuzzy right now.`, 
+                 timestamp: Date.now() 
+             }]);
+             setIsInitializing(false);
          }
      };
-     if (user) fetchHistory();
-  }, [user, navigate]);
 
+     initChat();
+  }, [user, navigate, botName]);
+
+  // --- 3. STANDARD EFFECTS ---
   useEffect(() => {
     const loadVoices = () => { window.speechSynthesis.getVoices(); };
     loadVoices();
@@ -206,10 +222,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     const spacer = prev.length > 0 && !prev.endsWith(' ') ? ' ' : '';
                     return prev + spacer + currentText;
                 });
-                if (textareaRef.current) {
-                    textareaRef.current.style.height = 'auto';
-                    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-                }
+                autoResizeTextarea();
             }
         } else {
             setTranscript(currentText);
@@ -222,6 +235,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       recognitionRef.current = recognition;
     }
   }, [isDictating]);
+
+  // --- HELPERS ---
+  const autoResizeTextarea = () => {
+    if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  };
 
   const startListening = () => { if (recognitionRef.current && !isListening) { try { setTranscript(''); recognitionRef.current.start(); } catch (e) { console.error("Speech start failed", e); } } };
   const stopListening = () => { if (recognitionRef.current && isListening) recognitionRef.current.stop(); };
@@ -281,16 +302,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
-    if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-    }
+    autoResizeTextarea();
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
+  // --- 4. SEND LOGIC (Refined) ---
   const handleSend = async (e?: React.FormEvent, overrideInput?: string) => {
     e?.preventDefault();
     const textToSend = overrideInput || input;
@@ -304,7 +323,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     setMessages(prev => [...prev, userMsg]);
     
     setInput(''); setAttachedImage(null); setShowEmojiPicker(false); setIsTyping(true); setError(null);
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    autoResizeTextarea();
 
     try {
       const response = await fetch(getApiUrl('/chat'), {
@@ -315,8 +334,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       });
 
       if (!response.ok) {
+          setIsTyping(false);
           if (response.status === 401) { 
-              // FIX: Dispatch event instead of navigating
               window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
               return; 
           }
@@ -366,18 +385,26 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                 return msg;
                             }));
                         }
-                    } catch (e: any) { if (e.message && e.message.includes("Upgrade")) setError(e.message); }
+                    } catch (e: any) { 
+                        // Silent catch for JSON parse errors in stream
+                        if (e.message && e.message.includes("Upgrade")) setError(e.message); 
+                    }
                 }
             }
         }
       }
+      
       const cleanFinal = processMagicTags(aiContentRaw);
       if ((isVoiceMode || ttsEnabled) && aiContentRaw) speakMessage(cleanFinal);
 
     } catch (error: any) {
-      setError(error.message || "Connection failed");
-      setIsTyping(false);
-    } finally { setIsTyping(false); }
+      console.error(error);
+      // Remove the empty loading message if failed
+      setMessages(prev => prev.filter(m => m.content !== '')); 
+      setError(error.message || "Connection failed. Please check internet.");
+    } finally { 
+        setIsTyping(false); 
+    }
   };
 
   const processMagicTags = (text: string) => {
@@ -396,8 +423,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 const colorValue = colorMatch[1].trim();
 
                 if (!processedTagsRef.current.has(fullBlock)) {
-                     const mappedColor = mapColorToTheme(colorValue);
-                     if (!showCountdown) {
+                      const mappedColor = mapColorToTheme(colorValue);
+                      if (!showCountdown) {
                         setShowCountdown(true);
                         setCountdownNum(3);
                         setTargetFlashColor(mappedColor.startsWith('#') ? mappedColor : '#ffffff');
@@ -417,19 +444,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                 return prev - 1;
                             });
                         }, 1000);
-                     }
-                     processedTagsRef.current.add(fullBlock);
-                     processedTagsRef.current.add('<color>');
-                     processedTagsRef.current.add('</color>');
+                      }
+                      processedTagsRef.current.add(fullBlock);
+                      processedTagsRef.current.add('<color>');
+                      processedTagsRef.current.add('</color>');
                 }
             }
 
             if (onOpenWidget) {
                 if (lowerTag.includes('recommend_breathing')) {
-                     const m = lowerTag.match(/mode="([^"]+)"/i);
-                     onOpenWidget('breathing', { initialMode: m ? m[1] : undefined });
+                      const m = lowerTag.match(/mode="([^"]+)"/i);
+                      onOpenWidget('breathing', { initialMode: m ? m[1] : undefined });
                 } else if (lowerTag.includes('open_breathing')) {
-                     onOpenWidget('breathing');
+                      onOpenWidget('breathing');
                 }
 
                 if (lowerTag.includes('open_soundscape')) {
@@ -549,14 +576,35 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       });
   };
 
+  // --- 5. RENDER LOADER VS CONTENT ---
+  if (isInitializing) {
+      return (
+          <div className="flex flex-col items-center justify-center w-full h-[100dvh] bg-black text-white">
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                className="mb-4"
+              >
+                  <Loader2 size={48} className="text-white/30" />
+              </motion.div>
+              <motion.p 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-white/50 font-serif tracking-wider"
+              >
+                {connectionStatus}
+              </motion.p>
+          </div>
+      );
+  }
+
   return (
     <div className="relative w-full h-[100dvh] flex flex-col items-center overflow-hidden">
       
-      {/* Remove local background to fix "Abrupt Cutoff" behind sidebar. Let AppContainer handle it. */}
-      {/* <div className="absolute inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out"
-           style={{ background: `radial-gradient(circle at 50% 30%, ${currentTheme.primaryColor}22 0%, #0a0e17 70%)` }} /> */}
+      {/* Background Noise */}
       <div className="absolute inset-0 z-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
 
+      {/* --- FLASH & COUNTDOWN EFFECTS --- */}
       <AnimatePresence>
           {showCountdown && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 pointer-events-none">
@@ -583,6 +631,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           )}
       </AnimatePresence>
 
+      {/* --- VOICE MODE OVERLAY --- */}
       <AnimatePresence>
         {isVoiceMode && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/90 backdrop-blur-3xl flex flex-col items-center justify-center">
@@ -596,19 +645,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
               <h3 className="text-3xl font-serif text-white mb-6">{isListening ? "Listening..." : "Thinking..."}</h3>
               <p className="text-white/50 text-lg max-w-lg text-center px-4 min-h-[3rem]">{transcript || "..."}</p>
               <button onClick={isListening ? stopListening : startListening} className="mt-12 p-6 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
-                 {isListening ? <Mic size={32} /> : <MicOff size={32} className="text-red-400" />}
+                  {isListening ? <Mic size={32} /> : <MicOff size={32} className="text-red-400" />}
               </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* MOBILE HEADER: Fixed Z-70 | DESKTOP HEADER: Absolute Z-30 */}
+      {/* --- HEADER --- */}
       <motion.div
         initial={{ y: -50 }}
         animate={{ y: 0 }}
         className={`${isMobile ? 'fixed top-0 z-[70]' : 'absolute top-0 z-30'} w-full pointer-events-none flex justify-center ${isMobile ? 'h-16 items-center px-4 pt-safe' : 'pt-6 px-4'}`}
       >
-         
+          
          <div className={`pointer-events-auto ${isMobile ? 'flex-1 flex justify-start' : 'absolute left-4 top-6 pt-safe'}`}>
             <button onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 ${isMobile ? 'bg-black/5' : 'bg-black/20 md:hidden'}`}>
                 <Menu size={20} />
@@ -648,104 +697,106 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          </div>
       </motion.div>
 
+      {/* --- ERROR TOAST --- */}
       <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
+      {/* --- CHAT AREA --- */}
       <div 
-         ref={messagesContainerRef}
-         className={`flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide flex flex-col ${isMobile ? 'pt-24 pb-32' : 'pt-32 md:pt-28 pb-4'}`}
+          ref={messagesContainerRef}
+          className={`flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide flex flex-col ${isMobile ? 'pt-24 pb-32' : 'pt-32 md:pt-28 pb-4'}`}
       >
-         <div className="flex flex-col mt-auto pb-4 min-h-0">
-             {renderMessages()}
-             <div ref={messagesEndRef} />
-         </div>
+          <div className="flex flex-col mt-auto pb-4 min-h-0">
+              {renderMessages()}
+              <div ref={messagesEndRef} />
+          </div>
       </div>
 
-      {/* MOBILE INPUT: Fixed Z-70 | DESKTOP INPUT: Standard Flow */}
+      {/* --- INPUT AREA --- */}
       <div className={`w-full px-4 pt-2 shrink-0 max-w-[700px] mx-auto z-30 ${isMobile ? 'fixed bottom-0 left-0 right-0 z-[70] pb-4 px-4 bg-gradient-to-t from-black/80 to-transparent' : 'pb-6'}`}>
-         <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
             
-            <AnimatePresence>
-                {replyingTo && (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center w-[95%] bg-black/60 backdrop-blur-xl border border-white/10 rounded-t-2xl border-b-0 p-3 flex justify-between items-center text-xs text-white/70 shadow-lg">
-                        <div className="flex items-center gap-2 truncate"><Reply size={12} className="text-white/40" /><span className="italic truncate max-w-[200px]">"{replyingTo}"</span></div>
-                        <button onClick={() => setReplyingTo(null)} className="hover:text-white"><X size={14} /></button>
-                    </motion.div>
-                )}
-                {attachedImage && (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center relative group mb-1">
-                        <img src={attachedImage} alt="Attachment" className="h-24 rounded-xl border border-white/20 shadow-2xl" />
-                        <button onClick={() => setAttachedImage(null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors"><X size={12} /></button>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+             <AnimatePresence>
+                 {replyingTo && (
+                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center w-[95%] bg-black/60 backdrop-blur-xl border border-white/10 rounded-t-2xl border-b-0 p-3 flex justify-between items-center text-xs text-white/70 shadow-lg">
+                         <div className="flex items-center gap-2 truncate"><Reply size={12} className="text-white/40" /><span className="italic truncate max-w-[200px]">"{replyingTo}"</span></div>
+                         <button onClick={() => setReplyingTo(null)} className="hover:text-white"><X size={14} /></button>
+                     </motion.div>
+                 )}
+                 {attachedImage && (
+                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center relative group mb-1">
+                         <img src={attachedImage} alt="Attachment" className="h-24 rounded-xl border border-white/20 shadow-2xl" />
+                         <button onClick={() => setAttachedImage(null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors"><X size={12} /></button>
+                     </motion.div>
+                 )}
+             </AnimatePresence>
 
-            <div className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border border-white/5 p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
-                
-                <div className="flex items-center gap-1">
-                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStandardMode} className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}>
-                        <ImageIcon size={20} />
-                    </button>
-                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} capture="environment" />
-                    
-                    <button onClick={toggleDictation} className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>
-                        {isDictating ? <MicOff size={20} /> : <Mic size={20} />}
-                    </button>
-                </div>
+             <div className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border border-white/5 p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
+                 
+                 <div className="flex items-center gap-1">
+                     <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStandardMode} className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                         <ImageIcon size={20} />
+                     </button>
+                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} capture="environment" />
+                     
+                     <button onClick={toggleDictation} className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>
+                         {isDictating ? <MicOff size={20} /> : <Mic size={20} />}
+                     </button>
+                 </div>
 
-                <form onSubmit={handleSend} className="flex-1 flex items-center relative h-full">
-                    <textarea 
-                        ref={textareaRef}
-                        value={input} 
-                        onChange={handleInput}
-                        onKeyDown={handleKeyPress}
-                        placeholder={isDictating ? "Listening..." : "Type a message..."} 
-                        className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base font-light py-3 px-2 resize-none max-h-32 scrollbar-hide"
-                        rows={1}
-                    />
-                    
-                    <div className="relative">
-                        <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
-                            <Smile size={20} />
-                        </button>
-                        {showEmojiPicker && (
-                            <div className="absolute bottom-14 right-0 shadow-2xl z-50">
-                                <EmojiPicker
-                                    theme={Theme.DARK}
-                                    emojiStyle={EmojiStyle.APPLE}
-                                    onEmojiClick={(e) => {
-                                        setInput(prev => prev + e.emoji);
-                                    }}
-                                    lazyLoadEmojis={true}
-                                    width={300}
-                                    height={400}
-                                    searchDisabled={false}
-                                    skinTonesDisabled={false}
-                                    categories={[
-                                        { name: 'Smileys', category: 'smileys_people' },
-                                        { name: 'Nature', category: 'animals_nature' },
-                                        { name: 'Food', category: 'food_drink' },
-                                        { name: 'Activities', category: 'activities' },
-                                        { name: 'Travel', category: 'travel_places' },
-                                        { name: 'Objects', category: 'objects' },
-                                        { name: 'Symbols', category: 'symbols' },
-                                        { name: 'Flags', category: 'flags' },
-                                    ] as any}
-                                />
-                            </div>
-                        )}
-                    </div>
-                </form>
+                 <form onSubmit={handleSend} className="flex-1 flex items-center relative h-full">
+                     <textarea 
+                         ref={textareaRef}
+                         value={input} 
+                         onChange={handleInput}
+                         onKeyDown={handleKeyPress}
+                         placeholder={isDictating ? "Listening..." : "Type a message..."} 
+                         className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base font-light py-3 px-2 resize-none max-h-32 scrollbar-hide"
+                         rows={1}
+                     />
+                     
+                     <div className="relative">
+                         <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
+                             <Smile size={20} />
+                         </button>
+                         {showEmojiPicker && (
+                             <div className="absolute bottom-14 right-0 shadow-2xl z-50">
+                                 <EmojiPicker
+                                     theme={Theme.DARK}
+                                     emojiStyle={EmojiStyle.APPLE}
+                                     onEmojiClick={(e) => {
+                                         setInput(prev => prev + e.emoji);
+                                     }}
+                                     lazyLoadEmojis={true}
+                                     width={300}
+                                     height={400}
+                                     searchDisabled={false}
+                                     skinTonesDisabled={false}
+                                     categories={[
+                                         { name: 'Smileys', category: 'smileys_people' },
+                                         { name: 'Nature', category: 'animals_nature' },
+                                         { name: 'Food', category: 'food_drink' },
+                                         { name: 'Activities', category: 'activities' },
+                                         { name: 'Travel', category: 'travel_places' },
+                                         { name: 'Objects', category: 'objects' },
+                                         { name: 'Symbols', category: 'symbols' },
+                                         { name: 'Flags', category: 'flags' },
+                                     ] as any}
+                                 />
+                             </div>
+                         )}
+                     </div>
+                 </form>
 
-                <button 
-                    onClick={(e) => handleSend(e)}
-                    disabled={!input.trim() && !attachedImage} 
-                    className="p-3.5 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-1" 
-                    style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #4f46e5)` }}
-                >
-                    <Send size={18} className="ml-0.5" fill="currentColor" />
-                </button>
-            </div>
-         </div>
+                 <button 
+                     onClick={(e) => handleSend(e)}
+                     disabled={!input.trim() && !attachedImage} 
+                     className="p-3.5 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-1" 
+                     style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #4f46e5)` }}
+                 >
+                     <Send size={18} className="ml-0.5" fill="currentColor" />
+                 </button>
+             </div>
+          </div>
       </div>
     </div>
   );
