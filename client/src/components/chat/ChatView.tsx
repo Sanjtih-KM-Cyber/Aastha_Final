@@ -592,26 +592,33 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // ==================================================================================
   // MAIN LAYOUT
-  // Mobile: Flex Column (Strict Sections). PC: Absolute/Floating Overlay (Transparent).
+  // Mobile: Flex Column (Strict Sections). PC: Absolute/Floating Overlay.
   // ==================================================================================
   return (
-    <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden bg-black md:bg-transparent">
+    // ✅ FIX 1: Removed bg-black from root. Now wallpaper layer dictates background.
+    <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden">
       
       {/* 1. GLOBAL BACKGROUNDS & WALLPAPER */}
-      {/* Positioned absolute, z-[-1] to stay behind everything */}
-      <div className="absolute inset-0 z-[-1] pointer-events-none">
-          {/* WALLPAPER LOGIC */}
+      {/* Positioned absolute, z-0 to stay behind everything */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+          {/* WALLPAPER LAYER */}
           {user?.wallpaper ? (
               <div 
                   className="w-full h-full bg-cover bg-center bg-no-repeat"
                   style={{ backgroundImage: `url(${user.wallpaper})` }}
               >
-                  {/* Dim overlay for readability */}
-                  <div className="absolute inset-0 bg-black/60" />
+                  {/* OVERLAY: Darker on Mobile, Lighter on PC */}
+                  <div className="absolute inset-0 bg-black/60 md:bg-black/40" />
+                  
+                  {/* ✅ FIX 2: LEFT-SIDE GRADIENT FOR PC (Fixes the "Cut") */}
+                  {/* This creates a smooth fade from the sidebar into the chat area */}
+                  {!isMobile && (
+                      <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-[#0a0e17] via-black/40 to-transparent" />
+                  )}
               </div>
           ) : (
-              // Fallback: Dark on Mobile, Transparent on PC (letting parent background show)
-              <div className="w-full h-full bg-[#0a0e17] md:bg-transparent" />
+              // Fallback: Dark solid for consistency
+              <div className="w-full h-full bg-[#0a0e17]" />
           )}
           
           {/* Noise Texture Overlay */}
@@ -648,9 +655,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       </AnimatePresence>
 
       {/* --- SECTION 1: HEADER --- */}
-      {/* Mobile: Relative/Flex item. PC: Absolute/Floating top */}
-      {/* FIX: Removed gradient for PC (md:bg-none) to solve "Black Box" issue */}
-      <div className="shrink-0 w-full z-30 pt-safe px-4 pb-2 bg-gradient-to-b from-black/80 to-transparent pointer-events-auto md:absolute md:top-0 md:pt-6 md:bg-none">
+      {/* Mobile: Relative/Flex item with Gradient. PC: Absolute/Floating top with Transparent BG */}
+      <div className={`shrink-0 w-full z-30 pt-safe px-4 pb-2 pointer-events-auto ${isMobile ? 'bg-gradient-to-b from-black/80 to-transparent' : 'md:absolute md:top-0 md:pt-6 bg-none'}`}>
           <div className="flex items-center gap-3 h-14 justify-between">
              {/* LEFT */}
              <div className="shrink-0 flex items-center">
@@ -664,6 +670,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              <div className="flex-1 min-w-0 relative group flex justify-center">
                  <div className={`flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full px-3 py-2 shadow-2xl transition-all focus-within:bg-black/50 focus-within:border-white/20 w-full ${!isMobile ? 'md:w-[400px]' : ''}`}>
                     <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2 shrink-0" />
+                    
                     <input 
                         value={searchQuery} 
                         onChange={(e) => setSearchQuery(e.target.value)} 
@@ -671,6 +678,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         placeholder="Search..." 
                         className="bg-transparent border-none outline-none text-sm text-white w-full min-w-0 placeholder-white/20" 
                     />
+                    
                     {searchQuery && (
                         <div className="flex items-center gap-1 ml-1 border-l border-white/10 pl-1 shrink-0">
                             <span className="text-[10px] text-white/40 whitespace-nowrap min-w-[24px] text-center">
@@ -708,7 +716,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       {/* Mobile: Flex-1 scrollable. PC: Full height absolute (sort of), large bottom padding */}
       <div 
           ref={messagesContainerRef}
-          className="flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0"
+          className="flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
       >
           <div className="flex flex-col min-h-full justify-end pb-4 md:pb-40">
               <div className="h-4" /> 
@@ -719,8 +727,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       {/* --- SECTION 3: INPUT AREA --- */}
       {/* Mobile: Fixed bottom via Flex (shrink-0). PC: Absolute bottom/floating */}
-      {/* FIX: Removed gradient for PC (md:bg-none) to solve "Black Box" issue */}
-      <div className="shrink-0 w-full px-4 pb-4 pt-2 z-30 max-w-[700px] mx-auto bg-gradient-to-t from-black via-black/80 to-transparent md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6 md:bg-none">
+      {/* ✅ FIX: Removed gradient for PC (md:bg-none) */}
+      <div className={`shrink-0 w-full px-4 pb-4 pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6 bg-none'}`}>
           <div className="flex flex-col gap-2">
              <AnimatePresence>
                  {replyingTo && (
