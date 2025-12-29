@@ -77,10 +77,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   return (
     <motion.div
-      // OPTIMIZATION: Reduce animation complexity for list items
-      initial={{ opacity: 0, y: 5 }} 
+      // OPTIMIZATION: Lighter animation (no scale, smaller Y movement) for mobile performance
+      initial={{ opacity: 0, y: 5 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
       className={`group flex w-full mb-6 relative ${
         isUser ? 'justify-end' : 'justify-start'
       }`}
@@ -107,16 +107,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             relative px-4 py-3 md:px-6 md:py-3.5 text-sm md:text-base leading-snug shadow-sm
             ${
               isUser
-                // OPTIMIZATION: Removed 'backdrop-blur-xl'. Replaced with high-opacity solid colors.
-                ? 'rounded-[20px] rounded-br-none text-white border border-white/5 bg-[#1a1a1a]/90' 
-                : 'rounded-[20px] rounded-bl-none text-white border border-white/5 bg-[#0f0f0f]/90' 
+                /* USER BUBBLE:
+                   - Mobile: Solid Dark Grey (#1a1a1a) + No Blur
+                   - PC (md): Translucent Black + Blur XL */
+                ? 'rounded-[20px] rounded-br-none text-white border border-white/10 bg-[#1a1a1a] md:bg-black/40 md:backdrop-blur-xl' 
+                : 'rounded-[20px] rounded-bl-none text-white border border-white/10 bg-[#0f0f0f] md:bg-black/30 md:backdrop-blur-xl' 
             }
           `}
           style={
             !isUser
               ? {
-                  // Fallback for solid color if gradient is too heavy, but this simple gradient is usually fine
-                  background: `linear-gradient(135deg, ${currentTheme.primaryColor}15, #0a0a0a)`,
+                  // FIX: Use 'backgroundImage' so it layers on top of the 'bg-[#0f0f0f]' class.
+                  // This ensures mobile gets a solid base color + the theme tint, while PC gets the tint + blur.
+                  backgroundImage: `linear-gradient(135deg, ${currentTheme.primaryColor}20, #00000060)`,
                   borderLeft: `2px solid ${currentTheme.primaryColor}`,
                 }
               : {}
@@ -150,9 +153,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons */}
-        {isHovered && !isThinking && (
-           <div
+        <AnimatePresence>
+          {isHovered && !isThinking && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, x: isUser ? -10 : 10 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.8 }}
               className={`
                 absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-10
                 ${isUser ? 'right-full mr-3' : 'left-full ml-3'}
@@ -160,7 +166,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             >
               <button
                 onClick={handleReplyClick}
-                className="p-2 rounded-full bg-zinc-800 border border-white/10 text-white/70 hover:text-white transition-all shadow-lg"
+                className="p-2 rounded-full bg-zinc-800 border border-white/10 hover:bg-zinc-700 text-white/70 hover:text-white transition-all shadow-lg"
                 title="Reply"
               >
                 <Reply size={14} />
@@ -168,13 +174,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
               <button
                 onClick={handleCopyClick}
-                className="p-2 rounded-full bg-zinc-800 border border-white/10 text-white/70 hover:text-white transition-all shadow-lg"
+                className="p-2 rounded-full bg-zinc-800 border border-white/10 hover:bg-zinc-700 text-white/70 hover:text-white transition-all shadow-lg"
                 title="Copy"
               >
                 <Copy size={14} />
               </button>
-            </div>
+            </motion.div>
           )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );
