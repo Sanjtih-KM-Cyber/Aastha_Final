@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Menu, Headphones, AlertCircle, Smile, Copy, Reply, 
   Mic, MicOff, X, Zap, Leaf, Search, Image as ImageIcon,
-  ShieldAlert, Loader2, ChevronUp, ChevronDown
+  ShieldAlert, Loader2, ChevronUp, ChevronDown, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
@@ -68,6 +68,8 @@ const mapColorToTheme = (colorName: string): string => {
     return 'aurora';
 };
 
+const EMOJIS = ['😊', '🌿', '☁️', '✨', '💜', '🌧️', '🎵', '🧘‍♀️', '🌸', '☕', '🌙', '💪', '🤔', '🔥', '👀', '🫂'];
+
 export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false }) => {
   const { user } = useAuth();
   const { setTheme, currentTheme } = useTheme();
@@ -101,6 +103,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [searchResults, setSearchResults] = useState<{ msgId: string, matchIndex: number }[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
+  // --- VOICE STATE ---
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isDictating, setIsDictating] = useState(false); 
@@ -108,29 +111,27 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem('user_tts_enabled') === 'true');
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(() => localStorage.getItem('user_voice_uri'));
   
+  // --- CREDITS ---
   const [localCredits, setLocalCredits] = useState(user?.credits || 0);
   const [modelMode, setModelMode] = useState<'pro' | 'eco'>(user?.credits && user.credits > 0 ? 'pro' : 'eco');
   const [isStandardMode, setIsStandardMode] = useState(false);
   
+  // --- REFS ---
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedTagsRef = useRef<Set<string>>(new Set());
 
-  // --- LOGIC: WebSocket & Init ---
+  // --- 1. SYNC & WEBSOCKET ---
   useEffect(() => {
-    // This listens for the 'message' event from the WebSocket (SyncContext)
-    // It updates the UI instantly without needing a refresh
     const unsubscribe = subscribe('message', (data: any) => {
         if (data && data.content) {
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
-                // If we have a temp "Thinking" bubble, replace it
-                if (lastMsg && lastMsg.role === 'assistant' && lastMsg.id && lastMsg.id.startsWith('temp-')) {
+                if (lastMsg && lastMsg.role === 'assistant' && (lastMsg.id?.startsWith('temp') || lastMsg.id === 'temp-ai')) {
                      return [...prev.slice(0, -1), { ...lastMsg, content: data.content, id: data._id || Date.now().toString() }];
                 }
-                // Otherwise append new message
                 return [...prev, { role: 'assistant', content: data.content, timestamp: Date.now() }];
             });
             setIsTyping(false);
@@ -149,6 +150,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
   }, [user]);
 
+  // --- 2. INIT CHAT ---
   useEffect(() => {
      if (!user) return; 
      if (hasAttemptedInit.current) return;
@@ -181,23 +183,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
      return () => { isMounted = false; };
   }, [user, navigate, botName]);
 
-  // --- LOGIC: Search ---
-  // Calculates all matches across all messages whenever query/messages change
+  // --- 3. SEARCH LOGIC (FIXED) ---
   useEffect(() => {
       if (searchQuery.trim()) {
           const hits: { msgId: string, matchIndex: number }[] = [];
           const lowerQuery = searchQuery.toLowerCase();
           
           messages.forEach((msg, idx) => {
-             // Fallback to ID or Index if ID is missing
              const safeId = msg.id || `msg-${idx}`;
-             
              if (msg.content) {
                  const lowerContent = msg.content.toLowerCase();
-                 // Find all occurrences in this message
                  let pos = lowerContent.indexOf(lowerQuery);
                  let localIndex = 0;
-                 
                  while (pos !== -1) {
                      hits.push({ msgId: safeId, matchIndex: localIndex });
                      localIndex++;
@@ -205,9 +202,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  }
              }
           });
-          
           setSearchResults(hits);
-          // Jump to the LAST match (Newest message) like WhatsApp
           setCurrentMatchIndex(hits.length > 0 ? hits.length - 1 : 0);
       } else { 
           setSearchResults([]); 
@@ -215,15 +210,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
   }, [searchQuery, messages]);
 
-  // Auto-scroll to current match
   useEffect(() => {
       if (searchResults.length > 0 && searchResults[currentMatchIndex]) {
           const { msgId } = searchResults[currentMatchIndex];
-          // We need to match the ID generated in renderMessages
           const el = document.getElementById(`msg-${msgId}`);
-          if (el) {
-              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
   }, [currentMatchIndex, searchResults]);
 
@@ -233,12 +224,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
           e.preventDefault();
-          if (e.shiftKey) nextMatch(); // Shift+Enter goes down (newer)
-          else prevMatch(); // Enter goes up (older)
+          if (e.shiftKey) nextMatch(); 
+          else prevMatch();
       }
   };
 
-  // --- LOGIC: Voice & Helpers ---
+  // --- 4. VOICE & HELPERS ---
   useEffect(() => {
     const loadVoices = () => { window.speechSynthesis.getVoices(); };
     loadVoices();
@@ -269,10 +260,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         if (isDictating) {
             const isFinal = event.results[event.results.length - 1].isFinal;
             if (isFinal) {
-                setInput(prev => {
-                    const spacer = prev.length > 0 && !prev.endsWith(' ') ? ' ' : '';
-                    return prev + spacer + currentText;
-                });
+                setInput(prev => prev + (prev.length > 0 ? ' ' : '') + currentText);
                 autoResizeTextarea();
             }
         } else {
@@ -302,7 +290,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     return `https://aastha-final.onrender.com/api${endpoint}`;
   };
 
-  const startListening = () => { if (recognitionRef.current && !isListening) { try { setTranscript(''); recognitionRef.current.start(); } catch (e) { console.error("Speech start failed", e); } } };
+  const startListening = () => { if (recognitionRef.current && !isListening) { try { setTranscript(''); recognitionRef.current.start(); } catch (e) { console.error("Speech start", e); } } };
   const stopListening = () => { if (recognitionRef.current && isListening) recognitionRef.current.stop(); };
   
   const toggleVoiceMode = () => {
@@ -359,17 +347,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     autoResizeTextarea();
   };
 
-  // ✅ FIX: Mobile "Enter" key logic
+  // ✅ MOBILE KEYPRESS FIX
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // If mobile, allow default behavior (newline)
-    // Only intercept Enter for sending on Desktop
     if (!isMobile && e.key === 'Enter' && !e.shiftKey) { 
         e.preventDefault(); 
         handleSend(); 
     }
   };
 
-  // --- SEND LOGIC ---
+  // --- 5. SEND LOGIC ---
   const handleSend = async (e?: React.FormEvent, overrideInput?: string) => {
     if (e) e.preventDefault();
     
@@ -381,8 +367,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     if (attachedImage) { finalContent = `[Image Attached] ${finalContent}`; }
 
     const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
-    
-    // Create a temporary ID for the "Thinking" bubble
     const tempBotId = `temp-${Date.now()}`;
     
     setMessages(prev => [
@@ -403,7 +387,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         if (storedInfo) token = JSON.parse(storedInfo).token;
       } catch(e) {}
 
-      // NOTE: Using fetch with credentials to ensure streaming works with auth
       const streamResponse = await fetch(getApiUrl('/chat'), {
         method: 'POST',
         headers: { 
@@ -605,11 +588,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       );
   }
 
-  // === MAIN LAYOUT ===
+  // ==================================================================================
+  // MAIN LAYOUT
+  // ==================================================================================
+  
+  // NOTE: We use specific MD breakpoints to satisfy the user's "3-part section in MOBILE ONLY" requirement.
+  // Mobile = Flex Col (Strict sections). 
+  // PC = Absolute/Floating (Original aesthetic).
+
   return (
-    <div className="relative w-full h-[100dvh] flex flex-col bg-black overflow-hidden">
+    <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden">
       
-      {/* Background & Overlays */}
+      {/* 1. GLOBAL BACKGROUNDS (Applied to both, Z-0) */}
       <div className="absolute inset-0 z-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
       <AnimatePresence>
           {showCountdown && (
@@ -640,17 +630,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         )}
       </AnimatePresence>
 
-      {/* --- SECTION 1: HEADER (Strict Flexbox) --- */}
-      <div className="shrink-0 w-full z-30 pt-safe px-4 pb-2 bg-gradient-to-b from-black/80 to-transparent pointer-events-auto">
-          <div className="flex items-center gap-3 h-14">
-             {/* LEFT: Menu */}
-             <button onClick={onMobileMenuClick} className="shrink-0 p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 bg-black/20">
-                <Menu size={20} />
-             </button>
+      {/* --- SECTION 1: HEADER --- */}
+      {/* Mobile: Relative/Flex item. PC: Absolute/Floating top */}
+      <div className="shrink-0 w-full z-30 pt-safe px-4 pb-2 bg-gradient-to-b from-black/80 to-transparent pointer-events-auto md:absolute md:top-0 md:pt-6">
+          <div className="flex items-center gap-3 h-14 justify-between">
+             {/* LEFT */}
+             <div className="shrink-0 flex items-center">
+                 {/* Mobile: Hamburger. PC: Empty or Menu if needed */}
+                 <button onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 bg-black/20 ${!isMobile ? 'md:hidden' : ''}`}>
+                    <Menu size={20} />
+                 </button>
+             </div>
 
-             {/* CENTER: Search Bar (Flexible width) */}
-             <div className="flex-1 min-w-0 relative group">
-                 <div className="flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full px-3 py-2 shadow-2xl transition-all focus-within:bg-black/50 focus-within:border-white/20">
+             {/* CENTER: Search Bar */}
+             {/* Visible on Mobile (Center) and PC (Center) */}
+             <div className="flex-1 min-w-0 relative group flex justify-center">
+                 <div className={`flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full px-3 py-2 shadow-2xl transition-all focus-within:bg-black/50 focus-within:border-white/20 w-full ${!isMobile ? 'md:w-[400px]' : ''}`}>
                     <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2 shrink-0" />
                     
                     <input 
@@ -674,20 +669,31 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  </div>
              </div>
 
-             {/* RIGHT: Headphones */}
-             <button onClick={toggleVoiceMode} className="shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg bg-black/30 hover:bg-white/10">
-                <Headphones size={18} />
-             </button>
+             {/* RIGHT: Controls */}
+             <div className="shrink-0 flex items-center gap-3 justify-end">
+                 {/* PC Only: Credits */}
+                 <div className={`hidden md:flex px-3 py-1.5 rounded-full backdrop-blur-xl border items-center gap-2 shadow-lg transition-colors ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
+                    {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-gray-400" fill="currentColor" />}
+                    <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-gray-400'}`}>
+                        {!isStandardMode && localCredits > 100 ? '∞' : `${localCredits}`}
+                    </span>
+                 </div>
+                 
+                 <button onClick={toggleVoiceMode} className="shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg bg-black/30 hover:bg-white/10">
+                    <Headphones size={18} />
+                 </button>
+             </div>
           </div>
       </div>
       
-      {/* --- ERROR TOAST --- */}
+      {/* ERROR TOAST */}
       <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
-      {/* --- SECTION 2: CHAT AREA (Scrollable) --- */}
+      {/* --- SECTION 2: CHAT AREA --- */}
+      {/* Mobile: Flex-1 scrollable. PC: Full height, padded top/bottom */}
       <div 
           ref={messagesContainerRef}
-          className="flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide min-h-0"
+          className="flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-4"
       >
           <div className="flex flex-col min-h-full justify-end pb-4">
               <div className="h-4" /> 
@@ -696,8 +702,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           </div>
       </div>
 
-      {/* --- SECTION 3: INPUT AREA (Fixed Bottom) --- */}
-      <div className="shrink-0 w-full px-4 pb-4 pt-2 z-30 max-w-[700px] mx-auto bg-gradient-to-t from-black via-black/80 to-transparent">
+      {/* --- SECTION 3: INPUT AREA --- */}
+      {/* Mobile: Fixed bottom via Flex (shrink-0). PC: Absolute bottom/floating */}
+      <div className="shrink-0 w-full px-4 pb-4 pt-2 z-30 max-w-[700px] mx-auto bg-gradient-to-t from-black via-black/80 to-transparent md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6">
           <div className="flex flex-col gap-2">
              <AnimatePresence>
                  {replyingTo && (
