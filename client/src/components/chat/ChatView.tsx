@@ -120,13 +120,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // --- LOGIC: WebSocket & Init ---
   useEffect(() => {
+    // This listens for the 'message' event from the WebSocket (SyncContext)
+    // It updates the UI instantly without needing a refresh
     const unsubscribe = subscribe('message', (data: any) => {
         if (data && data.content) {
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.role === 'assistant' && lastMsg.id === 'temp-ai') {
+                // If we have a temp "Thinking" bubble, replace it
+                if (lastMsg && lastMsg.role === 'assistant' && lastMsg.id && lastMsg.id.startsWith('temp-')) {
                      return [...prev.slice(0, -1), { ...lastMsg, content: data.content, id: data._id || Date.now().toString() }];
                 }
+                // Otherwise append new message
                 return [...prev, { role: 'assistant', content: data.content, timestamp: Date.now() }];
             });
             setIsTyping(false);
@@ -178,16 +182,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   }, [user, navigate, botName]);
 
   // --- LOGIC: Search ---
+  // Calculates all matches across all messages whenever query/messages change
   useEffect(() => {
       if (searchQuery.trim()) {
           const hits: { msgId: string, matchIndex: number }[] = [];
           const lowerQuery = searchQuery.toLowerCase();
           
           messages.forEach((msg, idx) => {
+             // Fallback to ID or Index if ID is missing
              const safeId = msg.id || `msg-${idx}`;
              
              if (msg.content) {
                  const lowerContent = msg.content.toLowerCase();
+                 // Find all occurrences in this message
                  let pos = lowerContent.indexOf(lowerQuery);
                  let localIndex = 0;
                  
@@ -198,7 +205,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  }
              }
           });
+          
           setSearchResults(hits);
+          // Jump to the LAST match (Newest message) like WhatsApp
           setCurrentMatchIndex(hits.length > 0 ? hits.length - 1 : 0);
       } else { 
           setSearchResults([]); 
@@ -206,9 +215,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
   }, [searchQuery, messages]);
 
+  // Auto-scroll to current match
   useEffect(() => {
       if (searchResults.length > 0 && searchResults[currentMatchIndex]) {
           const { msgId } = searchResults[currentMatchIndex];
+          // We need to match the ID generated in renderMessages
           const el = document.getElementById(`msg-${msgId}`);
           if (el) {
               el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -222,8 +233,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
           e.preventDefault();
-          if (e.shiftKey) nextMatch(); 
-          else prevMatch();
+          if (e.shiftKey) nextMatch(); // Shift+Enter goes down (newer)
+          else prevMatch(); // Enter goes up (older)
       }
   };
 
@@ -350,8 +361,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // ✅ FIX: Mobile "Enter" key logic
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // On Mobile: Do NOT prevent default. Let "Enter" create a new line.
-    // On Desktop: Prevent default and send, unless Shift is held.
+    // If mobile, allow default behavior (newline)
+    // Only intercept Enter for sending on Desktop
     if (!isMobile && e.key === 'Enter' && !e.shiftKey) { 
         e.preventDefault(); 
         handleSend(); 
@@ -370,7 +381,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     if (attachedImage) { finalContent = `[Image Attached] ${finalContent}`; }
 
     const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
-    const tempBotId = Date.now().toString();
+    
+    // Create a temporary ID for the "Thinking" bubble
+    const tempBotId = `temp-${Date.now()}`;
     
     setMessages(prev => [
         ...prev, 
@@ -390,6 +403,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         if (storedInfo) token = JSON.parse(storedInfo).token;
       } catch(e) {}
 
+      // NOTE: Using fetch with credentials to ensure streaming works with auth
       const streamResponse = await fetch(getApiUrl('/chat'), {
         method: 'POST',
         headers: { 
@@ -525,6 +539,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
        utterance.onend = () => { if (isVoiceMode) setTimeout(() => startListening(), 300); };
        window.speechSynthesis.speak(utterance);
     }
+  };
+
+  const getDateLabel = (timestamp: number) => {
+      const date = new Date(timestamp);
+      const today = new Date();
+      if (date.toDateString() === today.toDateString()) return 'Today';
+      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+      if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
   };
 
   const renderMessages = () => {
