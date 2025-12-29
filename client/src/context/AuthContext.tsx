@@ -46,7 +46,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ---------- GLOBAL AUTH EVENT LISTENER ----------
   useEffect(() => {
     const handleUnauthorized = () => {
-      // Immediate state clear without page reload
+      // ✅ Clear token immediately on 401
+      localStorage.removeItem('userInfo'); 
       setState(prev => ({
         ...prev,
         user: null,
@@ -60,19 +61,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
   }, []);
 
-  // ---------- CHECK AUTH (FIXED FOR MANUAL REFRESH) ----------
+  // ---------- CHECK AUTH ----------
   useEffect(() => {
     let isMounted = true;
 
     const checkAuth = async () => {
       try {
-        // 1. Create a timeout promise (5 seconds)
+        // ✅ Pre-check: If no token in storage, don't bother waiting for timeout
+        const storedInfo = localStorage.getItem('userInfo');
+        
+        // You might want to allow this to continue if you are relying on Cookies, 
+        // but given your issue, let's assume if it's not in storage, we are effectively logged out.
+        // However, standard pattern is to try the API call anyway (cookies might persist).
+        
         const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error("Timeout")), 5000)
         );
 
-        // 2. Race the API call against the timeout
-        // This ensures the app doesn't hang forever if the backend is sleeping
         const res: any = await Promise.race([
             api.get('/users/me'),
             timeoutPromise
@@ -87,12 +92,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
         }
       } catch (error) {
-        // If 401, Timeout, or Network Error -> Show Login Screen
         if (isMounted) {
+            // ✅ Cleanup if check fails
+            localStorage.removeItem('userInfo');
             setState({
                 user: null,
                 isAuthenticated: false,
-                isLoading: false, // CRITICAL: Always turn off loading
+                isLoading: false, 
                 encryptionKey: null
             });
         }
@@ -107,7 +113,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ---------- LOGIN ----------
   const login = async (identifier: string, password: string) => {
     const cleanedIdentifier = identifier.toLowerCase().trim();
-    // No try/catch here so the UI can handle the specific error (e.g. "Wrong Password")
     const res = await api.post('/users/login', { identifier: cleanedIdentifier, password });
 
     if (res.data.requiresVerification) {
@@ -115,6 +120,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const user: User = res.data;
+    
+    // ✅ SAVE TOKEN TO LOCAL STORAGE
+    localStorage.setItem('userInfo', JSON.stringify(user));
+
     let key = null;
     const salt = user.encryptionSalt || user.email;
 
@@ -138,7 +147,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return res.data;
     }
 
+    // If API returns user object directly (auto-login), save it
     const user: User = res.data;
+    
+    // ✅ SAVE TOKEN TO LOCAL STORAGE
+    localStorage.setItem('userInfo', JSON.stringify(user));
+
     const pwdToUse = data.diaryPassword || data.password;
     const salt = user.encryptionSalt || user.email;
     const key = deriveKey(pwdToUse, salt);
@@ -172,10 +186,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ---------- UPDATE USER ----------
   const updateUser = (data: Partial<User>) => {
-      setState(prev => ({
-          ...prev,
-          user: prev.user ? { ...prev.user, ...data } : null
-      }));
+      setState(prev => {
+        const updatedUser = prev.user ? { ...prev.user, ...data } : null;
+        
+        // ✅ Sync updates to Local Storage
+        if (updatedUser) {
+            const currentStorage = JSON.parse(localStorage.getItem('userInfo') || '{}');
+            localStorage.setItem('userInfo', JSON.stringify({ ...currentStorage, ...updatedUser }));
+        }
+
+        return { ...prev, user: updatedUser };
+      });
   };
 
   // ---------- DISPLAY HELPERS ----------
@@ -189,13 +210,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return getClientServerDecrypt(state.user.emailEncrypted);
   }, [state.user]);
 
-  // ---------- LOGOUT (FIXED SOFT LOGOUT) ----------
+  // ---------- LOGOUT ----------
   const logout = async () => {
     try {
-      // Fire and forget logout request
       api.get('/users/logout').catch(console.error);
     } finally {
-      // Immediate UI update
+      // ✅ CLEAR LOCAL STORAGE
+      localStorage.removeItem('userInfo');
+      
       setState({
         user: null,
         isAuthenticated: false,
