@@ -35,7 +35,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+      // FIX: Only fire the unauthorized event if we are NOT on the login page.
+      // This prevents infinite loops if the user types a wrong password.
+      if (window.location.pathname !== '/login') {
+         window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+      }
     }
     return Promise.reject(error);
   }
