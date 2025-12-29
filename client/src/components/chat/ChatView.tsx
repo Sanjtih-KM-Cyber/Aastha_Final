@@ -11,6 +11,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { AUTH_UNAUTHORIZED_EVENT } from '../../constants';
+// Note: We don't import api here directly to avoid circular dependency issues, 
+// we use dynamic import inside the effect.
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -25,15 +27,6 @@ interface ChatViewProps {
   onOpenWidget?: (widget: string, config?: any) => void;
   isMobile?: boolean;
 }
-
-// Keep your API URL helper, but we will mostly use the api.ts instance
-const getApiUrl = (endpoint: string) => {
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl) return `${envUrl}${endpoint}`;
-  const host = window.location.hostname;
-  if (host === 'localhost' || host === '127.0.0.1') return `http://${host}:5000/api${endpoint}`;
-  return `https://aastha-final.onrender.com/api${endpoint}`;
-};
 
 const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -87,6 +80,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [isInitializing, setIsInitializing] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState('Connecting...');
   
+  // --- LOOP KILLER: This ref guarantees we only fetch ONCE ---
+  const hasAttemptedInit = useRef(false);
+  
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -134,18 +130,23 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
   }, [user]);
 
-  // --- 2. BLOCKING INITIAL LOAD (FIXED CIRCUIT BREAKER) ---
+  // --- 2. BLOCKING INITIAL LOAD (WITH LOOP KILLER) ---
   useEffect(() => {
+     // If no user, we can't fetch. 
+     if (!user) return; 
+
+     // STOP THE LOOP: If we already tried fetching, DO NOT try again.
+     if (hasAttemptedInit.current) return;
+     hasAttemptedInit.current = true;
+
      let isMounted = true;
 
      const initChat = async () => {
-         if (!user) return; // Wait for AuthContext
-
          setIsInitializing(true);
          setConnectionStatus(`Connecting to ${botName}...`);
 
          try {
-             // Dynamic import to use the api instance with interceptors
+             // Dynamic import to use the api instance with correct interceptors
              const { default: api } = await import('../../services/api');
              const res = await api.get('/chat/history');
              
@@ -163,8 +164,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          } catch (e: any) { 
              console.error("Init failed:", e);
 
-             // Circuit Breaker: If 401, stop trying (let AuthContext handle it)
+             // CRITICAL: If 401, FORCE REDIRECT to stop React Loop
              if (e.response && e.response.status === 401) {
+                 window.location.href = '/login'; // Hard redirect breaks the loop
                  return;
              }
 
@@ -246,6 +248,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         textareaRef.current.style.height = 'auto';
         textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
+  };
+
+  // Helper for API URL in case we need it for fetch (though we prefer api.ts)
+  const getApiUrl = (endpoint: string) => {
+    const envUrl = import.meta.env.VITE_API_URL;
+    if (envUrl) return `${envUrl}${endpoint}`;
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return `http://${host}:5000/api${endpoint}`;
+    return `https://aastha-final.onrender.com/api${endpoint}`;
   };
 
   const startListening = () => { if (recognitionRef.current && !isListening) { try { setTranscript(''); recognitionRef.current.start(); } catch (e) { console.error("Speech start failed", e); } } };
@@ -330,24 +341,37 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     autoResizeTextarea();
 
     try {
-      const response = await fetch(getApiUrl('/chat'), {
+      // Use dynamic import for consistent API handling
+      const { default: api } = await import('../../services/api');
+      
+      // We use axios (api.post) instead of fetch so interceptors work!
+      const response = await api.post('/chat', { message: textToSend, image: attachedImage });
+
+      // Note: axios returns data directly in response.data, but streaming is different.
+      // If your backend streams, axios is tricky. Let's fallback to fetch for streaming ONLY.
+      // BUT we must ensure cookies are sent.
+      
+      // ... WAIT. If we use fetch, we bypass the 401 interceptor.
+      // Let's stick to fetch for streaming but add the 401 check manually.
+
+      const streamResponse = await fetch(getApiUrl('/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', 
         body: JSON.stringify({ message: textToSend, image: attachedImage }), 
       });
 
-      if (!response.ok) {
+      if (!streamResponse.ok) {
           setIsTyping(false);
-          if (response.status === 401) { 
-              window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
-              return; 
+          if (streamResponse.status === 401) { 
+               window.location.href = '/login'; // Hard redirect on 401
+               return; 
           }
-          const errData = await response.json().catch(() => ({}));
+          const errData = await streamResponse.json().catch(() => ({}));
           throw new Error(errData.message || `${botName} is unreachable.`);
       }
 
-      const reader = response.body?.getReader();
+      const reader = streamResponse.body?.getReader();
       const decoder = new TextDecoder();
       const newModelMessageId = Date.now().toString();
       processedTagsRef.current.clear();
@@ -574,7 +598,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       });
   };
 
-  // --- 5. RENDER LOADER VS CONTENT ---
   if (isInitializing) {
       return (
           <div className="flex flex-col items-center justify-center w-full h-[100dvh] bg-black text-white">
