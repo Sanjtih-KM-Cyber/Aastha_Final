@@ -39,13 +39,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [state, setState] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
-    isLoading: true,
+    isLoading: true, // Starts true to block UI until check completes
     encryptionKey: null,
   });
 
-  // ---------- GLOBAL AUTH EVENT LISTENER (FIX FOR REDIRECT LOOP) ----------
+  // ---------- GLOBAL AUTH EVENT LISTENER ----------
   useEffect(() => {
     const handleUnauthorized = () => {
+      // Immediate state clear without page reload
       setState(prev => ({
         ...prev,
         user: null,
@@ -59,52 +60,78 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
   }, []);
 
-  // ---------- CHECK AUTH ----------
+  // ---------- CHECK AUTH (THE FIX FOR MANUAL REFRESH) ----------
   useEffect(() => {
+    let isMounted = true;
+
     const checkAuth = async () => {
       try {
-        const res = await api.get('/users/me');
-        setState({
-          user: res.data,
-          isAuthenticated: true,
-          isLoading: false,
-          encryptionKey: state.encryptionKey
-        });
-      } catch {
-        setState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          encryptionKey: null
-        });
+        // 1. Create a timeout promise to prevent infinite loading
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout")), 5000)
+        );
+
+        // 2. Race the API call against the timeout
+        const res: any = await Promise.race([
+            api.get('/users/me'),
+            timeoutPromise
+        ]);
+
+        if (isMounted) {
+            setState({
+                user: res.data,
+                isAuthenticated: true,
+                isLoading: false,
+                encryptionKey: state.encryptionKey // Preserve key if exists (rare on refresh)
+            });
+        }
+      } catch (error) {
+        // If 401, Timeout, or Network Error -> Just show Login Screen
+        if (isMounted) {
+            setState({
+                user: null,
+                isAuthenticated: false,
+                isLoading: false, // CRITICAL: Ensure this always flips to false
+                encryptionKey: null
+            });
+        }
       }
     };
+
     checkAuth();
+
+    return () => { isMounted = false; };
   }, []);
 
   // ---------- LOGIN ----------
   const login = async (identifier: string, password: string) => {
     const cleanedIdentifier = identifier.toLowerCase().trim();
-    const res = await api.post('/users/login', { identifier: cleanedIdentifier, password });
+    
+    // Ensure UI is not blocked if this fails
+    try {
+        const res = await api.post('/users/login', { identifier: cleanedIdentifier, password });
 
-    if (res.data.requiresVerification) {
-        return res.data;
+        if (res.data.requiresVerification) {
+            return res.data;
+        }
+
+        const user: User = res.data;
+        let key = null;
+        const salt = user.encryptionSalt || user.email;
+
+        if (!user.hasDiarySetup) key = deriveKey(password, salt);
+
+        setState({
+            user,
+            isAuthenticated: true,
+            isLoading: false,
+            encryptionKey: key,
+        });
+
+        return user;
+    } catch (e) {
+        throw e;
     }
-
-    const user: User = res.data;
-    let key = null;
-    const salt = user.encryptionSalt || user.email;
-
-    if (!user.hasDiarySetup) key = deriveKey(password, salt);
-
-    setState({
-      user,
-      isAuthenticated: true,
-      isLoading: false,
-      encryptionKey: key,
-    });
-
-    return user;
   };
 
   // ---------- REGISTER ----------
@@ -166,18 +193,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return getClientServerDecrypt(state.user.emailEncrypted);
   }, [state.user]);
 
-  // ---------- LOGOUT ----------
+  // ---------- LOGOUT (FIXED: Soft Logout) ----------
   const logout = async () => {
     try {
-      await api.get('/users/logout');
+      // Fire and forget - don't let a slow server block the UI logout
+      api.get('/users/logout').catch(console.error);
     } finally {
+      // Immediate UI update
       setState({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         encryptionKey: null,
       });
-      window.location.href = '/login';
+      // We removed window.location.href here to prevent the "Manual Refresh" feel.
+      // Your App Router should detect !isAuthenticated and redirect to /login automatically.
     }
   };
 
