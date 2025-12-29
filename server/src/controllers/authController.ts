@@ -19,7 +19,7 @@ const generateToken = (id: string) => {
 };
 
 const generateOTP = () => {
-    // Generates a cryptographically secure 6-digit number (100000-999999 inclusive)
+    // Generates a cryptographically secure 6-digit number
     return crypto.randomInt(100000, 1000000).toString();
 };
 
@@ -90,7 +90,6 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
       dailyPremiumUsage: 0,
       streak: 1, 
       lastVisit: new Date(),
-
       // --- STRICT VERIFICATION MODE ---
       isVerified: false
     });
@@ -103,14 +102,11 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
             await user.save();
 
             console.log(`[Auth] Strict Registration: Sending OTP to ${cleanEmail}`);
-            // Fire-and-forget email sending
             sendOTPEmail(cleanEmail, otp).catch(e => console.error("[Auth] Background Email Error:", e));
         } catch(err) {
             console.error("[Auth] OTP generation/sending error:", err);
         }
 
-        // --- STRICT RESPONSE ---
-        // Do NOT set cookie. Do NOT return user data.
         (res as any).status(201).json({
             message: 'Account created. Verification required.',
             requiresVerification: true,
@@ -146,7 +142,6 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     });
 
     // --- MIGRATION ON LOGIN ---
-    // If user has legacy plaintext email but no hash, migrate them (force verify)
     if (user && user.email && !user.emailHash) {
         const emailToMigrate = user.email.toLowerCase().trim();
         user.emailHash = hashEmail(emailToMigrate);
@@ -173,14 +168,11 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
       
         // --- STRICT VERIFICATION CHECK ---
-        // Ensure even legacy users who are migrated or just logging in MUST be verified
         if (user.isVerified !== true) {
              const userEmail = decrypt(user.emailEncrypted) || user.email || cleanIdentifier;
-             console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}. isVerified: ${user.isVerified}`);
+             console.log(`[Auth] Unverified login attempt for ${cleanIdentifier}.`);
 
-             // Check if existing OTP is still valid (prevent race condition with Register flow)
              if (user.otpExpires && user.otpExpires > new Date()) {
-                 console.log(`[Auth] Existing OTP valid until ${user.otpExpires.toISOString()}. Skipping regeneration.`);
                  (res as any).status(403).json({
                      message: 'Verification pending. Please check your email.',
                      requiresVerification: true,
@@ -189,16 +181,11 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
                  return;
              }
 
-             // Only generate NEW OTP if expired or missing
-             console.log(`[Auth] OTP expired or missing. Generating NEW OTP for ${cleanIdentifier}.`);
              const otp = generateOTP();
              user.otpCode = await bcrypt.hash(otp, 10);
              user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-
-             // We MUST save here to persist the new OTP
              await user.save();
 
-             // Send Email
              sendOTPEmail(userEmail, otp).catch(e => console.error("[Auth] Login OTP Error:", e));
 
              (res as any).status(403).json({
@@ -212,7 +199,6 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       // --- PROCEED TO LOGIN (Verified Users Only) ---
       let needsSave = false;
 
-      // Self-healing legacy user data
       if (!user.emailEncrypted && user.email) {
           user.emailEncrypted = encrypt(user.email);
           needsSave = true;
@@ -235,7 +221,6 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       if (user.isPro === undefined) { user.isPro = false; needsSave = true; }
 
       const today = new Date();
-      // Ensure we have a valid date object for lastUsage
       const lastUsage = new Date(user.lastUsageDate || user.createdAt || Date.now());
 
       if (lastUsage.getDate() !== today.getDate() || 
@@ -248,13 +233,11 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       
       const lastVisitTime = new Date(user.lastVisit).getTime();
       const todayTime = today.getTime();
-      // Only update lastVisit if more than 60s has passed to prevent spam writes
       if (Math.abs(todayTime - lastVisitTime) > 60000) {
           user.lastVisit = today;
           needsSave = true;
       }
 
-      // OPTIMIZATION: Consolidate updates into one save
       if (needsSave) await user.save();
 
       const token = generateToken((user._id as any).toString());
@@ -267,7 +250,9 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         maxAge: 30 * 24 * 60 * 60 * 1000
       });
       
+      // ✅ ADDED TOKEN TO RESPONSE BODY
       (res as any).json({
+        token: token, 
         _id: user._id,
         name: user.name, 
         email: decrypt(user.emailEncrypted) || user.email,
@@ -518,8 +503,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
         const cleanEmail = email.toLowerCase().trim();
         const emailHash = hashEmail(cleanEmail);
 
-        // Lookup using Hash OR Regex for legacy mixed-case emails OR Username
-        console.log(`[Auth] Verifying OTP for ${cleanEmail}. Hash: ${emailHash}`);
+        console.log(`[Auth] Verifying OTP for ${cleanEmail}.`);
         const user = await User.findOne({ 
             $or: [
                 { emailHash },
@@ -539,12 +523,8 @@ export const verifyOTP = async (req: Request, res: Response) => {
             return (res as any).status(400).json({ message: 'OTP expired.' });
         }
 
-        // Ensure OTP is string
         const otpString = String(otp);
-        console.log(`[Auth] Verifying OTP for ${cleanEmail}. Input: ${otpString}`);
-
         const isValid = await bcrypt.compare(otpString, user.otpCode);
-        console.log(`[Auth] OTP Verification Result: ${isValid}`);
 
         if (!isValid) {
             return (res as any).status(400).json({ message: 'Invalid code.' });
@@ -570,7 +550,9 @@ export const verifyOTP = async (req: Request, res: Response) => {
             maxAge: 30 * 24 * 60 * 60 * 1000
         });
 
+        // ✅ ADDED TOKEN TO RESPONSE BODY
         (res as any).json({
+            token: token,
             _id: user._id,
             name: user.name,
             email: decrypt(user.emailEncrypted),
@@ -636,11 +618,9 @@ export const changeDiaryPassword = async (req: AuthRequest, res: Response) => {
         const isValid = await bcrypt.compare(oldPassword, user.diaryPasswordHash);
         if (!isValid) return (res as any).status(401).json({ message: 'Incorrect old password.' });
 
-        // Not implemented (Re-encryption logic required)
         return (res as any).status(501).json({ message: 'Password change not supported. Please use Reset (Data Wipe) for security.' });
 
     } catch (e) {
-        console.error(e);
         (res as any).status(500).json({ message: 'Error changing password' });
     }
 };
