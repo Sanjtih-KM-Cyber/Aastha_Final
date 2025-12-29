@@ -8,7 +8,8 @@ import cors from 'cors';
 import compression from 'compression'; // Performance boost
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
-import connectDB from './db'; // assume you have this
+import jwt from 'jsonwebtoken'; // ✅ REQUIRED IMPORT
+import connectDB from './db'; 
 import authRoutes from './routes/authRoutes';
 import chatRoutes from './routes/chatRoutes';
 import dataRoutes from './routes/dataRoutes';
@@ -28,17 +29,38 @@ connectDB();
 const app = express();
 const server = createServer(app);
 
-// --- REAL-TIME SYNC ENGINE ---
+// --- REAL-TIME SYNC ENGINE (SECURED) ---
 const wss = new WebSocketServer({ server, path: '/ws' });
 // Support multiple devices per user: userId -> Set<WebSocket>
 const clients = new Map<string, Set<WebSocket>>();
 
 wss.on('connection', (ws, req) => {
-    // Extract userId from query params
+    // Extract userId AND token from query params
     const url = new URL(req.url || '', `http://${req.headers.host}`);
     const userId = url.searchParams.get('userId');
+    const token = url.searchParams.get('token'); // ✅ Get Token
 
-    if (userId) {
+    // 1. Validation: Must have both ID and Token
+    if (!userId || !token) {
+        console.log('[WS] Connection rejected: Missing credentials');
+        ws.close(4001, 'Unauthorized: Missing credentials');
+        return;
+    }
+
+    // 2. Security: Verify Token
+    try {
+        const secret = process.env.JWT_SECRET as string;
+        const decoded = jwt.verify(token, secret) as any;
+        
+        // 3. ID Match: Ensure the token actually belongs to the user asking for connection
+        if (decoded.id !== userId) {
+             console.log(`[WS] Security Alert: ID Mismatch. Token(${decoded.id}) vs Req(${userId})`);
+             ws.close(4003, 'Forbidden: ID Mismatch');
+             return;
+        }
+
+        // --- AUTH SUCCESSFUL ---
+        
         // Add to client set
         if (!clients.has(userId)) {
             clients.set(userId, new Set());
@@ -50,7 +72,7 @@ wss.on('connection', (ws, req) => {
         ws.on('message', (message) => {
             try {
                 const data = JSON.parse(message.toString());
-                console.log(`[WS] Broadcast from ${userId}:`, data.type);
+                // console.log(`[WS] Broadcast from ${userId}:`, data.type); // Optional: Uncomment for debug
 
                 // Broadcast to ALL other devices belonging to this user
                 const userSockets = clients.get(userId);
@@ -76,6 +98,11 @@ wss.on('connection', (ws, req) => {
                 }
             }
         });
+
+    } catch (err) {
+        console.error('[WS] Auth Failed: Invalid Token');
+        ws.close(4001, 'Unauthorized: Invalid Token');
+        return;
     }
 });
 
