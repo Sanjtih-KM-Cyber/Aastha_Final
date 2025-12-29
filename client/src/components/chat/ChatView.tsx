@@ -595,7 +595,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   // Mobile: Flex Column (Strict Sections). PC: Absolute/Floating Overlay (Transparent).
   // ==================================================================================
   return (
-    <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden">
+    <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden bg-black md:bg-transparent">
       
       {/* 1. GLOBAL BACKGROUNDS & WALLPAPER */}
       {/* Positioned absolute, z-[-1] to stay behind everything */}
@@ -649,7 +649,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       {/* --- SECTION 1: HEADER --- */}
       {/* Mobile: Relative/Flex item. PC: Absolute/Floating top */}
-      <div className="shrink-0 w-full z-30 pt-safe px-4 pb-2 bg-gradient-to-b from-black/80 to-transparent pointer-events-auto md:absolute md:top-0 md:pt-6">
+      {/* FIX: Removed gradient for PC (md:bg-none) to solve "Black Box" issue */}
+      <div className="shrink-0 w-full z-30 pt-safe px-4 pb-2 bg-gradient-to-b from-black/80 to-transparent pointer-events-auto md:absolute md:top-0 md:pt-6 md:bg-none">
           <div className="flex items-center gap-3 h-14 justify-between">
              {/* LEFT */}
              <div className="shrink-0 flex items-center">
@@ -663,7 +664,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              <div className="flex-1 min-w-0 relative group flex justify-center">
                  <div className={`flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full px-3 py-2 shadow-2xl transition-all focus-within:bg-black/50 focus-within:border-white/20 w-full ${!isMobile ? 'md:w-[400px]' : ''}`}>
                     <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2 shrink-0" />
-                    
                     <input 
                         value={searchQuery} 
                         onChange={(e) => setSearchQuery(e.target.value)} 
@@ -671,7 +671,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         placeholder="Search..." 
                         className="bg-transparent border-none outline-none text-sm text-white w-full min-w-0 placeholder-white/20" 
                     />
-                    
                     {searchQuery && (
                         <div className="flex items-center gap-1 ml-1 border-l border-white/10 pl-1 shrink-0">
                             <span className="text-[10px] text-white/40 whitespace-nowrap min-w-[24px] text-center">
@@ -720,7 +719,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       {/* --- SECTION 3: INPUT AREA --- */}
       {/* Mobile: Fixed bottom via Flex (shrink-0). PC: Absolute bottom/floating */}
-      <div className="shrink-0 w-full px-4 pb-4 pt-2 z-30 max-w-[700px] mx-auto bg-gradient-to-t from-black via-black/80 to-transparent md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6">
+      {/* FIX: Removed gradient for PC (md:bg-none) to solve "Black Box" issue */}
+      <div className="shrink-0 w-full px-4 pb-4 pt-2 z-30 max-w-[700px] mx-auto bg-gradient-to-t from-black via-black/80 to-transparent md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6 md:bg-none">
           <div className="flex flex-col gap-2">
              <AnimatePresence>
                  {replyingTo && (
