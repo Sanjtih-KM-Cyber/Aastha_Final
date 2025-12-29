@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Menu, Headphones, AlertCircle, Smile, Copy, Reply, 
   Mic, MicOff, X, Zap, Leaf, Search, Image as ImageIcon,
-  Sparkles, ShieldAlert, Loader2
-} from 'lucide-react'; // Added Loader2
+  ShieldAlert, Loader2
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
 import { MessageBubble } from './MessageBubble';
@@ -26,6 +26,7 @@ interface ChatViewProps {
   isMobile?: boolean;
 }
 
+// Keep your API URL helper, but we will mostly use the api.ts instance
 const getApiUrl = (endpoint: string) => {
   const envUrl = import.meta.env.VITE_API_URL;
   if (envUrl) return `${envUrl}${endpoint}`;
@@ -34,7 +35,6 @@ const getApiUrl = (endpoint: string) => {
   return `https://aastha-final.onrender.com/api${endpoint}`;
 };
 
-// ... (Keep compressImage helper exactly as is)
 const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -62,7 +62,6 @@ const compressImage = (file: File): Promise<string> => {
     });
 };
 
-// ... (Keep mapColorToTheme helper exactly as is)
 const mapColorToTheme = (colorName: string): string => {
     const lower = colorName.toLowerCase().trim();
     const themes = ['aurora', 'sunset', 'ocean', 'midnight'];
@@ -85,7 +84,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const botName = user?.persona === 'aarav' ? 'Aastik' : 'Aastha';
 
   // --- STABILITY STATES ---
-  const [isInitializing, setIsInitializing] = useState(true); // NEW: Blocks UI until ready
+  const [isInitializing, setIsInitializing] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState('Connecting...');
   
   const [input, setInput] = useState('');
@@ -135,56 +134,61 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
   }, [user]);
 
-  // --- 2. BLOCKING INITIAL LOAD (THE FIX) ---
+  // --- 2. BLOCKING INITIAL LOAD (FIXED CIRCUIT BREAKER) ---
   useEffect(() => {
+     let isMounted = true;
+
      const initChat = async () => {
-         if (!user) return; // Wait for AuthContext to be ready
+         if (!user) return; // Wait for AuthContext
 
          setIsInitializing(true);
          setConnectionStatus(`Connecting to ${botName}...`);
 
          try {
-             const res = await fetch(getApiUrl('/chat/history'), { credentials: 'include' });
+             // Dynamic import to use the api instance with interceptors
+             const { default: api } = await import('../../services/api');
+             const res = await api.get('/chat/history');
              
-             if (!res.ok) { 
-                 if (res.status === 401) { 
-                    window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
-                    return; 
+             if (isMounted) {
+                 if (Array.isArray(res.data) && res.data.length > 0) {
+                     setMessages(res.data);
+                 } else {
+                     setMessages([{ 
+                         role: 'assistant', 
+                         content: `Hi ${user?.name || 'friend'}, I am ${botName}. How can I support you right now?`, 
+                         timestamp: Date.now() 
+                     }]);
                  }
-                 throw new Error("Failed to fetch history"); 
+             }
+         } catch (e: any) { 
+             console.error("Init failed:", e);
+
+             // Circuit Breaker: If 401, stop trying (let AuthContext handle it)
+             if (e.response && e.response.status === 401) {
+                 return;
              }
 
-             const data = await res.json();
-             
-             if (Array.isArray(data) && data.length > 0) {
-                 setMessages(data);
-             } else {
+             if (isMounted) {
+                 // Fallback so the app doesn't look broken
                  setMessages([{ 
                      role: 'assistant', 
-                     content: `Hi ${user?.name || 'friend'}, I am ${botName}. How can I support you right now?`, 
+                     content: `Hi ${user?.name || 'friend'}, I am ${botName}. I'm listening.`, 
                      timestamp: Date.now() 
                  }]);
              }
-             
-             // Small delay to ensure render catches up before removing loader
-             setTimeout(() => {
-                scrollToBottom();
-                setIsInitializing(false);
-             }, 500);
-
-         } catch (e) { 
-             console.error("Init failed:", e);
-             // Fallback so the app doesn't crash
-             setMessages([{ 
-                 role: 'assistant', 
-                 content: `Hi ${user?.name || 'friend'}, I am ${botName}. I'm here, though my memory of our past chats is fuzzy right now.`, 
-                 timestamp: Date.now() 
-             }]);
-             setIsInitializing(false);
+         } finally {
+             if (isMounted) {
+                 setTimeout(() => {
+                    scrollToBottom();
+                    setIsInitializing(false);
+                 }, 500);
+             }
          }
      };
 
      initChat();
+
+     return () => { isMounted = false; };
   }, [user, navigate, botName]);
 
   // --- 3. STANDARD EFFECTS ---
@@ -386,7 +390,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             }));
                         }
                     } catch (e: any) { 
-                        // Silent catch for JSON parse errors in stream
                         if (e.message && e.message.includes("Upgrade")) setError(e.message); 
                     }
                 }
@@ -399,7 +402,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
     } catch (error: any) {
       console.error(error);
-      // Remove the empty loading message if failed
       setMessages(prev => prev.filter(m => m.content !== '')); 
       setError(error.message || "Connection failed. Please check internet.");
     } finally { 
@@ -414,7 +416,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     if (matches) {
         matches.forEach(tag => {
             if (processedTagsRef.current.has(tag)) return;
-
             const lowerTag = tag.toLowerCase();
 
             const colorMatch = /<color>([\s\S]*?)<\/color>/i.exec(text);
@@ -458,18 +459,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 } else if (lowerTag.includes('open_breathing')) {
                       onOpenWidget('breathing');
                 }
-
                 if (lowerTag.includes('open_soundscape')) {
                     const m = lowerTag.match(/preset="([^"]+)"/i);
                     onOpenWidget('soundscape', { preset: m ? m[1] : undefined });
                 }
-
                 if (lowerTag.includes('open_diary')) onOpenWidget('diary');
                 if (lowerTag.includes('open_mood_tracker')) onOpenWidget('mood');
                 if (lowerTag.includes('open_pomodoro')) onOpenWidget('pomodoro');
                 if (lowerTag.includes('open_jam-with-aastha')) onOpenWidget('jam');
             }
-
             processedTagsRef.current.add(tag);
         });
     }
