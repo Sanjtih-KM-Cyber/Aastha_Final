@@ -11,6 +11,7 @@ interface MessageBubbleProps {
   onCopy?: (content: string) => void;
   searchQuery?: string;
   isStreaming?: boolean;
+  currentMatchIndex?: number;
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -22,19 +23,22 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   searchQuery,
   isStreaming,
   currentMatchIndex = -1
-}: MessageBubbleProps & { currentMatchIndex?: number }) => {
+}) => {
   const isUser = role === 'user';
   const { currentTheme } = useTheme();
   const [isHovered, setIsHovered] = useState(false);
 
-  // Detect "Thinking" mode: Streaming is active but no text has arrived yet
   const isThinking = isStreaming && (!content || content.length === 0);
 
   const renderContent = (text: string) => {
-      if (!searchQuery) return text;
+      if (!searchQuery || !text) return text;
+      
       let occurrenceCount = 0;
+      // Escape regex special characters in search query
       const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Case insensitive split
       const parts = text.split(new RegExp(`(${escapedQuery})`, 'gi'));
+      
       return parts.map((part, index) => {
           if (part.toLowerCase() === searchQuery.toLowerCase()) {
               const isActive = occurrenceCount === currentMatchIndex;
@@ -42,7 +46,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               return (
                 <span
                     key={index}
-                    className={`px-0.5 rounded font-bold text-black transition-colors duration-500 ${isActive ? 'bg-yellow-400 scale-110 inline-block px-1' : 'bg-yellow-200/50'}`}
+                    className={`rounded font-bold text-black transition-all duration-300 ${
+                        isActive 
+                        ? 'bg-orange-400 px-1 py-0.5 shadow-md scale-110' 
+                        : 'bg-yellow-300 px-0.5 opacity-80'
+                    }`}
                 >
                     {part}
                 </span>
@@ -100,8 +108,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             relative px-4 py-3 md:px-6 md:py-3.5 text-sm md:text-base leading-snug backdrop-blur-xl shadow-lg
             ${
               isUser
-                ? 'rounded-[20px] rounded-br-none text-white border border-white/10 bg-black/40' // Darker for user
-                : 'rounded-[20px] rounded-bl-none text-white border border-white/10 bg-black/30' // Lighter for bot
+                ? 'rounded-[20px] rounded-br-none text-white border border-white/10 bg-black/40' 
+                : 'rounded-[20px] rounded-bl-none text-white border border-white/10 bg-black/30' 
             }
           `}
           style={
@@ -114,7 +122,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           }
         >
           {isThinking ? (
-             // --- THINKING INDICATOR ---
              <div className="flex items-center gap-3 h-6 px-1">
                  <span className="text-xs text-white/50 font-medium tracking-wide">Thinking</span>
                  <div className="flex gap-1">
@@ -124,7 +131,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                  </div>
              </div>
           ) : (
-             // --- NORMAL MESSAGE CONTENT ---
              <div className="space-y-1">
                 {content.split('\n').map((line, i) => (
                   <p key={i} className="my-0 leading-snug break-words whitespace-pre-wrap text-white/90 font-light">
