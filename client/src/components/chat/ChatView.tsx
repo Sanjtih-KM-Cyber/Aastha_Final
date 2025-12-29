@@ -183,7 +183,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
      return () => { isMounted = false; };
   }, [user, navigate, botName]);
 
-  // --- 3. SEARCH LOGIC (FIXED) ---
+  // --- 3. SEARCH LOGIC ---
   useEffect(() => {
       if (searchQuery.trim()) {
           const hits: { msgId: string, matchIndex: number }[] = [];
@@ -524,15 +524,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     }
   };
 
-  const getDateLabel = (timestamp: number) => {
-      const date = new Date(timestamp);
-      const today = new Date();
-      if (date.toDateString() === today.toDateString()) return 'Today';
-      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-      if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
-  };
-
   const renderMessages = () => {
       let lastDateLabel = '';
       return messages.map((msg, idx) => {
@@ -557,7 +548,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         <span className="bg-black/30 backdrop-blur-md border border-white/5 text-white/50 text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm">{dateLabel}</span>
                     </div>
                 )}
-                <div id={domId} className="flex flex-col w-full shrink-0">
+                {/* On PC: Add padding bottom if it's the last message so it doesn't get covered */}
+                <div id={domId} className={`flex flex-col w-full shrink-0 ${idx === messages.length - 1 ? 'md:pb-8' : ''}`}>
                     <MessageBubble 
                         role={msg.role} 
                         content={msg.content} 
@@ -575,6 +567,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       });
   };
 
+  const getDateLabel = (timestamp: number) => {
+      const date = new Date(timestamp);
+      const today = new Date();
+      if (date.toDateString() === today.toDateString()) return 'Today';
+      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+      if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
   if (isInitializing) {
       return (
           <div className="flex flex-col items-center justify-center w-full h-[100dvh] bg-black text-white">
@@ -590,14 +591,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // ==================================================================================
   // MAIN LAYOUT
+  // Mobile: Flex Column (Strict Sections). PC: Absolute/Floating Overlay (Transparent).
   // ==================================================================================
-  
-  // NOTE: We use specific MD breakpoints to satisfy the user's "3-part section in MOBILE ONLY" requirement.
-  // Mobile = Flex Col (Strict sections). 
-  // PC = Absolute/Floating (Original aesthetic).
-
   return (
-    <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden">
+    <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden bg-black md:bg-transparent">
       
       {/* 1. GLOBAL BACKGROUNDS (Applied to both, Z-0) */}
       <div className="absolute inset-0 z-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
@@ -643,11 +640,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              </div>
 
              {/* CENTER: Search Bar */}
-             {/* Visible on Mobile (Center) and PC (Center) */}
              <div className="flex-1 min-w-0 relative group flex justify-center">
                  <div className={`flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full px-3 py-2 shadow-2xl transition-all focus-within:bg-black/50 focus-within:border-white/20 w-full ${!isMobile ? 'md:w-[400px]' : ''}`}>
                     <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2 shrink-0" />
-                    
                     <input 
                         value={searchQuery} 
                         onChange={(e) => setSearchQuery(e.target.value)} 
@@ -655,7 +650,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         placeholder="Search..." 
                         className="bg-transparent border-none outline-none text-sm text-white w-full min-w-0 placeholder-white/20" 
                     />
-                    
                     {searchQuery && (
                         <div className="flex items-center gap-1 ml-1 border-l border-white/10 pl-1 shrink-0">
                             <span className="text-[10px] text-white/40 whitespace-nowrap min-w-[24px] text-center">
@@ -690,12 +684,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
       {/* --- SECTION 2: CHAT AREA --- */}
-      {/* Mobile: Flex-1 scrollable. PC: Full height, padded top/bottom */}
+      {/* Mobile: Flex-1 scrollable. PC: Full height absolute (sort of), large bottom padding */}
       <div 
           ref={messagesContainerRef}
-          className="flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-4"
+          className="flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0"
       >
-          <div className="flex flex-col min-h-full justify-end pb-4">
+          <div className="flex flex-col min-h-full justify-end pb-4 md:pb-40">
               <div className="h-4" /> 
               {renderMessages()}
               <div ref={messagesEndRef} />
@@ -758,6 +752,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                      height={400}
                                      searchDisabled={false}
                                      skinTonesDisabled={false}
+                                     categories={[
+                                         { name: 'Smileys', category: 'smileys_people' },
+                                         { name: 'Nature', category: 'animals_nature' },
+                                         { name: 'Food', category: 'food_drink' },
+                                         { name: 'Activities', category: 'activities' },
+                                         { name: 'Travel', category: 'travel_places' },
+                                         { name: 'Objects', category: 'objects' },
+                                         { name: 'Symbols', category: 'symbols' },
+                                         { name: 'Flags', category: 'flags' },
+                                     ] as any}
                                  />
                              </div>
                          )}
