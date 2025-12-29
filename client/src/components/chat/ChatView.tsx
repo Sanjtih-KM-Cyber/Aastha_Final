@@ -10,9 +10,7 @@ import { MessageBubble } from './MessageBubble';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
-import { AUTH_UNAUTHORIZED_EVENT } from '../../constants';
-// Note: We don't import api here directly to avoid circular dependency issues, 
-// we use dynamic import inside the effect.
+import { useSync } from '../../context/SyncContext'; // ✅ Added Sync Context
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -28,6 +26,7 @@ interface ChatViewProps {
   isMobile?: boolean;
 }
 
+// ... (Helper functions compressImage and mapColorToTheme stay the same) ...
 const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -72,6 +71,7 @@ const mapColorToTheme = (colorName: string): string => {
 export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false }) => {
   const { user } = useAuth();
   const { setTheme, currentTheme } = useTheme();
+  const { subscribe } = useSync(); // ✅ Use the WebSocket we fixed
   const navigate = useNavigate();
   
   const botName = user?.persona === 'aarav' ? 'Aastik' : 'Aastha';
@@ -80,7 +80,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [isInitializing, setIsInitializing] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState('Connecting...');
   
-  // --- LOOP KILLER: This ref guarantees we only fetch ONCE ---
   const hasAttemptedInit = useRef(false);
   
   const [input, setInput] = useState('');
@@ -119,6 +118,26 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedTagsRef = useRef<Set<string>>(new Set());
 
+  // --- 0. WEBSOCKET LISTENER (For Live Updates) ---
+  useEffect(() => {
+    // If backend sends a 'message' event via WebSocket, update UI
+    const unsubscribe = subscribe('message', (data: any) => {
+        if (data && data.content) {
+            // Check if we already have this message (deduplication)
+            setMessages(prev => {
+                const lastMsg = prev[prev.length - 1];
+                // If the last message is an empty placeholder, fill it
+                if (lastMsg && lastMsg.role === 'assistant' && lastMsg.id === 'temp-ai') {
+                     return [...prev.slice(0, -1), { ...lastMsg, content: data.content, id: data._id || Date.now().toString() }];
+                }
+                return [...prev, { role: 'assistant', content: data.content, timestamp: Date.now() }];
+            });
+            setIsTyping(false);
+        }
+    });
+    return unsubscribe;
+  }, [subscribe]);
+
   // --- 1. CREDITS SYNC ---
   useEffect(() => {
       if (user) {
@@ -130,12 +149,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
   }, [user]);
 
-  // --- 2. BLOCKING INITIAL LOAD (WITH LOOP KILLER) ---
+  // --- 2. INITIAL LOAD ---
   useEffect(() => {
-     // If no user, we can't fetch. 
      if (!user) return; 
-
-     // STOP THE LOOP: If we already tried fetching, DO NOT try again.
      if (hasAttemptedInit.current) return;
      hasAttemptedInit.current = true;
 
@@ -146,7 +162,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          setConnectionStatus(`Connecting to ${botName}...`);
 
          try {
-             // Dynamic import to use the api instance with correct interceptors
              const { default: api } = await import('../../services/api');
              const res = await api.get('/chat/history');
              
@@ -163,20 +178,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              }
          } catch (e: any) { 
              console.error("Init failed:", e);
-
-             // CRITICAL: If 401, FORCE REDIRECT to stop React Loop
              if (e.response && e.response.status === 401) {
-                 window.location.href = '/login'; // Hard redirect breaks the loop
+                 // Don't hard redirect immediately, check auth state first
+                 // window.location.href = '/login'; 
                  return;
              }
-
              if (isMounted) {
-                 // Fallback so the app doesn't look broken
-                 setMessages([{ 
-                     role: 'assistant', 
-                     content: `Hi ${user?.name || 'friend'}, I am ${botName}. I'm listening.`, 
-                     timestamp: Date.now() 
-                 }]);
+                 setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. I'm listening.`, timestamp: Date.now() }]);
              }
          } finally {
              if (isMounted) {
@@ -189,11 +197,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
      };
 
      initChat();
-
      return () => { isMounted = false; };
   }, [user, navigate, botName]);
 
-  // --- 3. STANDARD EFFECTS ---
+  // --- 3. SPEECH SETUP (Existing code) ---
   useEffect(() => {
     const loadVoices = () => { window.speechSynthesis.getVoices(); };
     loadVoices();
@@ -250,7 +257,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     }
   };
 
-  // Helper for API URL in case we need it for fetch (though we prefer api.ts)
   const getApiUrl = (endpoint: string) => {
     const envUrl = import.meta.env.VITE_API_URL;
     if (envUrl) return `${envUrl}${endpoint}`;
@@ -321,12 +327,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key === 'Enter' && !e.shiftKey) { 
+        e.preventDefault(); 
+        handleSend(); 
+    }
   };
 
-  // --- 4. SEND LOGIC (Refined) ---
+  // --- 4. SEND LOGIC (FIXED) ---
   const handleSend = async (e?: React.FormEvent, overrideInput?: string) => {
-    e?.preventDefault();
+    // ✅ 1. PREVENT DEFAULT FIRST
+    if (e) e.preventDefault();
+    
     const textToSend = overrideInput || input;
     if (!textToSend.trim() && !attachedImage) return;
 
@@ -335,36 +346,46 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     if (attachedImage) { finalContent = `[Image Attached] ${finalContent}`; }
 
     const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
-    setMessages(prev => [...prev, userMsg]);
     
-    setInput(''); setAttachedImage(null); setShowEmojiPicker(false); setIsTyping(true); setError(null);
+    // ✅ 2. OPTIMISTIC UI: Add User Msg AND Empty Bot Msg (Thinking Bubble)
+    const tempBotId = Date.now().toString();
+    setMessages(prev => [
+        ...prev, 
+        userMsg,
+        { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId } // Empty content triggers "Thinking"
+    ]);
+    
+    setInput(''); setAttachedImage(null); setShowEmojiPicker(false); 
+    setIsTyping(true); // ✅ This combined with empty content shows the bubble
+    setError(null);
     autoResizeTextarea();
 
     try {
-      // Use dynamic import for consistent API handling
-      const { default: api } = await import('../../services/api');
-      
-      // We use axios (api.post) instead of fetch so interceptors work!
-      const response = await api.post('/chat', { message: textToSend, image: attachedImage });
-
-      // Note: axios returns data directly in response.data, but streaming is different.
-      // If your backend streams, axios is tricky. Let's fallback to fetch for streaming ONLY.
-      // BUT we must ensure cookies are sent.
-      
-      // ... WAIT. If we use fetch, we bypass the 401 interceptor.
-      // Let's stick to fetch for streaming but add the 401 check manually.
+      // ✅ 3. GET TOKEN FOR FETCH
+      // We must attach the token manually because 'fetch' doesn't use the axios interceptor
+      let token = '';
+      try {
+        const storedInfo = localStorage.getItem('userInfo');
+        if (storedInfo) token = JSON.parse(storedInfo).token;
+      } catch(e) {}
 
       const streamResponse = await fetch(getApiUrl('/chat'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` // ✅ FIX: Attach Token to prevent 401
+        },
         credentials: 'include', 
         body: JSON.stringify({ message: textToSend, image: attachedImage }), 
       });
 
       if (!streamResponse.ok) {
           setIsTyping(false);
+          // If still 401, only then redirect, but check first
           if (streamResponse.status === 401) { 
-               window.location.href = '/login'; // Hard redirect on 401
+               // Optional: Trigger global auth logout instead of hard redirect
+               // window.dispatchEvent(new Event('auth:unauthorized'));
+               setError("Session expired. Please login again.");
                return; 
           }
           const errData = await streamResponse.json().catch(() => ({}));
@@ -373,14 +394,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       const reader = streamResponse.body?.getReader();
       const decoder = new TextDecoder();
-      const newModelMessageId = Date.now().toString();
       processedTagsRef.current.clear();
-
-      setMessages(prev => [...prev, { role: 'assistant', content: '', timestamp: Date.now(), id: newModelMessageId }]);
       
       let aiContentRaw = '';
       let buffer = '';
-      let warningFromBackend = '';
 
       if (reader) {
         while (true) {
@@ -401,20 +418,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits)); 
                             setModelMode(data.meta.mode); 
                             setIsStandardMode(data.meta.mode === 'standard'); 
-                            if (data.meta.warning) warningFromBackend = data.meta.warning;
                         }
                         if (data.content) {
                             aiContentRaw += data.content;
                             const cleanContent = processMagicTags(aiContentRaw);
+                            
+                            // ✅ Update the specific placeholder message
                             setMessages(prev => prev.map(msg => {
-                                if (msg.id === newModelMessageId) {
-                                    return { ...msg, content: cleanContent, warning: warningFromBackend || msg.warning };
+                                if (msg.id === tempBotId) {
+                                    return { ...msg, content: cleanContent };
                                 }
                                 return msg;
                             }));
                         }
                     } catch (e: any) { 
-                        if (e.message && e.message.includes("Upgrade")) setError(e.message); 
+                        // ignore parse errors for partial chunks
                     }
                 }
             }
@@ -426,8 +444,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
     } catch (error: any) {
       console.error(error);
-      setMessages(prev => prev.filter(m => m.content !== '')); 
-      setError(error.message || "Connection failed. Please check internet.");
+      // Remove the empty thinking bubble if error
+      setMessages(prev => prev.filter(m => m.id !== tempBotId)); 
+      setError(error.message || "Connection failed.");
     } finally { 
         setIsTyping(false); 
     }
