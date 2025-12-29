@@ -1,4 +1,3 @@
-
 export const SECURITY_QUESTIONS = [
   "What song instantly resets your vibe?",
   "Which place feels like your safe corner?",
@@ -39,6 +38,7 @@ export const LANGUAGES = [
   "English", "Hindi", "Hinglish", "Spanish", "French", "German", "Japanese", "Mandarin"
 ];
 
+// --- AUTH EVENTS ---
 export const AUTH_UNAUTHORIZED_EVENT = 'auth:unauthorized';
 
 export const SOUND_URLS = {
