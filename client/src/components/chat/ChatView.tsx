@@ -559,7 +559,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         onCopy={copyToClipboard}
                         searchQuery={searchQuery}
                         currentMatchIndex={currentMatchIndexInMessage}
-                        isStreaming={isCurrentlyStreaming} 
+                        isStreaming={isCurrentlyStreaming}
+                        isMobile={isMobile} // ✅ Pass to MessageBubble
                     />
                     {msg.warning && <div className="flex items-center justify-center gap-1.5 text-[10px] text-white/30 -mt-3 mb-4"><ShieldAlert size={10} /> {msg.warning}</div>}
                 </div>
@@ -592,33 +593,26 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // ==================================================================================
   // MAIN LAYOUT
-  // Mobile: Flex Column (Strict Sections). PC: Absolute/Floating Overlay.
+  // Mobile: Flex Column (Strict Sections). PC: Absolute/Floating Overlay (Transparent).
   // ==================================================================================
   return (
-    // ✅ FIX 1: Removed bg-black from root. Now wallpaper layer dictates background.
-    <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden">
+    <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden bg-black md:bg-transparent">
       
       {/* 1. GLOBAL BACKGROUNDS & WALLPAPER */}
-      {/* Positioned absolute, z-0 to stay behind everything */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-          {/* WALLPAPER LAYER */}
+      {/* ✅ FIX 1: Use FIXED to span entire screen behind menu and chat */}
+      <div className="fixed inset-0 z-[-1] pointer-events-none">
+          {/* WALLPAPER LOGIC */}
           {user?.wallpaper ? (
               <div 
                   className="w-full h-full bg-cover bg-center bg-no-repeat"
                   style={{ backgroundImage: `url(${user.wallpaper})` }}
               >
-                  {/* OVERLAY: Darker on Mobile, Lighter on PC */}
+                  {/* Dim overlay for readability */}
                   <div className="absolute inset-0 bg-black/60 md:bg-black/40" />
-                  
-                  {/* ✅ FIX 2: LEFT-SIDE GRADIENT FOR PC (Fixes the "Cut") */}
-                  {/* This creates a smooth fade from the sidebar into the chat area */}
-                  {!isMobile && (
-                      <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-[#0a0e17] via-black/40 to-transparent" />
-                  )}
               </div>
           ) : (
-              // Fallback: Dark solid for consistency
-              <div className="w-full h-full bg-[#0a0e17]" />
+              // Fallback: Dark on Mobile, Transparent on PC (letting parent background show)
+              <div className="w-full h-full bg-[#0a0e17] md:bg-transparent" />
           )}
           
           {/* Noise Texture Overlay */}
@@ -655,7 +649,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       </AnimatePresence>
 
       {/* --- SECTION 1: HEADER --- */}
-      {/* Mobile: Relative/Flex item with Gradient. PC: Absolute/Floating top with Transparent BG */}
+      {/* Mobile: Relative/Flex item. PC: Absolute/Floating top */}
+      {/* FIX: Removed gradient for PC (md:bg-none) to solve "Black Box" issue */}
       <div className={`shrink-0 w-full z-30 pt-safe px-4 pb-2 pointer-events-auto ${isMobile ? 'bg-gradient-to-b from-black/80 to-transparent' : 'md:absolute md:top-0 md:pt-6 bg-none'}`}>
           <div className="flex items-center gap-3 h-14 justify-between">
              {/* LEFT */}
@@ -727,7 +722,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       {/* --- SECTION 3: INPUT AREA --- */}
       {/* Mobile: Fixed bottom via Flex (shrink-0). PC: Absolute bottom/floating */}
-      {/* ✅ FIX: Removed gradient for PC (md:bg-none) */}
+      {/* FIX: Removed gradient for PC (md:bg-none) to solve "Black Box" issue */}
       <div className={`shrink-0 w-full px-4 pb-4 pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6 bg-none'}`}>
           <div className="flex flex-col gap-2">
              <AnimatePresence>
@@ -807,4 +802,3 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     </div>
   );
 };
-
