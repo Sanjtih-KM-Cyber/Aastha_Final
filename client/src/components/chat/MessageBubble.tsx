@@ -12,6 +12,7 @@ interface MessageBubbleProps {
   searchQuery?: string;
   isStreaming?: boolean;
   currentMatchIndex?: number;
+  isMobile?: boolean; 
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -22,7 +23,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onCopy,
   searchQuery,
   isStreaming,
-  currentMatchIndex = -1
+  currentMatchIndex = -1,
+  isMobile = false
 }) => {
   const isUser = role === 'user';
   const { currentTheme } = useTheme();
@@ -65,27 +67,30 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       })
     : '';
 
-  const handleCopyClick = () => {
+  const handleCopyClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (onCopy && typeof content === 'string') {
       onCopy(content);
     }
   };
 
-  const handleReplyClick = () => {
+  const handleReplyClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (onReply) onReply(content);
   };
 
   return (
     <motion.div
-      // OPTIMIZATION: Lighter animation (no scale, smaller Y movement) for mobile performance
-      initial={{ opacity: 0, y: 5 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
-      className={`group flex w-full mb-6 relative ${
+      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.3, ease: 'easeOut' }}
+      // ✅ Fix: Add more bottom margin on mobile to make room for the buttons below
+      className={`group flex w-full relative ${
         isUser ? 'justify-end' : 'justify-start'
-      }`}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      } ${isMobile ? 'mb-10' : 'mb-6'}`}
+      onMouseEnter={() => !isMobile && setIsHovered(true)}
+      onMouseLeave={() => !isMobile && setIsHovered(false)}
+      onClick={() => isMobile && setIsHovered(!isHovered)}
     >
       {!isUser && (
         <div className="flex-shrink-0 mr-3 self-end hidden md:block">
@@ -104,22 +109,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       <div className="relative max-w-[90%] md:max-w-[70%]">
         <div
           className={`
-            relative px-4 py-3 md:px-6 md:py-3.5 text-sm md:text-base leading-snug shadow-sm
+            relative px-4 py-3 md:px-6 md:py-3.5 text-sm md:text-base leading-snug backdrop-blur-xl shadow-lg
             ${
               isUser
-                /* USER BUBBLE:
-                   - Mobile: Solid Dark Grey (#1a1a1a) + No Blur
-                   - PC (md): Translucent Black + Blur XL */
-                ? 'rounded-[20px] rounded-br-none text-white border border-white/10 bg-[#1a1a1a] md:bg-black/40 md:backdrop-blur-xl' 
-                : 'rounded-[20px] rounded-bl-none text-white border border-white/10 bg-[#0f0f0f] md:bg-black/30 md:backdrop-blur-xl' 
+                ? 'rounded-[20px] rounded-br-none text-white border border-white/10 bg-black/40' 
+                : 'rounded-[20px] rounded-bl-none text-white border border-white/10 bg-black/30' 
             }
           `}
           style={
             !isUser
               ? {
-                  // FIX: Use 'backgroundImage' so it layers on top of the 'bg-[#0f0f0f]' class.
-                  // This ensures mobile gets a solid base color + the theme tint, while PC gets the tint + blur.
-                  backgroundImage: `linear-gradient(135deg, ${currentTheme.primaryColor}20, #00000060)`,
+                  background: `linear-gradient(135deg, ${currentTheme.primaryColor}20, #00000060)`,
                   borderLeft: `2px solid ${currentTheme.primaryColor}`,
                 }
               : {}
@@ -154,19 +154,27 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         </div>
 
         <AnimatePresence>
-          {isHovered && !isThinking && (
+          {(isHovered || (isMobile && isHovered)) && !isThinking && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.8, x: isUser ? -10 : 10 }}
-              animate={{ opacity: 1, scale: 1, x: 0 }}
-              exit={{ opacity: 0, scale: 0.8 }}
+              // ✅ Fix: Different animation for Mobile (Slide Down) vs PC (Slide Side)
+              initial={isMobile ? { opacity: 0, y: -10 } : { opacity: 0, scale: 0.8, x: isUser ? -10 : 10 }}
+              animate={isMobile ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1, x: 0 }}
+              exit={isMobile ? { opacity: 0, y: -5 } : { opacity: 0, scale: 0.8 }}
+              
+              // ✅ Fix: Layout Logic
+              // Mobile: Absolute TOP-FULL (Below the bubble), aligned Left/Right
+              // PC: Absolute TOP-1/2 (Side of bubble)
               className={`
-                absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-10
-                ${isUser ? 'right-full mr-3' : 'left-full ml-3'}
+                flex items-center gap-2 z-10
+                ${isMobile 
+                  ? `absolute top-full mt-2 ${isUser ? 'right-0' : 'left-0'}` 
+                  : `absolute top-1/2 -translate-y-1/2 ${isUser ? 'right-full mr-3' : 'left-full ml-3'}`
+                }
               `}
             >
               <button
                 onClick={handleReplyClick}
-                className="p-2 rounded-full bg-zinc-800 border border-white/10 hover:bg-zinc-700 text-white/70 hover:text-white transition-all shadow-lg"
+                className="p-2 rounded-full bg-black/40 border border-white/10 hover:bg-white/10 hover:border-white/30 text-white/70 hover:text-white transition-all backdrop-blur-md shadow-lg"
                 title="Reply"
               >
                 <Reply size={14} />
@@ -174,7 +182,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
               <button
                 onClick={handleCopyClick}
-                className="p-2 rounded-full bg-zinc-800 border border-white/10 hover:bg-zinc-700 text-white/70 hover:text-white transition-all shadow-lg"
+                className="p-2 rounded-full bg-black/40 border border-white/10 hover:bg-white/10 hover:border-white/30 text-white/70 hover:text-white transition-all backdrop-blur-md shadow-lg"
                 title="Copy"
               >
                 <Copy size={14} />
@@ -186,4 +194,3 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     </motion.div>
   );
 };
-
