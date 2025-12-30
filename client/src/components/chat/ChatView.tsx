@@ -559,7 +559,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         onCopy={copyToClipboard}
                         searchQuery={searchQuery}
                         currentMatchIndex={currentMatchIndexInMessage}
-                        isStreaming={isCurrentlyStreaming}
+                        isStreaming={isCurrentlyStreaming} 
                         isMobile={isMobile} // ✅ Pass to MessageBubble
                     />
                     {msg.warning && <div className="flex items-center justify-center gap-1.5 text-[10px] text-white/30 -mt-3 mb-4"><ShieldAlert size={10} /> {msg.warning}</div>}
@@ -593,13 +593,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // ==================================================================================
   // MAIN LAYOUT
-  // Mobile: Flex Column (Strict Sections). PC: Absolute/Floating Overlay (Transparent).
+  // Mobile: Flex Column (Strict Sections). PC: Absolute/Floating Overlay.
   // ==================================================================================
   return (
-    <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden bg-black md:bg-transparent">
+    // ✅ FIX 1: Removed bg-black from root.
+    <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden bg-transparent">
       
       {/* 1. GLOBAL BACKGROUNDS & WALLPAPER */}
-      {/* ✅ FIX 1: Use FIXED to span entire screen behind menu and chat */}
+      {/* ✅ FIX 2: Use FIXED to span entire screen behind menu and chat */}
       <div className="fixed inset-0 z-[-1] pointer-events-none">
           {/* WALLPAPER LOGIC */}
           {user?.wallpaper ? (
