@@ -120,7 +120,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://checkout.razorpay.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-      connectSrc: ["'self'", "ws:", "wss:", "https://aasthaai.site", "http://localhost:*", "https://lumberjack.razorpay.com"],
+      connectSrc: ["'self'", "ws:", "wss:", "https://aasthaai.site", "https://aastha-final.onrender.com", "http://localhost:*", "https://lumberjack.razorpay.com"],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
       frameSrc: ["'self'", "https://api.razorpay.com"],
       upgradeInsecureRequests: null,
@@ -137,6 +137,7 @@ const allowedOrigins = [
   'https://aasthafv2.vercel.app',   // optional: keep for testing
   'https://aasthaai.site',          // ✅ NEW DOMAIN
   'https://www.aasthaai.site',      // ✅ WWW
+  'https://aastha-final.onrender.com', // ✅ Render Backend
   process.env.FRONTEND_URL || '',
 ];
 
