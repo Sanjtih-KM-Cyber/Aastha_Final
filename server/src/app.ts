@@ -5,6 +5,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
+import helmet from 'helmet';
 import compression from 'compression'; // Performance boost
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
@@ -108,8 +109,25 @@ wss.on('connection', (ws, req) => {
 
 // --- DEFENSE IN DEPTH ---
 app.disable('x-powered-by'); // Hide the Tech Stack
-
 app.set('trust proxy', 1);
+
+// HELMET - Content Security Policy
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow resources to be loaded
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://checkout.razorpay.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      connectSrc: ["'self'", "ws:", "wss:", "https://aasthaai.site", "http://localhost:*", "https://lumberjack.razorpay.com"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],
+      frameSrc: ["'self'", "https://api.razorpay.com"],
+      upgradeInsecureRequests: null,
+    }
+  },
+  crossOriginEmbedderPolicy: false
+}));
 
 // Accept a list of origins (add your domains)
 const allowedOrigins = [
@@ -127,7 +145,14 @@ app.use(cors({
   origin: (origin, callback) => {
     // allow no-origin (e.g. curl) and known origins
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) return callback(null, true);
+
+    // Check allowed origins
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+
+    // Allow vercel previews ONLY for this project
+    if (origin.endsWith('.vercel.app') && origin.includes('aastha')) {
+      return callback(null, true);
+    }
 
     console.log('Blocked CORS origin:', origin);
     return callback(new Error('CORS not allowed'), false);
@@ -138,8 +163,8 @@ app.use(cors({
 }));
 
 app.use(compression()); // Compress all responses
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(cookieParser());
 
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
