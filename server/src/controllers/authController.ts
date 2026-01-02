@@ -13,7 +13,10 @@ const hashEmail = (email: string) => {
 };
 
 const generateToken = (id: string) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('Server misconfiguration: Missing JWT_SECRET');
+  }
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: '30d',
   });
 };
@@ -439,6 +442,10 @@ export const softDeleteUser = async (req: AuthRequest, res: Response) => {
 
 export const initiateReset = async (req: Request, res: Response) => {
   try {
+    // Slow down enumeration attacks
+    const delay = Math.floor(Math.random() * 500) + 300; // 300-800ms
+    await new Promise(r => setTimeout(r, delay));
+
     const { email } = (req as any).body;
     const cleanEmail = email.toLowerCase().trim();
     const emailHash = hashEmail(cleanEmail);
