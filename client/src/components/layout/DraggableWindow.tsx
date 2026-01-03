@@ -170,17 +170,26 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             y: 0,
             borderRadius: isMobile ? 0 : 24,
           }}
-          exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          // --- MOBILE OPTIMIZATION 1: Fast Transitions & Simple Exit ---
+          transition={isMobile
+            ? { duration: 0.25, ease: "easeInOut" }
+            : { type: "spring", damping: 25, stiffness: 300 }
+          }
+          exit={isMobile
+            ? { opacity: 0 }
+            : { opacity: 0, scale: 0.9, y: 20 }
+          }
           drag={!isMobile && !isResizing}
           dragControls={dragControls}
           dragMomentum={false}
           dragListener={false}
           onPointerDown={onFocus}
           className={`fixed flex flex-col ${isMobile ? '' : 'cursor-auto'}`}
+          // --- MOBILE OPTIMIZATION 2: Hardware Acceleration ---
           style={{ 
             zIndex: isMobile ? 9999 : zIndex,
-            position: 'fixed'
+            position: 'fixed',
+            willChange: isMobile ? 'transform, opacity' : undefined
           }}
         >
           <div className={`
@@ -193,8 +202,12 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             {/* --- Window Header (Controls & Title) --- */}
             <div 
               onPointerDown={(e) => !isMobile && dragControls.start(e)}
+              // --- MOBILE OPTIMIZATION 3: Opaque Header (No Blur) ---
               className={`
-                 ${isMobile ? 'absolute top-0 left-0 right-0 h-16 bg-black/20 backdrop-blur-sm' : 'relative h-12 cursor-grab active:cursor-grabbing touch-none bg-transparent'}
+                 ${isMobile
+                     ? 'absolute top-0 left-0 right-0 h-16 bg-[#121212] border-b border-white/10'
+                     : 'relative h-12 cursor-grab active:cursor-grabbing touch-none bg-transparent'
+                 }
                  z-50 flex items-center justify-between px-4 shrink-0
               `}
             >
