@@ -125,6 +125,7 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
       isOpen={isOpen} onClose={onClose} title="Mood Tracker"
       initialWidth={360} initialHeight={580} defaultPosition={{ x: 200, y: 150 }}
       zIndex={zIndex || 10} onFocus={onFocus || (() => {})}
+      icon={Smile}
     >
       <div className="flex flex-col h-full w-full rounded-3xl overflow-hidden font-sans shadow-2xl">
         

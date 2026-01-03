@@ -101,24 +101,40 @@ const PaperPage: React.FC<{
         backgroundSize: '100% 2rem', backgroundAttachment: 'local'
       }}
     >
-      <div className="pt-8 px-8 pb-4 flex justify-between items-end border-b border-transparent">
+      <div className="pt-8 px-8 pb-4 flex justify-between items-start border-b border-transparent">
         <div className="flex flex-col w-full">
            <span className="text-xs font-mono text-gray-400 uppercase tracking-widest mb-1">{getFormattedDate(date)}</span>
-           {isEditing ? (
-             <input
-               value={title}
-               onChange={(e) => onTitleChange(e.target.value)}
-               onPointerDown={(e) => e.stopPropagation()}
-               placeholder="Title (Optional)..."
-               className="text-2xl font-serif font-bold bg-transparent border-none outline-none text-gray-800 placeholder-gray-300 w-full"
-             />
-           ) : (
-             <h2 className="text-2xl font-serif font-bold text-gray-800 leading-tight">{title || "Untitled Entry"}</h2>
-           )}
+           <div className="flex justify-between items-center w-full">
+               {isEditing ? (
+                 <input
+                   value={title}
+                   onChange={(e) => onTitleChange(e.target.value)}
+                   onPointerDown={(e) => e.stopPropagation()}
+                   placeholder="Title (Optional)..."
+                   className="text-2xl font-serif font-bold bg-transparent border-none outline-none text-gray-800 placeholder-gray-300 w-full"
+                 />
+               ) : (
+                 <h2 className="text-2xl font-serif font-bold text-gray-800 leading-tight truncate mr-2">{title || "Untitled Entry"}</h2>
+               )}
+
+               {!readOnly && (
+                  <div className="flex items-center gap-2 shrink-0">
+                     {isEditing ? (
+                       <button onClick={onSave} disabled={isSaving} className="px-4 py-1.5 rounded-full text-white text-[10px] font-bold shadow-md transition-transform hover:scale-105 active:scale-95 flex items-center gap-1.5" style={{ backgroundColor: currentTheme.primaryColor }}>
+                         {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} SAVE
+                       </button>
+                     ) : (
+                       <button onClick={onEdit} className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-all shadow-sm" title="Edit">
+                         <PenLine size={16} />
+                       </button>
+                     )}
+                  </div>
+               )}
+           </div>
         </div>
       </div>
 
-      <div className="flex-1 relative overflow-y-auto custom-scrollbar pl-14 pr-8 pb-8 pt-2">
+      <div className="flex-1 relative overflow-y-auto custom-scrollbar pl-14 pr-8 pb-8 pt-[0.4rem]">
         {isEditing ? (
           <textarea
              value={content}
@@ -134,20 +150,6 @@ const PaperPage: React.FC<{
           </div>
         )}
       </div>
-
-      {!readOnly && (
-        <div className="absolute bottom-6 right-8 flex items-center gap-3 z-20">
-           {isEditing ? (
-             <button onClick={onSave} disabled={isSaving} className="px-6 py-2 rounded-full text-white text-xs font-bold shadow-lg transition-transform hover:scale-105 active:scale-95 flex items-center gap-2" style={{ backgroundColor: currentTheme.primaryColor }}>
-               {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} SAVE
-             </button>
-           ) : (
-             <button onClick={onEdit} className="p-3 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-all shadow-md" title="Edit">
-               <PenLine size={18} />
-             </button>
-           )}
-        </div>
-      )}
     </div>
   );
 };
@@ -441,6 +443,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       isOpen={isOpen} onClose={onClose} title="Personal Journal"
       initialWidth={900} initialHeight={650} defaultPosition={{ x: 100, y: 80 }}
       zIndex={zIndex || 20} onFocus={onFocus || (() => {})}
+      icon={BookOpen}
     >
       <div
         className="flex h-full w-full bg-[#222] text-gray-800 relative overflow-hidden rounded-b-xl shadow-inner font-sans items-center justify-center"
@@ -454,13 +457,11 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
         ) : (
             <div className={`relative w-full h-full flex shadow-2xl ${isMobile ? '' : 'rounded-r-lg perspective-2000 w-[95%] h-[90%]'}`}>
                 
-                {/* --- MOBILE HEADER (Calendar Icon, Arrows, Date) --- */}
+                {/* --- MOBILE HEADER (Calendar Icon Only) --- */}
                 {isMobile && (
-                    <div className="absolute top-0 left-0 right-0 h-14 bg-[#fdfdf6] border-b border-gray-200 z-50 flex items-center justify-between px-4">
-                        <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-black/5 rounded-full"><ChevronLeft className="text-gray-600" /></button>
-
+                    <div className="absolute top-0 left-0 right-0 h-14 bg-[#fdfdf6] border-b border-gray-200 z-50 flex items-center justify-center px-4 relative">
                         <div className="flex items-center gap-2">
-                           <span className="font-serif font-bold text-gray-800">{getFormattedDate(activeDate)}</span>
+                           <span className="font-serif font-bold text-gray-800 text-sm">{getFormattedDate(activeDate)}</span>
                            <button
                              onClick={() => setIsCalendarModalOpen(true)}
                              className="p-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors"
@@ -468,8 +469,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                              <Calendar size={16} />
                            </button>
                         </div>
-
-                        <button onClick={() => changeDay(1)} disabled={!!isFlipping} className="p-2 hover:bg-black/5 rounded-full"><ChevronRight className="text-gray-600" /></button>
                     </div>
                 )}
 

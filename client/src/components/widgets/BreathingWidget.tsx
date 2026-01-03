@@ -100,6 +100,7 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
       isOpen={isOpen} onClose={onClose} title="Breathe"
       initialWidth={340} initialHeight={520} defaultPosition={{ x: 400, y: 200 }}
       zIndex={zIndex || 10} onFocus={onFocus || (() => {})}
+      icon={Wind}
     >
       <div className="flex flex-col h-full w-full bg-[#0a0a0a] font-sans relative overflow-hidden">
          
