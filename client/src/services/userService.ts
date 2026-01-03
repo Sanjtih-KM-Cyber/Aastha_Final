@@ -40,8 +40,8 @@ export const userService = {
   },
 
   // --- Analysis (Calls AI Controller) ---
-  async analyzeDiary(): Promise<any[]> {
-      const res = await api.get('/ai/analyze/diary');
+  async analyzeDiary(payload?: { content: string }): Promise<{ analysis: string }> {
+    const res = await api.post('/ai/analyze-diary', payload);
       return res.data;
   },
 

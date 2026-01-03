@@ -16,6 +16,7 @@ interface DraggableWindowProps {
   zIndex: number;
   onFocus: () => void;
   icon?: React.ElementType; // New Prop for Floating Bubble Icon
+  color?: string; // New Prop for Brand Color
 }
 
 export const DraggableWindow: React.FC<DraggableWindowProps> = ({ 
@@ -31,7 +32,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   className = "",
   zIndex,
   onFocus,
-  icon: Icon
+  icon: Icon,
+  color
 }) => {
   const dragControls = useDragControls();
   
@@ -129,10 +131,14 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
                     dragMomentum={false}
                     whileDrag={{ scale: 1.1 }}
                     onClick={() => setIsMinimized(false)}
-                    className="fixed bottom-24 right-5 w-[60px] h-[60px] rounded-full bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl flex items-center justify-center z-[100] cursor-pointer"
-                    style={{ touchAction: 'none' }} // Prevent scrolling while dragging
+                    className="fixed bottom-20 right-4 w-12 h-12 rounded-full shadow-2xl flex items-center justify-center z-[100] cursor-pointer"
+                    style={{
+                        backgroundColor: color || '#333',
+                        touchAction: 'none',
+                        border: '2px solid rgba(255,255,255,0.2)'
+                    }}
                 >
-                    <Icon size={28} className="text-white/80" />
+                    <Icon size={24} className="text-white" />
                 </motion.div>
             )}
           </AnimatePresence>

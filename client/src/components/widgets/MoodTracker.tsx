@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { userService, MoodEntryDTO } from '../../services/userService';
 import { Check, Grid, BarChart2, Sparkles, Book, MessageCircle, ChevronLeft, ChevronRight, Loader2, Smile } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { useEncryption } from '../../context/EncryptionContext';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface MoodTrackerProps {
@@ -28,6 +29,7 @@ const MOODS = [
 
 export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLogMood, zIndex, onFocus }) => {
   const { currentTheme } = useTheme();
+  const { decrypt } = useEncryption();
   const [activeTab, setActiveTab] = useState<'log' | 'trends' | 'insights'>('log');
   const [history, setHistory] = useState<MoodEntryDTO[]>([]);
   const [lastLogged, setLastLogged] = useState<typeof MOODS[0] | null>(null);
@@ -64,9 +66,19 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
       setAnalysisResult("");
       try {
           if (source === 'diary') {
-              const result = await userService.analyzeDiary();
-              // The backend now returns a rich text summary in 'summary' field or similar
-              // Depending on exact return of new geminiService. For now assuming object with 'analysis' text
+              // Fetch and Decrypt Locally
+              const entries = await userService.getDiaryEntries();
+              const recentText = entries.slice(0, 5).map(e => {
+                  try { return decrypt(e.content); } catch { return ""; }
+              }).join("\n");
+
+              if (!recentText.trim()) {
+                  setAnalysisResult("Your diary seems empty or locked. Please write something first.");
+                  return;
+              }
+
+              const result = await userService.analyzeDiary({ content: recentText });
+
               if (result && result.analysis) {
                   setAnalysisResult(result.analysis);
               } else {
@@ -126,6 +138,7 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
       initialWidth={360} initialHeight={580} defaultPosition={{ x: 200, y: 150 }}
       zIndex={zIndex || 10} onFocus={onFocus || (() => {})}
       icon={Smile}
+      color="#F97316"
     >
       <div className="flex flex-col h-full w-full rounded-3xl overflow-hidden font-sans shadow-2xl">
         
