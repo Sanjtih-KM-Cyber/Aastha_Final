@@ -394,8 +394,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             'Authorization': `Bearer ${token}` 
         },
         credentials: 'include', 
-        // ✅ FIX: Send finalContent (containing reply context) to the AI
-        body: JSON.stringify({ message: finalContent, image: attachedImage }), 
+        // ✅ FIX: Send 'images' as an array to match the server's expectation
+        body: JSON.stringify({
+            message: finalContent,
+            images: attachedImage ? [attachedImage] : []
+        }),
       });
 
       if (!streamResponse.ok) {
