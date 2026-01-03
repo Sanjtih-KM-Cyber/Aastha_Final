@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
-import { Play, Pause, RotateCcw, Settings, Check, AlertCircle } from 'lucide-react';
+import { Play, Pause, RotateCcw, Settings, Check, AlertCircle, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -162,6 +162,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
       defaultPosition={{ x: 80, y: 500 }}
       zIndex={zIndex || 10}
       onFocus={onFocus || (() => {})}
+      icon={Clock}
     >
       <div className="flex flex-col items-center justify-center py-6 bg-black/80 h-full relative overflow-hidden font-sans">
         

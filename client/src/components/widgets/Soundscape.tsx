@@ -186,6 +186,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
       defaultPosition={{ x: 850, y: 150 }}
       zIndex={zIndex || 10}
       onFocus={onFocus || (() => {})}
+      icon={Sliders}
     >
       <div className="flex flex-col h-full w-full font-sans select-none">
         {/* ... (UI JSX code same as provided previously) ... */}

@@ -15,6 +15,7 @@ interface DraggableWindowProps {
   className?: string;
   zIndex: number;
   onFocus: () => void;
+  icon?: React.ElementType; // New Prop for Floating Bubble Icon
 }
 
 export const DraggableWindow: React.FC<DraggableWindowProps> = ({ 
@@ -29,7 +30,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   minHeight = 350,
   className = "",
   zIndex,
-  onFocus
+  onFocus,
+  icon: Icon
 }) => {
   const dragControls = useDragControls();
   
@@ -113,6 +115,29 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   const effectivePos = defaultPosition || centerPos;
   const minimizedHeight = isMobile ? 64 : 48;
   const currentHeight = isMinimized ? minimizedHeight : (isMobile ? '100%' : size.height);
+
+  // --- FLOATING BUBBLE RENDER (Mobile + Minimized) ---
+  if (isMobile && isMinimized && Icon) {
+      return (
+          <AnimatePresence>
+            {isOpen && (
+                <motion.div
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    drag
+                    dragMomentum={false}
+                    whileDrag={{ scale: 1.1 }}
+                    onClick={() => setIsMinimized(false)}
+                    className="fixed bottom-24 right-5 w-[60px] h-[60px] rounded-full bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl flex items-center justify-center z-[100] cursor-pointer"
+                    style={{ touchAction: 'none' }} // Prevent scrolling while dragging
+                >
+                    <Icon size={28} className="text-white/80" />
+                </motion.div>
+            )}
+          </AnimatePresence>
+      );
+  }
 
   return (
     <AnimatePresence>
