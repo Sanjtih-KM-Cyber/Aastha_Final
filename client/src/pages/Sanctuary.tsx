@@ -5,12 +5,13 @@ import { SettingsPanel } from '../components/settings/SettingsPanel';
 import { useSync } from '../context/SyncContext';
 
 // ✅ DIRECT IMPORTS (Fix for Widgets Not Opening)
-import { Diary } from '../components/wellness/Diary';
-import { PomodoroWidget } from '../components/widgets/PomodoroWidget';
-import { JamWithAasthaWidget } from '../components/widgets/JamWithAasthaWidget';
-import { Soundscape } from '../components/widgets/Soundscape';
-import { BreathingWidget } from '../components/widgets/BreathingWidget';
-import { MoodTracker } from '../components/widgets/MoodTracker';
+// Lazy load widgets for better error isolation
+const Diary = React.lazy(() => import('../components/wellness/Diary').then(m => ({ default: m.Diary })));
+const PomodoroWidget = React.lazy(() => import('../components/widgets/PomodoroWidget').then(m => ({ default: m.PomodoroWidget })));
+const JamWithAasthaWidget = React.lazy(() => import('../components/widgets/JamWithAasthaWidget').then(m => ({ default: m.JamWithAasthaWidget })));
+const Soundscape = React.lazy(() => import('../components/widgets/Soundscape').then(m => ({ default: m.Soundscape })));
+const BreathingWidget = React.lazy(() => import('../components/widgets/BreathingWidget').then(m => ({ default: m.BreathingWidget })));
+const MoodTracker = React.lazy(() => import('../components/widgets/MoodTracker').then(m => ({ default: m.MoodTracker })));
 
 // Memoized Wrappers to prevent parent re-renders affecting heavy widgets
 const MemoDiary = memo(Diary);
@@ -136,64 +137,75 @@ export const Sanctuary: React.FC = () => {
          />
       </main>
 
-      {/* 3. Floating Widget Ecosystem - Widget Layer (z-40+) */}
-      {/* REMOVED SUSPENSE: Direct Rendering for Reliability */}
-      <div style={{ position: 'absolute', pointerEvents: 'none', inset: 0 }}>
+      {/* 3. Floating Widget Ecosystem - Widget Layer (z-50) */}
+      <div style={{ position: 'absolute', pointerEvents: 'none', inset: 0, zIndex: 50 }}>
 
-          <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
+          <div style={{ pointerEvents: 'auto' }}>
+            <React.Suspense fallback={null}>
               <MemoDiary
                 isOpen={widgets.diary} 
                 onClose={() => closeWidget('diary')} 
                 zIndex={zIndices.diary}
                 onFocus={() => bringToFront('diary')}
               />
+            </React.Suspense>
           </div>
 
-          <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
-            <MemoPomodoro
-                isOpen={widgets.pomodoro} 
-                onClose={() => closeWidget('pomodoro')} 
-                zIndex={zIndices.pomodoro}
-                onFocus={() => bringToFront('pomodoro')}
-            />
+          <div style={{ pointerEvents: 'auto' }}>
+            <React.Suspense fallback={null}>
+              <MemoPomodoro
+                  isOpen={widgets.pomodoro}
+                  onClose={() => closeWidget('pomodoro')}
+                  zIndex={zIndices.pomodoro}
+                  onFocus={() => bringToFront('pomodoro')}
+              />
+            </React.Suspense>
           </div>
 
-          <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
-            <MemoJam
-                isOpen={widgets.jam} 
-                onClose={() => closeWidget('jam')} 
-                zIndex={zIndices.jam}
-                onFocus={() => bringToFront('jam')}
-            />
+          <div style={{ pointerEvents: 'auto' }}>
+            <React.Suspense fallback={null}>
+              <MemoJam
+                  isOpen={widgets.jam}
+                  onClose={() => closeWidget('jam')}
+                  zIndex={zIndices.jam}
+                  onFocus={() => bringToFront('jam')}
+              />
+            </React.Suspense>
           </div>
 
-          <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
-            <MemoSoundscape
-                isOpen={widgets.soundscape} 
-                onClose={() => closeWidget('soundscape')} 
-                zIndex={zIndices.soundscape}
-                onFocus={() => bringToFront('soundscape')}
-                preset={widgetConfigs.soundscape?.preset}
-            />
+          <div style={{ pointerEvents: 'auto' }}>
+            <React.Suspense fallback={null}>
+              <MemoSoundscape
+                  isOpen={widgets.soundscape}
+                  onClose={() => closeWidget('soundscape')}
+                  zIndex={zIndices.soundscape}
+                  onFocus={() => bringToFront('soundscape')}
+                  preset={widgetConfigs.soundscape?.preset}
+              />
+            </React.Suspense>
           </div>
 
-          <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
-            <MemoBreathing
-                isOpen={widgets.breathing} 
-                onClose={() => closeWidget('breathing')} 
-                zIndex={zIndices.breathing}
-                onFocus={() => bringToFront('breathing')}
-                initialMode={widgetConfigs.breathing?.initialMode || "Box"}
-            />
+          <div style={{ pointerEvents: 'auto' }}>
+            <React.Suspense fallback={null}>
+              <MemoBreathing
+                  isOpen={widgets.breathing}
+                  onClose={() => closeWidget('breathing')}
+                  zIndex={zIndices.breathing}
+                  onFocus={() => bringToFront('breathing')}
+                  initialMode={widgetConfigs.breathing?.initialMode || "Box"}
+              />
+            </React.Suspense>
           </div>
 
-          <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
-            <MemoMood
-                isOpen={widgets.mood} 
-                onClose={() => closeWidget('mood')} 
-                zIndex={zIndices.mood}
-                onFocus={() => bringToFront('mood')}
-            />
+          <div style={{ pointerEvents: 'auto' }}>
+            <React.Suspense fallback={null}>
+              <MemoMood
+                  isOpen={widgets.mood}
+                  onClose={() => closeWidget('mood')}
+                  zIndex={zIndices.mood}
+                  onFocus={() => bringToFront('mood')}
+              />
+            </React.Suspense>
           </div>
       </div>
       

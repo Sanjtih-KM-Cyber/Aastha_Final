@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -12,7 +12,9 @@ import {
   RefreshCw,
   PenLine,
   Calendar,
-  X
+  X,
+  Eye,     // IMPORTED
+  EyeOff   // IMPORTED
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useEncryption } from '../../context/EncryptionContext';
@@ -54,6 +56,7 @@ const getShortDate = (dateStr: string) => new Date(dateStr).toLocaleDateString(u
 const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string; setError: (err: string) => void; }> = ({ onUnlock, error, setError }) => {
   const { currentTheme } = useTheme();
   const [input, setInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false); // NEW STATE
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,8 +72,25 @@ const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string
         </div>
         <h2 className="text-3xl font-serif mb-2">Sanctuary Vault</h2>
         <p className="text-white/50 text-center mb-8 text-sm">Enter your unique diary password to decrypt your journal.</p>
-        <form onSubmit={handleSubmit} className="w-full">
-          <input type="password" value={input} onChange={(e) => { setInput(e.target.value); setError(''); }} placeholder="Enter Password..." className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-center text-white focus:outline-none focus:border-white/30 transition-all text-lg tracking-widest" autoFocus />
+        <form onSubmit={handleSubmit} className="w-full relative">
+          <div className="relative">
+              <input
+                  type={showPassword ? "text" : "password"}
+                  value={input}
+                  onChange={(e) => { setInput(e.target.value); setError(''); }}
+                  placeholder="Enter Password..."
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-center text-white focus:outline-none focus:border-white/30 transition-all text-lg tracking-widest pr-12"
+                  autoFocus
+              />
+              <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+              >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+          </div>
+
           {error && <p className="text-red-400 text-xs text-center mt-4 flex items-center justify-center gap-1"><AlertCircle size={12} /> {error}</p>}
           <button type="submit" className="w-full mt-8 py-3 rounded-xl font-medium text-sm tracking-wide transition-all hover:scale-[1.02] shadow-lg" style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, ${currentTheme.primaryColor}80)`, color: '#000' }}>UNLOCK</button>
         </form>
@@ -101,56 +121,63 @@ const PaperPage: React.FC<{
         backgroundSize: '100% 2rem', backgroundAttachment: 'local'
       }}
     >
-      <div className="pt-8 px-8 pb-4 flex justify-between items-end border-b border-transparent">
+      <div className="pt-8 px-8 pb-4 flex justify-between items-start border-b border-transparent">
         <div className="flex flex-col w-full">
            <span className="text-xs font-mono text-gray-400 uppercase tracking-widest mb-1">{getFormattedDate(date)}</span>
-           {isEditing ? (
-             <input
-               value={title}
-               onChange={(e) => onTitleChange(e.target.value)}
-               onPointerDown={(e) => e.stopPropagation()}
-               placeholder="Title (Optional)..."
-               className="text-2xl font-serif font-bold bg-transparent border-none outline-none text-gray-800 placeholder-gray-300 w-full"
-             />
-           ) : (
-             <h2 className="text-2xl font-serif font-bold text-gray-800 leading-tight">{title || "Untitled Entry"}</h2>
-           )}
+           <div className="flex justify-between items-center w-full">
+               {isEditing ? (
+                 <input
+                   value={title}
+                   onChange={(e) => onTitleChange(e.target.value)}
+                   onPointerDown={(e) => e.stopPropagation()}
+                   placeholder="Title (Optional)..."
+                   className="text-2xl font-serif font-bold bg-transparent border-none outline-none text-gray-800 placeholder-gray-300 w-full"
+                 />
+               ) : (
+                 <h2 className="text-2xl font-serif font-bold text-gray-800 leading-tight truncate mr-2">{title || "Untitled Entry"}</h2>
+               )}
+
+               {!readOnly && (
+                  <div className="flex items-center gap-2 shrink-0">
+                     {isSaving && <span className="text-[10px] text-gray-400 uppercase tracking-wider animate-pulse">Saving...</span>}
+                     {isEditing ? (
+                       <button onClick={onSave} disabled={isSaving} className="px-4 py-1.5 rounded-full text-white text-[10px] font-bold shadow-md transition-transform hover:scale-105 active:scale-95 flex items-center gap-1.5" style={{ backgroundColor: currentTheme.primaryColor }}>
+                         {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} SAVE
+                       </button>
+                     ) : (
+                       <button onClick={onEdit} className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-all shadow-sm" title="Edit">
+                         <PenLine size={16} />
+                       </button>
+                     )}
+                  </div>
+               )}
+           </div>
         </div>
       </div>
 
-      <div className="flex-1 relative overflow-y-auto custom-scrollbar pl-14 pr-8 pb-8 pt-2">
+      <div className="flex-1 relative overflow-y-auto custom-scrollbar pl-14 pr-8 pb-8 pt-[0.35rem]">
         {isEditing ? (
           <textarea
              value={content}
              onChange={(e) => onContentChange(e.target.value)}
              onPointerDown={(e) => e.stopPropagation()}
              placeholder="Write your thoughts here..."
-             className="w-full h-full bg-transparent border-none outline-none resize-none text-gray-700 text-lg leading-[2rem] font-serif"
+             className="w-full h-full min-h-full bg-transparent border-none outline-none resize-none text-gray-700 text-lg font-serif"
+             style={{ lineHeight: '2rem' }}
              spellCheck={false}
           />
         ) : (
-          <div className="w-full min-h-full text-gray-800 text-lg leading-[2rem] font-serif whitespace-pre-wrap">
+          <div className="w-full min-h-full text-gray-800 text-lg font-serif whitespace-pre-wrap" style={{ lineHeight: '2rem' }}>
             {content || <span className="text-gray-300 italic">No content for this day.</span>}
           </div>
         )}
       </div>
-
-      {!readOnly && (
-        <div className="absolute bottom-6 right-8 flex items-center gap-3 z-20">
-           {isEditing ? (
-             <button onClick={onSave} disabled={isSaving} className="px-6 py-2 rounded-full text-white text-xs font-bold shadow-lg transition-transform hover:scale-105 active:scale-95 flex items-center gap-2" style={{ backgroundColor: currentTheme.primaryColor }}>
-               {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} SAVE
-             </button>
-           ) : (
-             <button onClick={onEdit} className="p-3 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-all shadow-md" title="Edit">
-               <PenLine size={18} />
-             </button>
-           )}
-        </div>
-      )}
     </div>
   );
 };
+
+// ... CalendarView and Diary components remain the same as previous submit ...
+// I will just copy them below to ensure the file is complete.
 
 const CalendarView: React.FC<{
   currentMonth: Date;
@@ -265,6 +292,8 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
+  const autoSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -332,8 +361,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
     setAuthError('');
   };
 
-  const handleSaveEntry = async () => {
-    if (!editContent.trim()) return;
+  const handleSaveEntry = async (silent = false) => {
     setIsSaving(true);
     try {
       const titleToSave = editTitle.trim() || "Untitled";
@@ -347,14 +375,26 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       });
       const newEntry = { ...saved, title: titleToSave, content: editContent, createdAt: activeDate.toISOString() };
       setEntriesMap(prev => ({ ...prev, [toDateString(activeDate)]: newEntry }));
-      setEditMode('view');
     } catch (e) {
       console.error("Save error", e);
-      alert("Failed to save entry.");
+      if (!silent) alert("Failed to save entry.");
     } finally {
       setIsSaving(false);
     }
   };
+
+  useEffect(() => {
+      if (editMode === 'edit') {
+          if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+          setIsSaving(true);
+          autoSaveTimerRef.current = setTimeout(() => {
+              handleSaveEntry(true);
+          }, 1000);
+      }
+      return () => {
+          if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      };
+  }, [editContent, editTitle]);
 
   const createNewEntry = () => {
     setActiveDate(new Date());
@@ -368,6 +408,10 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   };
 
   const changeDay = (offset: number) => {
+      if (isMobile) {
+          setActiveDate(prev => addDays(prev, offset));
+          return;
+      }
       if (isFlipping) return;
       setIsFlipping(offset > 0 ? 'next' : 'prev');
   };
@@ -441,6 +485,8 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       isOpen={isOpen} onClose={onClose} title="Personal Journal"
       initialWidth={900} initialHeight={650} defaultPosition={{ x: 100, y: 80 }}
       zIndex={zIndex || 20} onFocus={onFocus || (() => {})}
+      icon={BookOpen}
+      color="#F59E0B"
     >
       <div
         className="flex h-full w-full bg-[#222] text-gray-800 relative overflow-hidden rounded-b-xl shadow-inner font-sans items-center justify-center"
@@ -454,26 +500,27 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
         ) : (
             <div className={`relative w-full h-full flex shadow-2xl ${isMobile ? '' : 'rounded-r-lg perspective-2000 w-[95%] h-[90%]'}`}>
                 
-                {/* --- MOBILE HEADER (Calendar Icon, Arrows, Date) --- */}
                 {isMobile && (
                     <div className="absolute top-0 left-0 right-0 h-14 bg-[#fdfdf6] border-b border-gray-200 z-50 flex items-center justify-between px-4">
-                        <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-black/5 rounded-full"><ChevronLeft className="text-gray-600" /></button>
-
-                        <div className="flex items-center gap-2">
-                           <span className="font-serif font-bold text-gray-800">{getFormattedDate(activeDate)}</span>
-                           <button
-                             onClick={() => setIsCalendarModalOpen(true)}
-                             className="p-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors"
-                           >
-                             <Calendar size={16} />
-                           </button>
+                        <div className="flex items-center gap-3">
+                             <span className="font-serif font-bold text-gray-800 text-lg">
+                                {activeDate.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}
+                             </span>
+                             <button onClick={() => setIsCalendarModalOpen(true)} className="p-2 bg-gray-100 rounded-full text-gray-600">
+                                <Calendar size={18} />
+                             </button>
                         </div>
-
-                        <button onClick={() => changeDay(1)} disabled={!!isFlipping} className="p-2 hover:bg-black/5 rounded-full"><ChevronRight className="text-gray-600" /></button>
+                        <button
+                            onClick={() => handleSaveEntry(false)}
+                            disabled={isSaving}
+                            className="px-4 py-1.5 text-white text-xs font-bold uppercase rounded-full shadow-sm transition-colors"
+                            style={{ backgroundColor: currentTheme.primaryColor }}
+                        >
+                            {isSaving ? "Saving..." : "Save"}
+                        </button>
                     </div>
                 )}
 
-                {/* --- MOBILE CALENDAR MODAL --- */}
                 <AnimatePresence>
                   {isMobile && isCalendarModalOpen && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
@@ -521,7 +568,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                 </AnimatePresence>
 
                 {!isMobile && (
-                  <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white z-50">
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white z-50">
                       <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronLeft/></button>
                       <span className="font-mono text-sm w-32 text-center">{getFormattedDate(activeDate).split(',')[1]}</span>
                       <button onClick={() => changeDay(1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronRight/></button>
@@ -563,52 +610,63 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                                 content={isFlipping === 'next' ? entriesMap[toDateString(dPlus1)]?.content || '' : (editMode === 'view' ? entriesMap[toDateString(activeDate)]?.content : editContent)}
                                 mode={isFlipping ? 'view' : editMode} 
                                 isSaving={isSaving}
-                                onTitleChange={setEditTitle} onContentChange={setEditContent} onSave={handleSaveEntry} onEdit={() => setEditMode('edit')} onCancel={() => setEditMode('view')} onMoodChange={() => {}}
-                                readOnly={isFlipping !== null}
+                                onTitleChange={setEditTitle} onContentChange={setEditContent} onSave={() => handleSaveEntry(false)} onEdit={() => setEditMode('edit')} readOnly={isFlipping !== null}
                              />
                         </div>
                     </div>
 
-                    {!isMobile && (
-                      <AnimatePresence mode="sync" onExitComplete={() => setIsFlipping(null)}>
-                        {isFlipping === 'next' && (
-                             <motion.div
-                                key="flip-next"
-                                initial={{ rotateY: 0 }} animate={{ rotateY: -180 }}
-                                transition={{ duration: 0.6, ease: "easeInOut" }}
-                                onAnimationComplete={handleAnimationComplete}
-                                style={{ transformOrigin: 'left center', transformStyle: 'preserve-3d', position: 'absolute', right: 0, top: 0, bottom: 0, width: '50%', zIndex: 50 }}
-                             >
-                                <div className="absolute inset-0 w-full h-full backface-hidden" style={{ backfaceVisibility: 'hidden' }}>
-                                    <PaperPage date={activeDate} title={entriesMap[toDateString(activeDate)]?.title || ''} content={entriesMap[toDateString(activeDate)]?.content || ''} mode="view" isSaving={false} onTitleChange={()=>{}} onContentChange={()=>{}} onSave={()=>{}} onEdit={()=>{}} onCancel={()=>{}} onMoodChange={()=>{}} readOnly={true} />
-                                    <div className="absolute inset-0 bg-gradient-to-l from-black/10 to-transparent pointer-events-none" />
-                                </div>
-                                <div className="absolute inset-0 w-full h-full rounded-l-lg overflow-hidden" style={{ transform: 'rotateY(180deg)', backfaceVisibility: 'hidden', background: '#fdfdf6' }}>
-                                    <div className="flex-1 flex flex-col p-8"><h3 className="text-xl font-serif font-bold text-gray-400 mb-4">Navigation</h3><p className="text-gray-400 text-sm">Turning to {getFormattedDate(dPlus1)}...</p></div>
-                                    <div className="absolute inset-0 bg-gradient-to-r from-black/10 to-transparent pointer-events-none" />
-                                </div>
-                             </motion.div>
-                        )}
-                         {isFlipping === 'prev' && (
-                             <motion.div
-                                key="flip-prev"
-                                initial={{ rotateY: -180 }} animate={{ rotateY: 0 }}
-                                transition={{ duration: 0.6, ease: "easeInOut" }}
-                                onAnimationComplete={handleAnimationComplete}
-                                style={{ transformOrigin: 'right center', transformStyle: 'preserve-3d', position: 'absolute', left: 0, top: 0, bottom: 0, width: '50%', zIndex: 50 }}
-                             >
-                                <div className="absolute inset-0 w-full h-full rounded-l-lg overflow-hidden" style={{ transform: 'rotateY(180deg)', backfaceVisibility: 'hidden', background: '#fdfdf6' }}>
-                                    <PaperPage date={dMinus1} title={entriesMap[toDateString(dMinus1)]?.title || ''} content={entriesMap[toDateString(dMinus1)]?.content || ''} mode="view" isSaving={false} onTitleChange={()=>{}} onContentChange={()=>{}} onSave={()=>{}} onEdit={()=>{}} onCancel={()=>{}} onMoodChange={()=>{}} readOnly={true} />
-                                    <div className="absolute inset-0 bg-gradient-to-r from-black/10 to-transparent pointer-events-none" />
-                                </div>
-                                <div className="absolute inset-0 w-full h-full rounded-r-lg overflow-hidden" style={{ backfaceVisibility: 'hidden', background: '#fdfdf6' }}>
-                                     <div className="flex-1 flex flex-col p-8"><h3 className="text-xl font-serif font-bold text-gray-400 mb-4">Navigation</h3><p className="text-gray-400 text-sm">Turning back...</p></div>
-                                    <div className="absolute inset-0 bg-gradient-to-l from-black/10 to-transparent pointer-events-none" />
-                                </div>
-                             </motion.div>
-                        )}
-                      </AnimatePresence>
-                    )}
+                    <AnimatePresence mode="sync" onExitComplete={() => setIsFlipping(null)}>
+                      {isFlipping && !isMobile && (
+                           // PC: 3D Page Turn
+                           isFlipping === 'next' ? (
+                               <motion.div
+                                  key="flip-next"
+                                  initial={{ rotateY: 0 }} animate={{ rotateY: -180 }}
+                                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                                  onAnimationComplete={handleAnimationComplete}
+                                  style={{ transformOrigin: 'left center', transformStyle: 'preserve-3d', position: 'absolute', right: 0, top: 0, bottom: 0, width: '50%', zIndex: 50 }}
+                               >
+                                  <div className="absolute inset-0 w-full h-full backface-hidden" style={{ backfaceVisibility: 'hidden' }}>
+                                      <PaperPage date={activeDate} title={entriesMap[toDateString(activeDate)]?.title || ''} content={entriesMap[toDateString(activeDate)]?.content || ''} mode="view" isSaving={false} onTitleChange={()=>{}} onContentChange={()=>{}} onSave={()=>{}} onEdit={()=>{}} readOnly={true} />
+                                      <div className="absolute inset-0 bg-gradient-to-l from-black/10 to-transparent pointer-events-none" />
+                                  </div>
+                                  <div className="absolute inset-0 w-full h-full rounded-l-lg overflow-hidden" style={{ transform: 'rotateY(180deg)', backfaceVisibility: 'hidden', background: '#fdfdf6' }}>
+                                      <div className="flex-1 flex flex-col p-8"><h3 className="text-xl font-serif font-bold text-gray-400 mb-4">Navigation</h3><p className="text-gray-400 text-sm">Turning to {getFormattedDate(dPlus1)}...</p></div>
+                                      <div className="absolute inset-0 bg-gradient-to-r from-black/10 to-transparent pointer-events-none" />
+                                  </div>
+                               </motion.div>
+                           ) : (
+                               <motion.div
+                                  key="flip-prev"
+                                  initial={{ rotateY: -180 }} animate={{ rotateY: 0 }}
+                                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                                  onAnimationComplete={handleAnimationComplete}
+                                  style={{ transformOrigin: 'right center', transformStyle: 'preserve-3d', position: 'absolute', left: 0, top: 0, bottom: 0, width: '50%', zIndex: 50 }}
+                               >
+                                  <div className="absolute inset-0 w-full h-full rounded-l-lg overflow-hidden" style={{ transform: 'rotateY(180deg)', backfaceVisibility: 'hidden', background: '#fdfdf6' }}>
+                                      <PaperPage date={dMinus1} title={entriesMap[toDateString(dMinus1)]?.title || ''} content={entriesMap[toDateString(dMinus1)]?.content || ''} mode="view" isSaving={false} onTitleChange={()=>{}} onContentChange={()=>{}} onSave={()=>{}} onEdit={()=>{}} readOnly={true} />
+                                      <div className="absolute inset-0 bg-gradient-to-r from-black/10 to-transparent pointer-events-none" />
+                                  </div>
+                                  <div className="absolute inset-0 w-full h-full rounded-r-lg overflow-hidden" style={{ backfaceVisibility: 'hidden', background: '#fdfdf6' }}>
+                                       <div className="flex-1 flex flex-col p-8"><h3 className="text-xl font-serif font-bold text-gray-400 mb-4">Navigation</h3><p className="text-gray-400 text-sm">Turning back...</p></div>
+                                      <div className="absolute inset-0 bg-gradient-to-l from-black/10 to-transparent pointer-events-none" />
+                                  </div>
+                               </motion.div>
+                           )
+                      )}
+                      {isFlipping && isMobile && (
+                          // Mobile: Simple Fade
+                          <motion.div
+                              key="mobile-flip"
+                              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              onAnimationComplete={handleAnimationComplete}
+                              className="absolute inset-0 flex items-center justify-center bg-[#fdfdf6] z-50"
+                          >
+                              <Loader2 className="animate-spin text-gray-400" />
+                          </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     {!isMobile && (
                         <div className="absolute left-1/2 top-0 bottom-0 w-16 -ml-8 z-40 flex justify-center">

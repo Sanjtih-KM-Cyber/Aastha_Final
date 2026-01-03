@@ -3,7 +3,7 @@ import { DraggableWindow } from '../layout/DraggableWindow';
 import { 
   Play, Pause, SkipForward, SkipBack, Repeat, Search, 
   Disc, Sparkles, Plus, ListMusic, Lock, X, Music2, Globe, Check, Settings,
-  ArrowUp, ArrowDown, Trash2, Minus
+  ArrowUp, ArrowDown, Trash2, Minus, Music
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
@@ -435,6 +435,8 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       isOpen={isOpen} onClose={onClose} title="Jam with Aastha"
       initialWidth={360} initialHeight={620} defaultPosition={{ x: 800, y: 150 }}
       zIndex={zIndex || 10} onFocus={onFocus || (() => {})}
+      icon={Music}
+      color="#8B5CF6"
     >
       <div className="flex flex-col h-full w-full font-sans select-none relative">
         

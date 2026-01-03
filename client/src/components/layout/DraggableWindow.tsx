@@ -15,6 +15,8 @@ interface DraggableWindowProps {
   className?: string;
   zIndex: number;
   onFocus: () => void;
+  icon?: React.ElementType; // New Prop for Floating Bubble Icon
+  color?: string; // New Prop for Brand Color
 }
 
 export const DraggableWindow: React.FC<DraggableWindowProps> = ({ 
@@ -29,7 +31,9 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   minHeight = 350,
   className = "",
   zIndex,
-  onFocus
+  onFocus,
+  icon: Icon,
+  color
 }) => {
   const dragControls = useDragControls();
   
@@ -111,8 +115,43 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   };
 
   const effectivePos = defaultPosition || centerPos;
+  // If not minimized, Mobile height is 100%. If minimized, desktop is 48px.
+  // Note: logic below is for the MAIN window. The bubble is handled separately.
   const minimizedHeight = isMobile ? 64 : 48;
   const currentHeight = isMinimized ? minimizedHeight : (isMobile ? '100%' : size.height);
+
+  // --- FLOATING BUBBLE RENDER (Mobile + Minimized) ---
+  // STRICT IMPLEMENTATION AS REQUESTED
+  if (isMobile && isMinimized && Icon) {
+      return (
+          <AnimatePresence>
+            {isOpen && (
+                <motion.div
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    drag
+                    dragMomentum={false}
+                    whileDrag={{ scale: 1.1 }}
+                    onClick={() => setIsMinimized(false)}
+                    className="fixed z-[100] cursor-pointer shadow-2xl flex items-center justify-center rounded-full"
+                    style={{
+                        width: '48px', // Force 48px
+                        height: '48px', // Force 48px
+                        bottom: '5rem', // bottom-20 (20 * 0.25 = 5rem)
+                        right: '1.5rem', // right-6 (6 * 0.25 = 1.5rem)
+                        borderRadius: '50%', // FORCE CIRCLE
+                        backgroundColor: color || '#333',
+                        touchAction: 'none',
+                        border: '2px solid rgba(255,255,255,0.2)'
+                    }}
+                >
+                    <Icon size={24} className="text-white" />
+                </motion.div>
+            )}
+          </AnimatePresence>
+      );
+  }
 
   return (
     <AnimatePresence>
@@ -131,17 +170,26 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             y: 0,
             borderRadius: isMobile ? 0 : 24,
           }}
-          exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          // --- MOBILE OPTIMIZATION 1: Fast Transitions & Simple Exit ---
+          transition={isMobile
+            ? { duration: 0.25, ease: "easeInOut" }
+            : { type: "spring", damping: 25, stiffness: 300 }
+          }
+          exit={isMobile
+            ? { opacity: 0 }
+            : { opacity: 0, scale: 0.9, y: 20 }
+          }
           drag={!isMobile && !isResizing}
           dragControls={dragControls}
           dragMomentum={false}
           dragListener={false}
           onPointerDown={onFocus}
           className={`fixed flex flex-col ${isMobile ? '' : 'cursor-auto'}`}
+          // --- MOBILE OPTIMIZATION 2: Hardware Acceleration ---
           style={{ 
             zIndex: isMobile ? 9999 : zIndex,
-            position: 'fixed'
+            position: 'fixed',
+            willChange: isMobile ? 'transform, opacity' : undefined
           }}
         >
           <div className={`
@@ -154,8 +202,12 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             {/* --- Window Header (Controls & Title) --- */}
             <div 
               onPointerDown={(e) => !isMobile && dragControls.start(e)}
+              // --- MOBILE OPTIMIZATION 3: Opaque Header (No Blur) ---
               className={`
-                 ${isMobile ? 'absolute top-0 left-0 right-0 h-16 bg-black/20 backdrop-blur-sm' : 'relative h-12 cursor-grab active:cursor-grabbing touch-none bg-transparent'}
+                 ${isMobile
+                     ? 'absolute top-0 left-0 right-0 h-16 bg-[#121212] border-b border-white/10'
+                     : 'relative h-12 cursor-grab active:cursor-grabbing touch-none bg-transparent'
+                 }
                  z-50 flex items-center justify-between px-4 shrink-0
               `}
             >

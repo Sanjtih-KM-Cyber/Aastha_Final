@@ -10,6 +10,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLowPowerMode } from '../../hooks/useLowPowerMode';
 import api from '../../services/api';
+import { ACCENT_COLORS } from '../../constants';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -37,7 +38,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   const [isMobile, setIsMobile] = useState(false);
 
   const { currentTheme, setTheme, setWallpaper, wallpaper } = useTheme();
-  const { user, logout, updateUser } = useAuth();
+  const { user, logout, updateUser, getUserDisplayName, getUserDisplayEmail } = useAuth();
   const { isLowPower, setLowPowerMode } = useLowPowerMode();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -67,6 +68,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   const [resetStep, setResetStep] = useState(0);
   const [securityQuestion, setSecurityQuestion] = useState('');
   
+  // Auto-Lock
+  const [autoLockDuration, setAutoLockDuration] = useState<string>('0');
+
   // Subscription
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -87,6 +91,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   useEffect(() => {
     const loadVoices = () => setAvailableVoices(window.speechSynthesis.getVoices());
     loadVoices(); window.speechSynthesis.onvoiceschanged = loadVoices;
+  }, []);
+
+  useEffect(() => {
+      // Load Auto Lock
+      const storedAutoLock = localStorage.getItem('settings_autoLock') || '0';
+      setAutoLockDuration(storedAutoLock);
   }, []);
 
   // Load Razorpay SDK
@@ -214,6 +224,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
           await api.post('/users/delete-account', { reason: deleteReason });
           logout(); window.location.reload();
       } catch (e) { setIsDeleting(false); }
+  };
+
+  const handleAutoLockChange = (val: string) => {
+      setAutoLockDuration(val);
+      localStorage.setItem('settings_autoLock', val);
+      localStorage.setItem('auth_last_active', Date.now().toString());
   };
 
   const handleSubscribe = async () => {
@@ -395,7 +411,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                                  <input value={editUsername} onChange={e => setEditUsername(e.target.value)} className="w-full bg-black/40 border border-white/20 rounded p-1 text-sm text-white" placeholder="Username" />
                              </div>
                          ) : (
-                             <><h4 className="text-lg font-medium text-white">{user?.name}</h4><p className="text-sm text-white/50">@{user?.username}</p></>
+                             <><h4 className="text-lg font-medium text-white">{getUserDisplayName()}</h4><p className="text-sm text-white/50">@{user?.username}</p></>
                          )}
                     </div>
                     <button onClick={() => isEditingProfile ? saveProfile() : setIsEditingProfile(true)} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60">{isEditingProfile ? <Save size={18} className="text-teal-400"/> : <Edit2 size={16} />}</button>
@@ -419,7 +435,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                           </div>
                       </div>
 
-                      <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
+                      <div className="p-6 bg-white/5 rounded-2xl border border-white/5 mb-6">
                           <h4 className="text-lg font-medium text-white mb-2">Forgot Password (Nuclear Reset)</h4>
                           <p className="text-sm text-white/60 mb-6">Use this if you cannot remember your old password. <br/><span className="text-red-400">Warning: This will wipe your existing diary entries.</span></p>
                           
@@ -441,6 +457,31 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                                   <button onClick={handleResetDiary} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg">Reset & Wipe Diary</button>
                               </div>
                           )}
+                      </div>
+
+                      {/* --- AUTO LOCK SETTING (Preserved) --- */}
+                      <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
+                          <div className="flex items-center gap-3 mb-3">
+                              <Shield size={18} className="text-white/60"/>
+                              <div>
+                                  <h4 className="font-bold text-white">Auto-Lock Timer</h4>
+                                  <p className="text-xs text-white/50">Lock app after inactivity</p>
+                              </div>
+                          </div>
+
+                          <select
+                              value={autoLockDuration}
+                              onChange={(e) => handleAutoLockChange(e.target.value)}
+                              className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30 transition-all"
+                          >
+                              <option value="0">Disabled</option>
+                              <option value="15000">15 Seconds (Test)</option>
+                              <option value="30000">30 Seconds</option>
+                              <option value="60000">1 Minute</option>
+                              <option value="120000">2 Minutes</option>
+                              <option value="300000">5 Minutes</option>
+                              <option value="600000">10 Minutes</option>
+                          </select>
                       </div>
                   </section>
               </>

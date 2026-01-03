@@ -49,6 +49,6 @@ export const SOUND_URLS = {
   ocean: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/ocean.mp3',
   rain: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/rain.mp3',
   storm2: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/storm2.mp3',
-  thunder: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/thunder.mp3',
+  thunder: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/storm2.mp3',
   wind: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/wind.mp3'
 };
