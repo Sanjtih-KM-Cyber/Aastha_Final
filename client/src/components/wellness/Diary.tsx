@@ -152,6 +152,8 @@ const PaperPage: React.FC<{
           </div>
         )}
       </div>
+
+      {/* --- FIX: REMOVED FLOATING BUTTON FROM HERE --- */}
     </div>
   );
 };
@@ -339,7 +341,9 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   };
 
   const handleSaveEntry = async (silent = false) => {
-    if (!editContent.trim()) return;
+    // --- FIX: Allow deletion (empty string) ---
+    // if (!editContent.trim()) return; <--- REMOVED
+
     setIsSaving(true);
     try {
       const titleToSave = editTitle.trim() || "Untitled";
@@ -354,7 +358,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       const newEntry = { ...saved, title: titleToSave, content: editContent, createdAt: activeDate.toISOString() };
       setEntriesMap(prev => ({ ...prev, [toDateString(activeDate)]: newEntry }));
 
-      // ✅ FIX: Do NOT switch to view mode. Keep keyboard open.
+      // --- FIX: Stay in Edit Mode (Confirmed) ---
       // if (!silent) setEditMode('view'); <--- REMOVED
     } catch (e) {
       console.error("Save error", e);
@@ -366,18 +370,20 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
   // Auto-Save Logic
   useEffect(() => {
-      if (editMode === 'edit' && editContent.trim()) {
+      // Auto-save even if content is empty (to support clearing) but maybe we check if it CHANGED?
+      // Assuming editMode === 'edit' is enough context.
+      if (editMode === 'edit') {
           if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
 
-          setIsSaving(true); // Show "Saving..." immediately to indicate pending save
+          setIsSaving(true); // Show "Saving..." immediately
           autoSaveTimerRef.current = setTimeout(() => {
               handleSaveEntry(true);
-          }, 3000); // 3 seconds debounce
+          }, 1000); // --- FIX: 1000ms Debounce ---
       }
       return () => {
           if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
       };
-  }, [editContent, editTitle]); // Depend on content change
+  }, [editContent, editTitle]);
 
   const createNewEntry = () => {
     setActiveDate(new Date());
@@ -391,6 +397,11 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   };
 
   const changeDay = (offset: number) => {
+      // --- FIX: Mobile Swipe Bug ---
+      if (isMobile) {
+          setActiveDate(prev => addDays(prev, offset));
+          return;
+      }
       if (isFlipping) return;
       setIsFlipping(offset > 0 ? 'next' : 'prev');
   };
@@ -479,7 +490,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
         ) : (
             <div className={`relative w-full h-full flex shadow-2xl ${isMobile ? '' : 'rounded-r-lg perspective-2000 w-[95%] h-[90%]'}`}>
                 
-                {/* --- MOBILE HEADER (UPDATED ONE-LINE) --- */}
+                {/* --- MOBILE HEADER (One-Line) --- */}
                 {isMobile && (
                     <div className="absolute top-0 left-0 right-0 h-14 bg-[#fdfdf6] border-b border-gray-200 z-50 flex items-center justify-between px-4">
                         {/* Left: Date & Calendar */}
@@ -491,8 +502,13 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                                 <Calendar size={18} />
                              </button>
                         </div>
-                        {/* Right: Save Button */}
-                        <button onClick={() => handleSaveEntry(false)} disabled={isSaving} className="px-4 py-1.5 bg-amber-500 text-white text-xs font-bold uppercase rounded-full shadow-sm">
+                        {/* Right: Save Button with Theme Color */}
+                        <button
+                            onClick={() => handleSaveEntry(false)}
+                            disabled={isSaving}
+                            className="px-4 py-1.5 text-white text-xs font-bold uppercase rounded-full shadow-sm transition-colors"
+                            style={{ backgroundColor: currentTheme.primaryColor }}
+                        >
                             {isSaving ? "Saving..." : "Save"}
                         </button>
                     </div>
@@ -545,8 +561,9 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                   )}
                 </AnimatePresence>
 
+                {/* --- FIX: PC Navigation (-bottom-12 -> bottom-6 z-50) --- */}
                 {!isMobile && (
-                  <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white z-50">
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white z-50">
                       <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronLeft/></button>
                       <span className="font-mono text-sm w-32 text-center">{getFormattedDate(activeDate).split(',')[1]}</span>
                       <button onClick={() => changeDay(1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronRight/></button>

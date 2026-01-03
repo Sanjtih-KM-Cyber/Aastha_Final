@@ -136,10 +136,11 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
                     onClick={() => setIsMinimized(false)}
                     className="fixed z-[100] cursor-pointer shadow-2xl flex items-center justify-center rounded-full"
                     style={{
-                        width: '3rem', // w-12 (12 * 0.25rem = 3rem = 48px)
-                        height: '3rem', // h-12
+                        width: '48px', // Force 48px
+                        height: '48px', // Force 48px
                         bottom: '5rem', // bottom-20 (20 * 0.25 = 5rem)
                         right: '1.5rem', // right-6 (6 * 0.25 = 1.5rem)
+                        borderRadius: '50%', // FORCE CIRCLE
                         backgroundColor: color || '#333',
                         touchAction: 'none',
                         border: '2px solid rgba(255,255,255,0.2)'
