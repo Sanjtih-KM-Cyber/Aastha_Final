@@ -142,7 +142,7 @@ const PaperPage: React.FC<{
              onChange={(e) => onContentChange(e.target.value)}
              onPointerDown={(e) => e.stopPropagation()}
              placeholder="Write your thoughts here..."
-             className="w-full h-full bg-transparent border-none outline-none resize-none text-gray-700 text-lg font-serif"
+             className="w-full h-full min-h-full bg-transparent border-none outline-none resize-none text-gray-700 text-lg font-serif"
              style={{ lineHeight: '2rem' }}
              spellCheck={false}
           />
@@ -353,7 +353,9 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       });
       const newEntry = { ...saved, title: titleToSave, content: editContent, createdAt: activeDate.toISOString() };
       setEntriesMap(prev => ({ ...prev, [toDateString(activeDate)]: newEntry }));
-      if (!silent) setEditMode('view');
+
+      // ✅ FIX: Do NOT switch to view mode. Keep keyboard open.
+      // if (!silent) setEditMode('view'); <--- REMOVED
     } catch (e) {
       console.error("Save error", e);
       if (!silent) alert("Failed to save entry.");
@@ -477,18 +479,22 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
         ) : (
             <div className={`relative w-full h-full flex shadow-2xl ${isMobile ? '' : 'rounded-r-lg perspective-2000 w-[95%] h-[90%]'}`}>
                 
-                {/* --- MOBILE HEADER (Calendar Icon Only) --- */}
+                {/* --- MOBILE HEADER (UPDATED ONE-LINE) --- */}
                 {isMobile && (
-                    <div className="absolute top-0 left-0 right-0 h-14 bg-[#fdfdf6] border-b border-gray-200 z-50 flex items-center justify-center px-4 relative">
-                        <div className="flex items-center gap-2">
-                           <span className="font-serif font-bold text-gray-800 text-sm">{getFormattedDate(activeDate)}</span>
-                           <button
-                             onClick={() => setIsCalendarModalOpen(true)}
-                             className="p-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors"
-                           >
-                             <Calendar size={16} />
-                           </button>
+                    <div className="absolute top-0 left-0 right-0 h-14 bg-[#fdfdf6] border-b border-gray-200 z-50 flex items-center justify-between px-4">
+                        {/* Left: Date & Calendar */}
+                        <div className="flex items-center gap-3">
+                             <span className="font-serif font-bold text-gray-800 text-lg">
+                                {activeDate.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}
+                             </span>
+                             <button onClick={() => setIsCalendarModalOpen(true)} className="p-2 bg-gray-100 rounded-full text-gray-600">
+                                <Calendar size={18} />
+                             </button>
                         </div>
+                        {/* Right: Save Button */}
+                        <button onClick={() => handleSaveEntry(false)} disabled={isSaving} className="px-4 py-1.5 bg-amber-500 text-white text-xs font-bold uppercase rounded-full shadow-sm">
+                            {isSaving ? "Saving..." : "Save"}
+                        </button>
                     </div>
                 )}
 
@@ -582,7 +588,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                                 content={isFlipping === 'next' ? entriesMap[toDateString(dPlus1)]?.content || '' : (editMode === 'view' ? entriesMap[toDateString(activeDate)]?.content : editContent)}
                                 mode={isFlipping ? 'view' : editMode} 
                                 isSaving={isSaving}
-                                onTitleChange={setEditTitle} onContentChange={setEditContent} onSave={() => handleSaveEntry()} onEdit={() => setEditMode('edit')} readOnly={isFlipping !== null}
+                                onTitleChange={setEditTitle} onContentChange={setEditContent} onSave={() => handleSaveEntry(false)} onEdit={() => setEditMode('edit')} readOnly={isFlipping !== null}
                              />
                         </div>
                     </div>

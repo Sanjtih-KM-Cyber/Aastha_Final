@@ -115,10 +115,13 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   };
 
   const effectivePos = defaultPosition || centerPos;
+  // If not minimized, Mobile height is 100%. If minimized, desktop is 48px.
+  // Note: logic below is for the MAIN window. The bubble is handled separately.
   const minimizedHeight = isMobile ? 64 : 48;
   const currentHeight = isMinimized ? minimizedHeight : (isMobile ? '100%' : size.height);
 
   // --- FLOATING BUBBLE RENDER (Mobile + Minimized) ---
+  // STRICT IMPLEMENTATION AS REQUESTED
   if (isMobile && isMinimized && Icon) {
       return (
           <AnimatePresence>
@@ -131,8 +134,12 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
                     dragMomentum={false}
                     whileDrag={{ scale: 1.1 }}
                     onClick={() => setIsMinimized(false)}
-                    className="fixed bottom-20 right-4 w-12 h-12 rounded-full shadow-2xl flex items-center justify-center z-[100] cursor-pointer"
+                    className="fixed z-[100] cursor-pointer shadow-2xl flex items-center justify-center rounded-full"
                     style={{
+                        width: '3rem', // w-12 (12 * 0.25rem = 3rem = 48px)
+                        height: '3rem', // h-12
+                        bottom: '5rem', // bottom-20 (20 * 0.25 = 5rem)
+                        right: '1.5rem', // right-6 (6 * 0.25 = 1.5rem)
                         backgroundColor: color || '#333',
                         touchAction: 'none',
                         border: '2px solid rgba(255,255,255,0.2)'
