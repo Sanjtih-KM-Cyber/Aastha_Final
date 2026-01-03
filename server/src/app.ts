@@ -73,13 +73,15 @@ wss.on('connection', (ws, req) => {
         ws.on('message', (message) => {
             try {
                 const data = JSON.parse(message.toString());
-                // console.log(`[WS] Broadcast from ${userId}:`, data.type); // Optional: Uncomment for debug
+                // console.log(`[WS] Broadcast from ${userId}:`, data.type);
 
-                // Broadcast to ALL other devices belonging to this user
+                // Broadcast to ALL devices (including the sender)
                 const userSockets = clients.get(userId);
                 if (userSockets) {
                     userSockets.forEach(client => {
-                        if (client !== ws && client.readyState === WebSocket.OPEN) {
+                        // ✅ FIX: Removed "client !== ws".
+                        // We MUST echo back to the sender so the frontend knows to open the window.
+                        if (client.readyState === WebSocket.OPEN) {
                             client.send(JSON.stringify(data));
                         }
                     });
@@ -113,16 +115,20 @@ app.set('trust proxy', 1);
 
 // HELMET - Content Security Policy
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow resources to be loaded
+  crossOriginResourcePolicy: { policy: "cross-origin" },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://checkout.razorpay.com"],
+      // ✅ FIX: Added YouTube and ytimg to scripts
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://checkout.razorpay.com", "https://www.youtube.com", "https://s.ytimg.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-      connectSrc: ["'self'", "ws:", "wss:", "https://aasthaai.site", "https://aastha-final.onrender.com", "http://localhost:*", "https://lumberjack.razorpay.com"],
-      imgSrc: ["'self'", "data:", "https:", "blob:"],
-      frameSrc: ["'self'", "https://api.razorpay.com"],
+      // ✅ FIX: Added YouTube to connectSrc
+      connectSrc: ["'self'", "ws:", "wss:", "https://aasthaai.site", "https://aastha-final.onrender.com", "http://localhost:*", "https://lumberjack.razorpay.com", "https://www.youtube.com"],
+      // ✅ FIX: Added YouTube thumbnails to imgSrc
+      imgSrc: ["'self'", "data:", "https:", "blob:", "https://i.ytimg.com", "https://www.youtube.com"],
+      // ✅ FIX: Added YouTube to frameSrc (Critical for Widget)
+      frameSrc: ["'self'", "https://api.razorpay.com", "https://www.youtube.com", "https://youtube.com"],
       upgradeInsecureRequests: null,
     }
   },

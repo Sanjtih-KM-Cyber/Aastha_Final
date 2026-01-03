@@ -3,7 +3,6 @@ import { WellnessHub } from '../components/wellness/WellnessHub';
 import { ChatView } from '../components/chat/ChatView';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
 import { useSync } from '../context/SyncContext';
-import { LoadingFallback } from '../components/LoadingFallback';
 
 // Lazy Load Widgets
 const Diary = React.lazy(() => import('../components/wellness/Diary').then(m => ({ default: m.Diary })));
