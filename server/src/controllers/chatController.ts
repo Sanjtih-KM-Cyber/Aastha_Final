@@ -114,7 +114,12 @@ You are 'Aastik', a grounded, calm, and reliable campus wellness friend for {{us
 export const chatWithAI = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
 
-  const { message, images } = (req as any).body; 
+  // ✅ FIX: Robustly handle 'images' (array) OR 'image' (singular legacy)
+  let { message, images, image } = (req as any).body;
+  if (!images && image) {
+      images = [image];
+  }
+
   const userName = req.user.name;
   const userId = req.user._id;
 

@@ -138,6 +138,8 @@ export const Sanctuary: React.FC = () => {
 
       {/* 3. Floating Widget Ecosystem - Widget Layer (z-40+) */}
       <div style={{ position: 'absolute', pointerEvents: 'none', inset: 0 }}>
+
+        {/* Diary */}
         <Suspense fallback={null}>
           <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
               <MemoDiary
@@ -147,7 +149,10 @@ export const Sanctuary: React.FC = () => {
                 onFocus={() => bringToFront('diary')}
               />
           </div>
+        </Suspense>
 
+        {/* Pomodoro */}
+        <Suspense fallback={null}>
           <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
             <MemoPomodoro
                 isOpen={widgets.pomodoro} 
@@ -156,7 +161,10 @@ export const Sanctuary: React.FC = () => {
                 onFocus={() => bringToFront('pomodoro')}
             />
           </div>
+        </Suspense>
 
+        {/* Jam */}
+        <Suspense fallback={null}>
           <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
             <MemoJam
                 isOpen={widgets.jam} 
@@ -165,7 +173,10 @@ export const Sanctuary: React.FC = () => {
                 onFocus={() => bringToFront('jam')}
             />
           </div>
+        </Suspense>
 
+        {/* Soundscape */}
+        <Suspense fallback={null}>
           <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
             <MemoSoundscape
                 isOpen={widgets.soundscape} 
@@ -175,7 +186,10 @@ export const Sanctuary: React.FC = () => {
                 preset={widgetConfigs.soundscape?.preset}
             />
           </div>
+        </Suspense>
 
+        {/* Breathing */}
+        <Suspense fallback={null}>
           <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
             <MemoBreathing
                 isOpen={widgets.breathing} 
@@ -185,7 +199,10 @@ export const Sanctuary: React.FC = () => {
                 initialMode={widgetConfigs.breathing?.initialMode || "Box"}
             />
           </div>
+        </Suspense>
 
+        {/* Mood Tracker */}
+        <Suspense fallback={null}>
           <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
             <MemoMood
                 isOpen={widgets.mood} 
@@ -195,6 +212,7 @@ export const Sanctuary: React.FC = () => {
             />
           </div>
         </Suspense>
+
       </div>
       
       {/* 4. Global Settings Modal - System Layer (z-100) */}
