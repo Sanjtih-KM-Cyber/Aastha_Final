@@ -163,6 +163,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
       zIndex={zIndex || 10}
       onFocus={onFocus || (() => {})}
       icon={Clock}
+      color="#F43F5E"
     >
       <div className="flex flex-col items-center justify-center py-6 bg-black/80 h-full relative overflow-hidden font-sans">
         

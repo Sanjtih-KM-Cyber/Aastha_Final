@@ -436,6 +436,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       initialWidth={360} initialHeight={620} defaultPosition={{ x: 800, y: 150 }}
       zIndex={zIndex || 10} onFocus={onFocus || (() => {})}
       icon={Music}
+      color="#8B5CF6"
     >
       <div className="flex flex-col h-full w-full font-sans select-none relative">
         

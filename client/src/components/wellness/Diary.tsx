@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -119,6 +119,7 @@ const PaperPage: React.FC<{
 
                {!readOnly && (
                   <div className="flex items-center gap-2 shrink-0">
+                     {isSaving && <span className="text-[10px] text-gray-400 uppercase tracking-wider animate-pulse">Saving...</span>}
                      {isEditing ? (
                        <button onClick={onSave} disabled={isSaving} className="px-4 py-1.5 rounded-full text-white text-[10px] font-bold shadow-md transition-transform hover:scale-105 active:scale-95 flex items-center gap-1.5" style={{ backgroundColor: currentTheme.primaryColor }}>
                          {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} SAVE
@@ -134,18 +135,19 @@ const PaperPage: React.FC<{
         </div>
       </div>
 
-      <div className="flex-1 relative overflow-y-auto custom-scrollbar pl-14 pr-8 pb-8 pt-[0.4rem]">
+      <div className="flex-1 relative overflow-y-auto custom-scrollbar pl-14 pr-8 pb-8 pt-[0.35rem]">
         {isEditing ? (
           <textarea
              value={content}
              onChange={(e) => onContentChange(e.target.value)}
              onPointerDown={(e) => e.stopPropagation()}
              placeholder="Write your thoughts here..."
-             className="w-full h-full bg-transparent border-none outline-none resize-none text-gray-700 text-lg leading-[2rem] font-serif"
+             className="w-full h-full bg-transparent border-none outline-none resize-none text-gray-700 text-lg font-serif"
+             style={{ lineHeight: '2rem' }}
              spellCheck={false}
           />
         ) : (
-          <div className="w-full min-h-full text-gray-800 text-lg leading-[2rem] font-serif whitespace-pre-wrap">
+          <div className="w-full min-h-full text-gray-800 text-lg font-serif whitespace-pre-wrap" style={{ lineHeight: '2rem' }}>
             {content || <span className="text-gray-300 italic">No content for this day.</span>}
           </div>
         )}
@@ -267,6 +269,8 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
+  const autoSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -334,7 +338,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
     setAuthError('');
   };
 
-  const handleSaveEntry = async () => {
+  const handleSaveEntry = async (silent = false) => {
     if (!editContent.trim()) return;
     setIsSaving(true);
     try {
@@ -349,14 +353,29 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       });
       const newEntry = { ...saved, title: titleToSave, content: editContent, createdAt: activeDate.toISOString() };
       setEntriesMap(prev => ({ ...prev, [toDateString(activeDate)]: newEntry }));
-      setEditMode('view');
+      if (!silent) setEditMode('view');
     } catch (e) {
       console.error("Save error", e);
-      alert("Failed to save entry.");
+      if (!silent) alert("Failed to save entry.");
     } finally {
       setIsSaving(false);
     }
   };
+
+  // Auto-Save Logic
+  useEffect(() => {
+      if (editMode === 'edit' && editContent.trim()) {
+          if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+
+          setIsSaving(true); // Show "Saving..." immediately to indicate pending save
+          autoSaveTimerRef.current = setTimeout(() => {
+              handleSaveEntry(true);
+          }, 3000); // 3 seconds debounce
+      }
+      return () => {
+          if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      };
+  }, [editContent, editTitle]); // Depend on content change
 
   const createNewEntry = () => {
     setActiveDate(new Date());
@@ -444,6 +463,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       initialWidth={900} initialHeight={650} defaultPosition={{ x: 100, y: 80 }}
       zIndex={zIndex || 20} onFocus={onFocus || (() => {})}
       icon={BookOpen}
+      color="#F59E0B"
     >
       <div
         className="flex h-full w-full bg-[#222] text-gray-800 relative overflow-hidden rounded-b-xl shadow-inner font-sans items-center justify-center"
@@ -562,52 +582,63 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                                 content={isFlipping === 'next' ? entriesMap[toDateString(dPlus1)]?.content || '' : (editMode === 'view' ? entriesMap[toDateString(activeDate)]?.content : editContent)}
                                 mode={isFlipping ? 'view' : editMode} 
                                 isSaving={isSaving}
-                                onTitleChange={setEditTitle} onContentChange={setEditContent} onSave={handleSaveEntry} onEdit={() => setEditMode('edit')} onCancel={() => setEditMode('view')} onMoodChange={() => {}}
-                                readOnly={isFlipping !== null}
+                                onTitleChange={setEditTitle} onContentChange={setEditContent} onSave={() => handleSaveEntry()} onEdit={() => setEditMode('edit')} readOnly={isFlipping !== null}
                              />
                         </div>
                     </div>
 
-                    {!isMobile && (
-                      <AnimatePresence mode="sync" onExitComplete={() => setIsFlipping(null)}>
-                        {isFlipping === 'next' && (
-                             <motion.div
-                                key="flip-next"
-                                initial={{ rotateY: 0 }} animate={{ rotateY: -180 }}
-                                transition={{ duration: 0.6, ease: "easeInOut" }}
-                                onAnimationComplete={handleAnimationComplete}
-                                style={{ transformOrigin: 'left center', transformStyle: 'preserve-3d', position: 'absolute', right: 0, top: 0, bottom: 0, width: '50%', zIndex: 50 }}
-                             >
-                                <div className="absolute inset-0 w-full h-full backface-hidden" style={{ backfaceVisibility: 'hidden' }}>
-                                    <PaperPage date={activeDate} title={entriesMap[toDateString(activeDate)]?.title || ''} content={entriesMap[toDateString(activeDate)]?.content || ''} mode="view" isSaving={false} onTitleChange={()=>{}} onContentChange={()=>{}} onSave={()=>{}} onEdit={()=>{}} onCancel={()=>{}} onMoodChange={()=>{}} readOnly={true} />
-                                    <div className="absolute inset-0 bg-gradient-to-l from-black/10 to-transparent pointer-events-none" />
-                                </div>
-                                <div className="absolute inset-0 w-full h-full rounded-l-lg overflow-hidden" style={{ transform: 'rotateY(180deg)', backfaceVisibility: 'hidden', background: '#fdfdf6' }}>
-                                    <div className="flex-1 flex flex-col p-8"><h3 className="text-xl font-serif font-bold text-gray-400 mb-4">Navigation</h3><p className="text-gray-400 text-sm">Turning to {getFormattedDate(dPlus1)}...</p></div>
-                                    <div className="absolute inset-0 bg-gradient-to-r from-black/10 to-transparent pointer-events-none" />
-                                </div>
-                             </motion.div>
-                        )}
-                         {isFlipping === 'prev' && (
-                             <motion.div
-                                key="flip-prev"
-                                initial={{ rotateY: -180 }} animate={{ rotateY: 0 }}
-                                transition={{ duration: 0.6, ease: "easeInOut" }}
-                                onAnimationComplete={handleAnimationComplete}
-                                style={{ transformOrigin: 'right center', transformStyle: 'preserve-3d', position: 'absolute', left: 0, top: 0, bottom: 0, width: '50%', zIndex: 50 }}
-                             >
-                                <div className="absolute inset-0 w-full h-full rounded-l-lg overflow-hidden" style={{ transform: 'rotateY(180deg)', backfaceVisibility: 'hidden', background: '#fdfdf6' }}>
-                                    <PaperPage date={dMinus1} title={entriesMap[toDateString(dMinus1)]?.title || ''} content={entriesMap[toDateString(dMinus1)]?.content || ''} mode="view" isSaving={false} onTitleChange={()=>{}} onContentChange={()=>{}} onSave={()=>{}} onEdit={()=>{}} onCancel={()=>{}} onMoodChange={()=>{}} readOnly={true} />
-                                    <div className="absolute inset-0 bg-gradient-to-r from-black/10 to-transparent pointer-events-none" />
-                                </div>
-                                <div className="absolute inset-0 w-full h-full rounded-r-lg overflow-hidden" style={{ backfaceVisibility: 'hidden', background: '#fdfdf6' }}>
-                                     <div className="flex-1 flex flex-col p-8"><h3 className="text-xl font-serif font-bold text-gray-400 mb-4">Navigation</h3><p className="text-gray-400 text-sm">Turning back...</p></div>
-                                    <div className="absolute inset-0 bg-gradient-to-l from-black/10 to-transparent pointer-events-none" />
-                                </div>
-                             </motion.div>
-                        )}
-                      </AnimatePresence>
-                    )}
+                    <AnimatePresence mode="sync" onExitComplete={() => setIsFlipping(null)}>
+                      {isFlipping && !isMobile && (
+                           // PC: 3D Page Turn
+                           isFlipping === 'next' ? (
+                               <motion.div
+                                  key="flip-next"
+                                  initial={{ rotateY: 0 }} animate={{ rotateY: -180 }}
+                                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                                  onAnimationComplete={handleAnimationComplete}
+                                  style={{ transformOrigin: 'left center', transformStyle: 'preserve-3d', position: 'absolute', right: 0, top: 0, bottom: 0, width: '50%', zIndex: 50 }}
+                               >
+                                  <div className="absolute inset-0 w-full h-full backface-hidden" style={{ backfaceVisibility: 'hidden' }}>
+                                      <PaperPage date={activeDate} title={entriesMap[toDateString(activeDate)]?.title || ''} content={entriesMap[toDateString(activeDate)]?.content || ''} mode="view" isSaving={false} onTitleChange={()=>{}} onContentChange={()=>{}} onSave={()=>{}} onEdit={()=>{}} readOnly={true} />
+                                      <div className="absolute inset-0 bg-gradient-to-l from-black/10 to-transparent pointer-events-none" />
+                                  </div>
+                                  <div className="absolute inset-0 w-full h-full rounded-l-lg overflow-hidden" style={{ transform: 'rotateY(180deg)', backfaceVisibility: 'hidden', background: '#fdfdf6' }}>
+                                      <div className="flex-1 flex flex-col p-8"><h3 className="text-xl font-serif font-bold text-gray-400 mb-4">Navigation</h3><p className="text-gray-400 text-sm">Turning to {getFormattedDate(dPlus1)}...</p></div>
+                                      <div className="absolute inset-0 bg-gradient-to-r from-black/10 to-transparent pointer-events-none" />
+                                  </div>
+                               </motion.div>
+                           ) : (
+                               <motion.div
+                                  key="flip-prev"
+                                  initial={{ rotateY: -180 }} animate={{ rotateY: 0 }}
+                                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                                  onAnimationComplete={handleAnimationComplete}
+                                  style={{ transformOrigin: 'right center', transformStyle: 'preserve-3d', position: 'absolute', left: 0, top: 0, bottom: 0, width: '50%', zIndex: 50 }}
+                               >
+                                  <div className="absolute inset-0 w-full h-full rounded-l-lg overflow-hidden" style={{ transform: 'rotateY(180deg)', backfaceVisibility: 'hidden', background: '#fdfdf6' }}>
+                                      <PaperPage date={dMinus1} title={entriesMap[toDateString(dMinus1)]?.title || ''} content={entriesMap[toDateString(dMinus1)]?.content || ''} mode="view" isSaving={false} onTitleChange={()=>{}} onContentChange={()=>{}} onSave={()=>{}} onEdit={()=>{}} readOnly={true} />
+                                      <div className="absolute inset-0 bg-gradient-to-r from-black/10 to-transparent pointer-events-none" />
+                                  </div>
+                                  <div className="absolute inset-0 w-full h-full rounded-r-lg overflow-hidden" style={{ backfaceVisibility: 'hidden', background: '#fdfdf6' }}>
+                                       <div className="flex-1 flex flex-col p-8"><h3 className="text-xl font-serif font-bold text-gray-400 mb-4">Navigation</h3><p className="text-gray-400 text-sm">Turning back...</p></div>
+                                      <div className="absolute inset-0 bg-gradient-to-l from-black/10 to-transparent pointer-events-none" />
+                                  </div>
+                               </motion.div>
+                           )
+                      )}
+                      {isFlipping && isMobile && (
+                          // Mobile: Simple Fade
+                          <motion.div
+                              key="mobile-flip"
+                              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              onAnimationComplete={handleAnimationComplete}
+                              className="absolute inset-0 flex items-center justify-center bg-[#fdfdf6] z-50"
+                          >
+                              <Loader2 className="animate-spin text-gray-400" />
+                          </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     {!isMobile && (
                         <div className="absolute left-1/2 top-0 bottom-0 w-16 -ml-8 z-40 flex justify-center">
