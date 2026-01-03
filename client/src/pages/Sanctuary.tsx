@@ -1,14 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, memo } from 'react';
 import { WellnessHub } from '../components/wellness/WellnessHub';
 import { ChatView } from '../components/chat/ChatView';
-import { Diary } from '../components/wellness/Diary';
-import { PomodoroWidget } from '../components/widgets/PomodoroWidget';
-import { JamWithAasthaWidget } from '../components/widgets/JamWithAasthaWidget';
-import { Soundscape } from '../components/widgets/Soundscape';
-import { BreathingWidget } from '../components/widgets/BreathingWidget';
-import { MoodTracker } from '../components/widgets/MoodTracker';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
 import { useSync } from '../context/SyncContext';
+import { LoadingFallback } from '../components/LoadingFallback';
+
+// Lazy Load Widgets
+const Diary = React.lazy(() => import('../components/wellness/Diary').then(m => ({ default: m.Diary })));
+const PomodoroWidget = React.lazy(() => import('../components/widgets/PomodoroWidget').then(m => ({ default: m.PomodoroWidget })));
+const JamWithAasthaWidget = React.lazy(() => import('../components/widgets/JamWithAasthaWidget').then(m => ({ default: m.JamWithAasthaWidget })));
+const Soundscape = React.lazy(() => import('../components/widgets/Soundscape').then(m => ({ default: m.Soundscape })));
+const BreathingWidget = React.lazy(() => import('../components/widgets/BreathingWidget').then(m => ({ default: m.BreathingWidget })));
+const MoodTracker = React.lazy(() => import('../components/widgets/MoodTracker').then(m => ({ default: m.MoodTracker })));
+
+// Memoized Wrappers to prevent parent re-renders affecting heavy widgets
+const MemoDiary = memo(Diary);
+const MemoPomodoro = memo(PomodoroWidget);
+const MemoJam = memo(JamWithAasthaWidget);
+const MemoSoundscape = memo(Soundscape);
+const MemoBreathing = memo(BreathingWidget);
+const MemoMood = memo(MoodTracker);
 
 export const Sanctuary: React.FC = () => {
   const { emit, subscribe } = useSync();
@@ -128,8 +139,9 @@ export const Sanctuary: React.FC = () => {
 
       {/* 3. Floating Widget Ecosystem - Widget Layer (z-40+) */}
       <div style={{ position: 'absolute', pointerEvents: 'none', inset: 0 }}>
-          <div style={{ pointerEvents: 'auto' }}>
-              <Diary 
+        <Suspense fallback={null}>
+          <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
+              <MemoDiary
                 isOpen={widgets.diary} 
                 onClose={() => closeWidget('diary')} 
                 zIndex={zIndices.diary}
@@ -137,8 +149,8 @@ export const Sanctuary: React.FC = () => {
               />
           </div>
 
-          <div style={{ pointerEvents: 'auto' }}>
-            <PomodoroWidget 
+          <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
+            <MemoPomodoro
                 isOpen={widgets.pomodoro} 
                 onClose={() => closeWidget('pomodoro')} 
                 zIndex={zIndices.pomodoro}
@@ -146,8 +158,8 @@ export const Sanctuary: React.FC = () => {
             />
           </div>
 
-          <div style={{ pointerEvents: 'auto' }}>
-            <JamWithAasthaWidget 
+          <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
+            <MemoJam
                 isOpen={widgets.jam} 
                 onClose={() => closeWidget('jam')} 
                 zIndex={zIndices.jam}
@@ -155,8 +167,8 @@ export const Sanctuary: React.FC = () => {
             />
           </div>
 
-          <div style={{ pointerEvents: 'auto' }}>
-            <Soundscape 
+          <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
+            <MemoSoundscape
                 isOpen={widgets.soundscape} 
                 onClose={() => closeWidget('soundscape')} 
                 zIndex={zIndices.soundscape}
@@ -165,8 +177,8 @@ export const Sanctuary: React.FC = () => {
             />
           </div>
 
-          <div style={{ pointerEvents: 'auto' }}>
-            <BreathingWidget 
+          <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
+            <MemoBreathing
                 isOpen={widgets.breathing} 
                 onClose={() => closeWidget('breathing')} 
                 zIndex={zIndices.breathing}
@@ -175,14 +187,15 @@ export const Sanctuary: React.FC = () => {
             />
           </div>
 
-          <div style={{ pointerEvents: 'auto' }}>
-            <MoodTracker 
+          <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
+            <MemoMood
                 isOpen={widgets.mood} 
                 onClose={() => closeWidget('mood')} 
                 zIndex={zIndices.mood}
                 onFocus={() => bringToFront('mood')}
             />
           </div>
+        </Suspense>
       </div>
       
       {/* 4. Global Settings Modal - System Layer (z-100) */}

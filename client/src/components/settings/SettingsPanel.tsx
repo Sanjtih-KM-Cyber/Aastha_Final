@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLowPowerMode } from '../../hooks/useLowPowerMode';
 import api from '../../services/api';
 
 interface SettingsPanelProps {
@@ -37,6 +38,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
 
   const { currentTheme, setTheme, setWallpaper, wallpaper } = useTheme();
   const { user, logout, updateUser } = useAuth();
+  const { isLowPower, setLowPowerMode } = useLowPowerMode();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -282,6 +284,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   // --- CONTENT RENDERER (Shared) ---
   const renderContent = () => (
       <div className={`space-y-8 animate-fade-in ${isMobile ? 'pb-20' : ''}`}>
+
+          {isMobile && activeTab === 'appearance' && (
+             <section className="mb-8 p-4 rounded-xl bg-white/5 border border-white/5">
+                <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Performance</h3>
+                <div className="flex justify-between items-center mb-2">
+                    <span className="text-white font-medium">Lite Mode</span>
+                    <button onClick={() => setLowPowerMode(!isLowPower)} className={`text-teal-400 transition-transform active:scale-95`}>
+                        {isLowPower ? <ToggleRight size={32} /> : <ToggleLeft size={32} className="text-white/20" />}
+                    </button>
+                </div>
+                <p className="text-xs text-white/50 leading-relaxed">
+                    {isLowPower
+                        ? "Lite Mode is Active. Blur effects are disabled to maximize speed and battery."
+                        : "High Quality Mode is Active. Full visual effects enabled."}
+                </p>
+             </section>
+          )}
 
           {activeTab === 'appearance' && (
               <>
