@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { motion, AnimatePresence } from 'framer-motion';
 import { userService, MoodEntryDTO } from '../../services/userService';
-import { Check, Grid, BarChart2, Sparkles, Book, MessageCircle, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Check, Grid, BarChart2, Sparkles, Book, MessageCircle, ChevronLeft, ChevronRight, Loader2, Smile } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
