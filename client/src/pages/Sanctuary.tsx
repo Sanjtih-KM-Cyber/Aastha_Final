@@ -1,16 +1,16 @@
-import React, { useState, useEffect, Suspense, memo } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { WellnessHub } from '../components/wellness/WellnessHub';
 import { ChatView } from '../components/chat/ChatView';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
 import { useSync } from '../context/SyncContext';
 
-// Lazy Load Widgets (Safe Import Fix: Checks named export first, falls back to default)
-const Diary = React.lazy(() => import('../components/wellness/Diary').then(m => ({ default: m.Diary || m.default })));
-const PomodoroWidget = React.lazy(() => import('../components/widgets/PomodoroWidget').then(m => ({ default: m.PomodoroWidget || m.default })));
-const JamWithAasthaWidget = React.lazy(() => import('../components/widgets/JamWithAasthaWidget').then(m => ({ default: m.JamWithAasthaWidget || m.default })));
-const Soundscape = React.lazy(() => import('../components/widgets/Soundscape').then(m => ({ default: m.Soundscape || m.default })));
-const BreathingWidget = React.lazy(() => import('../components/widgets/BreathingWidget').then(m => ({ default: m.BreathingWidget || m.default })));
-const MoodTracker = React.lazy(() => import('../components/widgets/MoodTracker').then(m => ({ default: m.MoodTracker || m.default })));
+// ✅ DIRECT IMPORTS (Fix for Widgets Not Opening)
+import { Diary } from '../components/wellness/Diary';
+import { PomodoroWidget } from '../components/widgets/PomodoroWidget';
+import { JamWithAasthaWidget } from '../components/widgets/JamWithAasthaWidget';
+import { Soundscape } from '../components/widgets/Soundscape';
+import { BreathingWidget } from '../components/widgets/BreathingWidget';
+import { MoodTracker } from '../components/widgets/MoodTracker';
 
 // Memoized Wrappers to prevent parent re-renders affecting heavy widgets
 const MemoDiary = memo(Diary);
@@ -137,10 +137,9 @@ export const Sanctuary: React.FC = () => {
       </main>
 
       {/* 3. Floating Widget Ecosystem - Widget Layer (z-40+) */}
+      {/* REMOVED SUSPENSE: Direct Rendering for Reliability */}
       <div style={{ position: 'absolute', pointerEvents: 'none', inset: 0 }}>
 
-        {/* Diary */}
-        <Suspense fallback={null}>
           <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
               <MemoDiary
                 isOpen={widgets.diary} 
@@ -149,10 +148,7 @@ export const Sanctuary: React.FC = () => {
                 onFocus={() => bringToFront('diary')}
               />
           </div>
-        </Suspense>
 
-        {/* Pomodoro */}
-        <Suspense fallback={null}>
           <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
             <MemoPomodoro
                 isOpen={widgets.pomodoro} 
@@ -161,10 +157,7 @@ export const Sanctuary: React.FC = () => {
                 onFocus={() => bringToFront('pomodoro')}
             />
           </div>
-        </Suspense>
 
-        {/* Jam */}
-        <Suspense fallback={null}>
           <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
             <MemoJam
                 isOpen={widgets.jam} 
@@ -173,10 +166,7 @@ export const Sanctuary: React.FC = () => {
                 onFocus={() => bringToFront('jam')}
             />
           </div>
-        </Suspense>
 
-        {/* Soundscape */}
-        <Suspense fallback={null}>
           <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
             <MemoSoundscape
                 isOpen={widgets.soundscape} 
@@ -186,10 +176,7 @@ export const Sanctuary: React.FC = () => {
                 preset={widgetConfigs.soundscape?.preset}
             />
           </div>
-        </Suspense>
 
-        {/* Breathing */}
-        <Suspense fallback={null}>
           <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
             <MemoBreathing
                 isOpen={widgets.breathing} 
@@ -199,10 +186,7 @@ export const Sanctuary: React.FC = () => {
                 initialMode={widgetConfigs.breathing?.initialMode || "Box"}
             />
           </div>
-        </Suspense>
 
-        {/* Mood Tracker */}
-        <Suspense fallback={null}>
           <div style={{ pointerEvents: 'auto', willChange: 'transform' }}>
             <MemoMood
                 isOpen={widgets.mood} 
@@ -211,8 +195,6 @@ export const Sanctuary: React.FC = () => {
                 onFocus={() => bringToFront('mood')}
             />
           </div>
-        </Suspense>
-
       </div>
       
       {/* 4. Global Settings Modal - System Layer (z-100) */}
