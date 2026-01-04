@@ -122,48 +122,36 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   const minimizedHeight = isMobile ? 64 : 48;
   const currentHeight = isMinimized ? minimizedHeight : (isMobile ? '100%' : size.height);
 
+  // MAXIMIZE FIX FOR MOBILE: Ensure position resets to 0,0 when un-minimizing
+  const mobileStyle = isMobile && !isMinimized ? { top: 0, left: 0, x: 0, y: 0 } : {};
+
   // --- FLOATING BUBBLE RENDER (Mobile + Minimized) ---
-  // MODIFIED: If minimizedContent is present, render a Capsule (Pill) instead of just a Circle
+  // MODIFIED: Reverting to Bubble (Icon only) for Mobile to be unobtrusive
   if (isMobile && isMinimized && Icon) {
       return (
           <AnimatePresence>
             {isOpen && (
                 <motion.div
-                    initial={{ scale: 0, opacity: 0, y: 50 }}
-                    animate={{ scale: 1, opacity: 1, y: 0 }}
-                    exit={{ scale: 0, opacity: 0, y: 50 }}
-                    drag="y" // Only vertical drag to dismiss? Or free drag? Free drag is safer.
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    drag
                     dragMomentum={false}
-                    whileDrag={{ scale: 1.05 }}
+                    whileDrag={{ scale: 1.1 }}
                     onClick={() => setIsMinimized(false)}
-                    className="fixed z-[100] cursor-pointer shadow-2xl flex items-center overflow-hidden"
+                    className="fixed z-[100] cursor-pointer shadow-2xl flex items-center justify-center rounded-full"
                     style={{
-                        height: '56px',
-                        bottom: '5.5rem',
-                        left: '1rem',
-                        right: '1rem', // Stretch across mostly
-                        borderRadius: '28px', // Pill shape
-                        backgroundColor: '#1F2937', // Dark gray/slate
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        touchAction: 'none'
+                        width: '48px',
+                        height: '48px',
+                        bottom: '5rem',
+                        right: '1.5rem',
+                        borderRadius: '50%',
+                        backgroundColor: color || '#333',
+                        touchAction: 'none',
+                        border: '2px solid rgba(255,255,255,0.2)'
                     }}
                 >
-                    {/* Icon Section (Left) */}
-                    <div
-                        className="flex items-center justify-center h-full aspect-square shrink-0 rounded-l-full"
-                        style={{ backgroundColor: color || '#333' }}
-                    >
-                        <Icon size={24} className="text-white" />
-                    </div>
-
-                    {/* Content Section (Right/Middle) */}
-                    <div className="flex-1 h-full flex items-center px-3 min-w-0">
-                        {minimizedContent ? (
-                            minimizedContent
-                        ) : (
-                            <span className="text-white/80 font-medium text-sm truncate">{title}</span>
-                        )}
-                    </div>
+                    <Icon size={24} className="text-white" />
                 </motion.div>
             )}
           </AnimatePresence>
@@ -186,6 +174,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             x: 0,
             y: 0,
             borderRadius: isMobile ? 0 : 24,
+            ...mobileStyle // Force reset on mobile maximize
           }}
           // --- MOBILE OPTIMIZATION 1: Fast Transitions & Simple Exit ---
           transition={isMobile

@@ -123,11 +123,8 @@ const QueueItem = ({ track, index, isActive, onRemove, onPlay, isMobile }: any) 
                 }}
                 style={{ touchAction: 'none' }}
             >
-                 {/* Swipe Background Hint */}
-                 <div className="absolute inset-0 flex justify-between items-center px-4 -z-10 opacity-0 group-hover:opacity-100">
-                     <Trash2 size={16} className="text-red-500" />
-                     <Trash2 size={16} className="text-red-500" />
-                 </div>
+                 {/* Swipe Background Hint - REMOVED PER USER REQUEST "Two trash icons looking bad" */}
+                 {/* <div className="absolute inset-0 flex justify-between items-center px-4 -z-10 opacity-0 group-hover:opacity-100">...</div> */}
 
                 {/* Drag Handle (Mobile only or Desktop) */}
                 <div
@@ -294,7 +291,14 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
       // Auto-play attempt
       if (queue.length > 0) {
-          event.target.playVideo();
+         // Queue up the current video so controls are ready
+         if (event.target.cueVideoById) {
+             event.target.cueVideoById(queue[currentIndex].id);
+             // Attempt to restore time again after cue
+             if (savedTime) event.target.seekTo(parseFloat(savedTime));
+         }
+         // Try to play
+         event.target.playVideo();
       }
   };
 
@@ -537,7 +541,15 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   // --- MINIMIZED CONTENT ---
   const MinimizedContent = (
       <div className="flex items-center gap-3 w-full max-w-full">
-          {/* Controls */}
+          {/* Prev */}
+          <button
+                onClick={(e) => { e.stopPropagation(); playPrev(); }}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center shrink-0"
+          >
+              <SkipBack size={14} className="text-white/70"/>
+          </button>
+
+          {/* Play/Pause */}
           <button
                 onClick={(e) => {
                     e.stopPropagation();
@@ -569,6 +581,13 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           </button>
       </div>
   );
+
+  // Determine if we should pass minimized content (Only for Desktop)
+  // Logic: isMobile checked in parent? No, we check window width inside DraggableWindow usually,
+  // but here we can't easily know.
+  // DraggableWindow handles the "isMobile" check internally to switch views.
+  // BUT DraggableWindow now ignores minimizedContent on Mobile (rendering Bubble instead).
+  // So we can safely pass it.
 
   return (
     <DraggableWindow 
