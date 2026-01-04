@@ -18,6 +18,7 @@ interface DraggableWindowProps {
   icon?: React.ElementType; // New Prop for Floating Bubble Icon
   color?: string; // New Prop for Brand Color
   minimizedContent?: React.ReactNode; // New Prop for Minimized Content (Nano View)
+  mobileMinimizedType?: 'bubble' | 'squircle'; // New Prop for custom mobile view type
 }
 
 export const DraggableWindow: React.FC<DraggableWindowProps> = ({ 
@@ -35,7 +36,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   onFocus,
   icon: Icon,
   color,
-  minimizedContent
+  minimizedContent,
+  mobileMinimizedType = 'bubble'
 }) => {
   const dragControls = useDragControls();
   
@@ -125,41 +127,9 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   // MAXIMIZE FIX FOR MOBILE: Ensure position resets to 0,0 when un-minimizing
   const mobileStyle = isMobile && !isMinimized ? { top: 0, left: 0, x: 0, y: 0 } : {};
 
-  // --- FLOATING BUBBLE RENDER (Mobile + Minimized) ---
-  // MODIFIED: Reverting to Bubble (Icon only) for Mobile to be unobtrusive
-  if (isMobile && isMinimized && Icon) {
-      return (
-          <AnimatePresence>
-            {isOpen && (
-                <motion.div
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0 }}
-                    drag
-                    dragMomentum={false}
-                    whileDrag={{ scale: 1.1 }}
-                    onClick={() => setIsMinimized(false)}
-                    className="fixed z-[100] cursor-pointer shadow-2xl flex items-center justify-center rounded-full"
-                    style={{
-                        width: '48px',
-                        height: '48px',
-                        bottom: '5rem',
-                        right: '1.5rem',
-                        borderRadius: '50%',
-                        backgroundColor: color || '#333',
-                        touchAction: 'none',
-                        border: '2px solid rgba(255,255,255,0.2)'
-                    }}
-                >
-                    <Icon size={24} className="text-white" />
-                </motion.div>
-            )}
-          </AnimatePresence>
-      );
-  }
-
   return (
-    <AnimatePresence>
+    <>
+      <AnimatePresence>
       {isOpen && (
         <motion.div
           ref={containerRef}
@@ -192,10 +162,13 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           onPointerDown={onFocus}
           className={`fixed flex flex-col ${isMobile ? '' : 'cursor-auto'}`}
           // --- MOBILE OPTIMIZATION 2: Hardware Acceleration ---
+          // FIX: Don't unmount on mobile minimize, just hide visibility to keep background processes (audio) alive
           style={{ 
             zIndex: isMobile ? 9999 : zIndex,
             position: 'fixed',
-            willChange: isMobile ? 'transform, opacity' : undefined
+            willChange: isMobile ? 'transform, opacity' : undefined,
+            visibility: isMobile && isMinimized ? 'hidden' : 'visible',
+            pointerEvents: isMobile && isMinimized ? 'none' : 'auto'
           }}
         >
           <div className={`
@@ -275,6 +248,51 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           </div>
         </motion.div>
       )}
-    </AnimatePresence>
+      </AnimatePresence>
+
+      {/* --- SEPARATE MOBILE MINIMIZED VIEW --- */}
+      {/*
+          Rendered outside the main window div so it stays visible while main window is "hidden"
+          This keeps the DOM structure of the main window alive (critical for Audio/YouTube).
+      */}
+      <AnimatePresence>
+        {isOpen && isMobile && isMinimized && Icon && (
+            <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                drag
+                dragMomentum={false}
+                whileDrag={{ scale: 1.1 }}
+                onClick={() => setIsMinimized(false)}
+                className="fixed z-[100] cursor-pointer shadow-2xl flex items-center justify-center overflow-hidden"
+                style={{
+                    // DYNAMIC STYLE BASED ON TYPE
+                    width: mobileMinimizedType === 'squircle' ? 'auto' : '48px', // Auto width for content
+                    height: '48px',
+                    minWidth: '48px',
+                    bottom: '5rem',
+                    right: '1.5rem',
+                    // SQUIRCLE or CIRCLE logic
+                    borderRadius: mobileMinimizedType === 'squircle' ? '16px' : '50%',
+                    backgroundColor: color || '#333',
+                    touchAction: 'none',
+                    border: '2px solid rgba(255,255,255,0.2)',
+                    padding: mobileMinimizedType === 'squircle' ? '0 12px' : '0'
+                }}
+            >
+                {/* Icon Always Visible */}
+                <Icon size={24} className="text-white shrink-0" />
+
+                {/* Optional Content for Squircle Mode */}
+                {mobileMinimizedType === 'squircle' && minimizedContent && (
+                    <div className="ml-3 text-white">
+                        {minimizedContent}
+                    </div>
+                )}
+            </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 };
