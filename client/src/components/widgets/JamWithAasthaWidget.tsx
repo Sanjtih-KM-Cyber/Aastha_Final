@@ -138,7 +138,7 @@ const MobileQueueItem = ({ track, index, isActive, onRemove, onPlay }: any) => {
                 </div>
 
                 {/* Drag Handle (Right Side) */}
-                <div 
+                <div
                     onPointerDown={(e) => controls.start(e)}
                     className="p-2 touch-none cursor-grab active:cursor-grabbing text-white/30 hover:text-white"
                 >
@@ -163,7 +163,7 @@ const DesktopQueueItem = ({ track, index, isActive, onRemove, onPlay, onMoveUp, 
              ) : (
                  <span className="w-4 text-[10px] text-white/30 text-center shrink-0">{index + 1}</span>
              )}
-             
+
              <div className="flex-1 min-w-0 cursor-pointer" onClick={onPlay}>
                  <div className={`text-xs truncate font-medium ${isActive ? 'text-white' : 'text-white/70'}`}>{track.title}</div>
                  <div className="text-[10px] truncate text-white/40">{track.artist}</div>
@@ -319,7 +319,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               event.target.seekTo(t);
           }
       }
-      
+
       // Auto-play attempt
       if (queue.length > 0) {
          // Queue up the current video so controls are ready
@@ -474,7 +474,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       // Find where the current song moved to
       const currentTrackUUID = queue[currentIndex]?.uuid;
       setQueue(newQueue);
-      
+
       if (currentTrackUUID) {
           const newIndex = newQueue.findIndex(t => t.uuid === currentTrackUUID);
           if (newIndex !== -1) setCurrentIndex(newIndex);
@@ -594,7 +594,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const MinimizedContent = (
       <div className="flex items-center gap-3 w-full max-w-full">
           {/* Prev */}
-          <button 
+          <button
                 onClick={(e) => { e.stopPropagation(); playPrev(); }}
                 className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center shrink-0"
           >
@@ -602,7 +602,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           </button>
 
           {/* Play/Pause */}
-          <button 
+          <button
                 onClick={(e) => {
                     e.stopPropagation();
                     if (!playerRef.current) return;
@@ -613,7 +613,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           >
               {isPlaying ? <Pause size={14} className="text-white"/> : <Play size={14} className="text-white ml-0.5"/>}
           </button>
-          
+
           {/* Info */}
           <div className="flex-1 min-w-0 flex flex-col justify-center">
               <span className="text-xs font-bold text-white truncate leading-tight">
@@ -625,7 +625,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           </div>
 
           {/* Next */}
-          <button 
+          <button
                 onClick={(e) => { e.stopPropagation(); playNext(); }}
                 className="p-1 text-white/30 hover:text-white shrink-0"
           >
@@ -636,7 +636,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
   // Determine if we should pass minimized content (Only for Desktop)
   // Logic: isMobile checked in parent? No, we check window width inside DraggableWindow usually,
-  // but here we can't easily know. 
+  // but here we can't easily know.
   // DraggableWindow handles the "isMobile" check internally to switch views.
   // BUT DraggableWindow now ignores minimizedContent on Mobile (rendering Bubble instead).
   // So we can safely pass it.
@@ -791,7 +791,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                             placeholder="Search song..." 
                             className="w-full bg-black/30 backdrop-blur-md border border-white/10 rounded-full px-4 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/30 transition-all pr-8"
                         />
-                        <button 
+                        <button
                             type="submit" // Trigger Search on Click
                             onClick={handleSearch}
                             className="absolute right-3 top-2.5 text-white/30 hover:text-white transition-colors"
@@ -856,8 +856,8 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                          isMobile ? (
                              <Reorder.Group axis="y" values={queue} onReorder={handleReorder} className="space-y-2">
                                  {queue.map((track, idx) => (
-                                     <MobileQueueItem 
-                                        key={track.uuid} 
+                                     <MobileQueueItem
+                                        key={track.uuid}
                                         track={track}
                                         index={idx}
                                         isActive={currentIndex === idx}
@@ -869,7 +869,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                          ) : (
                              <div className="space-y-2">
                                  {queue.map((track, idx) => (
-                                     <DesktopQueueItem 
+                                     <DesktopQueueItem
                                         key={track.uuid}
                                         track={track}
                                         index={idx}

@@ -199,6 +199,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
       icon={Clock}
       color="#F43F5E"
       minimizedContent={MinimizedContent}
+      mobileMinimizedType="squircle"
     >
       <div className="flex flex-col items-center justify-center py-6 bg-black/80 h-full relative overflow-hidden font-sans">
         
