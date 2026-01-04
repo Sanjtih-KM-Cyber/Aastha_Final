@@ -17,6 +17,7 @@ interface DraggableWindowProps {
   onFocus: () => void;
   icon?: React.ElementType; // New Prop for Floating Bubble Icon
   color?: string; // New Prop for Brand Color
+  minimizedContent?: React.ReactNode; // New Prop for Minimized Content (Nano View)
 }
 
 export const DraggableWindow: React.FC<DraggableWindowProps> = ({ 
@@ -33,7 +34,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   zIndex,
   onFocus,
   icon: Icon,
-  color
+  color,
+  minimizedContent
 }) => {
   const dragControls = useDragControls();
   
@@ -121,32 +123,47 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   const currentHeight = isMinimized ? minimizedHeight : (isMobile ? '100%' : size.height);
 
   // --- FLOATING BUBBLE RENDER (Mobile + Minimized) ---
-  // STRICT IMPLEMENTATION AS REQUESTED
+  // MODIFIED: If minimizedContent is present, render a Capsule (Pill) instead of just a Circle
   if (isMobile && isMinimized && Icon) {
       return (
           <AnimatePresence>
             {isOpen && (
                 <motion.div
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0 }}
-                    drag
+                    initial={{ scale: 0, opacity: 0, y: 50 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0, opacity: 0, y: 50 }}
+                    drag="y" // Only vertical drag to dismiss? Or free drag? Free drag is safer.
                     dragMomentum={false}
-                    whileDrag={{ scale: 1.1 }}
+                    whileDrag={{ scale: 1.05 }}
                     onClick={() => setIsMinimized(false)}
-                    className="fixed z-[100] cursor-pointer shadow-2xl flex items-center justify-center rounded-full"
+                    className="fixed z-[100] cursor-pointer shadow-2xl flex items-center overflow-hidden"
                     style={{
-                        width: '48px', // Force 48px
-                        height: '48px', // Force 48px
-                        bottom: '5rem', // bottom-20 (20 * 0.25 = 5rem)
-                        right: '1.5rem', // right-6 (6 * 0.25 = 1.5rem)
-                        borderRadius: '50%', // FORCE CIRCLE
-                        backgroundColor: color || '#333',
-                        touchAction: 'none',
-                        border: '2px solid rgba(255,255,255,0.2)'
+                        height: '56px',
+                        bottom: '5.5rem',
+                        left: '1rem',
+                        right: '1rem', // Stretch across mostly
+                        borderRadius: '28px', // Pill shape
+                        backgroundColor: '#1F2937', // Dark gray/slate
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        touchAction: 'none'
                     }}
                 >
-                    <Icon size={24} className="text-white" />
+                    {/* Icon Section (Left) */}
+                    <div
+                        className="flex items-center justify-center h-full aspect-square shrink-0 rounded-l-full"
+                        style={{ backgroundColor: color || '#333' }}
+                    >
+                        <Icon size={24} className="text-white" />
+                    </div>
+
+                    {/* Content Section (Right/Middle) */}
+                    <div className="flex-1 h-full flex items-center px-3 min-w-0">
+                        {minimizedContent ? (
+                            minimizedContent
+                        ) : (
+                            <span className="text-white/80 font-medium text-sm truncate">{title}</span>
+                        )}
+                    </div>
                 </motion.div>
             )}
           </AnimatePresence>
@@ -214,7 +231,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
                 {/* macOS Controls (Left) - RED & YELLOW ONLY */}
                 <div
                    onPointerDown={(e) => e.stopPropagation()}
-                   className="flex items-center gap-2 group pointer-events-auto pl-2 z-10"
+                   className="flex items-center gap-2 group pointer-events-auto pl-2 z-10 shrink-0"
                 >
                     {/* Red (Close) */}
                     <button
@@ -233,15 +250,19 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
                     >
                         <Minus size={8} className="text-black/60 opacity-0 group-hover:opacity-100 transition-opacity" strokeWidth={3} />
                     </button>
-
-                    {/* GREEN BUTTON EXCLUDED PER STRICT REQUIREMENT */}
                 </div>
 
-                {/* Title (Centered) */}
-                <div className="absolute inset-x-0 mx-auto text-center pointer-events-none flex items-center justify-center h-full">
-                    <span className="font-serif text-white/60 text-sm font-medium tracking-wide">
-                        {title}
-                    </span>
+                {/* Title (Centered) OR Minimized Content (If Desktop & Minimized) */}
+                <div className="absolute inset-x-0 mx-auto text-center pointer-events-none flex items-center justify-center h-full pl-16 pr-4">
+                    {!isMobile && isMinimized && minimizedContent ? (
+                        <div className="pointer-events-auto w-full h-full flex items-center justify-center">
+                            {minimizedContent}
+                        </div>
+                    ) : (
+                        <span className="font-serif text-white/60 text-sm font-medium tracking-wide">
+                            {title}
+                        </span>
+                    )}
                 </div>
             </div>
 

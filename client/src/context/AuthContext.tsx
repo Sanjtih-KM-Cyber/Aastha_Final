@@ -31,6 +31,7 @@ interface AuthContextType extends AuthState {
   getUserDisplayName: () => string;
   getUserDisplayEmail: () => string;
   updateUser: (data: Partial<User>) => void;
+  setPreventAutoLock: (id: string, prevent: boolean) => void; // New method
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,6 +46,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Ref to track last activity without triggering re-renders
   const lastActiveRef = useRef<number>(Date.now());
+
+  // Ref to track active blockers (widgets running)
+  const preventLockIds = useRef<Set<string>>(new Set());
+
+  const setPreventAutoLock = useCallback((id: string, prevent: boolean) => {
+      if (prevent) {
+          preventLockIds.current.add(id);
+      } else {
+          preventLockIds.current.delete(id);
+      }
+      // Debug log to verify logic if needed
+      // console.log("AutoLock Blockers:", Array.from(preventLockIds.current));
+  }, []);
 
   // ---------- GLOBAL AUTH EVENT LISTENER ----------
   useEffect(() => {
@@ -87,6 +101,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!state.isAuthenticated) return;
 
       const checkInactivity = () => {
+          // CHECK IF PREVENTED
+          if (preventLockIds.current.size > 0) {
+              // If widgets are active, update "last active" so the timer effectively resets
+              // This ensures that the moment the music stops, the timer starts counting from *now*
+              // rather than from when the user last clicked the mouse 30 mins ago.
+              lastActiveRef.current = Date.now();
+              localStorage.setItem('auth_last_active', Date.now().toString());
+              return;
+          }
+
           const lockSetting = localStorage.getItem('settings_autoLock');
           if (!lockSetting || lockSetting === '0') return;
 
@@ -294,7 +318,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setEncryptionKeyManual,
       getUserDisplayName,
       getUserDisplayEmail,
-      updateUser
+      updateUser,
+      setPreventAutoLock
     }}>
       {children}
     </AuthContext.Provider>
