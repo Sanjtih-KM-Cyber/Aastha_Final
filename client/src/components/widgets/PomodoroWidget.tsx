@@ -3,6 +3,7 @@ import { DraggableWindow } from '../layout/DraggableWindow';
 import { Play, Pause, RotateCcw, Settings, Check, AlertCircle, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface PomodoroWidgetProps {
   isOpen: boolean;
@@ -44,6 +45,7 @@ const MESSAGES = {
 
 export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
   const { currentTheme } = useTheme();
+  const { setPreventAutoLock } = useAuth();
   
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isActive, setIsActive] = useState(false);
@@ -68,6 +70,12 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
   useEffect(() => {
       audioRef.current = new Audio('https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c153e1.mp3?filename=service-bell-ring-14610.mp3');
   }, []);
+
+  // AUTO-LOCK PREVENTION
+  useEffect(() => {
+      setPreventAutoLock('pomodoro-widget', isActive);
+      return () => setPreventAutoLock('pomodoro-widget', false);
+  }, [isActive, setPreventAutoLock]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -127,7 +135,10 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
     }
   };
 
-  const toggleTimer = () => setIsActive(!isActive);
+  const toggleTimer = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Stop propagation for Minimized button
+    setIsActive(!isActive);
+  };
   
   const resetTimer = () => {
     setIsActive(false);
@@ -152,6 +163,29 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference * (1 - progress);
 
+  // --- MINIMIZED CONTENT ---
+  const MinimizedContent = (
+      <div className="flex items-center gap-3">
+          {/* Time */}
+          <span className="text-xl font-mono font-bold text-white tabular-nums tracking-tight">
+              {formatTime(timeLeft)}
+          </span>
+
+          {/* Mode Badge */}
+          <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${mode === 'focus' ? 'bg-red-500/20 text-red-200' : 'bg-green-500/20 text-green-200'}`}>
+              {mode}
+          </span>
+
+          {/* Control */}
+          <button
+                onClick={toggleTimer}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center shrink-0 ml-1"
+          >
+              {isActive ? <Pause size={14} className="text-white"/> : <Play size={14} className="text-white ml-0.5"/>}
+          </button>
+      </div>
+  );
+
   return (
     <DraggableWindow 
       isOpen={isOpen} 
@@ -164,6 +198,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
       onFocus={onFocus || (() => {})}
       icon={Clock}
       color="#F43F5E"
+      minimizedContent={MinimizedContent}
     >
       <div className="flex flex-col items-center justify-center py-6 bg-black/80 h-full relative overflow-hidden font-sans">
         

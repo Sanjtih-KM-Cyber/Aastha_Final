@@ -1,12 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { 
   Play, Pause, SkipForward, SkipBack, Repeat, Search, 
   Disc, Sparkles, Plus, ListMusic, Lock, X, Music2, Globe, Check, Settings,
-  ArrowUp, ArrowDown, Trash2, Minus, Music
+  ArrowUp, ArrowDown, Trash2, Minus, Music, GripVertical
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 
 declare global {
@@ -24,7 +25,8 @@ interface JamWidgetProps {
 }
 
 interface Track {
-  id: string;
+  id: string; // The YouTube ID
+  uuid: string; // Unique ID for Drag & Drop
   title: string;
   artist: string;
   thumbnail?: string;
@@ -35,6 +37,14 @@ type LoopMode = 'off' | 'all' | 'one' | 'custom';
 const LANGUAGES = ["English", "Hindi", "Tamil", "Telugu", "Punjabi", "Malayalam", "Kannada", "Bengali", "Marathi"];
 const MOOD_TAGS = ["Happy", "Sad", "Calm", "Energetic", "Romantic", "Focus", "Melancholy", "Party", "Lo-Fi"];
 const GENRES = ["Lo-Fi", "Hip-Hop", "Pop", "Retro", "90s", "Modern", "Indie", "R&B", "Jazz", "Classical", "Rock", "Bollywood", "Acoustic", "EDM", "Ambient"];
+
+// --- Helper to Generate UUID ---
+const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+};
 
 // --- Reusable Stepper Component ---
 interface StepperProps {
@@ -88,8 +98,90 @@ const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max = 100, 
     );
 };
 
+// --- MOBILE QUEUE ITEM (Drag Handle Right, Swipe Left to Delete) ---
+const MobileQueueItem = ({ track, index, isActive, onRemove, onPlay }: any) => {
+    const controls = useDragControls();
+
+    return (
+        <Reorder.Item
+            value={track}
+            id={track.uuid} // STABLE KEY
+            dragListener={false} // Only use handle
+            dragControls={controls}
+            className="relative overflow-hidden mb-2"
+            // Layout prop handles the reordering animation for siblings
+            layout="position"
+        >
+            <motion.div
+                className={`flex items-center gap-3 p-2 rounded-lg transition-colors bg-[#111827] border-b border-white/5 relative z-10`}
+                drag="x"
+                dragConstraints={{ left: -100, right: 0 }}
+                dragElastic={0.1}
+                onDragEnd={(_, info) => {
+                    if (info.offset.x < -80) { // Swipe Left threshold
+                        onRemove();
+                    }
+                }}
+                style={{ touchAction: 'pan-y' }} // Allow vertical scroll, handle handles vertical drag
+            >
+                {/* Active Indicator */}
+                {isActive ? (
+                     <div className="w-1 h-6 bg-teal-400 rounded-full animate-pulse shrink-0"/>
+                ) : (
+                     <span className="w-4 text-[10px] text-white/30 text-center shrink-0">{index + 1}</span>
+                )}
+
+                {/* Track Info */}
+                <div className="flex-1 min-w-0" onClick={onPlay}>
+                    <div className={`text-xs truncate font-medium ${isActive ? 'text-white' : 'text-white/70'}`}>{track.title}</div>
+                    <div className="text-[10px] truncate text-white/40">{track.artist}</div>
+                </div>
+
+                {/* Drag Handle (Right Side) */}
+                <div
+                    onPointerDown={(e) => controls.start(e)}
+                    className="p-2 touch-none cursor-grab active:cursor-grabbing text-white/30 hover:text-white"
+                >
+                    <GripVertical size={16} />
+                </div>
+            </motion.div>
+
+            {/* Trash Background (Revealed on Swipe Left) */}
+            <div className="absolute inset-y-0 right-0 w-24 bg-red-500/20 flex items-center justify-end px-4 rounded-lg z-0">
+                <Trash2 size={16} className="text-red-500" />
+            </div>
+        </Reorder.Item>
+    );
+};
+
+// --- DESKTOP QUEUE ITEM (Arrows, Trash, No Drag) ---
+const DesktopQueueItem = ({ track, index, isActive, onRemove, onPlay, onMoveUp, onMoveDown, isFirst, isLast }: any) => {
+    return (
+        <div className={`group flex items-center gap-3 p-2 rounded-lg transition-colors ${isActive ? 'bg-white/10' : 'hover:bg-white/5'}`}>
+             {isActive ? (
+                 <div className="w-1 h-8 bg-teal-400 rounded-full animate-pulse shrink-0"/>
+             ) : (
+                 <span className="w-4 text-[10px] text-white/30 text-center shrink-0">{index + 1}</span>
+             )}
+
+             <div className="flex-1 min-w-0 cursor-pointer" onClick={onPlay}>
+                 <div className={`text-xs truncate font-medium ${isActive ? 'text-white' : 'text-white/70'}`}>{track.title}</div>
+                 <div className="text-[10px] truncate text-white/40">{track.artist}</div>
+             </div>
+
+             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                 <button onClick={onMoveUp} disabled={isFirst} className="p-1 text-white/30 hover:text-white disabled:opacity-0"><ArrowUp size={12}/></button>
+                 <button onClick={onMoveDown} disabled={isLast} className="p-1 text-white/30 hover:text-white disabled:opacity-0"><ArrowDown size={12}/></button>
+                 <button onClick={onRemove} className="p-1 text-white/30 hover:text-red-400"><Trash2 size={12}/></button>
+             </div>
+         </div>
+    );
+};
+
+
 export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
   const { currentTheme } = useTheme();
+  const { setPreventAutoLock } = useAuth();
   
   // Audio State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -103,7 +195,14 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
     if (savedQ) {
         try {
             const parsed = JSON.parse(savedQ);
-            if (Array.isArray(parsed)) setQueue(parsed);
+            if (Array.isArray(parsed)) {
+                // MIGRATION: Ensure all loaded tracks have UUIDs
+                const hydrated = parsed.map((t: any) => ({
+                    ...t,
+                    uuid: t.uuid || generateUUID()
+                }));
+                setQueue(hydrated);
+            }
         } catch(e) { console.error("Failed to load queue", e); }
     }
     if (savedIdx) {
@@ -117,6 +216,12 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       localStorage.setItem('jam_queue', JSON.stringify(queue));
       localStorage.setItem('jam_index', currentIndex.toString());
   }, [queue, currentIndex]);
+
+  // AUTO-LOCK PREVENTION
+  useEffect(() => {
+      setPreventAutoLock('jam-widget', isPlaying);
+      return () => setPreventAutoLock('jam-widget', false);
+  }, [isPlaying, setPreventAutoLock]);
 
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -151,6 +256,17 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
   const playerRef = useRef<any>(null);
   const progressInterval = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // --- PERSISTENCE: TIME ---
+  // Throttle updates to localStorage to avoid perf hit
+  const lastTimeSaveRef = useRef(0);
+  useEffect(() => {
+      if (Math.abs(currentTime - lastTimeSaveRef.current) > 2) { // Save every 2 seconds diff
+          localStorage.setItem('jam_time', currentTime.toString());
+          lastTimeSaveRef.current = currentTime;
+      }
+  }, [currentTime]);
+
 
   // --- YouTube Init ---
   useEffect(() => {
@@ -187,10 +303,34 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
         height: '0', width: '0',
         playerVars: { 'playsinline': 1, 'controls': 0, 'disablekb': 1, 'fs': 0, 'iv_load_policy': 3, 'autoplay': 1 },
         events: {
+            'onReady': onPlayerReady,
             'onStateChange': onPlayerStateChange,
             'onError': (e: any) => console.error("YT Player Error:", e.data)
         }
     });
+  };
+
+  const onPlayerReady = (event: any) => {
+      // RESUME PLAYBACK LOGIC
+      const savedTime = localStorage.getItem('jam_time');
+      if (savedTime) {
+          const t = parseFloat(savedTime);
+          if (!isNaN(t) && t > 0) {
+              event.target.seekTo(t);
+          }
+      }
+
+      // Auto-play attempt
+      if (queue.length > 0) {
+         // Queue up the current video so controls are ready
+         if (event.target.cueVideoById) {
+             event.target.cueVideoById(queue[currentIndex].id);
+             // Attempt to restore time again after cue
+             if (savedTime) event.target.seekTo(parseFloat(savedTime));
+         }
+         // Try to play
+         event.target.playVideo();
+      }
   };
 
   // --- Custom Loop Logic ---
@@ -305,7 +445,10 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           const res = await api.get(`/data/videos/search?q=${encodeURIComponent(query)}`);
           
           if (Array.isArray(res.data) && res.data.length > 0) {
-              const newTrack = res.data[0]; // Take top result
+              const newTrack = {
+                  ...res.data[0],
+                  uuid: generateUUID() // ASSIGN UUID
+              };
 
               setQueue(prev => {
                 // If queue is empty, play immediately
@@ -326,26 +469,19 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       finally { setIsSearching(false); setQuery(''); }
   };
 
-  const removeFromQueue = (index: number) => {
-      setQueue(prev => {
-          const newQueue = [...prev];
-          newQueue.splice(index, 1);
-          return newQueue;
-      });
-      // Adjust current index if needed
-      if (index < currentIndex) {
-          setCurrentIndex(prev => prev - 1);
-      } else if (index === currentIndex) {
-          if (queue.length <= 1) {
-             setIsPlaying(false);
-             setCurrentIndex(0);
-          } else {
-             const nextIdx = index >= queue.length - 1 ? 0 : index;
-             setCurrentIndex(nextIdx);
-          }
+  // UPDATED QUEUE HANDLER FOR REORDER
+  const handleReorder = (newQueue: Track[]) => {
+      // Find where the current song moved to
+      const currentTrackUUID = queue[currentIndex]?.uuid;
+      setQueue(newQueue);
+
+      if (currentTrackUUID) {
+          const newIndex = newQueue.findIndex(t => t.uuid === currentTrackUUID);
+          if (newIndex !== -1) setCurrentIndex(newIndex);
       }
   };
 
+  // DESKTOP MOVE HANDLERS
   const moveTrack = (index: number, direction: 'up' | 'down') => {
       if (direction === 'up' && index > 0) {
           setQueue(prev => {
@@ -363,6 +499,26 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           });
           if (currentIndex === index) setCurrentIndex(index + 1);
           else if (currentIndex === index + 1) setCurrentIndex(index);
+      }
+  };
+
+  const removeFromQueue = (index: number) => {
+      setQueue(prev => {
+          const newQueue = [...prev];
+          newQueue.splice(index, 1);
+          return newQueue;
+      });
+      // Adjust current index if needed
+      if (index < currentIndex) {
+          setCurrentIndex(prev => prev - 1);
+      } else if (index === currentIndex) {
+          if (queue.length <= 1) {
+             setIsPlaying(false);
+             setCurrentIndex(0);
+          } else {
+             const nextIdx = index >= queue.length - 1 ? 0 : index;
+             setCurrentIndex(nextIdx);
+          }
       }
   };
 
@@ -394,15 +550,19 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               genres: selectedGenres,
               duration: targetDuration
           });
-          const tracks = res.data;
           
-          if (tracks && tracks.length > 0) {
+          if (res.data && Array.isArray(res.data)) {
+              // Assign UUIDs to AI generated tracks
+              const tracks = res.data.map((t: any) => ({ ...t, uuid: generateUUID() }));
+
               setQueue(tracks);
               setCurrentIndex(0);
               // Small delay to ensure player is ready and state updated
               setTimeout(() => {
-                  loadAndPlay(tracks[0]);
-                  setCurrentLoopCount(1);
+                  if (tracks.length > 0) {
+                    loadAndPlay(tracks[0]);
+                    setCurrentLoopCount(1);
+                  }
               }, 100);
           } else {
               alert("Could not generate a vibe. Try manual search.");
@@ -430,6 +590,65 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
   const currentTrackData = queue[currentIndex];
 
+  // --- MINIMIZED CONTENT ---
+  const MinimizedContent = (
+      <div className="flex items-center gap-3 w-full max-w-full">
+          {/* Prev */}
+          <button
+                onClick={(e) => { e.stopPropagation(); playPrev(); }}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center shrink-0"
+          >
+              <SkipBack size={14} className="text-white/70"/>
+          </button>
+
+          {/* Play/Pause */}
+          <button
+                onClick={(e) => {
+                    e.stopPropagation();
+                    if (!playerRef.current) return;
+                    if (isPlaying) playerRef.current.pauseVideo();
+                    else playerRef.current.playVideo();
+                }}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center shrink-0"
+          >
+              {isPlaying ? <Pause size={14} className="text-white"/> : <Play size={14} className="text-white ml-0.5"/>}
+          </button>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0 flex flex-col justify-center">
+              <span className="text-xs font-bold text-white truncate leading-tight">
+                  {currentTrackData?.title || "No Track"}
+              </span>
+              <span className="text-[10px] text-white/50 truncate leading-tight">
+                  {currentTrackData?.artist || "Aastha's Jam"}
+              </span>
+          </div>
+
+          {/* Next */}
+          <button
+                onClick={(e) => { e.stopPropagation(); playNext(); }}
+                className="p-1 text-white/30 hover:text-white shrink-0"
+          >
+              <SkipForward size={16} />
+          </button>
+      </div>
+  );
+
+  // Determine if we should pass minimized content (Only for Desktop)
+  // Logic: isMobile checked in parent? No, we check window width inside DraggableWindow usually,
+  // but here we can't easily know.
+  // DraggableWindow handles the "isMobile" check internally to switch views.
+  // BUT DraggableWindow now ignores minimizedContent on Mobile (rendering Bubble instead).
+  // So we can safely pass it.
+
+  // --- Is Mobile Check for Rendering Queue Mode ---
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+      const check = () => setIsMobile(window.innerWidth < 768);
+      window.addEventListener('resize', check);
+      return () => window.removeEventListener('resize', check);
+  }, []);
+
   return (
     <DraggableWindow 
       isOpen={isOpen} onClose={onClose} title="Jam with Aastha"
@@ -437,6 +656,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       zIndex={zIndex || 10} onFocus={onFocus || (() => {})}
       icon={Music}
       color="#8B5CF6"
+      minimizedContent={MinimizedContent}
     >
       <div className="flex flex-col h-full w-full font-sans select-none relative">
         
@@ -571,7 +791,13 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                             placeholder="Search song..." 
                             className="w-full bg-black/30 backdrop-blur-md border border-white/10 rounded-full px-4 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/30 transition-all pr-8"
                         />
-                        <Search size={14} className="absolute right-3 top-3 text-white/30" />
+                        <button
+                            type="submit" // Trigger Search on Click
+                            onClick={handleSearch}
+                            className="absolute right-3 top-2.5 text-white/30 hover:text-white transition-colors"
+                        >
+                            <Search size={14} />
+                        </button>
                     </div>
                     <button 
                         type="button"
@@ -626,26 +852,38 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                      {queue.length === 0 ? (
                          <div className="text-white/20 text-center py-8 text-xs italic">Queue is empty</div>
                      ) : (
-                         <div className="space-y-2">
-                             {queue.map((track, idx) => (
-                                 <div key={`${track.id}-${idx}`} className={`group flex items-center gap-3 p-2 rounded-lg transition-colors ${currentIndex === idx ? 'bg-white/10' : 'hover:bg-white/5'}`}>
-                                     {currentIndex === idx && isPlaying ? (
-                                         <div className="w-1 h-8 bg-teal-400 rounded-full animate-pulse shrink-0"/>
-                                     ) : (
-                                         <span className="w-4 text-[10px] text-white/30 text-center shrink-0">{idx + 1}</span>
-                                     )}
-                                     <div className="flex-1 min-w-0" onClick={() => { setCurrentIndex(idx); loadAndPlay(track); }}>
-                                         <div className={`text-xs truncate font-medium ${currentIndex === idx ? 'text-white' : 'text-white/70'}`}>{track.title}</div>
-                                         <div className="text-[10px] truncate text-white/40">{track.artist}</div>
-                                     </div>
-                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                         <button onClick={() => moveTrack(idx, 'up')} disabled={idx === 0} className="p-1 text-white/30 hover:text-white disabled:opacity-0"><ArrowUp size={12}/></button>
-                                         <button onClick={() => moveTrack(idx, 'down')} disabled={idx === queue.length - 1} className="p-1 text-white/30 hover:text-white disabled:opacity-0"><ArrowDown size={12}/></button>
-                                         <button onClick={() => removeFromQueue(idx)} className="p-1 text-white/30 hover:text-red-400"><Trash2 size={12}/></button>
-                                     </div>
-                                 </div>
-                             ))}
-                         </div>
+                         // CONDITIONAL RENDERING BASED ON DEVICE
+                         isMobile ? (
+                             <Reorder.Group axis="y" values={queue} onReorder={handleReorder} className="space-y-2">
+                                 {queue.map((track, idx) => (
+                                     <MobileQueueItem
+                                        key={track.uuid}
+                                        track={track}
+                                        index={idx}
+                                        isActive={currentIndex === idx}
+                                        onPlay={() => { setCurrentIndex(idx); loadAndPlay(track); }}
+                                        onRemove={() => removeFromQueue(idx)}
+                                     />
+                                 ))}
+                             </Reorder.Group>
+                         ) : (
+                             <div className="space-y-2">
+                                 {queue.map((track, idx) => (
+                                     <DesktopQueueItem
+                                        key={track.uuid}
+                                        track={track}
+                                        index={idx}
+                                        isActive={currentIndex === idx}
+                                        onPlay={() => { setCurrentIndex(idx); loadAndPlay(track); }}
+                                        onMoveUp={() => moveTrack(idx, 'up')}
+                                        onMoveDown={() => moveTrack(idx, 'down')}
+                                        onRemove={() => removeFromQueue(idx)}
+                                        isFirst={idx === 0}
+                                        isLast={idx === queue.length - 1}
+                                     />
+                                 ))}
+                             </div>
+                         )
                      )}
                 </div>
             ) : (
