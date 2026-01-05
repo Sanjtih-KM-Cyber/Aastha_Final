@@ -43,9 +43,9 @@ export const Features: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-6 relative z-10">
         <FadeIn className="text-center mb-16">
-          <span className="text-violet-600 dark:text-violet-400 font-semibold tracking-wide uppercase text-sm bg-violet-50 dark:bg-violet-900/20 px-3 py-1 rounded-full border border-violet-100 dark:border-violet-500/20">Features</span>
+          <span className="text-violet-600 dark:text-violet-300 font-semibold tracking-wide uppercase text-sm bg-violet-50 dark:bg-violet-900/20 px-3 py-1 rounded-full border border-violet-100 dark:border-violet-500/20">Features</span>
           <h2 className="text-3xl md:text-5xl font-bold text-slate-900 dark:text-white mt-6 mb-6">Built for Your Wellbeing</h2>
-          <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+          <p className="text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
             Everything you need for a safe, private, and transformative mental wellness journey.
           </p>
         </FadeIn>
@@ -53,14 +53,14 @@ export const Features: React.FC = () => {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           {features.map((feature, idx) => (
             <FadeIn key={idx} delay={idx * 100} className="h-full">
-              <div className="group h-full p-8 bg-white dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/10 hover:border-violet-200 dark:hover:border-violet-500/30 shadow-sm hover:shadow-2xl hover:shadow-violet-100 dark:hover:shadow-violet-900/20 transition-all duration-300 relative overflow-hidden">
+              <div className="group h-full p-8 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-violet-200 dark:hover:border-violet-500/30 shadow-sm hover:shadow-2xl hover:shadow-violet-100 dark:hover:shadow-violet-900/20 transition-all duration-300 relative overflow-hidden">
                  <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-violet-50 to-transparent dark:from-violet-500/10 rounded-bl-full -mr-4 -mt-4 opacity-0 group-hover:opacity-100 transition-opacity" />
 
-                <div className="w-14 h-14 bg-slate-50 dark:bg-white/10 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-300 mb-6 group-hover:scale-110 group-hover:bg-violet-600 dark:group-hover:bg-violet-600 group-hover:text-white transition-all duration-300 shadow-sm relative z-10">
+                <div className="w-14 h-14 bg-slate-50 dark:bg-slate-700 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-300 mb-6 group-hover:scale-110 group-hover:bg-violet-600 dark:group-hover:bg-violet-600 group-hover:text-white transition-all duration-300 shadow-sm relative z-10">
                   <feature.icon size={28} strokeWidth={1.5} />
                 </div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 relative z-10">{feature.title}</h3>
-                <p className="text-slate-600 dark:text-slate-400 leading-relaxed relative z-10">{feature.desc}</p>
+                <p className="text-slate-600 dark:text-slate-300 leading-relaxed relative z-10">{feature.desc}</p>
               </div>
             </FadeIn>
           ))}

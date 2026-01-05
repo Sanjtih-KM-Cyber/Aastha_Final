@@ -78,6 +78,11 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
       })));
     }
 
+    // Prepare OTP upfront to avoid secondary write
+    const otp = generateOTP();
+    const otpCodeHash = await bcrypt.hash(otp, 10);
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
     const user = await User.create({
       name: name,
       email: cleanEmail,
@@ -94,21 +99,15 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
       streak: 1, 
       lastVisit: new Date(),
       // --- STRICT VERIFICATION MODE ---
-      isVerified: false
+      isVerified: false,
+      otpCode: otpCodeHash,
+      otpExpires: otpExpires
     });
 
     if (user) {
-        try {
-            const otp = generateOTP();
-            user.otpCode = await bcrypt.hash(otp, 10);
-            user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
-            await user.save();
-
-            console.log(`[Auth] Strict Registration: Sending OTP to ${cleanEmail}`);
-            sendOTPEmail(cleanEmail, otp).catch(e => console.error("[Auth] Background Email Error:", e));
-        } catch(err) {
-            console.error("[Auth] OTP generation/sending error:", err);
-        }
+        console.log(`[Auth] Strict Registration: Sending OTP to ${cleanEmail}`);
+        // Fire and forget email
+        sendOTPEmail(cleanEmail, otp).catch(e => console.error("[Auth] Background Email Error:", e));
 
         (res as any).status(201).json({
             message: 'Account created. Verification required.',
@@ -276,6 +275,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         avatar: user.avatar,
         wallpaper: user.wallpaper,
         persona: user.persona || 'aastha',
+        isOnboardingComplete: user.isOnboardingComplete,
         createdAt: user.createdAt,
         encryptionSalt: user.encryptionSalt,
         securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
@@ -364,6 +364,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
         avatar: user.avatar,
         wallpaper: user.wallpaper,
         persona: user.persona || 'aastha',
+        isOnboardingComplete: user.isOnboardingComplete,
         createdAt: user.createdAt,
         encryptionSalt: user.encryptionSalt,
         securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
@@ -412,6 +413,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
             avatar: user.avatar,
             wallpaper: user.wallpaper,
             persona: user.persona || 'aastha',
+            isOnboardingComplete: user.isOnboardingComplete,
             createdAt: user.createdAt,
             encryptionSalt: user.encryptionSalt,
             securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
@@ -578,6 +580,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
             streak: user.streak,
             avatar: user.avatar,
             wallpaper: user.wallpaper,
+            isOnboardingComplete: user.isOnboardingComplete,
             createdAt: user.createdAt,
             encryptionSalt: user.encryptionSalt,
             securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))

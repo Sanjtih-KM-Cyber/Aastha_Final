@@ -13,7 +13,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onLogin }) => {
   useEffect(() => {
     // Check local storage or system preference
     const stored = localStorage.getItem('theme');
-    const isDark = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    // If specific preference exists, use it. Otherwise, default to false (Light) or system.
+    // Given the Landing page is primarily Light, we might want to default to light if not specified.
+    const isDark = stored === 'dark';
 
     setIsDark(isDark);
     if (isDark) {
