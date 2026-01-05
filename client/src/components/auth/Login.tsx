@@ -6,6 +6,24 @@ import api from '../../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SECURITY_QUESTIONS } from '../../constants';
 
+const MOTIVATIONAL_QUOTES = [
+  "Your mind is a garden. Your thoughts are the seeds. You can grow flowers or you can grow weeds.",
+  "Peace comes from within. Do not seek it without.",
+  "You don't have to control your thoughts. You just have to stop letting them control you.",
+  "Breath is the anchor of your mindfulness.",
+  "Feelings come and go like clouds in a windy sky. Conscious breathing is my anchor.",
+  "It is not a daily increase, but a daily decrease. Hack away at the unessential.",
+  "The present moment is the only moment available to us, and it is the door to all moments.",
+  "Mental health is not a destination, but a process. It's about how you drive, not where you're going.",
+  "Self-care is how you take your power back.",
+  "You are allowed to be both a masterpiece and a work in progress simultaneously.",
+  "Sometimes the most productive thing you can do is relax.",
+  "Tough times never last, but tough people do.",
+  "Healing takes time, and asking for help is a courageous step.",
+  "Be gentle with yourself, you're doing the best you can.",
+  "What you think, you become. What you feel, you attract. What you imagine, you create."
+];
+
 interface LoginProps {
   onBack?: () => void;
   onLoginSuccess?: () => void;
@@ -47,6 +65,12 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   const [resetQuestion, setResetQuestion] = useState('');
   const [resetAnswer, setResetAnswer] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [quote, setQuote] = useState(MOTIVATIONAL_QUOTES[0]);
+
+  useEffect(() => {
+      // Random Quote on Mount
+      setQuote(MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)]);
+  }, []);
 
   // Handle incoming verify request (e.g. from failed login elsewhere)
   useEffect(() => {
@@ -227,10 +251,10 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
             {mode === 'verify-otp' && "Secure\nVerification."}
             {mode.startsWith('forgot') && "Recover Your\nPeace."}
           </h2>
-          <p className="text-slate-300 text-lg leading-relaxed">
+          <p className="text-slate-300 text-lg leading-relaxed italic">
             {mode === 'verify-otp'
                 ? "We take your privacy seriously. Please verify your identity to ensure your sanctuary remains yours alone."
-                : "\"Your mind is a garden. Your thoughts are the seeds. You can grow flowers or you can grow weeds.\""}
+                : `"${quote}"`}
           </p>
         </div>
       </div>

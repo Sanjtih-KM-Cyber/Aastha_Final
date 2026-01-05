@@ -15,6 +15,7 @@ export interface User {
   securityQuestions?: { question: string }[];
   persona?: 'aastha' | 'aarav'; // NEW
   encryptionSalt?: string; // NEW: For secure key derivation (replaces email for new users)
+  isOnboardingComplete?: boolean;
 }
 
 export interface AuthState {

@@ -156,6 +156,13 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         await user.save();
     }
 
+    // --- ONBOARDING MIGRATION (Legacy Users) ---
+    // If field is missing, set to true so they skip tour. New users (schema default false) will see it.
+    if (user && user.isOnboardingComplete === undefined) {
+        user.isOnboardingComplete = true;
+        await user.save();
+    }
+
     if (user && user.deletedAt) {
        const daysSinceDelete = (new Date().getTime() - new Date(user.deletedAt).getTime()) / (1000 * 3600 * 24);
        if (daysSinceDelete > 10) {
@@ -645,4 +652,20 @@ export const resetDiaryNuclear = async (req: AuthRequest, res: Response) => {
         await user.save();
         (res as any).json({ success: true, message: 'Diary wiped and password reset.' });
     } catch(e) { (res as any).status(500).json({ message: 'Error' }); }
+};
+
+export const completeOnboarding = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) return (res as any).status(401).json({ message: 'Not authorized' });
+        const user = await User.findById(req.user._id);
+        if (user) {
+            user.isOnboardingComplete = true;
+            await user.save();
+            (res as any).status(200).json({ success: true });
+        } else {
+            (res as any).status(404).json({ message: "User not found" });
+        }
+    } catch (e) {
+        (res as any).status(500).json({ message: 'Update failed' });
+    }
 };

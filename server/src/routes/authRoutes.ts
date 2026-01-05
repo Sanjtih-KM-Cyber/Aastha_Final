@@ -14,7 +14,8 @@ import {
   updateProfile,
   upgradeToPro,
   verifyOTP,
-  resendOTP
+  resendOTP,
+  completeOnboarding
 } from '../controllers/authController';
 import { createOrder, verifyPayment } from '../controllers/paymentController';
 import { protect } from '../middleware/authMiddleware';
@@ -45,5 +46,6 @@ router.post('/reset-complete', completeReset);
 router.post('/verify-security-answer', protect, verifySecurityAnswer);
 router.post('/reset-diary-nuclear', protect, resetDiaryNuclear);
 router.post('/change-diary-password', protect, changeDiaryPassword);
+router.post('/complete-onboarding', protect, completeOnboarding);
 
 export default router;

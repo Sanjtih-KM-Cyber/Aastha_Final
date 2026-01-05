@@ -3,6 +3,8 @@ import { WellnessHub } from '../components/wellness/WellnessHub';
 import { ChatView } from '../components/chat/ChatView';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
 import { useSync } from '../context/SyncContext';
+import { OnboardingTour, TourStep } from '../components/landing/OnboardingTour';
+import { useAuth } from '../context/AuthContext';
 
 // ✅ DIRECT IMPORTS (Fix for Widgets Not Opening)
 // Lazy load widgets for better error isolation
@@ -21,11 +23,41 @@ const MemoSoundscape = memo(Soundscape);
 const MemoBreathing = memo(BreathingWidget);
 const MemoMood = memo(MoodTracker);
 
+const SANCTUARY_TOUR_STEPS: TourStep[] = [
+  {
+    targetId: 'chat-container-main',
+    title: 'Your Personal Companion',
+    content: 'Talk to Aastha (or Aastik). Share your thoughts, feelings, or just vent. Everything is encrypted.',
+    position: 'right'
+  },
+  {
+    targetId: 'wellness-hub-nav',
+    title: 'Wellness Hub',
+    content: 'Access all your tools here: Diary, Music, Breathing Exercises, and Mood Tracking.',
+    position: 'right'
+  },
+  {
+    targetId: 'voice-mode-btn',
+    title: 'Voice Mode',
+    content: 'Prefer talking? Tap the headset icon to have a real-time voice conversation.',
+    position: 'bottom'
+  },
+  {
+    targetId: 'settings-btn',
+    title: 'Customize Everything',
+    content: 'Change themes, manage security, or switch personas in the settings.',
+    position: 'top'
+  }
+];
+
 export const Sanctuary: React.FC = () => {
   const { emit, subscribe } = useSync();
+  const { user, completeOnboarding } = useAuth();
+
   // Mobile Sidebar State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [showTour, setShowTour] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -33,6 +65,20 @@ export const Sanctuary: React.FC = () => {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Trigger Tour only if user exists and hasn't completed it
+  useEffect(() => {
+    if (user && user.isOnboardingComplete === false) {
+      // Small delay to ensure UI is mounted
+      const timer = setTimeout(() => setShowTour(true), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
+
+  const handleTourComplete = async () => {
+      setShowTour(false);
+      await completeOnboarding();
+  };
 
   const [widgets, setWidgets] = useState<Record<string, boolean>>({
     diary: false,
@@ -102,6 +148,13 @@ export const Sanctuary: React.FC = () => {
   return (
     <div className="relative w-full h-screen flex bg-transparent overflow-hidden">
       
+      <OnboardingTour
+         isOpen={showTour}
+         steps={SANCTUARY_TOUR_STEPS}
+         onComplete={handleTourComplete}
+         onSkip={handleTourComplete}
+      />
+
       {/* 1. Left Sidebar (Wellness Hub) - Navigation Layer (z-20) */}
       <WellnessHub 
         onToggleWidget={toggleWidget} 
