@@ -145,20 +145,23 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, onComplet
                         {currentStep.content}
                     </p>
 
-                    <div className="flex items-center justify-between">
-                        <button
-                            onClick={onSkip}
-                            className="text-slate-500 hover:text-slate-300 text-sm font-medium"
-                        >
-                            Skip
-                        </button>
+                    <div className="flex flex-col gap-3 mt-4">
                         <button
                             onClick={handleNext}
-                            className="px-6 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-full font-medium text-sm transition-all flex items-center gap-2"
+                            className="w-full py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-900/20"
                         >
-                            {isLastStep ? 'Finish' : 'Next'}
-                            {isLastStep ? <Check size={14}/> : <ChevronRight size={14}/>}
+                            {isLastStep ? 'Start My Journey' : 'Next'}
+                            {isLastStep ? <Check size={16}/> : <ChevronRight size={16}/>}
                         </button>
+
+                        {!isLastStep && (
+                            <button
+                                onClick={onSkip}
+                                className="text-slate-500 hover:text-white text-xs font-medium py-2 transition-colors"
+                            >
+                                I will explore by myself
+                            </button>
+                        )}
                     </div>
 
                     {/* Arrow (Visual decoration) */}
