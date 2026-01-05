@@ -151,12 +151,13 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             ...mobileStyle // Force reset on mobile maximize
           }}
           // --- MOBILE OPTIMIZATION 1: Fast Transitions & Simple Exit ---
+          // Further reduced duration for even snappier feel
           transition={isLiteMode
-            ? { duration: 0.15, ease: "easeOut" } // Snap!
+            ? { duration: 0.1, ease: "linear" }
             : { type: "spring", damping: 25, stiffness: 300 }
           }
           exit={isLiteMode
-            ? { opacity: 0, transition: { duration: 0.1 } }
+            ? { opacity: 0, transition: { duration: 0.05 } }
             : { opacity: 0, scale: 0.9, y: 20 }
           }
           drag={!isMobile && !isResizing}
