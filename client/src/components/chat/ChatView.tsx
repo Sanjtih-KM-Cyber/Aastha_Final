@@ -500,7 +500,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             }
             if (onOpenWidget) {
                 if (lowerTag.includes('recommend_breathing')) { const m = lowerTag.match(/mode="([^"]+)"/i); onOpenWidget('breathing', { initialMode: m ? m[1] : undefined }); }
-                if (lowerTag.includes('open_breathing')) onOpenWidget('breathing');
+                if (lowerTag.includes('open_breathing') || lowerTag.includes('start_breathing_exercise')) onOpenWidget('breathing');
                 if (lowerTag.includes('open_soundscape')) { const m = lowerTag.match(/preset="([^"]+)"/i); onOpenWidget('soundscape', { preset: m ? m[1] : undefined }); }
                 if (lowerTag.includes('open_diary')) onOpenWidget('diary');
                 if (lowerTag.includes('open_mood_tracker')) onOpenWidget('mood');
