@@ -226,7 +226,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       setIsDeleting(true);
       try {
           await api.post('/users/delete-account', { reason: deleteReason });
-          logout(); window.location.reload();
+          // Force logout and redirect to login page
+          await logout();
+          // Do not reload, as it might just refresh the current protected route (Sanctuary)
+          // logout() in AuthContext clears local storage and state.
+          // App.tsx should detect isAuthenticated=false and redirect to /login?
+          // To be safe, we can manually redirect or let the context update happen.
+          // window.location.href = '/login'; is a hard redirect that works.
+          window.location.href = '/login';
       } catch (e) { setIsDeleting(false); }
   };
 
