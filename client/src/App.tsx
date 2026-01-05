@@ -8,11 +8,12 @@ import { SyncProvider } from './context/SyncContext';
 import { SyncBridge } from './components/SyncBridge';
 import { useSecurity } from './hooks/useSecurity';
 import { LoadingFallback } from './components/LoadingFallback';
+import { Login } from './components/auth/Login';
 
 // Lazy Load Pages
-const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
-const Auth = lazy(() => import('./pages/Auth').then(module => ({ default: module.Auth })));
-const VerifyOTPScreen = lazy(() => import('./pages/VerifyOTPScreen').then(module => ({ default: module.VerifyOTPScreen })));
+// Note: We use the default export from the new Landing.tsx
+const Landing = lazy(() => import('./pages/Landing'));
+// Removed Auth and VerifyOTPScreen as they are replaced by Login.tsx
 const Sanctuary = lazy(() => import('./pages/Sanctuary').then(module => ({ default: module.Sanctuary })));
 
 // Protected Route Wrapper
@@ -51,8 +52,9 @@ const AppRoutes = () => {
       <Routes>
         {/* Public Routes - Wrapped to redirect if already auth */}
         <Route path="/" element={<PublicOnlyRoute><Landing /></PublicOnlyRoute>} />
-        <Route path="/login" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
-        <Route path="/verify" element={<PublicOnlyRoute><VerifyOTPScreen /></PublicOnlyRoute>} />
+
+        {/* New Login Component Handles Auth, Register, and Verification */}
+        <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
 
         {/* Protected Routes */}
         <Route
