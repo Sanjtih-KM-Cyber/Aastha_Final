@@ -87,16 +87,18 @@ export const VerifyOTPScreen: React.FC = () => {
 
       try {
           const res = await api.post('/users/verify-otp', { email, otp: code });
-          // Success! Context logic for "login" usually expects (email, password) OR we can manually hydrate.
-          // Since our AuthContext relies on the cookie primarily, we can just call `checkAuth` or `window.location.reload`
-          // OR better, we explicitly update the user state.
-          // Since 'login' function in context usually does the API call, we need a way to just 'refresh'.
 
-          // Assuming AuthContext has a reload or we can just fetch ME.
-          // Actually, let's just navigate to Sanctuary.
-          // If the cookie is set (which verify-otp does), the next /me call will work.
+          // ✅ FIX: Auto-Login Logic
+          // If the API returns the user object/token, verify-otp acts as a login.
+          // We must save this to localStorage so AuthContext picks it up immediately.
+          if (res.data && (res.data.token || res.data._id)) {
+              localStorage.setItem('userInfo', JSON.stringify(res.data));
+              // Set last active timestamp for auto-lock
+              localStorage.setItem('auth_last_active', Date.now().toString());
+          }
 
-          // Force a full reload to ensure AuthContext picks up the new cookie and state
+          // Force a navigation to Sanctuary
+          // Using window.location.href ensures a clean state reload for AuthContext
           window.location.href = '/sanctuary';
 
       } catch (err: any) {
