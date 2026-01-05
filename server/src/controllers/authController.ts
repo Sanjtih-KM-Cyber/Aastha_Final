@@ -136,10 +136,11 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     const identifierHash = hashEmail(cleanIdentifier);
 
     // LOOKUP
+    // Optimized: Removed Regex to prevent table scans. Used Exact Match which utilizes index.
     let user = await User.findOne({
       $or: [
         { emailHash: identifierHash },
-        { email: { $regex: new RegExp(`^${escapeRegex(cleanIdentifier)}$`, 'i') } },
+        { email: cleanIdentifier },
         { username: cleanIdentifier }
       ]
     });
