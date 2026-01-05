@@ -3,6 +3,9 @@ import { WellnessHub } from '../components/wellness/WellnessHub';
 import { ChatView } from '../components/chat/ChatView';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
 import { useSync } from '../context/SyncContext';
+import { OnboardingTour, TourStep } from '../components/common/OnboardingTour';
+import { SANCTUARY_TOUR_STEPS } from '../constants';
+import { useAuth } from '../hooks/useAuth';
 
 // ✅ DIRECT IMPORTS (Fix for Widgets Not Opening)
 // Lazy load widgets for better error isolation
@@ -22,10 +25,12 @@ const MemoBreathing = memo(BreathingWidget);
 const MemoMood = memo(MoodTracker);
 
 export const Sanctuary: React.FC = () => {
+  const { user } = useAuth();
   const { emit, subscribe } = useSync();
   // Mobile Sidebar State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isTourOpen, setIsTourOpen] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -33,6 +38,26 @@ export const Sanctuary: React.FC = () => {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Check for First Time User (Tour)
+  useEffect(() => {
+    if (!user) return;
+    const tourKey = `aastha_tour_completed_${user._id || user.id}`;
+    const hasSeenTour = localStorage.getItem(tourKey);
+
+    // Slight delay to allow UI to settle
+    if (!hasSeenTour) {
+        const timer = setTimeout(() => setIsTourOpen(true), 1500);
+        return () => clearTimeout(timer);
+    }
+  }, [user]);
+
+  const handleTourComplete = () => {
+      setIsTourOpen(false);
+      if (user) {
+          localStorage.setItem(`aastha_tour_completed_${user._id || user.id}`, 'true');
+      }
+  };
 
   const [widgets, setWidgets] = useState<Record<string, boolean>>({
     diary: false,
@@ -195,6 +220,13 @@ export const Sanctuary: React.FC = () => {
       {/* 4. Global Settings Modal - System Layer (z-100) */}
       <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
+      {/* 5. Onboarding Tour */}
+      <OnboardingTour
+         isOpen={isTourOpen}
+         steps={SANCTUARY_TOUR_STEPS}
+         onComplete={handleTourComplete}
+         onSkip={handleTourComplete}
+      />
     </div>
   );
 };

@@ -9,7 +9,7 @@ import { FAQ } from '../components/landing/FAQ';
 import { CallToAction } from '../components/landing/CallToAction';
 import { Footer } from '../components/landing/Footer';
 import { Login } from '../components/auth/Login';
-import { OnboardingTour, TourStep } from '../components/landing/OnboardingTour';
+import { OnboardingTour, TourStep } from '../components/common/OnboardingTour';
 import { useNavigate } from 'react-router-dom';
 
 const LANDING_TOUR_STEPS: TourStep[] = [

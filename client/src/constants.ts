@@ -52,3 +52,36 @@ export const SOUND_URLS = {
   thunder: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/storm2.mp3',
   wind: 'https://xuiodzjst7u2lxlz.public.blob.vercel-storage.com/wind.mp3'
 };
+
+export const SANCTUARY_TOUR_STEPS: any[] = [
+  {
+    targetId: 'chat-container',
+    title: 'Welcome to Your Sanctuary',
+    content: 'This is your safe space. Aastha is here to listen, understand, and grow with you.',
+    position: 'top'
+  },
+  {
+    targetId: 'wellness-sidebar',
+    title: 'Wellness Hub',
+    content: 'Access powerful tools like your Diary, Mood Tracker, Breathing Exercises, and Soundscapes from here.',
+    position: 'right'
+  },
+  {
+    targetId: 'chat-input-area',
+    title: 'Talk Your Way',
+    content: 'Type freely or use the Microphone for Voice Mode. Aastha responds with empathy and warmth.',
+    position: 'top'
+  },
+  {
+    targetId: 'chat-container',
+    title: 'Magic Commands',
+    content: 'Try typing "<color>orange</color>" or "<color>blue</color>" to instantly change the vibe of your sanctuary.',
+    position: 'bottom'
+  },
+  {
+    targetId: 'settings-trigger', // Assuming we have an ID for this
+    title: 'Make it Yours',
+    content: 'Customize your experience in Settings. Enjoy your journey with Aastha.',
+    position: 'left'
+  }
+];
