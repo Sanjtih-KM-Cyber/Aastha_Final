@@ -16,6 +16,9 @@ export const FadeIn: React.FC<FadeInProps> = ({
   const [isVisible, setIsVisible] = useState(false);
   const domRef = useRef<HTMLDivElement>(null);
 
+  // Detect mobile for reduced motion
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
   useEffect(() => {
     const observer = new IntersectionObserver(entries => {
       entries.forEach(entry => {
@@ -49,11 +52,12 @@ export const FadeIn: React.FC<FadeInProps> = ({
   return (
     <div
       ref={domRef}
-      className={`transition-all duration-700 ease-out ${className}`}
+      className={`transition-all ${isMobile ? 'duration-300' : 'duration-700'} ease-out ${className}`}
       style={{
         opacity: isVisible ? 1 : 0,
         transform: getTransform(),
-        transitionDelay: `${delay}ms`
+        transitionDelay: `${isMobile ? 0 : delay}ms`,
+        willChange: 'opacity, transform'
       }}
     >
       {children}

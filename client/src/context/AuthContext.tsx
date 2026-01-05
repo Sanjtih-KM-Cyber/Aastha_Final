@@ -32,6 +32,7 @@ interface AuthContextType extends AuthState {
   getUserDisplayEmail: () => string;
   updateUser: (data: Partial<User>) => void;
   setPreventAutoLock: (id: string, prevent: boolean) => void; // New method
+  completeOnboarding: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -297,6 +298,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
   };
 
+  // ---------- COMPLETE ONBOARDING ----------
+  const completeOnboarding = async () => {
+    try {
+        await api.post('/users/complete-onboarding');
+        updateUser({ isOnboardingComplete: true });
+    } catch (e) {
+        console.error("Failed to complete onboarding", e);
+    }
+  };
+
   // ---------- DISPLAY HELPERS ----------
   const getUserDisplayName = useCallback(() => {
     if (!state.user) return "Guest";
@@ -319,7 +330,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getUserDisplayName,
       getUserDisplayEmail,
       updateUser,
-      setPreventAutoLock
+      setPreventAutoLock,
+      completeOnboarding
     }}>
       {children}
     </AuthContext.Provider>

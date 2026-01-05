@@ -48,7 +48,7 @@ const Landing: React.FC = () => {
   };
 
   return (
-      <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-violet-200 selection:text-violet-900">
+      <div className="min-h-screen bg-white dark:bg-[#0B0F17] text-slate-900 font-sans selection:bg-violet-200 selection:text-violet-900 transition-colors duration-500">
         <OnboardingTour
           isOpen={isTourOpen}
           steps={LANDING_TOUR_STEPS}
