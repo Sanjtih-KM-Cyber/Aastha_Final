@@ -89,6 +89,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ className = "" }) => {
       if (res && res.requiresVerification) {
           navigate('/verify', { state: { email: res.email } });
       } else {
+          // Force navigate if not requiring verification
+          // The register function in AuthContext already sets state and localStorage
           navigate('/sanctuary');
       }
     } catch (err: any) { 
