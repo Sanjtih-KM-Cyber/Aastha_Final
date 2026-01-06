@@ -23,30 +23,99 @@ const MemoSoundscape = memo(Soundscape);
 const MemoBreathing = memo(BreathingWidget);
 const MemoMood = memo(MoodTracker);
 
-const SANCTUARY_TOUR_STEPS: TourStep[] = [
+const DESKTOP_TOUR_STEPS: TourStep[] = [
   {
-    targetId: 'chat-container-main',
-    title: 'Your Personal Companion',
-    content: 'Talk to Aastha (or Aastik). Share your thoughts, feelings, or just vent. Everything is encrypted.',
+    targetId: 'chat-input-area',
+    title: 'Say Hello!',
+    content: 'This is where the magic happens. Talk to Aastha (or Aastik) about anything—your crush, your boss, or that weird dream you had. No judgment, ever.',
+    position: 'top'
+  },
+  {
+    targetId: 'nav-diary',
+    title: 'Secret Vault',
+    content: 'Your digital diary. It’s encrypted, password-protected, and locked tighter than Fort Knox. Your secrets are safe here.',
     position: 'right'
   },
   {
-    targetId: 'wellness-hub-nav',
-    title: 'Wellness Hub',
-    content: 'Access all your tools here: Diary, Music, Breathing Exercises, and Mood Tracking.',
+    targetId: 'nav-mood',
+    title: 'Emotional Weather',
+    content: 'Feeling sunny or stormy? Log your mood here. It helps us understand you better (and maybe cheer you up).',
     position: 'right'
+  },
+  {
+    targetId: 'nav-breathing',
+    title: 'Chill Pill',
+    content: 'Anxious? Stressed? Just need a moment? Tap here for guided breathing exercises that actually work.',
+    position: 'right'
+  },
+  {
+    targetId: 'nav-jam',
+    title: 'Jam Station',
+    content: 'Queue up your favorite lo-fi beats or hype tracks from YouTube. Listening together is our love language.',
+    position: 'right'
+  },
+  {
+    targetId: 'nav-soundscape',
+    title: 'Vibe Creator',
+    content: 'Turn your room into a rainforest, a cafe, or a thunderstorm. Perfect for focus or just zoning out.',
+    position: 'right'
+  },
+  {
+    targetId: 'nav-pomodoro',
+    title: 'Focus Mode',
+    content: 'Got work to do? Use the Pomodoro timer to crush your tasks without burning out.',
+    position: 'right'
+  },
+  {
+    targetId: 'chat-input-area',
+    title: 'It’s Magic (Literally)',
+    content: 'Want to change the vibe? Just tell me! Try saying "Change theme to pink" or "Make it dark". I’m a genie, basically.',
+    position: 'top'
   },
   {
     targetId: 'voice-mode-btn',
-    title: 'Voice Mode',
-    content: 'Prefer talking? Tap the headset icon to have a real-time voice conversation.',
+    title: 'No Typing Needed',
+    content: 'Tired of typing? Tap the headset to talk to me in real-time. It’s like a phone call, but way less awkward.',
     position: 'bottom'
   },
   {
-    targetId: 'settings-btn',
-    title: 'Customize Everything',
-    content: 'Change themes, manage security, or switch personas in the settings.',
+    targetId: 'center-screen',
+    title: 'You’re All Set!',
+    content: 'That’s the tour! Thanks for logging in. Your sanctuary awaits—go explore and make yourself at home.',
+    position: 'bottom'
+  }
+];
+
+const MOBILE_TOUR_STEPS: TourStep[] = [
+  {
+    targetId: 'mobile-menu-btn',
+    title: 'The Everything Button',
+    content: 'Tap here to find all your cool tools: Diary, Music, Breathing, and more. It’s like a wellness Swiss Army knife.',
+    position: 'bottom'
+  },
+  {
+    targetId: 'chat-search-bar',
+    title: 'Time Machine',
+    content: 'Looking for that advice I gave you last week? Search your entire conversation history right here.',
+    position: 'bottom'
+  },
+  {
+    targetId: 'chat-input-area',
+    title: 'Your Space',
+    content: 'Chat with me here. You can type, use voice dictation, or even upload pics from your gallery to show me your world.',
     position: 'top'
+  },
+  {
+    targetId: 'voice-mode-btn',
+    title: 'Let’s Talk',
+    content: 'Tap the headset for a real voice convo. Perfect for late-night vents or morning pep talks.',
+    position: 'top'
+  },
+  {
+    targetId: 'center-screen',
+    title: 'You’re Ready!',
+    content: 'Thanks for being here. This is your safe space now. Enjoy the vibes!',
+    position: 'bottom'
   }
 ];
 
@@ -150,7 +219,7 @@ export const Sanctuary: React.FC = () => {
       
       <OnboardingTour
          isOpen={showTour}
-         steps={SANCTUARY_TOUR_STEPS}
+         steps={isMobile ? MOBILE_TOUR_STEPS : DESKTOP_TOUR_STEPS}
          onComplete={handleTourComplete}
          onSkip={handleTourComplete}
       />
