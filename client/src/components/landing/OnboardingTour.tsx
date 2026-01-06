@@ -32,14 +32,17 @@ const getArrowPath = (startX: number, startY: number, endX: number, endY: number
     const perpX = Math.cos(angle + Math.PI / 2);
     const perpY = Math.sin(angle + Math.PI / 2);
 
-    // Loop magnitude
-    const loopSize = Math.min(distance * 0.5, 100);
+    // Loop magnitude (increased for more "doodle" feel)
+    const loopSize = Math.min(distance * 0.6, 150);
 
-    const cp1x = startX + dx * 0.2 + perpX * loopSize;
-    const cp1y = startY + dy * 0.2 + perpY * loopSize;
+    // Randomness for hand-drawn feel
+    const randomOffset = Math.random() * 20 - 10;
 
-    const cp2x = startX + dx * 0.8 - perpX * (loopSize * 0.5);
-    const cp2y = startY + dy * 0.8 - perpY * (loopSize * 0.5);
+    const cp1x = startX + dx * 0.2 + perpX * loopSize + randomOffset;
+    const cp1y = startY + dy * 0.2 + perpY * loopSize + randomOffset;
+
+    const cp2x = startX + dx * 0.8 - perpX * (loopSize * 0.5) + randomOffset;
+    const cp2y = startY + dy * 0.8 - perpY * (loopSize * 0.5) + randomOffset;
 
     return `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
 };
@@ -215,11 +218,8 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, onComplet
                 <div className="w-[85vw] md:w-[90vw] max-w-[320px] bg-slate-900 border border-violet-500/30 rounded-2xl p-6 shadow-2xl relative">
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center gap-2">
-                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 text-white text-xs font-bold">
-                                {currentStepIndex + 1}
-                            </span>
-                            <span className="text-xs text-violet-300 font-medium uppercase tracking-wider">
-                                {steps.length} Steps
+                            <span className="text-sm font-bold text-violet-300 tracking-wide">
+                                Step {currentStepIndex + 1} of {steps.length}
                             </span>
                         </div>
                         <button onClick={onSkip} className="text-slate-500 hover:text-white transition-colors">

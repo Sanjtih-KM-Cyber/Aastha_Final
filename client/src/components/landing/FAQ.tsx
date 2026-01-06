@@ -12,12 +12,12 @@ const faqs = [
     answer: "No, Aastha is a wellness companion designed to support your mental health journey, but it is not a replacement for professional clinical therapy. We recommend using Aastha alongside professional care if needed."
   },
   {
-    question: "Can I use it offline?",
-    answer: "Yes! Core features like journaling and mood tracking work offline. AI conversations sync once you're back online to ensure you always have support available."
+    question: "How does voice mode work?",
+    answer: "Simply tap the microphone icon and speak naturally. Aastha listens, understands context, and responds with a warm, empathetic voice. It's like having a conversation with a caring friend."
   },
   {
-    question: "How does the mood tracking work?",
-    answer: "Aastha analyzes the sentiment of your conversations and journal entries (privately) to generate insights. You can also manually log your mood daily for more granular tracking."
+    question: "What makes Aastha different?",
+    answer: "Unlike passive journaling apps, Aastha actively engages with you, provides insights, tracks your mood patterns, and adapts to your emotional state in real-time. It's a complete wellness ecosystem."
   }
 ];
 
