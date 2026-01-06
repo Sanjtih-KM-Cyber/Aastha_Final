@@ -990,8 +990,24 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                     <button 
                         onClick={() => {
                             if (!playerRef.current) return;
-                            if (isPlaying) playerRef.current.pauseVideo();
-                            else playerRef.current.playVideo();
+
+                            // FORCE LOAD logic if state is "unstarted" (or sometimes -1/5)
+                            // If user clicked play but video isn't actually loaded/playing yet
+                            const state = playerRef.current.getPlayerState ? playerRef.current.getPlayerState() : -1;
+
+                            if (isPlaying) {
+                                playerRef.current.pauseVideo();
+                            } else {
+                                // If unstarted or cued, we might need to nudge it
+                                if ((state === -1 || state === 5) && queue.length > 0) {
+                                    playerRef.current.loadVideoById(queue[currentIndex].id);
+                                    // Restore time if saved
+                                    const savedTime = localStorage.getItem('jam_time');
+                                    if (savedTime) playerRef.current.seekTo(parseFloat(savedTime));
+                                } else {
+                                    playerRef.current.playVideo();
+                                }
+                            }
                         }}
                         className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)]"
                     >

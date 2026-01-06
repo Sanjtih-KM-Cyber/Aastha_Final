@@ -3,6 +3,8 @@ import { WellnessHub } from '../components/wellness/WellnessHub';
 import { ChatView } from '../components/chat/ChatView';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
 import { useSync } from '../context/SyncContext';
+import { OnboardingTour, TourStep } from '../components/landing/OnboardingTour';
+import { useAuth } from '../context/AuthContext';
 
 // ✅ DIRECT IMPORTS (Fix for Widgets Not Opening)
 // Lazy load widgets for better error isolation
@@ -21,11 +23,110 @@ const MemoSoundscape = memo(Soundscape);
 const MemoBreathing = memo(BreathingWidget);
 const MemoMood = memo(MoodTracker);
 
+const DESKTOP_TOUR_STEPS: TourStep[] = [
+  {
+    targetId: 'chat-input-area',
+    title: 'Say Hello!',
+    content: 'This is where the magic happens. Talk to Aastha (or Aastik) about anything—your crush, your boss, or that weird dream you had. No judgment, ever.',
+    position: 'top'
+  },
+  {
+    targetId: 'nav-diary',
+    title: 'Secret Vault',
+    content: 'Your digital diary. It’s encrypted, password-protected, and locked tighter than Fort Knox. Your secrets are safe here.',
+    position: 'right'
+  },
+  {
+    targetId: 'nav-mood',
+    title: 'Emotional Weather',
+    content: 'Feeling sunny or stormy? Log your mood here. It helps us understand you better (and maybe cheer you up).',
+    position: 'right'
+  },
+  {
+    targetId: 'nav-breathing',
+    title: 'Chill Pill',
+    content: 'Anxious? Stressed? Just need a moment? Tap here for guided breathing exercises that actually work.',
+    position: 'right'
+  },
+  {
+    targetId: 'nav-jam',
+    title: 'Jam Station',
+    content: 'Queue up your favorite lo-fi beats or hype tracks from YouTube. Listening together is our love language.',
+    position: 'right'
+  },
+  {
+    targetId: 'nav-soundscape',
+    title: 'Vibe Creator',
+    content: 'Turn your room into a rainforest, a cafe, or a thunderstorm. Perfect for focus or just zoning out.',
+    position: 'right'
+  },
+  {
+    targetId: 'nav-pomodoro',
+    title: 'Focus Mode',
+    content: 'Got work to do? Use the Pomodoro timer to crush your tasks without burning out.',
+    position: 'right'
+  },
+  {
+    targetId: 'chat-input-area',
+    title: 'It’s Magic (Literally)',
+    content: 'Want to change the vibe? Just tell me! Try saying "Change theme to pink" or "Make it dark". I’m a genie, basically.',
+    position: 'top'
+  },
+  {
+    targetId: 'voice-mode-btn',
+    title: 'No Typing Needed',
+    content: 'Tired of typing? Tap the headset to talk to me in real-time. It’s like a phone call, but way less awkward.',
+    position: 'bottom'
+  },
+  {
+    targetId: 'center-screen',
+    title: 'You’re All Set!',
+    content: 'That’s the tour! Thanks for logging in. Your sanctuary awaits—go explore and make yourself at home.',
+    position: 'bottom'
+  }
+];
+
+const MOBILE_TOUR_STEPS: TourStep[] = [
+  {
+    targetId: 'mobile-menu-btn',
+    title: 'The Everything Button',
+    content: 'Tap here to find all your cool tools: Diary, Music, Breathing, and more. It’s like a wellness Swiss Army knife.',
+    position: 'bottom'
+  },
+  {
+    targetId: 'chat-search-bar',
+    title: 'Time Machine',
+    content: 'Looking for that advice I gave you last week? Search your entire conversation history right here.',
+    position: 'bottom'
+  },
+  {
+    targetId: 'chat-input-area',
+    title: 'Your Space',
+    content: 'Chat with me here. You can type, use voice dictation, or even upload pics from your gallery to show me your world.',
+    position: 'top'
+  },
+  {
+    targetId: 'voice-mode-btn',
+    title: 'Let’s Talk',
+    content: 'Tap the headset for a real voice convo. Perfect for late-night vents or morning pep talks.',
+    position: 'top'
+  },
+  {
+    targetId: 'center-screen',
+    title: 'You’re Ready!',
+    content: 'Thanks for being here. This is your safe space now. Enjoy the vibes!',
+    position: 'bottom'
+  }
+];
+
 export const Sanctuary: React.FC = () => {
   const { emit, subscribe } = useSync();
+  const { user, completeOnboarding } = useAuth();
+
   // Mobile Sidebar State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [showTour, setShowTour] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -33,6 +134,20 @@ export const Sanctuary: React.FC = () => {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Trigger Tour only if user exists and hasn't completed it
+  useEffect(() => {
+    if (user && user.isOnboardingComplete === false) {
+      // Small delay to ensure UI is mounted
+      const timer = setTimeout(() => setShowTour(true), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
+
+  const handleTourComplete = async () => {
+      setShowTour(false);
+      await completeOnboarding();
+  };
 
   const [widgets, setWidgets] = useState<Record<string, boolean>>({
     diary: false,
@@ -102,6 +217,13 @@ export const Sanctuary: React.FC = () => {
   return (
     <div className="relative w-full h-screen flex bg-transparent overflow-hidden">
       
+      <OnboardingTour
+         isOpen={showTour}
+         steps={isMobile ? MOBILE_TOUR_STEPS : DESKTOP_TOUR_STEPS}
+         onComplete={handleTourComplete}
+         onSkip={handleTourComplete}
+      />
+
       {/* 1. Left Sidebar (Wellness Hub) - Navigation Layer (z-20) */}
       <WellnessHub 
         onToggleWidget={toggleWidget} 

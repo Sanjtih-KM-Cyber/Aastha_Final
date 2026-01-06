@@ -660,14 +660,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              {/* LEFT */}
              <div className="shrink-0 flex items-center">
                  {/* Mobile: Hamburger. PC: Empty or Menu if needed */}
-                 <button onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 bg-black/20 ${!isMobile ? 'md:hidden' : ''}`}>
+                 <button id="mobile-menu-btn" onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 bg-black/20 ${!isMobile ? 'md:hidden' : ''}`}>
                     <Menu size={20} />
                  </button>
              </div>
 
              {/* CENTER: Search Bar */}
              <div className="flex-1 min-w-0 relative group flex justify-center">
-                 <div className={`flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full px-3 py-2 shadow-2xl transition-all focus-within:bg-black/50 focus-within:border-white/20 w-full ${!isMobile ? 'md:w-[400px]' : ''}`}>
+                 <div id="chat-search-bar" className={`flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full px-3 py-2 shadow-2xl transition-all focus-within:bg-black/50 focus-within:border-white/20 w-full ${!isMobile ? 'md:w-[400px]' : ''}`}>
                     <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2 shrink-0" />
                     
                     <input 
@@ -701,7 +701,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     </span>
                  </div>
                  
-                 <button onClick={toggleVoiceMode} className="shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg bg-black/30 hover:bg-white/10">
+                 <button id="voice-mode-btn" onClick={toggleVoiceMode} className="shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg bg-black/30 hover:bg-white/10">
                     <Headphones size={18} />
                  </button>
              </div>
@@ -744,12 +744,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  )}
              </AnimatePresence>
 
-             <div className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border border-white/5 p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
+             <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border border-white/5 p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
                  <div className="flex items-center gap-1">
                      <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStandardMode} className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}>
                          <ImageIcon size={20} />
                      </button>
-                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} capture="environment" />
+                     {/* REMOVED capture="environment" to allow Gallery selection on mobile */}
+                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
                      
                      <button onClick={toggleDictation} className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>
                          {isDictating ? <MicOff size={20} /> : <Mic size={20} />}

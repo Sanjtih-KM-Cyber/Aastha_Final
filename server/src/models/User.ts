@@ -60,6 +60,9 @@ export interface IUser extends Document {
 
   // Memory
   memorySummary?: string;
+
+  // Onboarding
+  isOnboardingComplete?: boolean;
 }
 
 const securityQuestionSchema = new Schema({
@@ -122,7 +125,10 @@ const userSchema = new Schema<IUser>({
   persona: { type: String, enum: ['aastha', 'aarav'], default: 'aastha' },
 
   // Memory
-  memorySummary: { type: String, default: "" }
+  memorySummary: { type: String, default: "" },
+
+  // Onboarding (Default false = New users see it)
+  isOnboardingComplete: { type: Boolean, default: false }
 }, {
   timestamps: true,
 });

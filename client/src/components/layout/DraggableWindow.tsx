@@ -127,13 +127,17 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   // MAXIMIZE FIX FOR MOBILE: Ensure position resets to 0,0 when un-minimizing
   const mobileStyle = isMobile && !isMinimized ? { top: 0, left: 0, x: 0, y: 0 } : {};
 
+  // Use lite mode hook if available, otherwise fallback to mobile check
+  // (Assuming context is not passed, using simple check for now)
+  const isLiteMode = isMobile; // Can extend this later
+
   return (
     <>
       <AnimatePresence>
       {isOpen && (
         <motion.div
           ref={containerRef}
-          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          initial={isLiteMode ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
           animate={{
             opacity: 1, 
             scale: 1, 
@@ -147,12 +151,13 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             ...mobileStyle // Force reset on mobile maximize
           }}
           // --- MOBILE OPTIMIZATION 1: Fast Transitions & Simple Exit ---
-          transition={isMobile
-            ? { duration: 0.25, ease: "easeInOut" }
+          // Further reduced duration for even snappier feel
+          transition={isLiteMode
+            ? { duration: 0.1, ease: "linear" }
             : { type: "spring", damping: 25, stiffness: 300 }
           }
-          exit={isMobile
-            ? { opacity: 0 }
+          exit={isLiteMode
+            ? { opacity: 0, transition: { duration: 0.05 } }
             : { opacity: 0, scale: 0.9, y: 20 }
           }
           drag={!isMobile && !isResizing}
@@ -258,9 +263,10 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
       <AnimatePresence>
         {isOpen && isMobile && isMinimized && Icon && (
             <motion.div
-                initial={{ scale: 0, opacity: 0 }}
+                initial={isLiteMode ? { scale: 0.8, opacity: 0 } : { scale: 0, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0, opacity: 0 }}
+                transition={isLiteMode ? { duration: 0.1 } : undefined}
                 drag
                 dragMomentum={false}
                 whileDrag={{ scale: 1.1 }}
