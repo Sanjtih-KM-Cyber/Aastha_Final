@@ -41,8 +41,13 @@ export default {
         // New & Shared
         'float': 'float 6s ease-in-out infinite',
         'pulse-glow': 'pulse-glow 3s infinite',
+        'wiggle': 'wiggle 0.3s ease-in-out infinite',
       },
       keyframes: {
+        wiggle: {
+            '0%, 100%': { transform: 'rotate(-3deg)' },
+            '50%': { transform: 'rotate(3deg)' },
+        },
         blob: {
           '0%': { transform: 'translate(0px, 0px) scale(1)' },
           '33%': { transform: 'translate(30px, -50px) scale(1.1)' },

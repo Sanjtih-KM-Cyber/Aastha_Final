@@ -65,7 +65,8 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     }
 
     const encryptionSalt = crypto.randomUUID();
-    const salt = await bcrypt.genSalt(10);
+    // Optimization: Reduced salt rounds to 8 for faster performance on Render
+    const salt = await bcrypt.genSalt(8);
     const hashedPassword = await bcrypt.hash(password, salt);
     let hashedDiaryPassword = undefined;
     if (diaryPassword) hashedDiaryPassword = await bcrypt.hash(diaryPassword, salt);
@@ -80,7 +81,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 
     // Prepare OTP upfront to avoid secondary write
     const otp = generateOTP();
-    const otpCodeHash = await bcrypt.hash(otp, 10);
+    const otpCodeHash = await bcrypt.hash(otp, 8); // Optimized
     const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
     const user = await User.create({
@@ -192,7 +193,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
              }
 
              const otp = generateOTP();
-             user.otpCode = await bcrypt.hash(otp, 10);
+             user.otpCode = await bcrypt.hash(otp, 8); // Optimized
              user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
              await user.save();
 
@@ -225,26 +226,47 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           needsSave = true;
       }
 
-      if (!user.streak) { user.streak = 1; needsSave = true; }
-      if (!user.lastVisit) { user.lastVisit = new Date(); needsSave = true; }
-      if (user.dailyPremiumUsage === undefined) { user.dailyPremiumUsage = 0; needsSave = true; }
-      if (user.isPro === undefined) { user.isPro = false; needsSave = true; }
+      // STREAK CALCULATION (Must happen BEFORE updating lastVisit)
+      const now = new Date();
+      const lastVisit = user.lastVisit || new Date(0);
+      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const lastVisitMidnight = new Date(lastVisit.getFullYear(), lastVisit.getMonth(), lastVisit.getDate());
 
-      const today = new Date();
-      const lastUsage = new Date(user.lastUsageDate || user.createdAt || Date.now());
+      const diffTime = Math.abs(todayMidnight.getTime() - lastVisitMidnight.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-      if (lastUsage.getDate() !== today.getDate() || 
-          lastUsage.getMonth() !== today.getMonth() || 
-          lastUsage.getFullYear() !== today.getFullYear()) {
-          user.dailyPremiumUsage = 0;
-          user.lastUsageDate = today;
+      if (diffDays === 1) {
+          user.streak = (user.streak || 0) + 1;
+          needsSave = true;
+      } else if (diffDays > 1) {
+          user.streak = 1;
+          needsSave = true;
+      } else if (!user.streak) {
+          user.streak = 1;
           needsSave = true;
       }
       
+      // Update Visit Time Logic
+      if (!user.lastVisit) { user.lastVisit = new Date(); needsSave = true; }
       const lastVisitTime = new Date(user.lastVisit).getTime();
-      const todayTime = today.getTime();
+      const todayTime = now.getTime();
+
+      // Only update lastVisit if > 60s passed (prevents spam saves)
       if (Math.abs(todayTime - lastVisitTime) > 60000) {
-          user.lastVisit = today;
+          user.lastVisit = now;
+          needsSave = true;
+      }
+
+      // Reset Daily Limits
+      if (user.dailyPremiumUsage === undefined) { user.dailyPremiumUsage = 0; needsSave = true; }
+      if (user.isPro === undefined) { user.isPro = false; needsSave = true; }
+
+      const lastUsage = new Date(user.lastUsageDate || user.createdAt || Date.now());
+      if (lastUsage.getDate() !== now.getDate() ||
+          lastUsage.getMonth() !== now.getMonth() ||
+          lastUsage.getFullYear() !== now.getFullYear()) {
+          user.dailyPremiumUsage = 0;
+          user.lastUsageDate = now;
           needsSave = true;
       }
 

@@ -271,11 +271,15 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
           )}
 
           <div 
-             className={`flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5 ${isCollapsed ? 'justify-center w-10 h-10 p-0' : 'w-fit'}`}
+             className={`flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5 ${isCollapsed ? 'justify-center w-10 h-10 p-0' : 'w-fit'} group cursor-pointer`}
              title="Daily Streak"
           >
-             <div className={`rounded bg-orange-500/20 ${isCollapsed ? 'p-2' : 'p-1'}`}>
-               <Flame size={isCollapsed ? 16 : 12} className="text-orange-400" fill="currentColor" />
+             <div className={`rounded bg-orange-500/20 ${isCollapsed ? 'p-2' : 'p-1'} group-hover:bg-orange-500/30 transition-colors`}>
+               <Flame
+                 size={isCollapsed ? 16 : 12}
+                 className="text-orange-400 group-hover:animate-wiggle"
+                 fill="currentColor"
+               />
              </div>
              {!isCollapsed && (
                  <span className="text-xs font-mono text-white/60 whitespace-nowrap">
