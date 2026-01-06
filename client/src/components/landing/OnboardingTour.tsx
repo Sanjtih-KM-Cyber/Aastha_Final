@@ -16,35 +16,45 @@ interface OnboardingTourProps {
   isOpen: boolean;
 }
 
-// Helper to calculate doodle arrow path
+// Helper to calculate doodle arrow path with a proper loop
 const getArrowPath = (startX: number, startY: number, endX: number, endY: number) => {
-    // Determine vector
     const dx = endX - startX;
     const dy = endY - startY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // Control points for a "loopy" curve
-    // We create a cubic bezier that loops out
-    // M startX startY C cp1x cp1y, cp2x cp2y, endX endY
+    // Midpoint
+    const midX = (startX + endX) / 2;
+    const midY = (startY + endY) / 2;
 
-    // Offset perpendicular to direction to creating looping
+    // Perpendicular Vector for Loop Height
     const angle = Math.atan2(dy, dx);
-    const perpX = Math.cos(angle + Math.PI / 2);
-    const perpY = Math.sin(angle + Math.PI / 2);
+    const loopHeight = 150; // Height of the loop
 
-    // Loop magnitude (increased for more "doodle" feel)
-    const loopSize = Math.min(distance * 0.6, 150);
+    // Control Points for cubic bezier to form a loop
+    // We want a path that goes OUT, Crosses over, and Comes back
+    // Like a cursive 'e' or 'l' loop shape
 
-    // Randomness for hand-drawn feel
-    const randomOffset = Math.random() * 20 - 10;
+    const cp1X = midX + Math.cos(angle + Math.PI/2) * loopHeight;
+    const cp1Y = midY + Math.sin(angle + Math.PI/2) * loopHeight;
 
-    const cp1x = startX + dx * 0.2 + perpX * loopSize + randomOffset;
-    const cp1y = startY + dy * 0.2 + perpY * loopSize + randomOffset;
+    const cp2X = midX + Math.cos(angle - Math.PI/2) * (loopHeight * 0.5);
+    const cp2Y = midY + Math.sin(angle - Math.PI/2) * (loopHeight * 0.5);
 
-    const cp2x = startX + dx * 0.8 - perpX * (loopSize * 0.5) + randomOffset;
-    const cp2y = startY + dy * 0.8 - perpY * (loopSize * 0.5) + randomOffset;
+    // Hand-drawn roughness (reduced for "complete" look, not sloppy)
+    const rough = () => (Math.random() * 4 - 2);
 
-    return `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
+    return `M ${startX} ${startY} Q ${cp1X + rough()} ${cp1Y + rough()} ${midX} ${midY} T ${endX} ${endY}`;
+};
+
+// Hand-Drawn Arrowhead Path (Rotated to match angle)
+const getArrowHead = (endX: number, endY: number, startX: number, startY: number) => {
+    const angle = Math.atan2(endY - startY, endX - startX) * 180 / Math.PI;
+    return (
+        <g transform={`translate(${endX}, ${endY}) rotate(${angle})`}>
+            {/* Main Arrow V shape - Sketchy style */}
+            <path d="M -15 -10 L 0 0 L -15 10" fill="none" stroke="#8b5cf6" strokeWidth="3" strokeLinecap="round" />
+            <path d="M -12 -8 L -2 0 L -12 8" fill="none" stroke="#8b5cf6" strokeWidth="1" strokeOpacity="0.5" />
+        </g>
+    );
 };
 
 export const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, onComplete, onSkip, isOpen }) => {
@@ -187,23 +197,31 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, onComplet
         {/* Mobile Doodle Arrow */}
         {isMobile && coords && (
             <svg className="absolute inset-0 w-full h-full pointer-events-none z-[101]">
-                <defs>
-                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                        <polygon points="0 0, 10 3.5, 0 7" fill="#8b5cf6" />
-                    </marker>
-                </defs>
                 <motion.path
                     d={arrowPath}
                     fill="none"
                     stroke="#8b5cf6"
                     strokeWidth="3"
-                    strokeDasharray="10,5"
+                    strokeDasharray="none" // Solid line for "complete" look
                     strokeLinecap="round"
-                    markerEnd="url(#arrowhead)"
                     initial={{ pathLength: 0, opacity: 0 }}
                     animate={{ pathLength: 1, opacity: 1 }}
                     transition={{ duration: 0.8, ease: "easeInOut" }}
                 />
+                {/* Custom Hand-Drawn Arrowhead at End */}
+                 <motion.g
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.7, duration: 0.3 }}
+                 >
+                    {/* We approximate rotation based on direction from center to target */}
+                    {getArrowHead(
+                        coords.x + coords.width/2,
+                        coords.y + coords.height/2,
+                        window.innerWidth/2,
+                        window.innerHeight/2
+                    )}
+                 </motion.g>
             </svg>
         )}
 

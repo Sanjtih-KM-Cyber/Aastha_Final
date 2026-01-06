@@ -179,8 +179,18 @@ export const extractThemeFromImage = async (base64Image: string): Promise<any> =
     });
 
     return JSON.parse(response.text || '{}');
-  } catch (error) {
+  } catch (error: any) {
     console.error("Theme Extraction Error:", error);
+
+    // Graceful Handling for Overloaded Model (503) or other API errors
+    if (error?.status === 503 || error?.code === 503 || error?.message?.includes('overloaded')) {
+        console.warn("Gemini Model Overloaded. Returning fallback theme.");
+        return {
+            primaryColor: "#8b5cf6", // Default Violet
+            accentColor: "#f472b6", // Default Pink
+            themeName: "Sanctuary Fallback"
+        };
+    }
     throw error;
   }
 };
