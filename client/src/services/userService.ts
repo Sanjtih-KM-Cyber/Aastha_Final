@@ -48,5 +48,11 @@ export const userService = {
   async analyzeChat(): Promise<{ result: string }> {
       const res = await api.get('/ai/analyze/chat');
       return res.data;
+  },
+
+  // --- Fortress Bridge ---
+  async verifyDiaryPassword(password: string): Promise<{ success: boolean }> {
+      const res = await api.post('/users/verify-diary-password', { password });
+      return res.data;
   }
 };

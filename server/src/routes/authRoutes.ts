@@ -28,6 +28,7 @@ router.post('/verify-otp', verifyOTP);
 router.post('/resend-otp', resendOTP);
 router.get('/logout', logoutUser);                // GET logout (matching frontend)
 router.post('/verify-diary', protect, verifyDiaryPassword);
+router.post('/verify-diary-password', protect, verifyDiaryPassword); // Alias for clarity
 router.get('/verify', protect, getMe);
 router.get('/me', protect, getMe);
 router.put('/profile', protect, updateProfile);
