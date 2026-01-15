@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Send, Menu, Headphones, AlertCircle, Smile, Copy, Reply, 
-  Mic, MicOff, X, Zap, Leaf, Search, Image as ImageIcon, Plus, Camera,
-  ShieldAlert, Loader2, ChevronUp, ChevronDown, Sparkles
+  Send, Menu, Headphones, AlertCircle, Smile, 
+  Mic, MicOff, X, Search, Image as ImageIcon, Plus, Camera,
+  ShieldAlert, Loader2, ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
@@ -27,7 +27,6 @@ interface ChatViewProps {
   currentActivity?: string;
 }
 
-// --- UTILS ---
 const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -69,8 +68,6 @@ const mapColorToTheme = (colorName: string): string => {
     return 'aurora';
 };
 
-const EMOJIS = ['😊', '🌿', '☁️', '✨', '💜', '🌧️', '🎵', '🧘‍♀️', '🌸', '☕', '🌙', '💪', '🤔', '🔥', '👀', '🫂'];
-
 export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false, currentActivity = 'Online' }) => {
   const { user } = useAuth();
   const { setTheme, currentTheme } = useTheme();
@@ -100,16 +97,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
 
-  // Media Menu State
   const [showMediaMenu, setShowMediaMenu] = useState(false);
-
-  // --- SEARCH STATE ---
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ msgId: string, matchIndex: number }[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
-  // --- VOICE STATE ---
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isDictating, setIsDictating] = useState(false); 
@@ -117,12 +110,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem('user_tts_enabled') === 'true');
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(() => localStorage.getItem('user_voice_uri'));
   
-  // --- CREDITS ---
   const [localCredits, setLocalCredits] = useState(user?.credits || 0);
   const [modelMode, setModelMode] = useState<'pro' | 'eco'>(user?.credits && user.credits > 0 ? 'pro' : 'eco');
   const [isStandardMode, setIsStandardMode] = useState(false);
   
-  // --- REFS ---
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const recognitionRef = useRef<any>(null);
@@ -557,7 +548,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         <span className="bg-black/30 backdrop-blur-md border border-white/5 text-white/50 text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm">{dateLabel}</span>
                     </div>
                 )}
-                {/* Responsive Fix: Last message has dynamic padding applied by parent, not hardcoded */}
+                {/* 🛡️ FIX: No Hardcoded padding on children */}
                 <div id={domId} className="flex flex-col w-full shrink-0">
                     <MessageBubble 
                         role={msg.role} 
@@ -709,13 +700,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       
       <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
-      {/* --- SECTION 2: CHAT AREA --- */}
-      {/* FIX: Replaced pb-32 with pb-[18vh] to ensure input bar doesn't overlap 
-         on any device screen size.
+      {/* --- SECTION 2: CHAT AREA (THE FIX) --- */}
+      {/* 1. REMOVED overflow-x-hidden (S23 Fix: Stops sideways clipping)
+          2. ADDED pb-[18vh] (Overlap Fix: Ensures messages clear the keyboard/input)
+          3. ADDED overscrollBehaviorY: 'contain' (Bounce Fix)
       */}
       <div 
           ref={messagesContainerRef}
-          className="flex-1 w-full max-w-4xl mx-auto overflow-y-auto overflow-x-hidden px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
+          className="flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
+          style={{ overscrollBehaviorY: 'contain' }}
       >
           <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40">
               <div className="h-4" /> 
