@@ -81,13 +81,14 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     // Blob1: Encrypt with Password
     masterKeyBlob1 = await encryptMasterKey(masterKey, password);
 
-    if (securityQuestions && Array.isArray(securityQuestions)) {
+    if (securityQuestions && Array.isArray(securityQuestions) && securityQuestions.length > 0) {
+      // THE FORTRESS: Deterministically encrypt Blob2 with the FIRST security answer
+      // This prevents race conditions and ensures Reset logic (which checks securityQuestions[0]) matches the key
+      const firstAnswerClean = securityQuestions[0].answer.toLowerCase().trim();
+      masterKeyBlob2 = await encryptMasterKey(masterKey, firstAnswerClean);
+
       processedSecurityQuestions = await Promise.all(securityQuestions.map(async (q: any) => {
           const answerClean = q.answer.toLowerCase().trim();
-          // Blob2: Encrypt with Security Answer (using the first one for simplicity as per requirements)
-          if (!masterKeyBlob2) {
-              masterKeyBlob2 = await encryptMasterKey(masterKey, answerClean);
-          }
           return {
             question: q.question,
             answerHash: await bcrypt.hash(answerClean, salt)

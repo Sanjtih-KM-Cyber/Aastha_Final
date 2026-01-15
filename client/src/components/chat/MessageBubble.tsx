@@ -106,10 +106,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         </div>
       )}
 
-      <div className="relative max-w-[90%] md:max-w-[70%]">
+      <div className={`relative ${isMobile ? 'max-w-[85%]' : 'max-w-[90%]'} md:max-w-[70%]`}>
         <div
           className={`
-            relative px-4 py-3 md:px-6 md:py-3.5 text-sm md:text-base leading-snug backdrop-blur-xl shadow-lg
+            relative ${isMobile ? 'px-3 py-2.5' : 'px-4 py-3'} md:px-6 md:py-3.5 text-sm md:text-base leading-snug backdrop-blur-xl shadow-lg
             ${
               isUser
                 ? 'rounded-[20px] rounded-br-none text-white border border-white/10 bg-black/40' 
