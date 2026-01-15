@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Menu, Headphones, AlertCircle, Smile, Copy, Reply, 
-  Mic, MicOff, X, Zap, Leaf, Search, Image as ImageIcon,
+  Mic, MicOff, X, Zap, Leaf, Search, Image as ImageIcon, Plus, Camera,
   ShieldAlert, Loader2, ChevronUp, ChevronDown, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,6 +24,7 @@ interface ChatViewProps {
   onMobileMenuClick?: () => void;
   onOpenWidget?: (widget: string, config?: any) => void;
   isMobile?: boolean;
+  currentActivity?: string;
 }
 
 // --- UTILS ---
@@ -70,7 +71,7 @@ const mapColorToTheme = (colorName: string): string => {
 
 const EMOJIS = ['😊', '🌿', '☁️', '✨', '💜', '🌧️', '🎵', '🧘‍♀️', '🌸', '☕', '🌙', '💪', '🤔', '🔥', '👀', '🫂'];
 
-export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false }) => {
+export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false, currentActivity = 'Online' }) => {
   const { user } = useAuth();
   const { setTheme, currentTheme } = useTheme();
   const { subscribe } = useSync();
@@ -95,10 +96,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
 
+  // Media Menu State
+  const [showMediaMenu, setShowMediaMenu] = useState(false);
+
   // --- SEARCH STATE ---
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ msgId: string, matchIndex: number }[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
@@ -652,56 +658,61 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         )}
       </AnimatePresence>
 
-      {/* --- SECTION 1: HEADER --- */}
-      {/* Mobile: Relative/Flex item. PC: Absolute/Floating top */}
-      {/* FIX: Removed gradient for PC (md:bg-none) to solve "Black Box" issue */}
+      {/* --- SECTION 1: HEADER (SMART HEADER) --- */}
       <div className={`shrink-0 w-full z-30 pt-safe px-4 pb-2 pointer-events-auto ${isMobile ? 'bg-gradient-to-b from-black/80 to-transparent' : 'md:absolute md:top-0 md:pt-6 bg-none'}`}>
-          <div className="flex items-center gap-3 h-14 justify-between">
+          <div className="flex items-center gap-3 h-14 justify-between relative">
              {/* LEFT */}
-             <div className="shrink-0 flex items-center">
-                 {/* Mobile: Hamburger. PC: Empty or Menu if needed */}
+             <div className="shrink-0 flex items-center z-20">
                  <button id="mobile-menu-btn" onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 bg-black/20 ${!isMobile ? 'md:hidden' : ''}`}>
                     <Menu size={20} />
                  </button>
              </div>
 
-             {/* CENTER: Search Bar */}
-             <div className="flex-1 min-w-0 relative group flex justify-center">
-                 <div id="chat-search-bar" className={`flex items-center bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full px-3 py-2 shadow-2xl transition-all focus-within:bg-black/50 focus-within:border-white/20 w-full ${!isMobile ? 'md:w-[400px]' : ''}`}>
-                    <Search size={16} className="text-white/30 group-focus-within:text-white/70 transition-colors mr-2 shrink-0" />
-                    
-                    <input 
-                        value={searchQuery} 
-                        onChange={(e) => setSearchQuery(e.target.value)} 
-                        onKeyDown={handleSearchKeyDown}
-                        placeholder="Search..." 
-                        className="bg-transparent border-none outline-none text-sm text-white w-full min-w-0 placeholder-white/20" 
-                    />
-                    
-                    {searchQuery && (
-                        <div className="flex items-center gap-1 ml-1 border-l border-white/10 pl-1 shrink-0">
-                            <span className="text-[10px] text-white/40 whitespace-nowrap min-w-[24px] text-center">
-                                {searchResults.length > 0 ? `${currentMatchIndex + 1}/${searchResults.length}` : '0/0'}
-                            </span>
-                            <button onClick={prevMatch} disabled={searchResults.length === 0} className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded"><ChevronUp size={14} /></button>
-                            <button onClick={nextMatch} disabled={searchResults.length === 0} className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded"><ChevronDown size={14} /></button>
-                            <button onClick={() => setSearchQuery('')} className="p-1 text-white/30 hover:text-white ml-1 hover:bg-white/10 rounded"><X size={14}/></button>
-                        </div>
+             {/* CENTER: Status Pill (The Smart Header) */}
+             <div className="absolute left-1/2 -translate-x-1/2 z-10 flex items-center justify-center w-full pointer-events-none">
+                 <AnimatePresence>
+                    {!isSearchOpen && (
+                        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/5 shadow-lg">
+                            <div className={`w-2 h-2 rounded-full ${currentActivity === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-400 animate-pulse'}`} />
+                            <span className="text-xs font-medium text-white/80 tracking-wide uppercase">{currentActivity === 'Online' ? botName : currentActivity}</span>
+                        </motion.div>
                     )}
-                 </div>
+                 </AnimatePresence>
              </div>
 
-             {/* RIGHT: Controls */}
-             <div className="shrink-0 flex items-center gap-3 justify-end">
-                 {/* PC Only: Credits */}
-                 <div className={`hidden md:flex px-3 py-1.5 rounded-full backdrop-blur-xl border items-center gap-2 shadow-lg transition-colors ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
-                    {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-gray-400" fill="currentColor" />}
-                    <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-gray-400'}`}>
-                        {!isStandardMode && localCredits > 100 ? '∞' : `${localCredits}`}
-                    </span>
+             {/* RIGHT: Search & Voice */}
+             <div className="shrink-0 flex items-center gap-3 justify-end z-20">
+                 {/* Fluid Search */}
+                 <div className={`flex items-center transition-all duration-300 ease-spring ${isSearchOpen ? 'w-[200px] md:w-[300px] bg-black/40 border-white/10 px-3' : 'w-10 bg-black/20 border-transparent justify-center'} h-10 rounded-full backdrop-blur-xl border`}>
+                     {isSearchOpen ? (
+                         <>
+                            <input
+                                autoFocus
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyDown={handleSearchKeyDown}
+                                onBlur={() => !searchQuery && setIsSearchOpen(false)}
+                                placeholder="Search history..."
+                                className="bg-transparent border-none outline-none text-xs text-white w-full min-w-0 placeholder-white/30"
+                            />
+                            {searchQuery ? (
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                    <span className="text-[9px] text-white/30 whitespace-nowrap mr-1">{searchResults.length > 0 ? `${currentMatchIndex + 1}/${searchResults.length}` : '0'}</span>
+                                    <button onMouseDown={e => e.preventDefault()} onClick={nextMatch} className="p-1 hover:text-white text-white/40"><ChevronDown size={12}/></button>
+                                    <button onMouseDown={e => e.preventDefault()} onClick={() => { setSearchQuery(''); setIsSearchOpen(false); }} className="p-1 hover:text-white text-white/40"><X size={12}/></button>
+                                </div>
+                            ) : (
+                                <button onMouseDown={e => e.preventDefault()} onClick={() => setIsSearchOpen(false)} className="shrink-0 text-white/40 hover:text-white"><X size={14}/></button>
+                            )}
+                         </>
+                     ) : (
+                         <button onClick={() => setIsSearchOpen(true)} className="text-white/60 hover:text-white w-full h-full flex items-center justify-center">
+                            <Search size={18} />
+                         </button>
+                     )}
                  </div>
-                 
-                 <button id="voice-mode-btn" onClick={toggleVoiceMode} className="shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg bg-black/30 hover:bg-white/10">
+
+                 <button id="voice-mode-btn" onClick={toggleVoiceMode} className="shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg bg-black/20 hover:bg-white/10">
                     <Headphones size={18} />
                  </button>
              </div>
@@ -712,12 +723,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
       {/* --- SECTION 2: CHAT AREA --- */}
-      {/* Mobile: Flex-1 scrollable. PC: Full height absolute (sort of), large bottom padding */}
+      {/* Added overflow-x-hidden, increased padding (px-6), increased bottom buffer (pb-32) */}
       <div 
           ref={messagesContainerRef}
-          className="flex-1 w-full max-w-4xl mx-auto overflow-y-auto px-4 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
+          className="flex-1 w-full max-w-[100vw] md:max-w-4xl mx-auto overflow-y-auto overflow-x-hidden px-4 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
       >
-          <div className="flex flex-col min-h-full justify-end pb-4 md:pb-40">
+          <div className="flex flex-col min-h-full justify-end pb-32 md:pb-40">
               <div className="h-4" /> 
               {renderMessages()}
               <div ref={messagesEndRef} />
@@ -745,12 +756,50 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              </AnimatePresence>
 
              <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border border-white/5 p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
-                 <div className="flex items-center gap-1">
-                     <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStandardMode} className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}>
-                         <ImageIcon size={20} />
-                     </button>
-                     {/* REMOVED capture="environment" to allow Gallery selection on mobile */}
+                 <div className="flex items-center gap-1 relative">
+                     {/* UNIFIED MEDIA BUTTON */}
+                     {isMobile ? (
+                         <div className="relative">
+                             <button
+                                type="button"
+                                onClick={() => setShowMediaMenu(!showMediaMenu)}
+                                disabled={isStandardMode}
+                                className={`p-2.5 rounded-full transition-all ${showMediaMenu || attachedImage ? 'bg-white/10 text-white rotate-45' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                             >
+                                 <Plus size={22} />
+                             </button>
+                             <AnimatePresence>
+                                 {showMediaMenu && (
+                                     <motion.div
+                                        initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                                        // ✅ Fix: Use FIXED positioning to break out of any overflow containers
+                                        className="fixed bottom-24 left-6 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden min-w-[160px] z-[100] flex flex-col p-1.5"
+                                     >
+                                         <button onClick={() => { cameraInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
+                                             <div className="w-8 h-8 rounded-full bg-teal-500/20 flex items-center justify-center"><Camera size={16} className="text-teal-400" /></div> Camera
+                                         </button>
+                                         <button onClick={() => { fileInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
+                                             <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center"><ImageIcon size={16} className="text-violet-400" /></div> Gallery
+                                         </button>
+                                     </motion.div>
+                                 )}
+                             </AnimatePresence>
+                         </div>
+                     ) : (
+                         <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isStandardMode}
+                            className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                         >
+                             <ImageIcon size={20} />
+                         </button>
+                     )}
+
                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
+                     <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
                      
                      <button onClick={toggleDictation} className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>
                          {isDictating ? <MicOff size={20} /> : <Mic size={20} />}

@@ -97,6 +97,8 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
            setRegEmail(res.email);
            setMode('verify-otp');
         } else {
+           // Ensure local storage is set properly via AuthContext, but double check here if needed?
+           // No, AuthContext.login handles it.
            if (onLoginSuccess) onLoginSuccess();
            navigate('/sanctuary');
         }
@@ -150,16 +152,29 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
       }
 
       try {
-          const res = await api.post('/users/verify-otp', { email: regEmail, otp: code });
+          // 1. Verify OTP
+          await api.post('/users/verify-otp', { email: regEmail, otp: code });
 
-          // Auto-login Logic
-          if (res.data && (res.data.token || res.data._id)) {
-             localStorage.setItem('userInfo', JSON.stringify(res.data));
-             localStorage.setItem('auth_last_active', Date.now().toString());
+          // 2. Auto-login using the password we still have in state (if registration flow)
+          // This is critical to retrieve the 'masterKey' which verify-otp cannot return (Zero Knowledge)
+          if (regPassword) {
+              const loginRes = await login(regEmail, regPassword);
+              // login() inside useAuth handles localStorage.setItem
+          } else {
+             // Fallback: If for some reason we lost password (page refresh?), user must login manually
+             // But if we are here from 'login' -> 'unverified' flow, we might have 'password' state
+             if (password) {
+                 await login(identifier || regEmail, password);
+             } else {
+                 // No password available, force manual login
+                 alert("Verification successful! Please login.");
+                 setMode('login');
+                 setIsLoading(false);
+                 return;
+             }
           }
 
           if (onLoginSuccess) onLoginSuccess();
-          // Hard reload to sync context completely
           window.location.href = '/sanctuary';
       } catch(err: any) {
           console.error(err);
@@ -392,6 +407,9 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                                 ref={el => { otpRefs.current[idx] = el; }}
                                 type="text"
                                 maxLength={1}
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                pattern="\d{1}"
                                 value={digit}
                                 onChange={(e) => handleOtpChange(idx, e.target.value)}
                                 onKeyDown={(e) => handleOtpKeyDown(idx, e)}

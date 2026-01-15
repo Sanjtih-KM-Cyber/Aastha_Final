@@ -6,6 +6,8 @@ body {
   background-color: #0a0e17;
   color: #ffffff;
   overflow-x: hidden;
+  width: 100vw;
+  max-width: 100vw;
   /* user-select: none; removed for inspection */
   -webkit-user-select: none;
   -moz-user-select: none;
