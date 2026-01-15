@@ -99,7 +99,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
-  
+
   // Media Menu State
   const [showMediaMenu, setShowMediaMenu] = useState(false);
 
@@ -361,7 +361,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     }
   };
 
-  // --- 5. SEND LOGIC (FIXED) ---
+  // --- 5. SEND LOGIC ---
   const handleSend = async (e?: React.FormEvent, overrideInput?: string) => {
     if (e) e.preventDefault();
     
@@ -400,7 +400,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             'Authorization': `Bearer ${token}` 
         },
         credentials: 'include', 
-        // ✅ FIX: Send 'images' as an array to match the server's expectation
         body: JSON.stringify({
             message: finalContent,
             images: attachedImage ? [attachedImage] : []
@@ -558,8 +557,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         <span className="bg-black/30 backdrop-blur-md border border-white/5 text-white/50 text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm">{dateLabel}</span>
                     </div>
                 )}
-                {/* PC Fix: Add padding bottom if it's the last message so it doesn't get covered */}
-                <div id={domId} className={`flex flex-col w-full shrink-0 ${idx === messages.length - 1 ? 'md:pb-8' : ''}`}>
+                {/* Responsive Fix: Last message has dynamic padding applied by parent, not hardcoded */}
+                <div id={domId} className="flex flex-col w-full shrink-0">
                     <MessageBubble 
                         role={msg.role} 
                         content={msg.content} 
@@ -569,7 +568,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         searchQuery={searchQuery}
                         currentMatchIndex={currentMatchIndexInMessage}
                         isStreaming={isCurrentlyStreaming} 
-                        isMobile={isMobile} // ✅ Pass to MessageBubble
+                        isMobile={isMobile} 
                     />
                     {msg.warning && <div className="flex items-center justify-center gap-1.5 text-[10px] text-white/30 -mt-3 mb-4"><ShieldAlert size={10} /> {msg.warning}</div>}
                 </div>
@@ -601,31 +600,23 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   }
 
   // ==================================================================================
-  // MAIN LAYOUT
-  // Mobile: Flex Column (Strict Sections). PC: Absolute/Floating Overlay.
+  // MAIN LAYOUT (RESPONSIVE FIXES APPLIED)
   // ==================================================================================
   return (
-    // ✅ FIX 1: Removed bg-black from root.
     <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden bg-transparent">
       
       {/* 1. GLOBAL BACKGROUNDS & WALLPAPER */}
-      {/* ✅ FIX 2: Use FIXED to span entire screen behind menu and chat */}
       <div className="fixed inset-0 z-[-1] pointer-events-none">
-          {/* WALLPAPER LOGIC */}
           {user?.wallpaper ? (
               <div 
                   className="w-full h-full bg-cover bg-center bg-no-repeat"
                   style={{ backgroundImage: `url(${user.wallpaper})` }}
               >
-                  {/* Dim overlay for readability */}
                   <div className="absolute inset-0 bg-black/60 md:bg-black/40" />
               </div>
           ) : (
-              // Fallback: Dark on Mobile, Transparent on PC (letting parent background show)
               <div className="w-full h-full bg-[#0a0e17] md:bg-transparent" />
           )}
-          
-          {/* Noise Texture Overlay */}
           <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
       </div>
 
@@ -659,16 +650,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       </AnimatePresence>
 
       {/* --- SECTION 1: HEADER (SMART HEADER) --- */}
+      {/* Responsive Height & Gradient */}
       <div className={`shrink-0 w-full z-30 pt-safe px-4 pb-2 pointer-events-auto ${isMobile ? 'bg-gradient-to-b from-black/80 to-transparent' : 'md:absolute md:top-0 md:pt-6 bg-none'}`}>
           <div className="flex items-center gap-3 h-14 justify-between relative">
-             {/* LEFT */}
              <div className="shrink-0 flex items-center z-20">
                  <button id="mobile-menu-btn" onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 bg-black/20 ${!isMobile ? 'md:hidden' : ''}`}>
                     <Menu size={20} />
                  </button>
              </div>
 
-             {/* CENTER: Status Pill (The Smart Header) */}
              <div className="absolute left-1/2 -translate-x-1/2 z-10 flex items-center justify-center w-full pointer-events-none">
                  <AnimatePresence>
                     {!isSearchOpen && (
@@ -680,20 +670,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  </AnimatePresence>
              </div>
 
-             {/* RIGHT: Search & Voice */}
              <div className="shrink-0 flex items-center gap-3 justify-end z-20">
-                 {/* Fluid Search */}
                  <div className={`flex items-center transition-all duration-300 ease-spring ${isSearchOpen ? 'w-[200px] md:w-[300px] bg-black/40 border-white/10 px-3' : 'w-10 bg-black/20 border-transparent justify-center'} h-10 rounded-full backdrop-blur-xl border`}>
                      {isSearchOpen ? (
                          <>
-                            <input 
+                            <input
                                 autoFocus
-                                value={searchQuery} 
-                                onChange={(e) => setSearchQuery(e.target.value)} 
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
                                 onKeyDown={handleSearchKeyDown}
                                 onBlur={() => !searchQuery && setIsSearchOpen(false)}
-                                placeholder="Search history..." 
-                                className="bg-transparent border-none outline-none text-xs text-white w-full min-w-0 placeholder-white/30" 
+                                placeholder="Search history..."
+                                className="bg-transparent border-none outline-none text-xs text-white w-full min-w-0 placeholder-white/30"
                             />
                             {searchQuery ? (
                                 <div className="flex items-center gap-0.5 shrink-0">
@@ -719,16 +707,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           </div>
       </div>
       
-      {/* ERROR TOAST */}
       <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
       {/* --- SECTION 2: CHAT AREA --- */}
-      {/* Added overflow-x-hidden, increased padding (px-6), increased bottom buffer (pb-32) */}
+      {/* FIX: Replaced pb-32 with pb-[18vh] to ensure input bar doesn't overlap 
+         on any device screen size.
+      */}
       <div 
           ref={messagesContainerRef}
-          className="flex-1 w-full max-w-4xl mx-auto overflow-y-auto overflow-x-hidden px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
+          className="flex-1 w-full max-w-4xl mx-auto overflow-y-auto overflow-x-hidden px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
       >
-          <div className="flex flex-col min-h-full justify-end pb-32 md:pb-40">
+          <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40">
               <div className="h-4" /> 
               {renderMessages()}
               <div ref={messagesEndRef} />
@@ -736,9 +725,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       </div>
 
       {/* --- SECTION 3: INPUT AREA --- */}
-      {/* Mobile: Fixed bottom via Flex (shrink-0). PC: Absolute bottom/floating */}
-      {/* FIX: Removed gradient for PC (md:bg-none) to solve "Black Box" issue */}
-      <div className={`shrink-0 w-full px-4 pb-4 pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6 bg-none'}`}>
+      {/* Responsive bottom padding (pb-safe) handles Home Indicator */}
+      <div className={`shrink-0 w-full px-4 pb-safe pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6 bg-none'}`}>
           <div className="flex flex-col gap-2">
              <AnimatePresence>
                  {replyingTo && (
@@ -760,9 +748,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      {/* UNIFIED MEDIA BUTTON */}
                      {isMobile ? (
                          <div className="relative">
-                             <button 
-                                type="button" 
-                                onClick={() => setShowMediaMenu(!showMediaMenu)} 
+                             <button
+                                type="button"
+                                onClick={() => setShowMediaMenu(!showMediaMenu)}
                                 disabled={isStandardMode}
                                 className={`p-2.5 rounded-full transition-all ${showMediaMenu || attachedImage ? 'bg-white/10 text-white rotate-45' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
                              >
@@ -770,11 +758,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                              </button>
                              <AnimatePresence>
                                  {showMediaMenu && (
-                                     <motion.div 
+                                     <motion.div
                                         initial={{ opacity: 0, scale: 0.8, y: 10 }}
                                         animate={{ opacity: 1, scale: 1, y: 0 }}
                                         exit={{ opacity: 0, scale: 0.8, y: 10 }}
-                                        // ✅ Fix: Use FIXED positioning to break out of any overflow containers
                                         className="fixed bottom-24 left-6 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden min-w-[160px] z-[100] flex flex-col p-1.5"
                                      >
                                          <button onClick={() => { cameraInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
@@ -788,16 +775,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                              </AnimatePresence>
                          </div>
                      ) : (
-                         <button 
-                            type="button" 
-                            onClick={() => fileInputRef.current?.click()} 
+                         <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
                             disabled={isStandardMode}
                             className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
                          >
                              <ImageIcon size={20} />
                          </button>
                      )}
-                     
+
                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
                      <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
                      
@@ -831,16 +818,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                      height={400}
                                      searchDisabled={false}
                                      skinTonesDisabled={false}
-                                     categories={[
-                                         { name: 'Smileys', category: 'smileys_people' },
-                                         { name: 'Nature', category: 'animals_nature' },
-                                         { name: 'Food', category: 'food_drink' },
-                                         { name: 'Activities', category: 'activities' },
-                                         { name: 'Travel', category: 'travel_places' },
-                                         { name: 'Objects', category: 'objects' },
-                                         { name: 'Symbols', category: 'symbols' },
-                                         { name: 'Flags', category: 'flags' },
-                                     ] as any}
                                  />
                              </div>
                          )}
