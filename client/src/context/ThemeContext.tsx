@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
-import { useSync } from './SyncContext'; // FIX: Import Sync Hook
+import { useSync } from './SyncContext';
 
 export interface Theme {
   id: string;
@@ -27,32 +27,50 @@ const defaultThemes: Record<string, Theme> = {
   custom: { id: 'custom', name: 'Custom', primaryColor: '#ffffff', accentGlow: 'shadow-white/50', gradient: 'from-gray-500 to-slate-500' }
 };
 
+// ✅ HELPER: Validate Color to prevent "Shitty" UI breaks
+const isValidColor = (color: string | null | undefined): boolean => {
+    if (!color) return false;
+    const s = new Option().style;
+    s.color = color;
+    // Check if it's a valid hex or standard color, and not 'undefined' string
+    return s.color !== '' && !color.includes('undefined') && !color.includes('null');
+};
+
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const { emit } = useSync(); // FIX: Get emit function
+  const { emit } = useSync();
 
   const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('user_theme_id');
     const savedCustom = localStorage.getItem('user_custom_theme_color');
-    if (saved === 'custom' && savedCustom) {
-      return { ...defaultThemes.custom, primaryColor: savedCustom, gradient: 'from-white/20 to-black/20' };
+    
+    // ✅ FIX: Strict validation before applying custom theme
+    if (saved === 'custom' && isValidColor(savedCustom)) {
+      return { ...defaultThemes.custom, primaryColor: savedCustom!, gradient: 'from-white/20 to-black/20' };
     }
+    
+    // Fallback to Aurora if saved data is corrupt
     return defaultThemes[saved?.toLowerCase() || 'aurora'] || defaultThemes.aurora;
   });
 
-  const [wallpaper, setWallpaperState] = useState<string | null>(() => localStorage.getItem('user_wallpaper'));
+  const [wallpaper, setWallpaperState] = useState<string | null>(() => {
+      const w = localStorage.getItem('user_wallpaper');
+      return w !== 'undefined' && w !== 'null' ? w : null;
+  });
 
   useEffect(() => {
-    // sync when user changes (from server)
     if (user) {
-      const serverWallpaper = (user as any).wallpaper || null;
-      if (serverWallpaper !== wallpaper) {
-        setWallpaperState(serverWallpaper);
-        if (serverWallpaper) {
-          localStorage.setItem('user_wallpaper', serverWallpaper);
-          extractThemeFromImage(serverWallpaper); // best-effort theme extraction
+      // ✅ FIX: Sanitize server data before applying
+      const serverWallpaper = (user as any).wallpaper;
+      const validWallpaper = (serverWallpaper && serverWallpaper !== 'undefined' && serverWallpaper.length > 50) ? serverWallpaper : null;
+
+      if (validWallpaper !== wallpaper) {
+        setWallpaperState(validWallpaper);
+        if (validWallpaper) {
+          localStorage.setItem('user_wallpaper', validWallpaper);
+          extractThemeFromImage(validWallpaper);
         } else {
           localStorage.removeItem('user_wallpaper');
         }
@@ -62,49 +80,45 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [user]);
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--primary-color', currentTheme.primaryColor);
+    // ✅ FIX: Ensure CSS variable is never invalid
+    const safeColor = isValidColor(currentTheme.primaryColor) ? currentTheme.primaryColor : '#2dd4bf';
+    document.documentElement.style.setProperty('--primary-color', safeColor);
+    
     localStorage.setItem('user_theme_id', currentTheme.id);
-    if (currentTheme.id === 'custom') localStorage.setItem('user_custom_theme_color', currentTheme.primaryColor);
+    if (currentTheme.id === 'custom') {
+        localStorage.setItem('user_custom_theme_color', safeColor);
+    }
   }, [currentTheme]);
 
   const setTheme = (themeId: string, fromSync = false) => {
     if (themeId.startsWith('#')) {
-      setCurrentTheme({ ...defaultThemes.custom, primaryColor: themeId, id: 'custom', gradient: `from-[${themeId}]/20 to-black/50` });
+      if (isValidColor(themeId)) {
+          setCurrentTheme({ ...defaultThemes.custom, primaryColor: themeId, id: 'custom', gradient: `from-[${themeId}]/20 to-black/50` });
+      }
     } else {
       const key = themeId.toLowerCase();
       if (defaultThemes[key]) setCurrentTheme(defaultThemes[key]);
     }
 
-    // FIX: Emit event if not triggered by sync AND user is authenticated
     if (!fromSync && user) {
         emit('THEME_UPDATE', { theme: themeId });
     }
   };
 
-  // Tries backend AI then falls back to local canvas sampling.
   const extractThemeFromImage = async (base64Image: string) => {
-    // Only attempt AI extraction if user is logged in, otherwise fallback local immediately
     if (!user) {
         fallbackLocalExtraction(base64Image);
         return;
     }
-
     try {
-      // backend AI extraction endpoint (mounted under /api)
       const res = await api.post('/ai/theme', { image: base64Image });
       const { primaryColor } = res.data || {};
-      if (primaryColor) {
+      if (isValidColor(primaryColor)) {
         setTheme(primaryColor);
       } else {
         fallbackLocalExtraction(base64Image);
       }
     } catch (error: any) {
-      // Silence 401 warnings here if they happen during a race condition
-      if (error.response && error.response.status === 401) {
-          // Do nothing, just fallback
-      } else {
-          console.warn('AI theme extraction failed, falling back to local extraction', error);
-      }
       fallbackLocalExtraction(base64Image);
     }
   };
@@ -123,10 +137,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ctx.drawImage(img, 0, 0, 1, 1);
         const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
         const hex = '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
-        setTheme(hex);
-      };
-      img.onerror = () => {
-        // console.warn('Image load error for local theme extraction');
+        if (isValidColor(hex)) setTheme(hex);
       };
     } catch (err) {
       console.error('Fallback extraction error', err);
@@ -137,17 +148,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!file) {
       setWallpaperState(null);
       localStorage.removeItem('user_wallpaper');
-      if (user) {
-        // Clear on server if user exists
-        api.put('/users/profile', { wallpaper: '' }).catch(console.error);
-      }
+      if (user) api.put('/users/profile', { wallpaper: '' }).catch(console.error);
       return;
     }
 
     const reader = new FileReader();
     reader.onload = async (e) => {
       const dataUrl = e.target?.result as string;
-      // Resize/compress to keep payload small
       const img = new Image();
       img.src = dataUrl;
       img.onload = async () => {
@@ -164,17 +171,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         try {
           localStorage.setItem('user_wallpaper', compressedData);
           extractThemeFromImage(compressedData);
-          if (user) {
-            // Persist on server
-            await api.put('/users/profile', { wallpaper: compressedData });
-          }
+          if (user) await api.put('/users/profile', { wallpaper: compressedData });
         } catch (err) {
           console.error('Error saving wallpaper', err);
-          alert('Failed to save wallpaper to server.');
         }
-      };
-      img.onerror = () => {
-        alert('Invalid image file.');
       };
     };
     reader.readAsDataURL(file);
@@ -186,10 +186,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.removeItem('user_theme_id');
     localStorage.removeItem('user_custom_theme_color');
     localStorage.removeItem('user_wallpaper');
-    // Optionally clear on server
-    if (user) {
-      api.put('/users/profile', { wallpaper: '' }).catch(console.error);
-    }
+    if (user) api.put('/users/profile', { wallpaper: '' }).catch(console.error);
   };
 
   return (
