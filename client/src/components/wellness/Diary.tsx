@@ -13,14 +13,13 @@ import {
   PenLine,
   Calendar,
   X,
-  Eye,     // IMPORTED
-  EyeOff   // IMPORTED
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useEncryption } from '../../context/EncryptionContext';
 import { useTheme } from '../../context/ThemeContext';
 import { userService, DiaryEntryDTO } from '../../services/userService';
-import { deriveKey } from '../../utils/encryptionUtils';
 
 interface DiaryProps {
   isOpen: boolean;
@@ -56,7 +55,7 @@ const getShortDate = (dateStr: string) => new Date(dateStr).toLocaleDateString(u
 const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string; setError: (err: string) => void; }> = ({ onUnlock, error, setError }) => {
   const { currentTheme } = useTheme();
   const [input, setInput] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // NEW STATE
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,9 +175,6 @@ const PaperPage: React.FC<{
   );
 };
 
-// ... CalendarView and Diary components remain the same as previous submit ...
-// I will just copy them below to ensure the file is complete.
-
 const CalendarView: React.FC<{
   currentMonth: Date;
   onMonthChange: (offset: number) => void;
@@ -269,7 +265,7 @@ const CalendarView: React.FC<{
 }
 
 export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
-  const { user, encryptionKey, setEncryptionKeyManual } = useAuth();
+  const { user, unlockSanctuary } = useAuth(); // ✅ FIX: Use central unlock logic
   const { encrypt, decrypt } = useEncryption();
   const { currentTheme } = useTheme();
 
@@ -349,28 +345,20 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
     finally { setIsLoading(false); }
   };
 
-  const handleUnlock = (password: string) => {
+  // ✅ THE FIX: Use AuthContext to verify password against server/master-key
+  const handleUnlock = async (password: string) => {
     if (!user) return;
-    // THE FORTRESS FIX: Verify password with server instead of deriving locally.
-    // The server has already decrypted the Master Key into the session.
-    // We just need to prove we are the owner to "view" the diary UI.
-    userService.verifyDiaryPassword(password)
-      .then((res) => {
-          if (res.success) {
+    setAuthError('');
+    try {
+        const success = await unlockSanctuary(password);
+        if (success) {
             setIsUnlocked(true);
-            setAuthError('');
-            // Ensure encryption key is set if missing (should be in AuthContext)
-            if (!encryptionKey && user.masterKey) {
-                setEncryptionKeyManual(user.masterKey);
-            }
-          } else {
+        } else {
             setAuthError("Incorrect Password");
-          }
-      })
-      .catch((err) => {
-          console.error("Unlock failed", err);
-          setAuthError("Incorrect Password");
-      });
+        }
+    } catch (err) {
+        setAuthError("Incorrect Password");
+    }
   };
 
   const handleSaveEntry = async (silent = false) => {
@@ -667,7 +655,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
                            )
                       )}
                       {isFlipping && isMobile && (
-                          // Mobile: Simple Fade
                           <motion.div
                               key="mobile-flip"
                               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
