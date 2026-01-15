@@ -77,7 +77,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     const masterKey = generateMasterKey();
     let masterKeyBlob1 = undefined;
     let masterKeyBlob2: string | undefined = undefined;
-
+    
     // Blob1: Encrypt with Password
     masterKeyBlob1 = await encryptMasterKey(masterKey, password);
 
@@ -228,7 +228,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       // --- PROCEED TO LOGIN (Verified Users Only) ---
       let needsSave = false;
       let decryptedMasterKeyHex = null;
-
+      
       // THE FORTRESS: Silent Migration or Decryption
       if (user.masterKeyBlob1) {
           // Decrypt existing key
@@ -560,8 +560,8 @@ export const completeReset = async (req: Request, res: Response) => {
         } catch (e) {
             console.error("Master Key Recovery Failed during Reset:", e);
         }
-    }
-
+    } 
+    
     if (!recoverySuccess) {
         // Fallback: If recovery failed or legacy user, we MUST generate a NEW key.
         // Data is lost, but account access is restored.
