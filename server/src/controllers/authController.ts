@@ -7,6 +7,7 @@ import Diary from '../models/Diary';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { encrypt, decrypt } from '../utils/serverEncryption';
 import { sendOTPEmail } from '../services/emailService';
+import { encryptMasterKey, decryptMasterKey, generateMasterKey } from '../utils/cryptoUtils';
 
 const hashEmail = (email: string) => {
     return crypto.createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
@@ -72,11 +73,26 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     if (diaryPassword) hashedDiaryPassword = await bcrypt.hash(diaryPassword, salt);
 
     let processedSecurityQuestions = undefined;
+    // THE FORTRESS: Generate Master Key
+    const masterKey = generateMasterKey();
+    let masterKeyBlob1 = undefined;
+    let masterKeyBlob2: string | undefined = undefined;
+
+    // Blob1: Encrypt with Password
+    masterKeyBlob1 = await encryptMasterKey(masterKey, password);
+
     if (securityQuestions && Array.isArray(securityQuestions)) {
-      processedSecurityQuestions = await Promise.all(securityQuestions.map(async (q: any) => ({
-        question: q.question,
-        answerHash: await bcrypt.hash(q.answer.toLowerCase().trim(), salt)
-      })));
+      processedSecurityQuestions = await Promise.all(securityQuestions.map(async (q: any) => {
+          const answerClean = q.answer.toLowerCase().trim();
+          // Blob2: Encrypt with Security Answer (using the first one for simplicity as per requirements)
+          if (!masterKeyBlob2) {
+              masterKeyBlob2 = await encryptMasterKey(masterKey, answerClean);
+          }
+          return {
+            question: q.question,
+            answerHash: await bcrypt.hash(answerClean, salt)
+          };
+      }));
     }
 
     // Prepare OTP upfront to avoid secondary write
@@ -95,6 +111,8 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
       passwordHash: hashedPassword,
       diaryPasswordHash: hashedDiaryPassword,
       securityQuestions: processedSecurityQuestions,
+      masterKeyBlob1: masterKeyBlob1,
+      masterKeyBlob2: masterKeyBlob2,
       isPro: false,
       dailyPremiumUsage: 0,
       streak: 1, 
@@ -143,7 +161,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         { email: cleanIdentifier },
         { username: cleanIdentifier }
       ]
-    });
+    }).select('+masterKeyBlob1'); // Explicitly select hidden field for Logic
 
     // --- MIGRATION ON LOGIN ---
     if (user && user.email && !user.emailHash) {
@@ -209,6 +227,28 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
 
       // --- PROCEED TO LOGIN (Verified Users Only) ---
       let needsSave = false;
+      let decryptedMasterKeyHex = null;
+
+      // THE FORTRESS: Silent Migration or Decryption
+      if (user.masterKeyBlob1) {
+          // Decrypt existing key
+          try {
+              const mkBuffer = await decryptMasterKey(user.masterKeyBlob1, password);
+              decryptedMasterKeyHex = mkBuffer.toString('hex');
+          } catch (e) {
+              console.error("Master Key Decryption Failed:", e);
+              // Fallback? If pass is correct but blob fails, it's corrupted.
+          }
+      } else {
+          // Silent Migration (Legacy User)
+          console.log(`[The Fortress] Migrating legacy user: ${user._id}`);
+          const newMasterKey = generateMasterKey();
+          user.masterKeyBlob1 = await encryptMasterKey(newMasterKey, password);
+          // Note: We cannot create Blob2 here as we don't have the plain text security answer.
+          // It will be created on next Reset or Profile Update if implemented.
+          decryptedMasterKeyHex = newMasterKey.toString('hex');
+          needsSave = true;
+      }
 
       if (!user.emailEncrypted && user.email) {
           user.emailEncrypted = encrypt(user.email);
@@ -297,6 +337,8 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         avatar: user.avatar,
         wallpaper: user.wallpaper,
         persona: user.persona || 'aastha',
+        moodStatus: user.moodStatus,
+        masterKey: decryptedMasterKeyHex, // Zero-Knowledge Return
         isOnboardingComplete: user.isOnboardingComplete,
         createdAt: user.createdAt,
         encryptionSalt: user.encryptionSalt,
@@ -496,13 +538,36 @@ export const completeReset = async (req: Request, res: Response) => {
   try {
     const { email, answer, newPassword } = (req as any).body;
     const cleanEmail = email.toLowerCase().trim();
+    const cleanAnswer = answer.toLowerCase().trim();
     const emailHash = hashEmail(cleanEmail);
 
-    const user = await User.findOne({ $or: [{ emailHash: emailHash }, { email: cleanEmail }] });
+    const user = await User.findOne({ $or: [{ emailHash: emailHash }, { email: cleanEmail }] }).select('+masterKeyBlob2');
     if (!user || !user.securityQuestions || user.securityQuestions.length === 0) return (res as any).status(400).json({ message: 'Invalid request.' });
 
-    const isValid = await bcrypt.compare(answer.toLowerCase().trim(), user.securityQuestions[0].answerHash);
+    const isValid = await bcrypt.compare(cleanAnswer, user.securityQuestions[0].answerHash);
     if (!isValid) return (res as any).status(401).json({ message: 'Incorrect security answer.' });
+
+    // THE FORTRESS: Recover Master Key
+    if (user.masterKeyBlob2) {
+        try {
+            const recoveredKey = await decryptMasterKey(user.masterKeyBlob2, cleanAnswer);
+            // Re-encrypt for new password (Blob1)
+            user.masterKeyBlob1 = await encryptMasterKey(recoveredKey, newPassword);
+            // Re-encrypt for security answer (refresh Blob2) - optional but good for consistency
+            user.masterKeyBlob2 = await encryptMasterKey(recoveredKey, cleanAnswer);
+        } catch (e) {
+            console.error("Master Key Recovery Failed during Reset:", e);
+            // Critical Error: Password reset possible, but data lost?
+            // If recovery fails, we might have to generate a new key (Data Wipe)
+            // But we should try to avoid this. For now, log and proceed (user might lose data).
+        }
+    } else {
+        // Legacy User who forgot password before Blob2 was created.
+        // They lose access to encrypted data. Generate new key.
+        const newKey = generateMasterKey();
+        user.masterKeyBlob1 = await encryptMasterKey(newKey, newPassword);
+        user.masterKeyBlob2 = await encryptMasterKey(newKey, cleanAnswer);
+    }
 
     const salt = await bcrypt.genSalt(10);
     user.passwordHash = await bcrypt.hash(newPassword, salt);

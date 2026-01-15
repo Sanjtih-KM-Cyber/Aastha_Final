@@ -1,9 +1,19 @@
 import axios from 'axios';
 
+// Helper to determine URL
+const getBaseUrl = () => {
+    if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+        return 'http://localhost:5000/api';
+    }
+    return 'https://aastha-final.onrender.com/api';
+};
+
 // 1. Create the Axios instance
 const api = axios.create({
-  baseURL: 'https://aastha-final.onrender.com/api', // Your backend URL
+  baseURL: getBaseUrl(),
   withCredentials: true, // This allows cookies to be sent/received if you use them
+  timeout: 30000,
 });
 
 // 2. THE CRITICAL PART: Request Interceptor
