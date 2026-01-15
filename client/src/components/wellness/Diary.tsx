@@ -351,14 +351,26 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
   const handleUnlock = (password: string) => {
     if (!user) return;
-    const derived = deriveKey(password, user.email);
-    if (encryptionKey && derived !== encryptionKey) {
-       setAuthError("Incorrect Password");
-       return;
-    }
-    if (!encryptionKey) setEncryptionKeyManual(derived);
-    setIsUnlocked(true);
-    setAuthError('');
+    // THE FORTRESS FIX: Verify password with server instead of deriving locally.
+    // The server has already decrypted the Master Key into the session.
+    // We just need to prove we are the owner to "view" the diary UI.
+    userService.verifyDiaryPassword(password)
+      .then((res) => {
+          if (res.success) {
+            setIsUnlocked(true);
+            setAuthError('');
+            // Ensure encryption key is set if missing (should be in AuthContext)
+            if (!encryptionKey && user.masterKey) {
+                setEncryptionKeyManual(user.masterKey);
+            }
+          } else {
+            setAuthError("Incorrect Password");
+          }
+      })
+      .catch((err) => {
+          console.error("Unlock failed", err);
+          setAuthError("Incorrect Password");
+      });
   };
 
   const handleSaveEntry = async (silent = false) => {
