@@ -265,7 +265,7 @@ const CalendarView: React.FC<{
 }
 
 export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
-  const { user, unlockSanctuary } = useAuth(); // ✅ FIX: Use central unlock logic
+  const { user, unlockSanctuary } = useAuth();
   const { encrypt, decrypt } = useEncryption();
   const { currentTheme } = useTheme();
 
@@ -345,7 +345,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
     finally { setIsLoading(false); }
   };
 
-  // ✅ THE FIX: Use AuthContext to verify password against server/master-key
   const handleUnlock = async (password: string) => {
     if (!user) return;
     setAuthError('');
@@ -361,19 +360,40 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
     }
   };
 
+  // ✅ FIX: Allow saving empty content & Force Past Dates
   const handleSaveEntry = async (silent = false) => {
     setIsSaving(true);
     try {
-      const titleToSave = editTitle.trim() || "Untitled";
-      const encTitle = encrypt(titleToSave);
-      const encContent = encrypt(editContent);
+      const titleToSave = editTitle.trim();
+      const contentToSave = editContent; // Allow empty string (clearing entry)
+      
+      // If everything is empty, don't save a ghost entry unless it already exists
+      if (!titleToSave && !contentToSave && !entriesMap[toDateString(activeDate)]) {
+          setIsSaving(false);
+          return;
+      }
+
+      const encTitle = encrypt(titleToSave || "Untitled");
+      const encContent = encrypt(contentToSave);
+      
+      // ✅ FIX: Explicitly send activeDate ISO string to preserve time travel
+      const targetDateISO = activeDate.toISOString();
+
       const saved = await userService.saveDiaryEntry({
         title: encTitle,
         content: encContent,
         tags: ['journal'],
-        date: activeDate.toISOString()
+        date: targetDateISO 
       });
-      const newEntry = { ...saved, title: titleToSave, content: editContent, createdAt: activeDate.toISOString() };
+
+      // ✅ FIX: Update local state with the ACTIVE date, not just what server returns
+      const newEntry = { 
+          ...saved, 
+          title: titleToSave || "Untitled", 
+          content: contentToSave, 
+          createdAt: targetDateISO 
+      };
+      
       setEntriesMap(prev => ({ ...prev, [toDateString(activeDate)]: newEntry }));
     } catch (e) {
       console.error("Save error", e);
@@ -617,7 +637,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
                     <AnimatePresence mode="sync" onExitComplete={() => setIsFlipping(null)}>
                       {isFlipping && !isMobile && (
-                           // PC: 3D Page Turn
                            isFlipping === 'next' ? (
                                <motion.div
                                   key="flip-next"
