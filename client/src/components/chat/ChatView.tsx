@@ -758,33 +758,44 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border border-white/5 p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
                  <div className="flex items-center gap-1 relative">
                      {/* UNIFIED MEDIA BUTTON */}
-                     <div className="relative">
+                     {isMobile ? (
+                         <div className="relative">
+                             <button
+                                type="button"
+                                onClick={() => setShowMediaMenu(!showMediaMenu)}
+                                disabled={isStandardMode}
+                                className={`p-2.5 rounded-full transition-all ${showMediaMenu || attachedImage ? 'bg-white/10 text-white rotate-45' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                             >
+                                 <Plus size={22} />
+                             </button>
+                             <AnimatePresence>
+                                 {showMediaMenu && (
+                                     <motion.div
+                                        initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                                        className="absolute bottom-14 left-0 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-xl overflow-hidden min-w-[140px] z-50 flex flex-col p-1"
+                                     >
+                                         <button onClick={() => { cameraInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-sm text-white/90">
+                                             <Camera size={16} className="text-teal-400" /> Camera
+                                         </button>
+                                         <button onClick={() => { fileInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-sm text-white/90">
+                                             <ImageIcon size={16} className="text-violet-400" /> Gallery
+                                         </button>
+                                     </motion.div>
+                                 )}
+                             </AnimatePresence>
+                         </div>
+                     ) : (
                          <button
                             type="button"
-                            onClick={() => setShowMediaMenu(!showMediaMenu)}
+                            onClick={() => fileInputRef.current?.click()}
                             disabled={isStandardMode}
-                            className={`p-2.5 rounded-full transition-all ${showMediaMenu || attachedImage ? 'bg-white/10 text-white rotate-45' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                            className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
                          >
-                             <Plus size={22} />
+                             <ImageIcon size={20} />
                          </button>
-                         <AnimatePresence>
-                             {showMediaMenu && (
-                                 <motion.div
-                                    initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 0.8, y: 10 }}
-                                    className="absolute bottom-14 left-0 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-xl overflow-hidden min-w-[140px] z-50 flex flex-col p-1"
-                                 >
-                                     <button onClick={() => { cameraInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-sm text-white/90">
-                                         <Camera size={16} className="text-teal-400" /> Camera
-                                     </button>
-                                     <button onClick={() => { fileInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-sm text-white/90">
-                                         <ImageIcon size={16} className="text-violet-400" /> Gallery
-                                     </button>
-                                 </motion.div>
-                             )}
-                         </AnimatePresence>
-                     </div>
+                     )}
 
                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
                      <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
