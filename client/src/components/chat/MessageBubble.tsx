@@ -84,7 +84,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       initial={{ opacity: 0, y: 10, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      // ✅ Fix: Add more bottom margin on mobile to make room for the buttons below
+      // Responsive Fix: Adjusted margins for better spacing on mobile
       className={`group flex w-full relative ${
         isUser ? 'justify-end' : 'justify-start'
       } ${isMobile ? 'mb-10' : 'mb-6'}`}
@@ -106,14 +106,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         </div>
       )}
 
-      <div className={`relative ${isMobile ? 'max-w-[75%]' : 'max-w-[90%]'} md:max-w-[70%]`}>
+      {/* FIX: Increased max-width for mobile (85%) to prevent squeezing.
+         FIX: Added break-words to handle long words gracefully.
+      */}
+      <div className={`relative ${isMobile ? 'max-w-[85%]' : 'max-w-[90%]'} md:max-w-[70%]`}>
         <div
           className={`
-            relative ${isMobile ? 'px-3 py-3 text-[15px] leading-tight tracking-tight' : 'px-4 py-3 text-sm'} md:px-6 md:py-3.5 md:text-base md:leading-snug backdrop-blur-xl shadow-lg
+            relative backdrop-blur-xl shadow-lg
+            ${isMobile ? 'px-4 py-3 text-[15.5px] leading-relaxed tracking-normal' : 'px-4 py-3 text-sm'} 
+            md:px-6 md:py-3.5 md:text-base md:leading-snug
             ${
               isUser
-                ? 'rounded-[20px] rounded-br-none text-white border border-white/10 bg-black/40' 
-                : 'rounded-[20px] rounded-bl-none text-white border border-white/10 bg-black/30' 
+                ? 'rounded-[22px] rounded-br-none text-white border border-white/10 bg-black/40' 
+                : 'rounded-[22px] rounded-bl-none text-white border border-white/10 bg-black/30' 
             }
           `}
           style={
@@ -137,7 +142,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           ) : (
              <div className="space-y-1">
                 {content.split('\n').map((line, i) => (
-                  <p key={i} className="my-0 leading-snug break-words whitespace-pre-wrap text-white/90 font-light">
+                  <p key={i} className="my-0 leading-relaxed break-words whitespace-pre-wrap text-white/95 font-light">
                     {renderContent(line)}
                   </p>
                 ))}
@@ -156,14 +161,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         <AnimatePresence>
           {(isHovered || (isMobile && isHovered)) && !isThinking && (
             <motion.div
-              // ✅ Fix: Different animation for Mobile (Slide Down) vs PC (Slide Side)
+              // FIX: Mobile menu slides down, PC menu slides to side
               initial={isMobile ? { opacity: 0, y: -10 } : { opacity: 0, scale: 0.8, x: isUser ? -10 : 10 }}
               animate={isMobile ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1, x: 0 }}
               exit={isMobile ? { opacity: 0, y: -5 } : { opacity: 0, scale: 0.8 }}
               
-              // ✅ Fix: Layout Logic
-              // Mobile: Absolute TOP-FULL (Below the bubble), aligned Left/Right
-              // PC: Absolute TOP-1/2 (Side of bubble)
               className={`
                 flex items-center gap-2 z-10
                 ${isMobile 
