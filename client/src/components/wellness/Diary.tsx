@@ -360,41 +360,42 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
     }
   };
 
-  // ✅ FIX: Allow saving empty content & Force Past Dates
+  // ✅ FIX: "Ctrl+X" Empty Save & "Time Travel" Date Fix
   const handleSaveEntry = async (silent = false) => {
     setIsSaving(true);
     try {
       const titleToSave = editTitle.trim();
-      const contentToSave = editContent; // Allow empty string (clearing entry)
-      
-      // If everything is empty, don't save a ghost entry unless it already exists
-      if (!titleToSave && !contentToSave && !entriesMap[toDateString(activeDate)]) {
-          setIsSaving(false);
-          return;
-      }
+      const contentToSave = editContent; // Allow saving empty string
+
+      // REMOVED GUARD CLAUSE: Now you can save an empty entry (clearing it)
 
       const encTitle = encrypt(titleToSave || "Untitled");
       const encContent = encrypt(contentToSave);
       
-      // ✅ FIX: Explicitly send activeDate ISO string to preserve time travel
-      const targetDateISO = activeDate.toISOString();
+      // ✅ FIX: Explicitly set date to Noon UTC on the ACTIVE DATE
+      // This prevents the "previous day" shifting bug across all timezones
+      const y = activeDate.getFullYear();
+      const m = String(activeDate.getMonth() + 1).padStart(2, '0');
+      const d = String(activeDate.getDate()).padStart(2, '0');
+      const stableDateISO = `${y}-${m}-${d}T12:00:00.000Z`;
 
       const saved = await userService.saveDiaryEntry({
         title: encTitle,
         content: encContent,
         tags: ['journal'],
-        date: targetDateISO 
+        date: stableDateISO
       });
 
-      // ✅ FIX: Update local state with the ACTIVE date, not just what server returns
+      // ✅ FIX: Update local state using stableDateISO so UI doesn't jump
       const newEntry = { 
           ...saved, 
           title: titleToSave || "Untitled", 
           content: contentToSave, 
-          createdAt: targetDateISO 
+          createdAt: stableDateISO 
       };
       
-      setEntriesMap(prev => ({ ...prev, [toDateString(activeDate)]: newEntry }));
+      const key = toDateString(activeDate);
+      setEntriesMap(prev => ({ ...prev, [key]: newEntry }));
     } catch (e) {
       console.error("Save error", e);
       if (!silent) alert("Failed to save entry.");
@@ -471,6 +472,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
        resultDays.push({
          date: dateObj,
          isCurrentMonth: true,
+         hasEntry,
          hasEntry,
          isToday,
          isSelected
