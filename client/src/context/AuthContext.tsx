@@ -168,6 +168,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
              throw new Error("No token");
         }
         
+        // THE FORTRESS: Retrieve local Master Key
+        // The server cannot return the decrypted masterKey in /users/me (Zero Knowledge).
+        // We must retrieve it from the local session storage where login/register saved it.
+        let localMasterKey = null;
+        try {
+            const parsed = JSON.parse(storedInfo);
+            if (parsed && parsed.masterKey) localMasterKey = parsed.masterKey;
+        } catch(e) {}
+
         const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error("Timeout")), 5000)
         );
@@ -181,11 +190,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Update last active on successful load
             localStorage.setItem('auth_last_active', Date.now().toString());
 
+            // Merge local keys into fresh user data
+            const userWithKey = { ...res.data };
+            if (localMasterKey) {
+                userWithKey.masterKey = localMasterKey;
+            }
+
+            // Determine encryption key
+            let activeKey = state.encryptionKey;
+            if (localMasterKey) activeKey = localMasterKey;
+            else {
+                 // Fallback for legacy
+                 const salt = userWithKey.encryptionSalt || userWithKey.email;
+                 // Note: We don't have password here to derive key.
+                 // If masterKey is missing and not in state, user must re-login to decrypt data.
+            }
+
             setState({
-                user: res.data,
+                user: userWithKey,
                 isAuthenticated: true,
                 isLoading: false,
-                encryptionKey: state.encryptionKey 
+                encryptionKey: activeKey
             });
         }
       } catch (error) {
@@ -223,9 +248,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('auth_last_active', Date.now().toString());
 
     let key = null;
-    const salt = user.encryptionSalt || user.email;
-
-    if (!user.hasDiarySetup) key = deriveKey(password, salt);
+    // THE FORTRESS: Use Master Key if available
+    if (user.masterKey) {
+        key = user.masterKey; // Hex string from server is directly compatible with CryptoJS
+    } else {
+        // Legacy fallback
+        const salt = user.encryptionSalt || user.email;
+        if (!user.hasDiarySetup) key = deriveKey(password, salt);
+    }
 
     setState({
       user,
@@ -252,9 +282,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('userInfo', JSON.stringify(user));
     localStorage.setItem('auth_last_active', Date.now().toString());
 
-    const pwdToUse = data.diaryPassword || data.password;
-    const salt = user.encryptionSalt || user.email;
-    const key = deriveKey(pwdToUse, salt);
+    let key = null;
+    // THE FORTRESS: Use Master Key if available
+    if (user.masterKey) {
+        key = user.masterKey;
+    } else {
+        const pwdToUse = data.diaryPassword || data.password;
+        const salt = user.encryptionSalt || user.email;
+        key = deriveKey(pwdToUse, salt);
+    }
 
     setState({
       user,
@@ -270,9 +306,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const unlockSanctuary = async (password: string): Promise<boolean> => {
     if (!state.user) return false;
 
-    await api.post('/users/verify-diary', { diaryPassword: password });
-    const salt = state.user.encryptionSalt || state.user.email;
-    const key = deriveKey(password, salt);
+    // Verify password with server
+    const res = await api.post('/users/verify-diary', { diaryPassword: password });
+
+    let key;
+    // THE FORTRESS: If server returns key (future upgrade), use it.
+    // Currently, for "Lock Screen", we usually already have the key from Login (state.user.masterKey).
+    // But if we want to be safe or if key was cleared:
+    if (state.user.masterKey) {
+        key = state.user.masterKey;
+    } else {
+        // Legacy: Re-derive from password
+        const salt = state.user.encryptionSalt || state.user.email;
+        key = deriveKey(password, salt);
+    }
     
     setState(prev => ({ ...prev, encryptionKey: key }));
     return true;
