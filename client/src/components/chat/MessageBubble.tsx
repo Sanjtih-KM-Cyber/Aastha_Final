@@ -84,8 +84,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       initial={{ opacity: 0, y: 10, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      // Responsive Fix: Adjusted margins for better spacing on mobile
-      className={`group flex w-full relative ${
+      className={`group flex w-full relative px-1 ${
         isUser ? 'justify-end' : 'justify-start'
       } ${isMobile ? 'mb-10' : 'mb-6'}`}
       onMouseEnter={() => !isMobile && setIsHovered(true)}
@@ -106,28 +105,31 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         </div>
       )}
 
-      {/* FIX: Increased max-width for mobile (85%) to prevent squeezing.
-         FIX: Added break-words to handle long words gracefully.
-      */}
+      {/* 🛡️ FIX: Disable backdrop-blur on mobile to fix S23 Lag. Use solid/dark bg. */}
       <div className={`relative ${isMobile ? 'max-w-[85%]' : 'max-w-[90%]'} md:max-w-[70%]`}>
         <div
           className={`
-            relative backdrop-blur-xl shadow-lg
-            ${isMobile ? 'px-4 py-3 text-[15.5px] leading-relaxed tracking-normal' : 'px-4 py-3 text-sm'} 
-            md:px-6 md:py-3.5 md:text-base md:leading-snug
+            relative ${isMobile ? 'px-4 py-3 text-[15.5px] leading-relaxed tracking-normal' : 'px-4 py-3 text-sm'} 
+            md:px-6 md:py-3.5 md:text-base md:leading-snug shadow-lg
             ${
               isUser
-                ? 'rounded-[22px] rounded-br-none text-white border border-white/10 bg-black/40' 
-                : 'rounded-[22px] rounded-bl-none text-white border border-white/10 bg-black/30' 
+                ? 'rounded-[22px] rounded-br-none text-white border border-white/10' 
+                : 'rounded-[22px] rounded-bl-none text-white border border-white/10' 
             }
+            ${!isMobile ? 'backdrop-blur-xl' : 'backdrop-blur-none'} 
           `}
           style={
             !isUser
               ? {
-                  background: `linear-gradient(135deg, ${currentTheme.primaryColor}20, #00000060)`,
-                  borderLeft: `2px solid ${currentTheme.primaryColor}`,
+                  // Mobile: Solid dark bg (fast). Desktop: Glass (pretty).
+                  background: isMobile 
+                    ? '#111827' 
+                    : `linear-gradient(135deg, ${currentTheme.primaryColor}20, #00000060)`,
+                  borderLeft: `3px solid ${currentTheme.primaryColor}`,
                 }
-              : {}
+              : {
+                  background: isMobile ? '#1f2937' : 'bg-black/40' 
+              }
           }
         >
           {isThinking ? (
@@ -150,7 +152,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
 
           <div
-            className={`text-[10px] mt-2 opacity-30 font-medium ${
+            className={`text-[10px] mt-2 opacity-40 font-medium ${
               isUser ? 'text-right' : 'text-left'
             }`}
           >
@@ -161,11 +163,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         <AnimatePresence>
           {(isHovered || (isMobile && isHovered)) && !isThinking && (
             <motion.div
-              // FIX: Mobile menu slides down, PC menu slides to side
               initial={isMobile ? { opacity: 0, y: -10 } : { opacity: 0, scale: 0.8, x: isUser ? -10 : 10 }}
               animate={isMobile ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1, x: 0 }}
               exit={isMobile ? { opacity: 0, y: -5 } : { opacity: 0, scale: 0.8 }}
-              
               className={`
                 flex items-center gap-2 z-10
                 ${isMobile 
@@ -176,7 +176,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             >
               <button
                 onClick={handleReplyClick}
-                className="p-2 rounded-full bg-black/40 border border-white/10 hover:bg-white/10 hover:border-white/30 text-white/70 hover:text-white transition-all backdrop-blur-md shadow-lg"
+                className="p-2 rounded-full bg-zinc-800 border border-white/10 text-white/70 hover:text-white shadow-lg"
                 title="Reply"
               >
                 <Reply size={14} />
@@ -184,7 +184,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
               <button
                 onClick={handleCopyClick}
-                className="p-2 rounded-full bg-black/40 border border-white/10 hover:bg-white/10 hover:border-white/30 text-white/70 hover:text-white transition-all backdrop-blur-md shadow-lg"
+                className="p-2 rounded-full bg-zinc-800 border border-white/10 text-white/70 hover:text-white shadow-lg"
                 title="Copy"
               >
                 <Copy size={14} />
