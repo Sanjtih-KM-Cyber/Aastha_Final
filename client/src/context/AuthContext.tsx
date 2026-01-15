@@ -223,9 +223,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('auth_last_active', Date.now().toString());
 
     let key = null;
-    const salt = user.encryptionSalt || user.email;
-
-    if (!user.hasDiarySetup) key = deriveKey(password, salt);
+    // THE FORTRESS: Use Master Key if available
+    if (user.masterKey) {
+        key = user.masterKey; // Hex string from server is directly compatible with CryptoJS
+    } else {
+        // Legacy fallback
+        const salt = user.encryptionSalt || user.email;
+        if (!user.hasDiarySetup) key = deriveKey(password, salt);
+    }
 
     setState({
       user,
@@ -252,9 +257,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('userInfo', JSON.stringify(user));
     localStorage.setItem('auth_last_active', Date.now().toString());
 
-    const pwdToUse = data.diaryPassword || data.password;
-    const salt = user.encryptionSalt || user.email;
-    const key = deriveKey(pwdToUse, salt);
+    let key = null;
+    // THE FORTRESS: Use Master Key if available
+    if (user.masterKey) {
+        key = user.masterKey;
+    } else {
+        const pwdToUse = data.diaryPassword || data.password;
+        const salt = user.encryptionSalt || user.email;
+        key = deriveKey(pwdToUse, salt);
+    }
 
     setState({
       user,
@@ -270,9 +281,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const unlockSanctuary = async (password: string): Promise<boolean> => {
     if (!state.user) return false;
 
-    await api.post('/users/verify-diary', { diaryPassword: password });
-    const salt = state.user.encryptionSalt || state.user.email;
-    const key = deriveKey(password, salt);
+    // Verify password with server
+    const res = await api.post('/users/verify-diary', { diaryPassword: password });
+
+    let key;
+    // THE FORTRESS: If server returns key (future upgrade), use it.
+    // Currently, for "Lock Screen", we usually already have the key from Login (state.user.masterKey).
+    // But if we want to be safe or if key was cleared:
+    if (state.user.masterKey) {
+        key = state.user.masterKey;
+    } else {
+        // Legacy: Re-derive from password
+        const salt = state.user.encryptionSalt || state.user.email;
+        key = deriveKey(password, salt);
+    }
     
     setState(prev => ({ ...prev, encryptionKey: key }));
     return true;

@@ -20,6 +20,10 @@ export interface IUser extends Document {
   usernameEncrypted?: string; // Add encrypted username back
   encryptionSalt?: string; // Random salt for Client-Side Key Derivation (New Users)
 
+  // --- The Fortress (Master Key Architecture) ---
+  masterKeyBlob1?: string; // Encrypted by Password (select: false)
+  masterKeyBlob2?: string; // Encrypted by Security Question (select: false)
+
   // --- Indexed/Plain Fields (Used for Login, Display, or Features) ---
   name: string; // Plain text name for display
   email?: string; // DEPRECATED: Plain text email. Used for legacy lookup.
@@ -57,9 +61,11 @@ export interface IUser extends Document {
 
   // AI Persona
   persona?: 'aastha' | 'aarav'; 
+  moodStatus?: string; // Default: 'happy'
 
   // Memory
   memorySummary?: string;
+  ghostNotificationSent?: boolean;
 
   // Onboarding
   isOnboardingComplete?: boolean;
@@ -90,6 +96,10 @@ const userSchema = new Schema<IUser>({
   emailEncrypted: { type: String, required: true, unique: true }, 
   usernameEncrypted: { type: String, required: false },
   encryptionSalt: { type: String, required: false },
+
+  // --- The Fortress ---
+  masterKeyBlob1: { type: String, select: false },
+  masterKeyBlob2: { type: String, select: false },
 
   // --- Feature Fields ---
   streak: { type: Number, default: 0 }, // Initialize streak
@@ -123,9 +133,11 @@ const userSchema = new Schema<IUser>({
 
   // AI Persona Preference (Default: Aastha/Female)
   persona: { type: String, enum: ['aastha', 'aarav'], default: 'aastha' },
+  moodStatus: { type: String, default: 'happy' },
 
   // Memory
   memorySummary: { type: String, default: "" },
+  ghostNotificationSent: { type: Boolean, default: false },
 
   // Onboarding (Default false = New users see it)
   isOnboardingComplete: { type: Boolean, default: false }
