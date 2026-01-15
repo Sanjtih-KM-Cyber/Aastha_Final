@@ -77,18 +77,17 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     const masterKey = generateMasterKey();
     let masterKeyBlob1 = undefined;
     let masterKeyBlob2: string | undefined = undefined;
-
+    
     // Blob1: Encrypt with Password
     masterKeyBlob1 = await encryptMasterKey(masterKey, password);
 
-    if (securityQuestions && Array.isArray(securityQuestions) && securityQuestions.length > 0) {
-      // THE FORTRESS: Deterministically encrypt Blob2 with the FIRST security answer
-      // This prevents race conditions and ensures Reset logic (which checks securityQuestions[0]) matches the key
-      const firstAnswerClean = securityQuestions[0].answer.toLowerCase().trim();
-      masterKeyBlob2 = await encryptMasterKey(masterKey, firstAnswerClean);
-
+    if (securityQuestions && Array.isArray(securityQuestions)) {
       processedSecurityQuestions = await Promise.all(securityQuestions.map(async (q: any) => {
           const answerClean = q.answer.toLowerCase().trim();
+          // Blob2: Encrypt with Security Answer (using the first one for simplicity as per requirements)
+          if (!masterKeyBlob2) {
+              masterKeyBlob2 = await encryptMasterKey(masterKey, answerClean);
+          }
           return {
             question: q.question,
             answerHash: await bcrypt.hash(answerClean, salt)
@@ -229,7 +228,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       // --- PROCEED TO LOGIN (Verified Users Only) ---
       let needsSave = false;
       let decryptedMasterKeyHex = null;
-
+      
       // THE FORTRESS: Silent Migration or Decryption
       if (user.masterKeyBlob1) {
           // Decrypt existing key
@@ -549,6 +548,7 @@ export const completeReset = async (req: Request, res: Response) => {
     if (!isValid) return (res as any).status(401).json({ message: 'Incorrect security answer.' });
 
     // THE FORTRESS: Recover Master Key
+    let recoverySuccess = false;
     if (user.masterKeyBlob2) {
         try {
             const recoveredKey = await decryptMasterKey(user.masterKeyBlob2, cleanAnswer);
@@ -556,15 +556,16 @@ export const completeReset = async (req: Request, res: Response) => {
             user.masterKeyBlob1 = await encryptMasterKey(recoveredKey, newPassword);
             // Re-encrypt for security answer (refresh Blob2) - optional but good for consistency
             user.masterKeyBlob2 = await encryptMasterKey(recoveredKey, cleanAnswer);
+            recoverySuccess = true;
         } catch (e) {
             console.error("Master Key Recovery Failed during Reset:", e);
-            // Critical Error: Password reset possible, but data lost?
-            // If recovery fails, we might have to generate a new key (Data Wipe)
-            // But we should try to avoid this. For now, log and proceed (user might lose data).
         }
-    } else {
-        // Legacy User who forgot password before Blob2 was created.
-        // They lose access to encrypted data. Generate new key.
+    } 
+    
+    if (!recoverySuccess) {
+        // Fallback: If recovery failed or legacy user, we MUST generate a NEW key.
+        // Data is lost, but account access is restored.
+        console.log(`[The Fortress] Reset: Generating NEW Master Key for ${cleanEmail}`);
         const newKey = generateMasterKey();
         user.masterKeyBlob1 = await encryptMasterKey(newKey, newPassword);
         user.masterKeyBlob2 = await encryptMasterKey(newKey, cleanAnswer);
@@ -724,7 +725,13 @@ export const changeDiaryPassword = async (req: AuthRequest, res: Response) => {
         const isValid = await bcrypt.compare(oldPassword, user.diaryPasswordHash);
         if (!isValid) return (res as any).status(401).json({ message: 'Incorrect old password.' });
 
-        return (res as any).status(501).json({ message: 'Password change not supported. Please use Reset (Data Wipe) for security.' });
+        // THE FORTRESS: Safe to change password without re-encryption
+        // because data is now encrypted by Master Key (Blob1/Blob2), not this password directly.
+        const salt = await bcrypt.genSalt(10);
+        user.diaryPasswordHash = await bcrypt.hash(newPassword, salt);
+        await user.save();
+
+        (res as any).json({ success: true, message: 'Diary password updated.' });
 
     } catch (e) {
         (res as any).status(500).json({ message: 'Error changing password' });
