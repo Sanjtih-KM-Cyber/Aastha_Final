@@ -99,7 +99,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
-
+  
   // Media Menu State
   const [showMediaMenu, setShowMediaMenu] = useState(false);
 
@@ -686,14 +686,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  <div className={`flex items-center transition-all duration-300 ease-spring ${isSearchOpen ? 'w-[200px] md:w-[300px] bg-black/40 border-white/10 px-3' : 'w-10 bg-black/20 border-transparent justify-center'} h-10 rounded-full backdrop-blur-xl border`}>
                      {isSearchOpen ? (
                          <>
-                            <input
+                            <input 
                                 autoFocus
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                value={searchQuery} 
+                                onChange={(e) => setSearchQuery(e.target.value)} 
                                 onKeyDown={handleSearchKeyDown}
                                 onBlur={() => !searchQuery && setIsSearchOpen(false)}
-                                placeholder="Search history..."
-                                className="bg-transparent border-none outline-none text-xs text-white w-full min-w-0 placeholder-white/30"
+                                placeholder="Search history..." 
+                                className="bg-transparent border-none outline-none text-xs text-white w-full min-w-0 placeholder-white/30" 
                             />
                             {searchQuery ? (
                                 <div className="flex items-center gap-0.5 shrink-0">
@@ -760,9 +760,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      {/* UNIFIED MEDIA BUTTON */}
                      {isMobile ? (
                          <div className="relative">
-                             <button
-                                type="button"
-                                onClick={() => setShowMediaMenu(!showMediaMenu)}
+                             <button 
+                                type="button" 
+                                onClick={() => setShowMediaMenu(!showMediaMenu)} 
                                 disabled={isStandardMode}
                                 className={`p-2.5 rounded-full transition-all ${showMediaMenu || attachedImage ? 'bg-white/10 text-white rotate-45' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
                              >
@@ -770,7 +770,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                              </button>
                              <AnimatePresence>
                                  {showMediaMenu && (
-                                     <motion.div
+                                     <motion.div 
                                         initial={{ opacity: 0, scale: 0.8, y: 10 }}
                                         animate={{ opacity: 1, scale: 1, y: 0 }}
                                         exit={{ opacity: 0, scale: 0.8, y: 10 }}
@@ -788,16 +788,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                              </AnimatePresence>
                          </div>
                      ) : (
-                         <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
+                         <button 
+                            type="button" 
+                            onClick={() => fileInputRef.current?.click()} 
                             disabled={isStandardMode}
                             className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
                          >
                              <ImageIcon size={20} />
                          </button>
                      )}
-
+                     
                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
                      <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
                      
