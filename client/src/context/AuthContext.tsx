@@ -168,6 +168,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
              throw new Error("No token");
         }
         
+        // THE FORTRESS: Retrieve local Master Key
+        // The server cannot return the decrypted masterKey in /users/me (Zero Knowledge).
+        // We must retrieve it from the local session storage where login/register saved it.
+        let localMasterKey = null;
+        try {
+            const parsed = JSON.parse(storedInfo);
+            if (parsed && parsed.masterKey) localMasterKey = parsed.masterKey;
+        } catch(e) {}
+
         const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error("Timeout")), 5000)
         );
@@ -181,11 +190,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Update last active on successful load
             localStorage.setItem('auth_last_active', Date.now().toString());
 
+            // Merge local keys into fresh user data
+            const userWithKey = { ...res.data };
+            if (localMasterKey) {
+                userWithKey.masterKey = localMasterKey;
+            }
+
+            // Determine encryption key
+            let activeKey = state.encryptionKey;
+            if (localMasterKey) activeKey = localMasterKey;
+            else {
+                 // Fallback for legacy
+                 const salt = userWithKey.encryptionSalt || userWithKey.email;
+                 // Note: We don't have password here to derive key.
+                 // If masterKey is missing and not in state, user must re-login to decrypt data.
+            }
+
             setState({
-                user: res.data,
+                user: userWithKey,
                 isAuthenticated: true,
                 isLoading: false,
-                encryptionKey: state.encryptionKey 
+                encryptionKey: activeKey
             });
         }
       } catch (error) {
