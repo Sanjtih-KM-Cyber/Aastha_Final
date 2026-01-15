@@ -392,6 +392,9 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                                 ref={el => { otpRefs.current[idx] = el; }}
                                 type="text"
                                 maxLength={1}
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                pattern="\d{1}"
                                 value={digit}
                                 onChange={(e) => handleOtpChange(idx, e.target.value)}
                                 onKeyDown={(e) => handleOtpKeyDown(idx, e)}

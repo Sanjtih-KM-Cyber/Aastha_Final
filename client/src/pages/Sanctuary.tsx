@@ -158,6 +158,9 @@ export const Sanctuary: React.FC = () => {
     mood: false,
   });
 
+  // Derived Status for Smart Header
+  const currentActivity = widgets.diary ? 'Journaling' : (widgets.jam ? 'Jamming' : 'Online');
+
   // State for widget configurations (passed from Chat)
   const [widgetConfigs, setWidgetConfigs] = useState<Record<string, any>>({});
 
@@ -239,6 +242,7 @@ export const Sanctuary: React.FC = () => {
             onMobileMenuClick={() => setIsMobileMenuOpen(true)} 
             onOpenWidget={openWidget}
             isMobile={isMobile}
+            currentActivity={currentActivity}
          />
       </main>
 
