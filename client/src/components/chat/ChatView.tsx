@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Menu, Headphones, AlertCircle, Smile, 
   Mic, MicOff, X, Search, Image as ImageIcon, Plus, Camera,
-  ShieldAlert, Loader2, ChevronDown, Reply
+  ShieldAlert, Loader2, ChevronDown, Reply, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
