@@ -26,6 +26,7 @@ interface DiaryProps {
   onClose: () => void;
   zIndex?: number;
   onFocus?: () => void;
+  initialParams?: any;
 }
 
 type DiaryMode = 'view' | 'edit';
@@ -264,7 +265,7 @@ const CalendarView: React.FC<{
   );
 }
 
-export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
+export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, initialParams }) => {
   const { user, unlockSanctuary } = useAuth();
   const { encrypt, decrypt } = useEncryption();
   const { currentTheme } = useTheme();
@@ -307,6 +308,19 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   useEffect(() => {
     if (isOpen && isUnlocked) fetchEntries();
   }, [isOpen, isUnlocked, user]);
+
+  // MANAGER MODE: Handle Initial Params (Prompt)
+  useEffect(() => {
+      if (isOpen && isUnlocked && initialParams) {
+          const { title, prompt } = initialParams;
+          if (title || prompt) {
+              setActiveDate(new Date());
+              setEditMode('edit');
+              setEditTitle(title || "Reflect");
+              setEditContent(prompt ? `${prompt}\n\n` : "");
+          }
+      }
+  }, [isOpen, isUnlocked, initialParams]);
 
   const prevActiveDateRef = useRef<string>(toDateString(activeDate));
 

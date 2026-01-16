@@ -13,7 +13,8 @@ import {
   Flame,
   ChevronsLeft,
   ChevronsRight,
-  X
+  X,
+  Ghost
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
@@ -35,6 +36,7 @@ const WIDGETS = [
   { id: 'jam', label: 'Music', icon: Music, color: 'text-violet-300', barColor: 'bg-violet-400', glow: 'shadow-violet-500/20', from: 'from-violet-500/20', desc: 'Listen together' },
   { id: 'soundscape', label: 'Sounds', icon: Sliders, color: 'text-emerald-300', barColor: 'bg-emerald-400', glow: 'shadow-emerald-500/20', from: 'from-emerald-500/20', desc: 'Ambient noise' },
   { id: 'pomodoro', label: 'Focus', icon: Clock, color: 'text-rose-300', barColor: 'bg-rose-400', glow: 'shadow-rose-500/20', from: 'from-rose-500/20', desc: 'Deep work timer' },
+  { id: 'mirror', label: 'Mirror', icon: Ghost, color: 'text-purple-300', barColor: 'bg-purple-400', glow: 'shadow-purple-500/20', from: 'from-purple-500/20', desc: 'Her secret diary' },
   { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-300', barColor: 'bg-slate-400', glow: 'shadow-slate-500/20', from: 'from-slate-500/20', desc: 'Configure Aastha' },
 ];
 

@@ -468,6 +468,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const processMagicTags = (text: string) => {
+    // Legacy Tag Processing (Retained for backward compat, but Proposal tags are handled in MessageBubble)
     const tagRegex = /<[^>]+>/g;
     const matches = text.match(tagRegex);
     if (matches) {
@@ -501,20 +502,27 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                   processedTagsRef.current.add('<color>');
                   processedTagsRef.current.add('</color>');
             }
+            // Only handle LEGACY simple tags here. Complex proposals are handled by MessageBubble click.
             if (onOpenWidget) {
-                if (lowerTag.includes('recommend_breathing')) { const m = lowerTag.match(/mode="([^"]+)"/i); onOpenWidget('breathing', { initialMode: m ? m[1] : undefined }); }
-                if (lowerTag.includes('open_breathing') || lowerTag.includes('start_breathing_exercise')) onOpenWidget('breathing');
-                if (lowerTag.includes('open_soundscape')) { const m = lowerTag.match(/preset="([^"]+)"/i); onOpenWidget('soundscape', { preset: m ? m[1] : undefined }); }
-                if (lowerTag.includes('open_diary')) onOpenWidget('diary');
-                if (lowerTag.includes('open_mood_tracker')) onOpenWidget('mood');
-                if (lowerTag.includes('open_pomodoro')) onOpenWidget('pomodoro');
-                if (lowerTag.includes('open_jam-with-aastha')) onOpenWidget('jam');
+                // If it's a Proposal tag, IGNORE it here (don't strip it yet, let UI render it)
+                if (lowerTag.startsWith('<proposal')) {
+                    // Do nothing, MessageBubble handles parsing
+                } else {
+                    if (lowerTag.includes('recommend_breathing')) { const m = lowerTag.match(/mode="([^"]+)"/i); onOpenWidget('breathing', { initialMode: m ? m[1] : undefined }); }
+                    if (lowerTag.includes('open_breathing') || lowerTag.includes('start_breathing_exercise')) onOpenWidget('breathing');
+                    if (lowerTag.includes('open_soundscape')) { const m = lowerTag.match(/preset="([^"]+)"/i); onOpenWidget('soundscape', { preset: m ? m[1] : undefined }); }
+                    if (lowerTag.includes('open_diary')) onOpenWidget('diary');
+                    if (lowerTag.includes('open_mood_tracker')) onOpenWidget('mood');
+                    if (lowerTag.includes('open_pomodoro')) onOpenWidget('pomodoro');
+                    if (lowerTag.includes('open_jam-with-aastha')) onOpenWidget('jam');
+                }
             }
             processedTagsRef.current.add(tag);
         });
     }
     let cleanText = text.replace(/<color>[\s\S]*?<\/color>/gi, '');
-    cleanText = cleanText.replace(/<[^>]+>/g, '');
+    // Don't strip proposal tags here, MessageBubble needs them
+    cleanText = cleanText.replace(/<(?!proposal)[^>]+>/g, '');
     return cleanText;
   };
 
@@ -563,6 +571,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         timestamp={msg.timestamp}
                         onReply={() => handleReply(msg.content)} 
                         onCopy={copyToClipboard}
+                        onOpenWidget={onOpenWidget}
                         searchQuery={searchQuery}
                         currentMatchIndex={currentMatchIndexInMessage}
                         isStreaming={isCurrentlyStreaming} 
@@ -742,6 +751,29 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      </motion.div>
                  )}
              </AnimatePresence>
+
+             {/* SMART CONTEXT CHIPS */}
+             <div className="overflow-x-auto scrollbar-hide flex gap-2 mb-2 px-1">
+                {(() => {
+                    const hour = new Date().getHours();
+                    const isLateNight = hour >= 23 || hour < 5;
+                    const isNewUser = messages.length <= 2;
+
+                    let chips = ["Roast me", "Inspire me", "Let's jam"];
+                    if (isNewUser) chips = ["Who are you?", "What can you do?", "I'm stressed"];
+                    else if (isLateNight) chips = ["I can't sleep", "Tell me a story", "Play night sounds"];
+
+                    return chips.map((chip, i) => (
+                        <button
+                            key={i}
+                            onClick={() => handleSend(undefined, chip)}
+                            className="shrink-0 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-xs text-white/70 whitespace-nowrap transition-colors"
+                        >
+                            {chip}
+                        </button>
+                    ));
+                })()}
+             </div>
 
              <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border border-white/5 p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
                  <div className="flex items-center gap-1 relative">

@@ -22,6 +22,7 @@ interface JamWidgetProps {
   onClose: () => void;
   zIndex?: number;
   onFocus?: () => void;
+  initialParams?: any;
 }
 
 interface Track {
@@ -179,7 +180,7 @@ const DesktopQueueItem = ({ track, index, isActive, onRemove, onPlay, onMoveUp, 
 };
 
 
-export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
+export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose, zIndex, onFocus, initialParams }) => {
   const { currentTheme } = useTheme();
   const { setPreventAutoLock } = useAuth();
   
@@ -216,6 +217,23 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       localStorage.setItem('jam_queue', JSON.stringify(queue));
       localStorage.setItem('jam_index', currentIndex.toString());
   }, [queue, currentIndex]);
+
+  // --- MANAGER MODE: Auto-Generate Playlist from Params ---
+  useEffect(() => {
+      if (initialParams && isOpen) {
+          const { mood, genre } = initialParams;
+          if (mood || genre) {
+             // Reset UI selections to match manager request
+             if (mood) setSelectedMoods([mood]);
+             if (genre) setSelectedGenres([genre]);
+
+             // Trigger generation immediately
+             // We need to wrap in timeout to ensure state is ready?
+             // Better to call the API function directly with these params.
+             generateVibePlaylist(mood, genre);
+          }
+      }
+  }, [initialParams, isOpen]);
 
   // AUTO-LOCK PREVENTION
   useEffect(() => {
@@ -534,7 +552,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       }
   };
 
-  const generateVibePlaylist = async () => {
+  const generateVibePlaylist = async (overrideMood?: string, overrideGenre?: string) => {
       setShowConfigModal(false);
       setIsSearching(true);
       
@@ -543,11 +561,14 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
       const langsToSend = selectedLanguages.length > 0 ? selectedLanguages : ["English"];
       
+      const moodsToSend = overrideMood ? [overrideMood] : selectedMoods;
+      const genresToSend = overrideGenre ? [overrideGenre] : selectedGenres;
+
       try {
           const res = await api.post('/ai/generate-vibe', { 
               languages: langsToSend,
-              moods: selectedMoods,
-              genres: selectedGenres,
+              moods: moodsToSend,
+              genres: genresToSend,
               duration: targetDuration
           });
           
@@ -763,7 +784,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
                         <div className="mt-6 pt-4 border-t border-white/10 shrink-0">
                             <button 
-                                onClick={generateVibePlaylist}
+                                onClick={() => generateVibePlaylist()}
                                 className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-white text-black hover:scale-[1.02] transition-transform"
                             >
                                 <Sparkles size={16} className="text-amber-600" /> Generate Playlist
@@ -810,29 +831,37 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                 </form>
             </div>
 
-            {/* Vinyl Centerpiece */}
+            {/* Album Art Centerpiece (Updated Visuals) */}
             <div className="relative flex-1 flex items-center justify-center w-full">
                 {isPlaying && (
                     <motion.div 
                         animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
-                        transition={{ duration: 4, repeat: Infinity }}
-                        className="absolute w-48 h-48 rounded-full blur-3xl"
+                        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                        className="absolute w-64 h-64 rounded-full blur-3xl"
                         style={{ backgroundColor: currentTheme.primaryColor }}
                     />
                 )}
 
                 <motion.div
-                    animate={{ rotate: isPlaying ? 360 : 0 }}
-                    transition={{ repeat: Infinity, duration: 8, ease: "linear" }}
-                    className="w-56 h-56 rounded-full bg-black border-[6px] border-[#1a1a1a] shadow-2xl flex items-center justify-center relative overflow-hidden"
+                    className="w-56 h-56 rounded-full shadow-2xl flex items-center justify-center relative overflow-hidden z-10"
+                    animate={{ scale: isPlaying ? [1, 1.02, 1] : 1 }}
+                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                 >
-                    <div className="absolute inset-0 rounded-full border-[20px] border-transparent border-t-white/5 border-b-white/5 opacity-20 pointer-events-none" />
-                    <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-[#121212] relative z-10">
+                    {/* Background Blur of Art */}
+                     {currentTrackData?.thumbnail && (
+                        <div
+                            className="absolute inset-0 bg-cover bg-center blur-sm opacity-50 scale-110"
+                            style={{ backgroundImage: `url(${currentTrackData.thumbnail})` }}
+                        />
+                    )}
+
+                    {/* Actual Art */}
+                    <div className="w-full h-full rounded-full overflow-hidden border border-white/10 relative z-20">
                         {currentTrackData?.thumbnail ? (
                             <img src={currentTrackData.thumbnail} className="w-full h-full object-cover" alt="Art" />
                         ) : (
                             <div className="w-full h-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center">
-                                <Disc size={32} className="text-white/20" />
+                                <Disc size={48} className="text-white/20" />
                             </div>
                         )}
                     </div>

@@ -48,6 +48,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regUsername, setRegUsername] = useState('');
+  const [regDob, setRegDob] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regDiaryPassword, setRegDiaryPassword] = useState('');
   const [secQ1, setSecQ1] = useState(SECURITY_QUESTIONS[0]);
@@ -121,6 +122,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
             name: regName,
             email: regEmail,
             username: regUsername,
+            dateOfBirth: regDob,
             password: regPassword,
             diaryPassword: regDiaryPassword,
             securityQuestions: [{ question: secQ1, answer: secA1 }]
@@ -336,7 +338,17 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                       <input type="text" placeholder="Full Name" value={regName} onChange={e => setRegName(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full" required />
                       <input type="text" placeholder="Username" value={regUsername} onChange={e => setRegUsername(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full" required />
                   </div>
-                  <input type="email" placeholder="Email Address" value={regEmail} onChange={e => setRegEmail(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full" required />
+                  <div className="grid grid-cols-2 gap-4">
+                      <input type="email" placeholder="Email Address" value={regEmail} onChange={e => setRegEmail(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full" required />
+                      <input
+                        type="date"
+                        placeholder="Date of Birth"
+                        value={regDob}
+                        onChange={e => setRegDob(e.target.value)}
+                        className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full placeholder-white/50"
+                        required
+                      />
+                  </div>
 
                   <div className="relative">
                       <input type={showRegPassword ? "text" : "password"} placeholder="Password" value={regPassword} onChange={e => setRegPassword(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full pr-10" required />
