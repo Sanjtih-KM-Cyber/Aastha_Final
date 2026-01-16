@@ -117,22 +117,26 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
   useEffect(() => {
       if (isOpen) {
           if (preset) {
-              const soundsToActivate = preset.split(',').map(s => s.trim().toLowerCase());
+              // PRESET PARSER: "rain:0.8,fire:0.2" or "rain,fire" (defaults to 0.5)
+              const parts = preset.split(',');
+              const newActive: Record<string, number> = {};
 
-              setActiveLoops(prev => {
-                  const newState = { ...prev };
-                  // Don't clear existing if appending? No, preset implies "set to this".
-                  Object.keys(newState).forEach(k => delete newState[k]);
+              // Clear existing
+              setActiveLoops({});
 
-                  soundsToActivate.forEach(soundId => {
-                      const match = SOUNDS.find(s => s.id === soundId || s.label.toLowerCase() === soundId);
-                      if (match) {
-                          newState[match.id] = 0.5;
-                          getAudio(match.id);
-                      }
-                  });
-                  return newState;
+              parts.forEach(part => {
+                  const [name, volStr] = part.split(':');
+                  const cleanName = name.trim().toLowerCase();
+                  const vol = volStr ? parseFloat(volStr) : 0.5;
+
+                  const match = SOUNDS.find(s => s.id === cleanName || s.label.toLowerCase() === cleanName);
+                  if (match) {
+                      newActive[match.id] = isNaN(vol) ? 0.5 : vol;
+                      getAudio(match.id);
+                  }
               });
+
+              setActiveLoops(newActive);
           }
 
           if (volume !== undefined) {
