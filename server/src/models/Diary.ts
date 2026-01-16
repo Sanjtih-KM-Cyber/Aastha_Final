@@ -5,6 +5,7 @@ export interface IDiaryEntry extends Document {
   title: string;
   content: string;
   mood?: string;
+  moodKeywords?: string;
   tags: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -15,6 +16,7 @@ const diaryEntrySchema = new Schema<IDiaryEntry>({
   title: { type: String, required: true }, // Encrypted
   content: { type: String, required: true }, // Encrypted
   mood: { type: String, required: false },
+  moodKeywords: { type: String, required: false }, // Unencrypted keywords for Ghosting Service
   tags: [{ type: String }],
 }, {
   timestamps: true
