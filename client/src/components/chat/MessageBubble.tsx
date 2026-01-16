@@ -18,14 +18,20 @@ interface MessageBubbleProps {
   isMobile?: boolean;
 }
 
-// Helper to parse hidden <proposal> tags
+// Helper to parse hidden <proposal> tags AND STRIP LEAKED JSON
 const extractProposals = (text: string) => {
+    // 1. Remove leaked Subconscious JSON block if it appears in text
+    // Matches { "internal_monologue": ... } including newlines, non-greedy
+    let cleanText = text.replace(/\{[\s\S]*?"internal_monologue"[\s\S]*?\}/g, '').trim();
+
+    // Also remove markdown json blocks if they leaked
+    cleanText = cleanText.replace(/```json[\s\S]*?```/g, '').trim();
+
     const proposalRegex = /<proposal tool="([^"]+)" params='([^']+)' reason="([^"]+)" \/>/g;
     const proposals = [];
-    let cleanText = text;
     let match;
 
-    while ((match = proposalRegex.exec(text)) !== null) {
+    while ((match = proposalRegex.exec(cleanText)) !== null) {
         try {
             proposals.push({
                 tool: match[1],
