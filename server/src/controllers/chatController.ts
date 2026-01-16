@@ -1,8 +1,8 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
-import { streamGemini, generateSummary } from '../services/geminiService';
+import { streamGemini, generateMemoryAnalysis, mergeLoreDescription } from '../services/geminiService';
 import { streamGroq, ChatMessage } from '../services/groqService';
-import User from '../models/User';
+import User, { ILore, IOpenLoop } from '../models/User';
 import Chat from '../models/Chat';
 import { encrypt, decrypt } from '../utils/serverEncryption';
 
@@ -222,9 +222,32 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         baseTemplate = AASTIK_PROMPT;
     }
 
-    const finalSystemPrompt = baseTemplate
+    let finalSystemPrompt = baseTemplate
       .replace(/{{userName}}/g, userName || 'Friend')
       .replace(/{{userFacts}}/g, factsString);
+
+    // --- PROACTIVE INJECTION (Bundle 4) ---
+    const now = new Date();
+    const pendingEvents = user.openLoops.filter(
+        (loop: IOpenLoop) => loop.status === 'pending' && new Date(loop.date) < now
+    );
+
+    if (pendingEvents.length > 0) {
+        const event = pendingEvents[0]; // Take the first one
+
+        const eventDateStr = new Date(event.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+        const injection = `\n\n[SYSTEM ALERT: ACTIVE MEMORY TRIGGER] The user recently had this event: "${event.event}" on ${eventDateStr}. MANDATORY: Your FIRST sentence must be asking how this went.`;
+
+        finalSystemPrompt += injection;
+
+        // Mark as completed immediately to prevent loops
+        event.status = 'completed';
+        await User.updateOne(
+            { _id: userId, "openLoops._id": event._id },
+            { $set: { "openLoops.$.status": "completed" } }
+        );
+    }
 
     // 6. Start Streaming
     const stream = provider === 'GEMINI' 
@@ -256,11 +279,92 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                 content: decrypt(m.content)
             }));
             
-            generateSummary(recentHistory, user.memorySummary || "")
-                .then(async (newSummary) => {
-                    await User.findByIdAndUpdate(userId, { memorySummary: newSummary });
-                })
-                .catch(err => console.error("Memory Update Failed:", err));
+            // Background processing
+            (async () => {
+                try {
+                    const analysis = await generateMemoryAnalysis(recentHistory, user.memorySummary || "");
+
+                    // 1. Update Summary
+                    const updates: any = { memorySummary: analysis.summary };
+
+                    // atomic update object for safe merges
+                    const atomicUpdates: any = {};
+
+                    // 2. Add New Facts (Deduplicated via $addToSet)
+                    if (analysis.newFacts && analysis.newFacts.length > 0) {
+                        atomicUpdates.$addToSet = { facts: { $each: analysis.newFacts } };
+                    }
+
+                    // 3. Add Detected Events (Open Loops)
+                    if (analysis.detectedEvents && analysis.detectedEvents.length > 0) {
+                        const newLoops = analysis.detectedEvents.map(e => ({
+                            event: e.name,
+                            date: new Date(e.date),
+                            status: 'pending',
+                            createdAt: new Date()
+                        }));
+                        await User.findByIdAndUpdate(userId, { $push: { openLoops: { $each: newLoops } } });
+                    }
+
+                    // 4. Update Lore System
+                    if (analysis.detectedEntities && analysis.detectedEntities.length > 0) {
+                        const currentUser = await User.findById(userId); // Re-fetch to get latest lore
+                        if (currentUser) {
+                            const loreUpdates: ILore[] = [...currentUser.lore];
+                            let loreChanged = false;
+
+                            for (const entity of analysis.detectedEntities) {
+                                const existingIndex = loreUpdates.findIndex(l => l.topic.toLowerCase() === entity.name.toLowerCase());
+
+                                if (existingIndex >= 0) {
+                                    // Update Existing
+                                    loreUpdates[existingIndex].mentionCount += 1;
+                                    loreUpdates[existingIndex].lastMentioned = new Date();
+
+                                    // Unlock check
+                                    if (loreUpdates[existingIndex].mentionCount >= 3 && !loreUpdates[existingIndex].isUnlocked) {
+                                        loreUpdates[existingIndex].isUnlocked = true;
+                                    }
+
+                                    // Smart Merge Description
+                                    const mergedDesc = await mergeLoreDescription(
+                                        loreUpdates[existingIndex].description || "",
+                                        `${entity.name} (${entity.category}): ${entity.description}`
+                                    );
+                                    loreUpdates[existingIndex].description = mergedDesc;
+                                    loreChanged = true;
+
+                                } else {
+                                    // Create New
+                                    loreUpdates.push({
+                                        topic: entity.name,
+                                        category: entity.category as any, // 'Villain' | 'Bestie' | ...
+                                        description: entity.description,
+                                        mentionCount: 1,
+                                        isUnlocked: false,
+                                        lastMentioned: new Date()
+                                    });
+                                    loreChanged = true;
+                                }
+                            }
+
+                            if (loreChanged) {
+                                updates.lore = loreUpdates;
+                            }
+                        }
+                    }
+
+                    // Apply all updates
+                    await User.findByIdAndUpdate(userId, {
+                        ...updates,
+                        ...atomicUpdates
+                    });
+
+                } catch (err) {
+                    console.error("Advanced Memory Processing Failed:", err);
+                }
+            })();
+
         } catch (e) {
             console.error("Memory Logic Error:", e);
         }

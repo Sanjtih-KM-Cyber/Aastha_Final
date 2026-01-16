@@ -117,7 +117,14 @@ export async function* streamGemini(
 // ==========================================
 // 3. MEMORY SUMMARY ENGINE
 // ==========================================
-export const generateSummary = async (chatHistory: ChatMessage[], previousSummary: string): Promise<string> => {
+export interface MemoryAnalysis {
+  summary: string;
+  newFacts: string[];
+  detectedEvents: { name: string; date: string }[];
+  detectedEntities: { name: string; category: string; description: string }[];
+}
+
+export const generateMemoryAnalysis = async (chatHistory: ChatMessage[], previousSummary: string): Promise<MemoryAnalysis> => {
     const client = getGeminiClient(false); 
 
     try {
@@ -127,21 +134,93 @@ export const generateSummary = async (chatHistory: ChatMessage[], previousSummar
             return `${role}: ${content}`;
         }).join('\n');
 
+        const currentDate = new Date().toISOString().split('T')[0];
+
         const response = await client.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `
-                Read this chat conversation and update the "Memory Summary".
+                Analyze the recent chat history and return a valid JSON object (no markdown formatting).
+
                 Previous Summary: "${previousSummary}"
-                Task: Identify new facts (names, goals), patterns, and communication style. Merge with previous summary (max 200 words).
-                Chat Log: ${textData}
+                Current Date: ${currentDate}
+
+                Task:
+                1. Update the narrative summary (max 200 words).
+                2. Identify any FUTURE events with specific dates. Convert relative dates (e.g., 'tomorrow', 'Friday') to ISO format (YYYY-MM-DD).
+                3. Identify proper nouns (people, places) mentioned with strong emotion. Categorize them (Villain/Bestie/Goal/Place/Lore).
+                4. Extract any permanent user facts.
+
+                Chat Log:
+                ${textData}
             `,
-            config: { maxOutputTokens: 300, temperature: 0.3 }
+            config: {
+                temperature: 0.3,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        summary: { type: Type.STRING },
+                        newFacts: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        detectedEvents: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    name: { type: Type.STRING },
+                                    date: { type: Type.STRING }
+                                }
+                            }
+                        },
+                        detectedEntities: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    name: { type: Type.STRING },
+                                    category: { type: Type.STRING },
+                                    description: { type: Type.STRING }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         });
 
-        return response.text?.trim() || previousSummary;
+        return JSON.parse(response.text || '{}') as MemoryAnalysis;
     } catch (e) {
-        console.error("Memory Summary Error:", e);
-        return previousSummary;
+        console.error("Memory Analysis Error:", e);
+        return {
+            summary: previousSummary,
+            newFacts: [],
+            detectedEvents: [],
+            detectedEntities: []
+        };
+    }
+};
+
+export const mergeLoreDescription = async (oldDesc: string, newContext: string): Promise<string> => {
+    const client = getGeminiClient(false);
+    try {
+        const response = await client.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `
+                Update the description of a person/place/goal in the user's life.
+                Old Description: "${oldDesc}"
+                New Context from recent chat: "${newContext}"
+
+                Task: Smartly merge the new details into the old description. Keep it concise (max 2 sentences).
+                Do not delete important history, but prioritize the latest status.
+            `,
+             config: {
+                maxOutputTokens: 100,
+                temperature: 0.4
+            }
+        });
+        return response.text?.trim() || oldDesc;
+    } catch (error) {
+        console.error("Lore Merge Error:", error);
+        return oldDesc;
     }
 };
 

@@ -13,6 +13,26 @@ export interface IPaymentRecord {
   date: Date;
 }
 
+// 1. Open Loops (Future Event Tracking)
+export interface IOpenLoop {
+  _id: string;
+  event: string;
+  date: Date;
+  status: 'pending' | 'completed';
+  createdAt: Date;
+}
+
+// 2. The Lore System (Recurring Entities)
+export interface ILore {
+  _id: string;
+  topic: string;
+  category: 'Villain' | 'Bestie' | 'Goal' | 'Place' | 'Lore';
+  description?: string;
+  mentionCount: number;
+  isUnlocked: boolean;
+  lastMentioned: Date;
+}
+
 export interface IUser extends Document {
   // --- Encrypted Fields (Sensitive PII - Stored Encrypted) ---
   nameEncrypted?: string;
@@ -66,6 +86,10 @@ export interface IUser extends Document {
   // Memory
   memorySummary?: string;
   ghostNotificationSent?: boolean;
+
+  // Active Memory & Lore
+  openLoops: IOpenLoop[];
+  lore: ILore[];
 
   // Onboarding
   isOnboardingComplete?: boolean;
@@ -138,6 +162,24 @@ const userSchema = new Schema<IUser>({
   // Memory
   memorySummary: { type: String, default: "" },
   ghostNotificationSent: { type: Boolean, default: false },
+
+  // 1. Open Loops (Future Event Tracking)
+  openLoops: [{
+    event: { type: String, required: true },
+    date: { type: Date, required: true },
+    status: { type: String, enum: ['pending', 'completed'], default: 'pending' },
+    createdAt: { type: Date, default: Date.now }
+  }],
+
+  // 2. The Lore System (Recurring Entities)
+  lore: [{
+    topic: { type: String, required: true },
+    category: { type: String, enum: ['Villain', 'Bestie', 'Goal', 'Place', 'Lore'], default: 'Lore' },
+    description: { type: String },
+    mentionCount: { type: Number, default: 1 },
+    isUnlocked: { type: Boolean, default: false }, // Set true when mentionCount >= 3
+    lastMentioned: { type: Date, default: Date.now }
+  }],
 
   // Onboarding (Default false = New users see it)
   isOnboardingComplete: { type: Boolean, default: false }
