@@ -14,6 +14,7 @@ const JamWithAasthaWidget = React.lazy(() => import('../components/widgets/JamWi
 const Soundscape = React.lazy(() => import('../components/widgets/Soundscape').then(m => ({ default: m.Soundscape })));
 const BreathingWidget = React.lazy(() => import('../components/widgets/BreathingWidget').then(m => ({ default: m.BreathingWidget })));
 const MoodTracker = React.lazy(() => import('../components/widgets/MoodTracker').then(m => ({ default: m.MoodTracker })));
+const MemoryWall = React.lazy(() => import('../components/widgets/MemoryWall').then(m => ({ default: m.MemoryWall })));
 
 // Memoized Wrappers to prevent parent re-renders affecting heavy widgets
 const MemoDiary = memo(Diary);
@@ -22,6 +23,7 @@ const MemoJam = memo(JamWithAasthaWidget);
 const MemoSoundscape = memo(Soundscape);
 const MemoBreathing = memo(BreathingWidget);
 const MemoMood = memo(MoodTracker);
+const MemoLore = memo(MemoryWall);
 
 const DESKTOP_TOUR_STEPS: TourStep[] = [
   {
@@ -156,6 +158,7 @@ export const Sanctuary: React.FC = () => {
     soundscape: false,
     breathing: false,
     mood: false,
+    lore: false,
   });
 
   // Derived Status for Smart Header
@@ -173,6 +176,7 @@ export const Sanctuary: React.FC = () => {
     soundscape: 50,
     breathing: 50,
     mood: 50,
+    lore: 50,
   });
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -313,6 +317,17 @@ export const Sanctuary: React.FC = () => {
                   onClose={() => closeWidget('mood')}
                   zIndex={zIndices.mood}
                   onFocus={() => bringToFront('mood')}
+              />
+            </React.Suspense>
+          </div>
+
+          <div style={{ pointerEvents: 'auto' }}>
+            <React.Suspense fallback={null}>
+              <MemoLore
+                  isOpen={widgets.lore}
+                  onClose={() => closeWidget('lore')}
+                  zIndex={zIndices.lore}
+                  onFocus={() => bringToFront('lore')}
               />
             </React.Suspense>
           </div>
