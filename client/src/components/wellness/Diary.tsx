@@ -254,8 +254,12 @@ const CalendarView: React.FC<{
         <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-3 custom-scrollbar">
             <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Recent Memories</h4>
             {Object.values(entriesMap).slice(0, 5).map((entry, i) => (
-                <div key={i} onClick={() => { if(entry.createdAt) setActiveDate(new Date(entry.createdAt)) }} className="p-3 rounded-lg bg-white/40 hover:bg-white/80 cursor-pointer transition-colors border border-transparent hover:border-gray-300">
-                    <div className="flex justify-between"><span className="font-bold text-sm">{entry.title || 'Untitled'}</span><span className="text-[10px] text-gray-500">{getShortDate(entry.createdAt || '')}</span></div>
+                <div key={i} onClick={() => {
+                    // USE entryDate if available, else createdAt
+                    const d = entry.entryDate ? new Date(entry.entryDate) : (entry.createdAt ? new Date(entry.createdAt) : new Date());
+                    setActiveDate(d);
+                }} className="p-3 rounded-lg bg-white/40 hover:bg-white/80 cursor-pointer transition-colors border border-transparent hover:border-gray-300">
+                    <div className="flex justify-between"><span className="font-bold text-sm">{entry.title || 'Untitled'}</span><span className="text-[10px] text-gray-500">{getShortDate(entry.entryDate || entry.createdAt || '')}</span></div>
                     <p className="text-xs text-gray-500 line-clamp-1 mt-1">{entry.content}</p>
                 </div>
             ))}
@@ -362,8 +366,28 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
                   title: decrypt(entry.title),
                   content: decrypt(entry.content)
               };
-              if (entry.createdAt) {
-                  const dateKey = toDateString(new Date(entry.createdAt));
+
+              // USE entryDate logic
+              // Check if entryDate exists (it might be a string from JSON)
+              // If not, check createdAt
+              let dateObj = null;
+              if (entry.entryDate) dateObj = new Date(entry.entryDate);
+              else if (entry.createdAt) dateObj = new Date(entry.createdAt);
+
+              if (dateObj && !isNaN(dateObj.getTime())) {
+                  // CRITICAL FIX: The backend returns UTC dates.
+                  // If we use toDateString() (Local), it might shift days depending on user timezone.
+                  // We need to match the KEY generation logic used when SAVING.
+                  // When Saving, we used `stableDateISO` (Noon UTC).
+                  // So we should map this back to Local Date String consistent with activeDate.
+
+                  // If the user saved "Dec 28", we sent "Dec 28 12:00 UTC".
+                  // Now we get back "Dec 28 12:00 UTC".
+                  // `new Date("...12:00Z")` will be Local Time.
+                  // As long as the user is in the same timezone, `toDateString()` should return "Dec 28".
+                  // UNLESS the user is in a timezone where 12:00 UTC is next/prev day (e.g. UTC+13 or UTC-13).
+
+                  const dateKey = toDateString(dateObj);
                   map[dateKey] = decrypted;
               }
           } catch (e) { console.error("Decrypt error", e); }
@@ -430,7 +454,9 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
           ...saved, 
           title: titleToSave || "Untitled", 
           content: contentToSave, 
-          createdAt: stableDateISO 
+          // Prefer entryDate from response, fallback to createdAt/stable
+          entryDate: saved.entryDate || stableDateISO,
+          createdAt: saved.createdAt || stableDateISO
       };
       
       const key = toDateString(activeDate);

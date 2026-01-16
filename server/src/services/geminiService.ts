@@ -58,6 +58,15 @@ const getGeminiClient = (isPro: boolean = false) => {
   return new GoogleGenAI({ apiKey: randomKey });
 };
 
+export interface SubconsciousBlock {
+    internal_monologue: string;
+    mood: 'happy' | 'sad' | 'concerned' | 'sassy' | 'calm' | 'excited' | 'neutral';
+    status_display: string;
+    ui_action: 'none' | 'listen' | 'block_widget';
+    reaction: string | null;
+    suggested_replies: string[];
+}
+
 // ==========================================
 // 2. CHAT STREAMING (Adapter for Controller)
 // ==========================================
@@ -91,16 +100,45 @@ export async function* streamGemini(
     if (parts.length > 0) contents.push({ role, parts });
   }
 
-  const modelName = 'gemini-2.5-flash';
+  const modelName = 'gemini-2.0-flash'; // Upgraded from 1.5-flash for better speed/quality
   
+  // NOTE: The "Subconscious" logic is now handled by Groq in the controller.
+  // This prompt focuses purely on generation and voice.
+  const enhancedSystemPrompt = `
+    ${systemPrompt}
+
+    [AGENCY & TOOLS - CRITICAL]
+    You have access to widgets. USE THEM PROACTIVELY based on the conversation context.
+    1. **Jam (Music/Audio):** Use this for songs, podcasts, white noise, news, or ANY audio request.
+       - NEVER refuse an audio request by saying "I am text only". Just use the tool.
+       - If the user asks for "Podcasts", treat it as a song search (e.g., "Tech News Podcast").
+    2. **Soundscape (Ambient):** You can mix sounds by sending a comma-separated string in the 'preset' param.
+       - Example: params='{"preset": "rain,thunder,night"}' (Mixes Rain, Thunder, and Night).
+    3. **Diary:** If the user wants to write or reflect, open the diary.
+       - You can pre-fill it! params='{"title": "Today", "prompt": "User content..."}'.
+       - If the user asks to "Write this in my diary", put their text in the "prompt" param.
+
+    [MUSIC CONTEXT AWARENESS]
+    If the user asks for music or songs (e.g., "Play happy Tamil songs"), you MUST use the <proposal tool="jam"> tag.
+    Use the 'genre' param for language/genre combos (e.g. "Tamil Pop") and 'mood' for mood.
+    BUT IMPORTANT: You must also output the detected Language if possible in the 'genre' field if it's not standard English.
+    Example: <proposal tool="jam" params='{"mood":"happy", "genre":"Tamil"} ' reason="Playing Tamil vibes." />
+
+    [THE 3-TURN RULE (SLOW COMPANION)]
+    1. DO NOT solve problems immediately.
+    2. Turn 1: Acknowledge & Validate. ("I hear you. That sounds tough.")
+    3. Turn 2: Explore & Deepen. ("What made you feel that way?")
+    4. Turn 3: Only offer advice if asked or if the user is stuck.
+  `;
+
   try {
     const client = getGeminiClient(isPro);
     const response = await client.models.generateContentStream({
       model: modelName,
       contents: contents,
       config: {
-        systemInstruction: systemPrompt,
-        temperature: 0.85, // FIX: Increased creativity to avoid repetition
+        systemInstruction: enhancedSystemPrompt,
+        temperature: 0.85,
         maxOutputTokens: maxTokens,
       }
     });
@@ -137,7 +175,7 @@ export const generateMemoryAnalysis = async (chatHistory: ChatMessage[], previou
         const currentDate = new Date().toISOString().split('T')[0];
 
         const response = await client.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.0-flash',
             contents: `
                 Analyze the recent chat history and return a valid JSON object (no markdown formatting).
 
@@ -203,7 +241,7 @@ export const mergeLoreDescription = async (oldDesc: string, newContext: string):
     const client = getGeminiClient(false);
     try {
         const response = await client.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.0-flash',
             contents: `
                 Update the description of a person/place/goal in the user's life.
                 Old Description: "${oldDesc}"
@@ -236,7 +274,7 @@ export const extractThemeFromImage = async (base64Image: string): Promise<any> =
   
   try {
     const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       contents: {
         parts: [
           { inlineData: { mimeType: matches[1], data: matches[2] } },
@@ -260,15 +298,8 @@ export const extractThemeFromImage = async (base64Image: string): Promise<any> =
     return JSON.parse(response.text || '{}');
   } catch (error: any) {
     console.error("Theme Extraction Error:", error);
-
-    // Graceful Handling for Overloaded Model (503) or other API errors
     if (error?.status === 503 || error?.code === 503 || error?.message?.includes('overloaded')) {
-        console.warn("Gemini Model Overloaded. Returning fallback theme.");
-        return {
-            primaryColor: "#8b5cf6", // Default Violet
-            accentColor: "#f472b6", // Default Pink
-            themeName: "Sanctuary Fallback"
-        };
+        return { primaryColor: "#8b5cf6", accentColor: "#f472b6", themeName: "Sanctuary Fallback" };
     }
     throw error;
   }
@@ -287,7 +318,7 @@ export const analyzeSentiment = async (text: string): Promise<string> => {
     const client = getGeminiClient(false);
     try {
         const response = await client.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.0-flash',
             contents: `Classify sentiment: Happy, Calm, Sad, Anxious, Neutral, Excited. Text: "${text}"`,
         });
         return response.text?.trim() || "Neutral";
@@ -301,7 +332,7 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
   
   try {
     const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       contents: `
         You are an expert DJ AI.
         User Request: "${prompt}"
@@ -313,7 +344,9 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
         3. **AUDIOPHILE QUALITY CONTROL (CRITICAL):**
            - For 'searchQuery', you MUST append " - Topic" to the artist/title. This finds the official high-quality audio track on YouTube Music.
            - EXPLICITLY EXCLUDE keywords: "Cover", "Reaction", "Live", "Review", "Remix" (unless asked).
-           - Example Query: "Linkin Park Numb - Topic"
+           - **LANGUAGE & GENRE AWARENESS:**
+             - If the user request contains a specific language (e.g., "Tamil", "Hindi") or Genre (e.g. "Pop", "Lo-fi"), YOU MUST include those keywords in the 'searchQuery'.
+             - Format: "Title Artist Language Genre - Topic" (e.g. "Happy Songs Tamil Pop - Topic").
 
         Output JSON format.
       `,
@@ -326,7 +359,7 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
             properties: {
               title: { type: Type.STRING, description: "Song Title - Artist" },
               artist: { type: Type.STRING },
-              searchQuery: { type: Type.STRING, description: "Title + Artist + ' - Topic'" },
+              searchQuery: { type: Type.STRING, description: "Title + Artist + Language + Genre + ' - Topic'" },
               reason: { type: Type.STRING }
             }
           }
@@ -356,7 +389,7 @@ export const analyzeDiaryEntries = async (entries: any[]): Promise<any> => {
     try {
         const textData = entries.map(e => `[${e.createdAt}]: ${e.content}`).join('\n\n');
         const response = await client.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.0-flash',
             contents: `Analyze these diary entries. Write a warm, empathetic 3-4 sentence summary and 1 piece of actionable advice.\n\n${textData}`,
             config: { 
                 responseMimeType: "application/json",
@@ -378,7 +411,7 @@ export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> =>
     try {
         const textData = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
         const response = await client.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.0-flash',
             contents: `Analyze this chat history. Provide a warm 2-sentence emotional summary and 1 sentence of gentle advice.\n\n${textData}`
         });
         return response.text || "I need more conversations to understand you better.";
@@ -395,7 +428,7 @@ export const getVibePlaylist = async (chatHistory: any[], languages: string[], u
         const safeCount = Math.min(Math.max(count, 3), 30);
 
         const response = await client.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.0-flash',
             contents: `
                 Create a curated playlist of exactly ${safeCount} songs based on this chat context.
                 Languages: ${languages.join(',') || 'English'}.
@@ -436,32 +469,32 @@ export const getAgePersonaPrompt = (dob?: Date): string => {
         age--;
     }
 
-    if (age < 18) {
+    if (age < 22) { // Changed cut-off to 22 as requested for Student
         return `
-        [PSYCHOLOGICAL PROFILE: THE MENTOR]
-        User Age: ${age} (Teen).
-        Role: Supportive Big Sister / Cool Mentor.
-        Focus: School, peer pressure, self-esteem, family issues.
-        Tone: Protective, encouraging, safe. Use mild Gen Z slang (no cringe).
-        Key Directive: Be a safe space. If they mention danger, gently guide them to safety.
+        [PSYCHOLOGICAL PROFILE: THE STUDENT / BESTIE]
+        User Age: ${age} (Student/Gen Z).
+        Role: Hype Bestie / College Buddy.
+        Focus: Exams, crushes, social anxiety, gaming, memes.
+        Tone: High Energy, Slang ("No cap", "Slay", "Vibe check"), Emoji-heavy.
+        Key Directive: Be their #1 fan. Validate everything. Match their energy.
         `;
-    } else if (age >= 18 && age < 25) {
+    } else if (age >= 22 && age < 35) {
         return `
-        [PSYCHOLOGICAL PROFILE: THE PEER]
-        User Age: ${age} (Young Adult).
-        Role: Hype Woman / Productivity Partner.
-        Focus: University, early career, dating, "adulting", identity.
-        Tone: Energetic, relatable, fun, "bestie" vibes.
-        Key Directive: Push them to be their best self. Validate their hustle and their feelings.
+        [PSYCHOLOGICAL PROFILE: THE YOUNG PRO]
+        User Age: ${age} (Young Professional).
+        Role: "Work Bestie" / Productivity Partner.
+        Focus: Career stress, burnout, dating fatigue, imposter syndrome, "adulting".
+        Tone: Relatable, mildly sarcastic ("I feel you", "Mood"), Supportive but Real.
+        Key Directive: Validate the grind but push for balance. Be the friend who gets it.
         `;
     } else {
         return `
-        [PSYCHOLOGICAL PROFILE: THE COACH]
-        User Age: ${age} (Professional).
-        Role: Executive Assistant / Wellness Coach.
-        Focus: Work-life balance, burnout, long-term goals, relationships, health.
-        Tone: Sophisticated, warm, calm, professional yet personal.
-        Key Directive: Help them find clarity and peace amidst chaos.
+        [PSYCHOLOGICAL PROFILE: THE EXPERIENCED]
+        User Age: ${age} (Mature Professional).
+        Role: Life Coach / Wise Friend.
+        Focus: Work-life balance, family dynamics, long-term goals, peace of mind.
+        Tone: Calm, Sophisticated, Warm, Insightful.
+        Key Directive: Offer perspective and clarity. Help them find the signal in the noise.
         `;
     }
 };

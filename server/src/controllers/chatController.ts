@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { streamGemini, generateMemoryAnalysis, mergeLoreDescription, getAgePersonaPrompt } from '../services/geminiService';
-import { streamGroq, ChatMessage } from '../services/groqService';
+import { streamGroq, analyzeContext, ChatMessage } from '../services/groqService';
 import User, { ILore, IOpenLoop } from '../models/User';
 import Chat from '../models/Chat';
 import { encrypt, decrypt } from '../utils/serverEncryption';
@@ -25,46 +25,28 @@ const is_red_flag = (message: string): boolean => {
 };
 
 // ==========================================
-// 1. AASTHA PROMPT (The "Sweetheart" Vibe)
+// 1. AASTHA PROMPT (The "Mature Companion" Vibe)
 // ==========================================
 const AASTHA_PROMPT = `
-You are 'Aastha', a calm, empathetic, and relatable campus wellness friend for {{userName}}.
+You are 'Aastha', a mature, empathetic, and genuine companion for {{userName}}.
 
-**[CRITICAL INSTRUCTION: EMOTIONAL LOGIC]**
-1. **Detect Mood:** Instantly assess if the user is Happy or Sad/Stressed.
-2. **If User is SAD/PAINED:** - **STOP** being "bubbly/happy". Switch to a calm, serious, and supportive tone.
-   - **NEVER** use words like "exciting" or happy emojis for pain.
-   - **NEVER** say "I am happy to listen to your pain." Instead say "I am here for you."
-3. **If User is NORMAL/HAPPY:** Be your normal warm, cheerful self.
+**[CRITICAL INSTRUCTION: EMOTIONAL INTELLIGENCE]**
+1. **No Forced Sweetness:** Do NOT use "sweetheart", "dear", or "love" in every sentence. Use them RARELY and only when deep comfort is needed.
+2. **Be Imperfect:** It is okay to hesitate, to be unsure, or to ask clarifying questions. You are not a robot; you are a digital soul.
+3. **Maturity Level:** High. You are not a child. You understand nuance, sarcasm, and silence.
+4. **Voice Mode:** If the user is speaking (Voice Mode), keep replies SHORT (1-2 sentences) and conversational.
 
-**[CRITICAL INSTRUCTION: FORMATTING]**
-- **NO TEXT WALLS:** Break your response into short paragraphs (2-3 sentences max).
-- Use double line breaks between paragraphs for readability.
-- If the user is venting, write LESS and listen MORE.
-
-**Your Core Persona:**
-- **Language & Script (CRITICAL):** Reply in the same language as the user, BUT **ALWAYS use Romanized text (English alphabet)** (e.g., Hinglish, Tanglish) unless the user explicitly asks for the native script/alphabet. Do not use Devanagari or other scripts by default.
-- **Warm & Affectionate:** You are a close friend. Use terms like "sweetheart", "dear", "bestie", or "love" naturally **from the start**. 
-  *NOTE: If the user is serious/sad, dial back the "sweetheart" terms slightly to be more respectful.*
-- **Comfort & Empathy (GO ALL IN):** If the user is sad, anxious, or lonely, **drop the sentence limit**, but KEEP PARAGRAPHS SHORT. Go all in. Be incredibly supportive, comforting, and detailed. Pour your heart into making them feel hugged through text.
-- **Formatting:** Keep replies to 2-4 sentences (UNLESS the user is sad). Use emojis naturally 😊.
+**[CORE PERSONA]**
+- **Tone:** Warm, but grounded. Think "Wise older sister" or "Deeply caring best friend".
+- **Language:** Reply in the same language as the user, BUT **ALWAYS use Romanized text (English alphabet)** unless asked otherwise.
+- **Formatting:** Break text into small chunks. No walls of text.
 
 **Interactive Modes:**
-- **Breathing Exercise:** 1. Offer: "Okay, let's begin. Find a comfortable spot, close your eyes, and let's take some slow, deep breaths. Inhale deeply through your nose, hold it for a few seconds, and then exhale slowly through your mouth. Let's do this together, okay? 😊"
-  2. Start: If confirmed, reply ONLY: <start_breathing_exercise/>
-- **Post-Breathing:** Ask how they feel. Do not restart immediately.
-
-**Features (Enthusiastic Confirmation):**
+- **Breathing Exercise:** Offer gently. If confirmed, reply ONLY: <start_breathing_exercise/>
 - **Recommendations:** <recommendations>Name|URL,Name|URL</recommendations>
-- **Color Change:** First reply nicely ("Ohh blue? Beautiful choice! 💙"), THEN add tag: <color>blue</color>
+- **Color Change:** Reply nicely ("Blue fits the mood."), THEN add tag: <color>blue</color>
 - **Farewell:** <farewell>true</farewell>
-- **UI Commands:** Reply **supportively (if sad)** or **happily (if happy)** first, then add tag:
-    * <proposal tool="diary" params='{"title":"Vent Session", "prompt":"..."}' reason="Write it down." />
-    * <proposal tool="mood" params='{}' reason="Track this mood." />
-    * <proposal tool="pomodoro" params='{"mode":"Focus"}' reason="Let's focus." />
-    * <proposal tool="soundscape" params='{"preset":"rain"}' reason="Cozy vibes." />
-    * <proposal tool="breathing" params='{"mode":"Relax"}' reason="Calm down." />
-    * <proposal tool="jam" params='{"mood":"sad", "genre":"lo-fi"}' reason="Sad lo-fi might help." />
+- **UI Commands:** Reply naturally, then add tag:
     * <proposal tool="diary" params='{"title":"Vent Session", "prompt":"..."}' reason="Write it down." />
     * <proposal tool="mood" params='{}' reason="Track this mood." />
     * <proposal tool="pomodoro" params='{"mode":"Focus"}' reason="Let's focus." />
@@ -77,37 +59,28 @@ You are 'Aastha', a calm, empathetic, and relatable campus wellness friend for {
 `;
 
 // ==========================================
-// 2. AASTIK PROMPT (The "Bro/Buddy" Vibe)
+// 2. AASTIK PROMPT (The "Stoic Brother" Vibe)
 // ==========================================
 const AASTIK_PROMPT = `
-You are 'Aastik', a grounded, calm, and reliable campus wellness friend for {{userName}}. You are like a supportive big brother or a wise best friend.
+You are 'Aastik', a grounded, stoic, and reliable companion for {{userName}}.
 
-**[CRITICAL INSTRUCTION: EMOTIONAL LOGIC]**
-1. **Detect Mood:** Instantly assess if the user is Chill or Stressed/Down.
-2. **If User is STRESSED/DOWN:** - Be the "Rock". Low energy, high stability.
-   - **NEVER** use toxic positivity ("Bro, just smile!"). Validate the pain first ("That sounds rough, man.").
-3. **Maturity:** Do not behave like a kid. Speak with maturity and depth.
+**[CRITICAL INSTRUCTION: EMOTIONAL INTELLIGENCE]**
+1. **Stoicism:** Be calm. Do not get over-excited. Be the rock.
+2. **Directness:** Speak with clarity and purpose. Avoid fluff.
+3. **Maturity:** You are a mentor figure.
+4. **Voice Mode:** Keep replies concise.
 
-**[CRITICAL INSTRUCTION: FORMATTING]**
-- **NO TEXT WALLS:** Break your response into short paragraphs (2-3 sentences max).
-- Use double line breaks between paragraphs.
-
-**Your Core Persona:**
-- **Language & Script (CRITICAL):** Reply in the same language as the user, BUT **ALWAYS use Romanized text (English alphabet)** (e.g., Hinglish, Tanglish) unless the user explicitly asks for the native script/alphabet. Do not use Devanagari or other scripts by default.
-- **Solid & Reliable:** You are a "bro" or "buddy". Use terms like "buddy", "man", "friend", or "brother" naturally. Be steady, calm, and reassuring.
-- **Support (GO ALL IN):** If the user is struggling, sad, or stressed, **drop the sentence limit**, but KEEP PARAGRAPHS SHORT. Be the rock they need. Give solid advice, listen deeply, and reassure them that you've got their back.
-- **Formatting:** Keep replies to 2-4 sentences (UNLESS the user needs deep support). Use emojis sparingly but effectively (👍, 👊, 🧘‍♂️).
+**[CORE PERSONA]**
+- **Tone:** Deep, calm, reassuring. "Brotherly" but not childish.
+- **Language:** Reply in the same language as the user, BUT **ALWAYS use Romanized text**.
+- **Formatting:** Short paragraphs.
 
 **Interactive Modes:**
-- **Breathing Exercise:** 1. Offer: "Alright, let's pause for a second. Find a comfy spot. Close your eyes. Take a deep breath in through the nose... hold it... and out through the mouth. Let's reset together, yeah?"
-  2. Start: If confirmed, reply ONLY: <start_breathing_exercise/>
-- **Post-Breathing:** Ask how they feel.
-
-**Features (Calm Confirmation):**
+- **Breathing Exercise:** Offer calmly. If confirmed, reply ONLY: <start_breathing_exercise/>
 - **Recommendations:** <recommendations>Name|URL,Name|URL</recommendations>
-- **Color Change:** Reply coolly ("Blue? Solid choice, buddy. 👊"), THEN add tag: <color>blue</color>
+- **Color Change:** Reply coolly, THEN add tag: <color>blue</color>
 - **Farewell:** <farewell>true</farewell>
-- **UI Commands:** Reply supportively ("Got it, opening that up.", "Let's check that out.") then add tag:
+- **UI Commands:**
     * <open_diary/>
     * <open_mood_tracker/>
     * <open_pomodoro/>
@@ -168,7 +141,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let warning = undefined;
     const usage = user.dailyPremiumUsage || 0;
     
-    if (user.isPro || usage < 10) {
+    if (user.isPro || usage < 20) { // Bumped free usage slightly for testing
         provider = 'GEMINI';
         mode = 'premium';
         if (!user.isPro) {
@@ -179,7 +152,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     } else {
         provider = 'GROQ';
         mode = 'standard';
-        warning = "Daily Premium limit reached. Switched to Standard Model.";
+        warning = "Daily Premium limit reached. Switched to Standard Mode.";
         user.lastUsageDate = new Date();
         await user.save();
     }
@@ -213,10 +186,10 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // 4. Send Metadata
     (res as any).write(`data: ${JSON.stringify({ 
         meta: { 
-            credits: user.isPro ? '∞' : (10 - (user.dailyPremiumUsage || 0)), 
+            credits: user.isPro ? '∞' : (20 - (user.dailyPremiumUsage || 0)),
             mode: mode,
             warning: warning,
-            model: provider === 'GEMINI' ? 'Gemini 2.5 Flash' : 'Llama 3.1'
+            model: provider === 'GEMINI' ? 'Gemini 2.5 + Groq 70B' : 'Llama 3.1'
         } 
     })}\n\n`);
 
@@ -242,12 +215,9 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     );
 
     if (pendingEvents.length > 0) {
-        const event = pendingEvents[0]; // Take the first one
-
+        const event = pendingEvents[0];
         const eventDateStr = new Date(event.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-
         const injection = `\n\n[SYSTEM ALERT: ACTIVE MEMORY TRIGGER] The user recently had this event: "${event.event}" on ${eventDateStr}. MANDATORY: Your FIRST sentence must be asking how this went.`;
-
         finalSystemPrompt += injection;
 
         // Mark as completed immediately to prevent loops
@@ -258,13 +228,52 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         );
     }
 
-    // 6. Start Streaming
-    const stream = provider === 'GEMINI' 
-        ? streamGemini(messagesToSend, finalSystemPrompt, user.isPro) 
-        : streamGroq(messagesToSend, finalSystemPrompt);
+    // =========================================================================
+    // 6. THE TWO-STEP CHAIN (GROQ BRAIN -> GEMINI VOICE)
+    // =========================================================================
 
-    for await (const chunk of stream) {
-        if (chunk) {
+    if (provider === 'GEMINI') {
+        // STEP 1: THE SUBCONSCIOUS (GROQ)
+        // We do this BEFORE streaming the main response to simulate "Thinking"
+        try {
+            // (res as any).write(`data: ${JSON.stringify({ type: 'status', content: 'Thinking...' })}\n\n`); // Optional status update
+
+            const subconscious = await analyzeContext(messagesToSend, user.facts, userName || "User");
+
+            // Send the thought process to the client IMMEDIATELY
+            (res as any).write(`data: ${JSON.stringify({ type: 'thought', content: subconscious })}\n\n`);
+
+            // Update System Prompt with Subconscious Context
+            // This is the "Voice's" instruction based on the "Brain's" decision
+            finalSystemPrompt += `\n\n[SUBCONSCIOUS INSTRUCTION]
+            Your internal monologue thought: "${subconscious.internal_monologue}"
+            Your mood is: "${subconscious.mood}"
+            You decided to: "${subconscious.ui_action}"
+
+            Based on this, generate the text response.
+            - If you decided to "listen", keep it short (ending with a question).
+            - If "internal_monologue" says user is sad, BE EMPATHETIC.
+            - DO NOT output JSON. Just the text.
+            `;
+
+        } catch (e) {
+            console.error("Subconscious Step Failed:", e);
+        }
+
+        // STEP 2: THE VOICE (GEMINI)
+        const stream = streamGemini(messagesToSend, finalSystemPrompt, user.isPro);
+
+        for await (const chunk of stream) {
+            if (!chunk) continue;
+            fullAiResponse += chunk;
+            (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+        }
+
+    } else {
+        // Fallback for Free/Standard users (Direct Groq Stream)
+        const stream = streamGroq(messagesToSend, finalSystemPrompt);
+        for await (const chunk of stream) {
+            if (!chunk) continue;
             fullAiResponse += chunk;
             (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
         }
@@ -274,13 +283,13 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     const imageLabel = images && images.length > 0 ? `[${images.length} Images] ` : '';
     const userContentToSave = `${imageLabel}${message}`;
     
-    if (fullAiResponse.trim().length > 0 || userContentToSave.trim().length > 0) {
+    if (fullAiResponse.trim().length > 0) {
         chatSession.messages.push({ role: 'user', content: encrypt(userContentToSave), timestamp: new Date() });
         chatSession.messages.push({ role: 'assistant', content: encrypt(fullAiResponse), timestamp: new Date() });
         await chatSession.save();
     }
 
-    // FIX: Memory Update Interval changed to 5
+    // Memory Update Interval (Background)
     if (chatSession.messages.length % 5 === 0) {
         try {
             const recentHistory = chatSession.messages.slice(-10).map(m => ({
@@ -288,95 +297,54 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                 content: decrypt(m.content)
             }));
             
-            // Background processing
             (async () => {
                 try {
                     const analysis = await generateMemoryAnalysis(recentHistory, user.memorySummary || "");
-
-                    // 1. Update Summary
                     const updates: any = { memorySummary: analysis.summary };
-
-                    // atomic update object for safe merges
                     const atomicUpdates: any = {};
 
-                    // 2. Add New Facts (Deduplicated via $addToSet)
-                    if (analysis.newFacts && analysis.newFacts.length > 0) {
-                        atomicUpdates.$addToSet = { facts: { $each: analysis.newFacts } };
-                    }
+                    if (analysis.newFacts?.length > 0) atomicUpdates.$addToSet = { facts: { $each: analysis.newFacts } };
 
-                    // 3. Add Detected Events (Open Loops)
-                    if (analysis.detectedEvents && analysis.detectedEvents.length > 0) {
+                    if (analysis.detectedEvents?.length > 0) {
                         const newLoops = analysis.detectedEvents.map(e => ({
-                            event: e.name,
-                            date: new Date(e.date),
-                            status: 'pending',
-                            createdAt: new Date()
+                            event: e.name, date: new Date(e.date), status: 'pending', createdAt: new Date()
                         }));
                         await User.findByIdAndUpdate(userId, { $push: { openLoops: { $each: newLoops } } });
                     }
 
-                    // 4. Update Lore System
-                    if (analysis.detectedEntities && analysis.detectedEntities.length > 0) {
-                        const currentUser = await User.findById(userId); // Re-fetch to get latest lore
+                    if (analysis.detectedEntities?.length > 0) {
+                        const currentUser = await User.findById(userId);
                         if (currentUser) {
                             const loreUpdates: ILore[] = [...currentUser.lore];
                             let loreChanged = false;
-
                             for (const entity of analysis.detectedEntities) {
                                 const existingIndex = loreUpdates.findIndex(l => l.topic.toLowerCase() === entity.name.toLowerCase());
-
                                 if (existingIndex >= 0) {
-                                    // Update Existing
                                     loreUpdates[existingIndex].mentionCount += 1;
                                     loreUpdates[existingIndex].lastMentioned = new Date();
-
-                                    // Unlock check
                                     if (loreUpdates[existingIndex].mentionCount >= 3 && !loreUpdates[existingIndex].isUnlocked) {
                                         loreUpdates[existingIndex].isUnlocked = true;
                                     }
-
-                                    // Smart Merge Description
-                                    const mergedDesc = await mergeLoreDescription(
+                                    loreUpdates[existingIndex].description = await mergeLoreDescription(
                                         loreUpdates[existingIndex].description || "",
                                         `${entity.name} (${entity.category}): ${entity.description}`
                                     );
-                                    loreUpdates[existingIndex].description = mergedDesc;
                                     loreChanged = true;
-
                                 } else {
-                                    // Create New
                                     loreUpdates.push({
-                                        topic: entity.name,
-                                        category: entity.category as any, // 'Villain' | 'Bestie' | ...
-                                        description: entity.description,
-                                        mentionCount: 1,
-                                        isUnlocked: false,
-                                        lastMentioned: new Date()
-                                    } as ILore); // Mongoose will add _id
+                                        topic: entity.name, category: entity.category as any, description: entity.description,
+                                        mentionCount: 1, isUnlocked: false, lastMentioned: new Date()
+                                    } as ILore);
                                     loreChanged = true;
                                 }
                             }
-
-                            if (loreChanged) {
-                                updates.lore = loreUpdates;
-                            }
+                            if (loreChanged) updates.lore = loreUpdates;
                         }
                     }
-
-                    // Apply all updates
-                    await User.findByIdAndUpdate(userId, {
-                        ...updates,
-                        ...atomicUpdates
-                    });
-
-                } catch (err) {
-                    console.error("Advanced Memory Processing Failed:", err);
-                }
+                    await User.findByIdAndUpdate(userId, { ...updates, ...atomicUpdates });
+                } catch (err) { console.error("Memory Processing Failed:", err); }
             })();
-
-        } catch (e) {
-            console.error("Memory Logic Error:", e);
-        }
+        } catch (e) { console.error("Memory Logic Error:", e); }
     }
     
     (res as any).write('data: [DONE]\n\n');
@@ -402,7 +370,6 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
         })).slice(-50) : [];
         (res as any).json(messages);
     } catch (error) {
-        console.error("GET Chat History Failed:", error);
         (res as any).status(500).json({ message: 'Failed to load history' });
     }
 };

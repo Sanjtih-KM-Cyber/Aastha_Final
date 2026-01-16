@@ -7,6 +7,8 @@ interface MessageBubbleProps {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp?: number;
+  reaction?: string;
+  mood?: string;
   onReply?: (content: string) => void;
   onCopy?: (content: string) => void;
   onOpenWidget?: (widget: string, params?: any) => void;
@@ -16,14 +18,20 @@ interface MessageBubbleProps {
   isMobile?: boolean;
 }
 
-// Helper to parse hidden <proposal> tags
+// Helper to parse hidden <proposal> tags AND STRIP LEAKED JSON
 const extractProposals = (text: string) => {
+    // 1. Remove leaked Subconscious JSON block if it appears in text
+    // Matches { "internal_monologue": ... } including newlines, non-greedy
+    let cleanText = text.replace(/\{[\s\S]*?"internal_monologue"[\s\S]*?\}/g, '').trim();
+
+    // Also remove markdown json blocks if they leaked
+    cleanText = cleanText.replace(/```json[\s\S]*?```/g, '').trim();
+
     const proposalRegex = /<proposal tool="([^"]+)" params='([^']+)' reason="([^"]+)" \/>/g;
     const proposals = [];
-    let cleanText = text;
     let match;
 
-    while ((match = proposalRegex.exec(text)) !== null) {
+    while ((match = proposalRegex.exec(cleanText)) !== null) {
         try {
             proposals.push({
                 tool: match[1],
@@ -43,6 +51,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   role,
   content,
   timestamp,
+  reaction,
+  mood,
   onReply,
   onCopy,
   onOpenWidget,
@@ -98,30 +108,84 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       })
     : '';
 
+  // AVATAR MAPPING (Emoji/Icon Proxy for Phase 1)
+  const getMoodEmoji = () => {
+      switch (mood) {
+          case 'happy': return '🌟';
+          case 'sad': return '💙';
+          case 'concerned': return '🥺';
+          case 'sassy': return '🔥';
+          case 'excited': return '⚡';
+          case 'calm': return '🧘';
+          default: return null;
+      }
+  };
+
+  const moodColor = useMemo(() => {
+      switch (mood) {
+          case 'happy': return '#F59E0B'; // Amber
+          case 'sad': return '#3B82F6'; // Blue
+          case 'concerned': return '#8B5CF6'; // Violet
+          case 'sassy': return '#EF4444'; // Red
+          case 'excited': return '#10B981'; // Emerald
+          case 'calm': return '#06B6D4'; // Cyan
+          default: return currentTheme.primaryColor;
+      }
+  }, [mood, currentTheme]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
-      className={`group flex w-full ${
+      className={`group flex w-full relative ${
         isUser ? 'justify-end' : 'justify-start'
       } ${isMobile ? 'mb-10' : 'mb-6'}`}
       onMouseEnter={() => !isMobile && setIsHovered(true)}
       onMouseLeave={() => !isMobile && setIsHovered(false)}
       onClick={() => isMobile && setIsHovered(!isHovered)}
     >
-      {/* Assistant avatar (desktop only) */}
+      {/* Sticky Reaction (User Side) */}
+      <AnimatePresence>
+          {isUser && reaction && (
+              <motion.div
+                  initial={{ scale: 0, opacity: 0, rotate: -20 }}
+                  animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                  className="absolute -left-2 -bottom-2 z-20 text-xl bg-black/60 rounded-full p-1.5 border border-white/20 backdrop-blur-xl shadow-lg"
+              >
+                  {reaction}
+              </motion.div>
+          )}
+      </AnimatePresence>
+
+      {/* Assistant avatar (Dynamic) */}
       {!isUser && (
-        <div className="hidden md:flex flex-shrink-0 mr-3 self-end">
+        <div className="hidden md:flex flex-shrink-0 mr-3 self-end relative">
           <div
-            className="w-8 h-8 rounded-full flex items-center justify-center shadow-lg"
+            className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-500 overflow-hidden border-2"
             style={{
-              background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #111827)`,
-              boxShadow: `0 0 10px ${currentTheme.primaryColor}40`,
+              borderColor: moodColor,
+              boxShadow: `0 0 15px ${moodColor}50`,
+              background: '#000'
             }}
           >
-            <Sparkles size={14} className="text-white" />
+             {/*
+                Phase 2 Placeholder:
+                Ideally <img src={`/avatars/${mood}.png`} />
+                For now, we use a generic icon + badge
+             */}
+             <Sparkles size={18} style={{ color: moodColor }} />
           </div>
+
+          {/* Mood Badge Overlay */}
+          {getMoodEmoji() && (
+             <motion.div
+                initial={{ scale: 0 }} animate={{ scale: 1 }}
+                className="absolute -bottom-1 -right-1 w-5 h-5 bg-black/80 rounded-full border border-white/20 flex items-center justify-center text-[10px]"
+             >
+                 {getMoodEmoji()}
+             </motion.div>
+          )}
         </div>
       )}
 
@@ -147,6 +211,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             text-[15px] md:text-base
             leading-relaxed
             shadow-lg
+            break-words
             ${
               isUser
                 ? 'rounded-[22px] rounded-br-none border border-white/10'
@@ -154,20 +219,23 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             }
             ${!isMobile ? 'backdrop-blur-xl' : 'backdrop-blur-none'}
           `}
-          style={
-            !isUser
+          style={{
+             ...( !isUser
               ? {
                   background: isMobile
                     ? '#111827'
-                    : `linear-gradient(135deg, ${currentTheme.primaryColor}20, #00000070)`,
-                  borderLeft: `3px solid ${currentTheme.primaryColor}`,
+                    : `linear-gradient(135deg, ${moodColor}15, #00000080)`,
+                  borderLeft: `3px solid ${moodColor}`,
                 }
               : {
                   background: isMobile
                     ? '#1f2937'
                     : `linear-gradient(135deg, #1f293780, #11182780)`,
-                }
-          }
+                }),
+                // 🛡️ FIX 1: Strict Mobile Wrapping
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere'
+          }}
         >
           {isThinking ? (
             <div className="flex items-center gap-3 h-6">
@@ -185,7 +253,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               {visibleContent.split('\n').map((line, i) => (
                 <p
                   key={i}
-                  className="break-words whitespace-pre-wrap text-white/95 font-light"
+                  className="whitespace-pre-wrap text-white/95 font-light"
                 >
                   {renderContent(line)}
                 </p>

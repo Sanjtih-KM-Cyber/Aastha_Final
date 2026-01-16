@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Menu, Headphones, AlertCircle, Smile, 
   Mic, MicOff, X, Search, Image as ImageIcon, Plus, Camera,
-  ShieldAlert, Loader2, ChevronDown
+  ShieldAlert, Loader2, ChevronDown, Reply
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
@@ -18,6 +18,7 @@ interface ChatMessage {
   timestamp?: number;
   warning?: string;
   id?: string;
+  reaction?: string; // New field for sticky reaction
 }
 
 interface ChatViewProps {
@@ -97,6 +98,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
+
+  // Subconscious State
+  const [statusDisplay, setStatusDisplay] = useState(currentActivity || 'Online');
+  const [uiAction, setUiAction] = useState<'none' | 'listen' | 'block_widget'>('none');
+  const [currentMood, setCurrentMood] = useState('neutral');
+  const [suggestedChips, setSuggestedChips] = useState<string[]>([]); // New State for Chips
 
   // Media Menu State
   const [showMediaMenu, setShowMediaMenu] = useState(false);
@@ -271,7 +278,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             setTranscript(currentText);
             if (currentText.trim().length > 0) {
                 if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-                silenceTimerRef.current = setTimeout(() => { handleVoiceSend(currentText); }, 1500);
+                // WAIT LONGER: 3.5s patience window (User Request: "Patience")
+                silenceTimerRef.current = setTimeout(() => { handleVoiceSend(currentText); }, 3500);
             }
         }
       };
@@ -301,9 +309,30 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     // @ts-ignore
     if (!window.SpeechRecognition && !window.webkitSpeechRecognition) { setError("Browser not supported."); return; }
     if (isStandardMode) { alert("Voice Mode requires Premium."); return; }
-    if (isVoiceMode) { stopListening(); setIsVoiceMode(false); } else {
-        if (isDictating) { setIsDictating(false); setIsVoiceMode(true); return; }
-        setIsVoiceMode(true); startListening();
+
+    if (isVoiceMode) {
+        // EXITING VOICE MODE
+        stopListening();
+        setIsVoiceMode(false);
+        setTtsEnabled(false); // Auto-disable TTS
+        localStorage.setItem('user_tts_enabled', 'false');
+    } else {
+        // ENTERING VOICE MODE
+        if (isDictating) { setIsDictating(false); }
+
+        setIsVoiceMode(true);
+        setTtsEnabled(true); // Auto-enable TTS
+        localStorage.setItem('user_tts_enabled', 'true');
+
+        // Select Indian Voice if available
+        const voices = window.speechSynthesis.getVoices();
+        const indianVoice = voices.find(v => v.lang.includes('IN') || v.name.includes('India'));
+        if (indianVoice) {
+            setSelectedVoiceURI(indianVoice.voiceURI);
+            localStorage.setItem('user_voice_uri', indianVoice.voiceURI);
+        }
+
+        startListening();
     }
   };
   
@@ -373,6 +402,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
     const tempBotId = `temp-${Date.now()}`;
     
+    // Save the user's message immediately
     setMessages(prev => [
         ...prev, 
         userMsg,
@@ -382,6 +412,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     setInput(''); setAttachedImage(null); setShowEmojiPicker(false); 
     setIsTyping(true); 
     setError(null);
+    setStatusDisplay('Thinking...'); // Reset status
     autoResizeTextarea();
 
     try {
@@ -441,7 +472,33 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             setModelMode(data.meta.mode); 
                             setIsStandardMode(data.meta.mode === 'standard'); 
                         }
-                        if (data.content) {
+
+                        // Handle Hidden Thought
+                        if (data.type === 'thought' && data.content) {
+                            const thought = data.content;
+                            console.log("Subconscious:", thought);
+                            if (thought.status_display) setStatusDisplay(thought.status_display);
+                            if (thought.ui_action) setUiAction(thought.ui_action);
+                            if (thought.mood) setCurrentMood(thought.mood);
+
+                            // Handle Dynamic Suggested Chips
+                            if (thought.suggested_replies && Array.isArray(thought.suggested_replies)) {
+                                setSuggestedChips(thought.suggested_replies);
+                            }
+
+                            if (thought.reaction) {
+                                // Add sticky reaction to USER'S last message
+                                setMessages(prev => prev.map(m => {
+                                    if (m.id === userMsg.id) {
+                                        return { ...m, reaction: thought.reaction };
+                                    }
+                                    return m;
+                                }));
+                            }
+                        }
+
+                        // Handle Content Stream
+                        if (data.content && !data.type) { // Standard content has no type usually, or text
                             aiContentRaw += data.content;
                             const cleanContent = processMagicTags(aiContentRaw);
                             setMessages(prev => prev.map(msg => {
@@ -458,6 +515,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
       
       const cleanFinal = processMagicTags(aiContentRaw);
+
+      // If listen mode, clear any partial text if it was empty/minimal?
+      // Actually, standard content stream will be empty if AI obeyed instructions, so cleanFinal will be empty.
+      // If AI disobeyed and sent text despite 'listen', we show it (better safe).
+
       if ((isVoiceMode || ttsEnabled) && aiContentRaw) speakMessage(cleanFinal);
 
     } catch (error: any) {
@@ -569,6 +631,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         role={msg.role} 
                         content={msg.content} 
                         timestamp={msg.timestamp}
+                        reaction={msg.reaction} // Pass Reaction
+                        mood={currentMood} // Pass Mood for Avatar
                         onReply={() => handleReply(msg.content)} 
                         onCopy={copyToClipboard}
                         onOpenWidget={onOpenWidget}
@@ -671,7 +735,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     {!isSearchOpen && (
                         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/5 shadow-lg">
                             <div className={`w-2 h-2 rounded-full ${currentActivity === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-400 animate-pulse'}`} />
-                            <span className="text-xs font-medium text-white/80 tracking-wide uppercase">{currentActivity === 'Online' ? botName : currentActivity}</span>
+                            <span className="text-xs font-medium text-white/80 tracking-wide uppercase">{statusDisplay}</span>
                         </motion.div>
                     )}
                  </AnimatePresence>
@@ -707,7 +771,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      )}
                  </div>
 
-                 <button id="voice-mode-btn" onClick={toggleVoiceMode} className="shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg bg-black/20 hover:bg-white/10">
+                 <button id="voice-mode-btn" onClick={toggleVoiceMode} className={`shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg ${isVoiceMode ? 'bg-white/20 text-white' : 'bg-black/20 hover:bg-white/10'}`}>
                     <Headphones size={18} />
                  </button>
              </div>
@@ -752,30 +816,62 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  )}
              </AnimatePresence>
 
-             {/* SMART CONTEXT CHIPS */}
-             <div className="overflow-x-auto scrollbar-hide flex gap-2 mb-2 px-1">
-                {(() => {
-                    const hour = new Date().getHours();
-                    const isLateNight = hour >= 23 || hour < 5;
-                    const isNewUser = messages.length <= 2;
+             {/* SMART CONTEXT CHIPS (Redesigned) */}
+             <AnimatePresence>
+             {suggestedChips.length > 0 || messages.length <= 2 ? (
+                <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-x-auto scrollbar-hide flex gap-2 mb-3 px-1 relative pr-8 items-center"
+                >
+                    {(() => {
+                        const hour = new Date().getHours();
+                        const isLateNight = hour >= 23 || hour < 5;
+                        const isNewUser = messages.length <= 2;
 
-                    let chips = ["Roast me", "Inspire me", "Let's jam"];
-                    if (isNewUser) chips = ["Who are you?", "What can you do?", "I'm stressed"];
-                    else if (isLateNight) chips = ["I can't sleep", "Tell me a story", "Play night sounds"];
+                        // Use AI suggestions if available, else fall back to heuristics
+                        let chips = suggestedChips.length > 0 ? suggestedChips : (
+                             isNewUser ? ["Who are you?", "What can you do?", "I'm stressed"] :
+                             isLateNight ? ["I can't sleep", "Tell me a story", "Play night sounds"] :
+                             ["Roast me", "Inspire me", "Let's jam"]
+                        );
 
-                    return chips.map((chip, i) => (
-                        <button
-                            key={i}
-                            onClick={() => handleSend(undefined, chip)}
-                            className="shrink-0 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-xs text-white/70 whitespace-nowrap transition-colors"
-                        >
-                            {chip}
-                        </button>
-                    ));
-                })()}
-             </div>
+                        return chips.map((chip, i) => (
+                            <button
+                                key={i}
+                                onClick={() => handleSend(undefined, chip)}
+                                className="shrink-0 px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/15 text-xs font-medium text-white/90 whitespace-nowrap transition-all shadow-sm backdrop-blur-md"
+                            >
+                                {chip}
+                            </button>
+                        ));
+                    })()}
 
-             <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border border-white/5 p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
+                    {/* Dismiss Button */}
+                    <button
+                        onClick={() => setSuggestedChips([])}
+                        className="sticky right-0 bg-black/60 backdrop-blur-xl p-1.5 rounded-full border border-white/10 text-white/40 hover:text-white hover:bg-white/10 ml-2 shadow-lg"
+                    >
+                        <X size={14} />
+                    </button>
+                </motion.div>
+             ) : null}
+             </AnimatePresence>
+
+            {/* INPUT AREA (MODIFIED FOR LISTEN MODE) */}
+             <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border ${uiAction === 'listen' ? 'border-teal-500/50 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'border-white/5'} p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
+                 {uiAction === 'listen' && (
+                     <div className="absolute -top-8 left-0 right-0 flex justify-center pointer-events-none">
+                         <motion.div
+                             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                             className="bg-teal-500/20 text-teal-200 text-xs px-3 py-1 rounded-full backdrop-blur-md border border-teal-500/30 flex items-center gap-2"
+                         >
+                             <Headphones size={12} /> Listening Mode Active
+                         </motion.div>
+                     </div>
+                 )}
+
                  <div className="flex items-center gap-1 relative">
                      {/* UNIFIED MEDIA BUTTON */}
                      {isMobile ? (
@@ -831,7 +927,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                          value={input} 
                          onChange={handleInput}
                          onKeyDown={handleKeyPress}
-                         placeholder={isDictating ? "Listening..." : "Type a message..."} 
+                         placeholder={isDictating ? "Listening..." : (uiAction === 'listen' ? "I'm listening..." : "Type a message...")}
                          className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base font-light py-3 px-2 resize-none max-h-32 scrollbar-hide"
                          rows={1}
                      />

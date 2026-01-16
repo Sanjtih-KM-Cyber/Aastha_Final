@@ -3,7 +3,7 @@ import { DraggableWindow } from '../layout/DraggableWindow';
 import { 
   Play, Pause, SkipForward, SkipBack, Repeat, Search, 
   Disc, Sparkles, Plus, ListMusic, Lock, X, Music2, Globe, Check, Settings,
-  ArrowUp, ArrowDown, Trash2, Minus, Music, GripVertical
+  ArrowUp, ArrowDown, Trash2, Minus, Music, GripVertical, Mic
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
@@ -188,6 +188,9 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const [isPlaying, setIsPlaying] = useState(false);
   const [queue, setQueue] = useState<Track[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // RADIO HOST STATE (For Future Phase)
+  const [isRadioHostSpeaking, setIsRadioHostSpeaking] = useState(false);
 
   // Persistence: Load on Mount
   useEffect(() => {
@@ -385,9 +388,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
               if (currentIndex < queue.length - 1) {
                   // Move to next song
-                  const nextIndex = currentIndex + 1;
-                  setCurrentIndex(nextIndex);
-                  loadAndPlay(queue[nextIndex]);
+                  triggerNextTrack(currentIndex + 1);
               } else {
                   // This was the last song, stop playback
                   setIsPlaying(false);
@@ -397,22 +398,36 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           // Play Next logic, looping back to start if needed
           if (queue.length > 0) {
               const nextIndex = (currentIndex + 1) % queue.length;
-              setCurrentIndex(nextIndex);
-              loadAndPlay(queue[nextIndex]);
+              triggerNextTrack(nextIndex);
               setCurrentLoopCount(1);
           }
       } else {
           // Loop Mode Off (Normal)
           if (currentIndex < queue.length - 1) {
               const nextIndex = currentIndex + 1;
-              setCurrentIndex(nextIndex);
-              loadAndPlay(queue[nextIndex]);
+              triggerNextTrack(nextIndex);
               setCurrentLoopCount(1);
           } else {
               // End of playlist
               setIsPlaying(false);
           }
       }
+  };
+
+  // --- RADIO HOST MODE HOOK (Placeholder for Phase 4) ---
+  const triggerNextTrack = (nextIndex: number) => {
+      // Logic:
+      // 1. Check if Radio Mode is ON (Future prop/state)
+      // 2. If ON:
+      //    - Set isRadioHostSpeaking(true)
+      //    - Call TTS API with track info
+      //    - Wait for TTS end -> Then loadAndPlay(queue[nextIndex])
+      // 3. If OFF:
+      //    - Immediately loadAndPlay
+
+      // For Phase 1, just pass through:
+      setCurrentIndex(nextIndex);
+      loadAndPlay(queue[nextIndex]);
   };
 
   const loadAndPlay = (track: Track) => {
@@ -426,8 +441,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const playNext = () => {
       if (queue.length === 0) return;
       const nextIndex = (currentIndex + 1) % queue.length;
-      setCurrentIndex(nextIndex);
-      loadAndPlay(queue[nextIndex]);
+      triggerNextTrack(nextIndex);
       setCurrentLoopCount(1); 
   };
 

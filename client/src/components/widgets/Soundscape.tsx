@@ -22,6 +22,7 @@ interface SoundscapeProps {
   zIndex?: number;
   onFocus?: () => void;
   preset?: string; 
+  volume?: number; // Added volume prop
 }
 
 // Updated SOUNDS array to use Vercel Blob URLs
@@ -36,7 +37,7 @@ const SOUNDS = [
   { id: 'birds', label: 'Birds', color: '#FACC15', path: SOUND_URLS.birds }
 ];
 
-export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex, onFocus, preset }) => {
+export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex, onFocus, preset, volume }) => {
   const { currentTheme } = useTheme();
   
   // State
@@ -112,26 +113,33 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
     });
   }, [activeLoops, masterVolume, previewId]);
 
-  // Auto-configure from preset
+  // Auto-configure from preset and volume
   useEffect(() => {
-      if (isOpen && preset) {
-          const soundsToActivate = preset.split(',').map(s => s.trim().toLowerCase());
+      if (isOpen) {
+          if (preset) {
+              const soundsToActivate = preset.split(',').map(s => s.trim().toLowerCase());
 
-          setActiveLoops(prev => {
-              const newState = { ...prev };
-              Object.keys(newState).forEach(k => delete newState[k]);
+              setActiveLoops(prev => {
+                  const newState = { ...prev };
+                  // Don't clear existing if appending? No, preset implies "set to this".
+                  Object.keys(newState).forEach(k => delete newState[k]);
 
-              soundsToActivate.forEach(soundId => {
-                  const match = SOUNDS.find(s => s.id === soundId || s.label.toLowerCase() === soundId);
-                  if (match) {
-                      newState[match.id] = 0.5; 
-                      getAudio(match.id); 
-                  }
+                  soundsToActivate.forEach(soundId => {
+                      const match = SOUNDS.find(s => s.id === soundId || s.label.toLowerCase() === soundId);
+                      if (match) {
+                          newState[match.id] = 0.5;
+                          getAudio(match.id);
+                      }
+                  });
+                  return newState;
               });
-              return newState;
-          });
+          }
+
+          if (volume !== undefined) {
+              setMasterVolume(Math.max(0, Math.min(1, volume)));
+          }
       }
-  }, [isOpen, preset]);
+  }, [isOpen, preset, volume]);
 
   // Cleanup on unmount or close
   useEffect(() => {
