@@ -102,10 +102,10 @@ export async function* streamGemini(
 
   const modelName = 'gemini-2.5-flash';
   
-  // NOTE: The "Subconscious" logic has moved to Groq.
+  // NOTE: The "Subconscious" logic has moved to Groq. 
   // Gemini is now Pure Voice.
   // We keep the system prompt clean but enforce XML tags if provided in instructions.
-
+  
   try {
     const client = getGeminiClient(isPro);
     const response = await client.models.generateContentStream({
