@@ -39,8 +39,8 @@ Your internal "Subconscious" has already analyzed the situation. Your job is to 
 {{diaryContext}}
 
 **Instructions:**
-1. **Tone:** Be grounded, caring, and mature. Avoid repetitive phrases like "sweetheart" unless the moment truly calls for deep affection.
-2. **Style:** Speak naturally. If the user is venting, be concise and supportive. If they are chatting, be engaging.
+1. **Tone:** Be grounded, sweet, caring, and mature. Avoid repetitive phrases like "sweetheart" unless the moment truly calls for deep affection.
+2. **Style:** Speak naturally. If the user is venting, be concise, affectionate and supportive. If they are chatting, be engaging.
 3. **Language:** Reply in the user's language (Romanized) if they initiated it.
 4. **Tool Use:** If the Subconscious decided to use a tool (like 'write_diary'), you must include the XML tag proposal in your output.
    - Example: <proposal tool="diary" params='{"title":"...", "content":"..."}' reason="Drafting your entry." />
@@ -116,7 +116,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     // Limit context for "Brain" to save speed/cost
     const historyWindow: ChatMessage[] = chatSession.messages.slice(-15).map(m => ({
-        role: m.role as 'user' | 'assistant',
+        role: m.role as 'user' | 'assistant' | 'system',
         content: decrypt(m.content)
     }));
 
@@ -143,8 +143,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     `;
 
     // Add current user message to history for the brain
-    const brainHistory = [...historyWindow, { role: 'user', content: newUserMsgContent }];
-
+    const brainHistory: ChatMessage[] = [...historyWindow, { role: 'user', content: newUserMsgContent }];
+    
     // Generate Subconscious Thought
     const subconscious = await generateSubconscious(brainHistory, userContextString, forceReply);
 
@@ -160,7 +160,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         // Stop here. Do not generate text.
         (res as any).write('data: [DONE]\n\n');
         (res as any).end();
-
+        
         // Save the user message (so history isn't lost), but NO assistant reply yet.
         chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
         await chatSession.save();
@@ -169,24 +169,24 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     // B. REPLY MODE -> EXECUTE TOOLS FIRST
     let diaryContext = "";
-
+    
     if (subconscious.tool_calls) {
         for (const tool of subconscious.tool_calls) {
             if (tool.name === 'read_diary') {
                 // Fetch recent diary entries
                 const entries = await Diary.find({ user: userId }).sort({ entryDate: -1 }).limit(5);
-                // Note: Content is encrypted client-side usually (Zero Knowledge).
-                // IF we have the content server-side (legacy or shared key), we use it.
+                // Note: Content is encrypted client-side usually (Zero Knowledge). 
+                // IF we have the content server-side (legacy or shared key), we use it. 
                 // BUT current architecture is Zero Knowledge. The server sees CIPHERTEXT.
                 // WE CANNOT READ DIARY SERVER SIDE unless we have the key.
                 // However, the `Diary` model has `moodKeywords` which ARE unencrypted.
                 // We will feed the metadata and keywords.
-
+                
                 const summaries = entries.map(e => `Date: ${e.entryDate}, Mood: ${e.moodKeywords || 'Unknown'}`);
                 diaryContext += `\nRecent Diary Metadata: ${summaries.join(' | ')}`;
-
+                
                 // If the user *explicitly* asked to read content, we can't do it server-side.
-                // We must instruct the Client to do it via a tool proposal?
+                // We must instruct the Client to do it via a tool proposal? 
                 // Or assume the user context string has what we need?
                 // For now, we use metadata.
             }
@@ -199,7 +199,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
 
     // Select Provider
-    let provider = 'GEMINI';
+    let provider = 'GEMINI'; 
     if (!user.isPro && (user.dailyPremiumUsage || 0) >= 10) {
         provider = 'GROQ';
     } else if (!user.isPro) {
@@ -221,15 +221,20 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     if (subconscious.tool_calls && subconscious.tool_calls.length > 0) {
         const toolInstructions = subconscious.tool_calls.map(t => {
             if (t.name === 'control_widget') return `EXECUTE: <proposal tool="${t.params.widget}" params='${JSON.stringify(t.params.params || t.params)}' reason="Subconscious command" />`;
-            if (t.name === 'write_diary') return `EXECUTE: <proposal tool="diary" params='${JSON.stringify(t.params)}' reason="Drafting diary entry" />`;
+            // Ensure write_diary params are correctly stringified and passed as prompt/content
+            if (t.name === 'write_diary') {
+                 // Map 'content' to 'prompt' or 'content' depending on what Diary.tsx expects. 
+                 // Diary.tsx checks 'title' and 'prompt' (or 'content').
+                 return `EXECUTE: <proposal tool="diary" params='${JSON.stringify(t.params)}' reason="Drafting diary entry" />`;
+            }
             return "";
         }).join('\n');
-        voiceSystemPrompt += `\n\n[MANDATORY COMMANDS]\nThe Brain has commanded you to execute these tools. You MUST include these tags in your output:\n${toolInstructions}`;
+        voiceSystemPrompt += `\n\n[MANDATORY COMMANDS]\nThe Brain has commanded you to execute these tools. You MUST include these exact XML tags in your response (at the end):\n${toolInstructions}`;
     }
 
     // Stream
-    const stream = provider === 'GEMINI'
-        ? streamGemini(brainHistory, voiceSystemPrompt, user.isPro)
+    const stream = provider === 'GEMINI' 
+        ? streamGemini(brainHistory, voiceSystemPrompt, user.isPro) 
         : streamGroq(brainHistory, voiceSystemPrompt);
 
     for await (const chunk of stream) {
@@ -241,21 +246,21 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
     // STEP 4: SAVE & MEMORY
     // =================================================================================
-
+    
     // Save User Msg
-    chatSession.messages.push({
-        role: 'user',
-        content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'),
-        timestamp: new Date()
+    chatSession.messages.push({ 
+        role: 'user', 
+        content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), 
+        timestamp: new Date() 
     });
-
+    
     // Save AI Msg
-    chatSession.messages.push({
-        role: 'assistant',
-        content: encrypt(fullAiResponse),
-        timestamp: new Date()
+    chatSession.messages.push({ 
+        role: 'assistant', 
+        content: encrypt(fullAiResponse), 
+        timestamp: new Date() 
     });
-
+    
     await chatSession.save();
 
     // Memory Update (Background) - Every 5 messages
@@ -267,7 +272,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                 const atomicUpdates: any = {};
 
                 if (analysis.newFacts?.length > 0) atomicUpdates.$addToSet = { facts: { $each: analysis.newFacts } };
-
+                
                 if (analysis.detectedEvents?.length > 0) {
                     const newLoops = analysis.detectedEvents.map(e => ({
                         event: e.name,
@@ -279,7 +284,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                 }
 
                 // Lore updates omitted for brevity but should be here similar to previous controller
-
+                
                 await User.findByIdAndUpdate(userId, { ...updates, ...atomicUpdates });
             } catch (e) {
                 console.error("Memory Error:", e);

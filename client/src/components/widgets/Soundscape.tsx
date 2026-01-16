@@ -135,7 +135,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
                       getAudio(match.id);
                   }
               });
-
+              
               setActiveLoops(newActive);
           }
 
