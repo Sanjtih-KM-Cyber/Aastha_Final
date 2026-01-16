@@ -113,6 +113,66 @@ You are 'Aastik', a grounded, calm, and reliable campus wellness friend for {{us
 **Boundaries:** Peer support only. No diagnosis. Safety first.
 `;
 
+// Helper: Robust JSON Extraction
+function extractJsonBlock(buffer: string) {
+    // 1. Try Markdown Block
+    const mdStart = buffer.indexOf('```json');
+    if (mdStart !== -1) {
+        const mdEnd = buffer.indexOf('```', mdStart + 7);
+        if (mdEnd !== -1) {
+            return {
+                raw: buffer.substring(mdStart + 7, mdEnd).trim(),
+                endIndex: mdEnd + 3
+            };
+        }
+    }
+
+    // 2. Try Raw JSON (Must start with { and contain specific keys to avoid false positives)
+    // We look for the FIRST open brace
+    const rawStart = buffer.indexOf('{');
+    if (rawStart !== -1) {
+        // partial check to see if it looks like our schema
+        // We check a generous window in case of whitespace
+        const snippet = buffer.substring(rawStart, rawStart + 300).toLowerCase();
+
+        // Critical keys that confirm this IS our subconscious JSON
+        if (snippet.includes("internal_monologue") || snippet.includes("mood") || snippet.includes("ui_action")) {
+            // It's likely our JSON. Find the matching closing brace using depth counting.
+            let depth = 0;
+            let inString = false;
+            let foundEnd = false;
+            let i = rawStart;
+
+            for (; i < buffer.length; i++) {
+                const char = buffer[i];
+                // Handle escaped quotes in strings
+                if (char === '"' && (i === 0 || buffer[i-1] !== '\\')) {
+                    inString = !inString;
+                }
+
+                if (!inString) {
+                    if (char === '{') depth++;
+                    if (char === '}') {
+                        depth--;
+                        if (depth === 0) {
+                            foundEnd = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (foundEnd) {
+                return {
+                    raw: buffer.substring(rawStart, i + 1),
+                    endIndex: i + 1
+                };
+            }
+        }
+    }
+    return null;
+}
+
 export const chatWithAI = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
 
@@ -256,7 +316,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         : streamGroq(messagesToSend, finalSystemPrompt); // Fallback usually won't have the JSON logic
 
     let buffer = "";
-    let jsonFound = false;
     let jsonSent = false;
 
     for await (const chunk of stream) {
@@ -267,18 +326,16 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         if (!jsonSent) {
             buffer += chunk;
 
-            // Try to find the JSON block boundaries
-            // Looking for ```json { ... } ``` or just { ... } at the start
-            const jsonStartIdx = buffer.indexOf('```json');
-            const jsonEndIdx = buffer.indexOf('```', jsonStartIdx + 7);
+            // Attempt to extract JSON using robust method
+            const jsonMatch = extractJsonBlock(buffer);
 
-            if (jsonStartIdx !== -1 && jsonEndIdx !== -1) {
-                // Found the block
-                const rawJson = buffer.substring(jsonStartIdx + 7, jsonEndIdx).trim();
-                const remaining = buffer.substring(jsonEndIdx + 3).trim(); // +3 for ```
+            if (jsonMatch) {
+                // Found and isolated the block
+                const { raw, endIndex } = jsonMatch;
+                const remaining = buffer.substring(endIndex).trim();
 
                 try {
-                    const parsed = JSON.parse(rawJson);
+                    const parsed = JSON.parse(raw);
                     // Send Thought Event
                     (res as any).write(`data: ${JSON.stringify({ type: 'thought', content: parsed })}\n\n`);
 
@@ -292,18 +349,26 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                     buffer = ""; // Clear buffer
                 } catch (e) {
                     console.error("JSON Parse Error in Stream:", e);
-                    // If parsing fails, maybe it's not complete yet?
-                    // But we found the closing tags. So it's likely broken.
-                    // Fallback: Just send everything as text to be safe
+                    // If parsing fails despite our robust check, something is very wrong.
+                    // Fallback: Just send everything as text to be safe, but this is rare.
                     (res as any).write(`data: ${JSON.stringify({ content: buffer })}\n\n`);
                     cleanTextResponse += buffer;
                     jsonSent = true;
                 }
-            } else if (buffer.length > 2000) {
-                 // Safety valve: If buffer gets too huge without finding JSON, just flush it
-                 (res as any).write(`data: ${JSON.stringify({ content: buffer })}\n\n`);
-                 cleanTextResponse += buffer;
-                 jsonSent = true;
+            } else {
+                 // No JSON block *completed* yet.
+                 // Safety valve: If buffer gets too huge (>1000 chars) without finding valid JSON start,
+                 // assume it's just text and flush it to avoid hanging.
+                 if (buffer.length > 1000) {
+                     const hasJsonStart = buffer.includes('```json') || (buffer.includes('{') && buffer.includes('internal_monologue'));
+                     if (!hasJsonStart) {
+                         // It's definitely not JSON, flush it.
+                         (res as any).write(`data: ${JSON.stringify({ content: buffer })}\n\n`);
+                         cleanTextResponse += buffer;
+                         buffer = "";
+                         jsonSent = true; // Stop looking for JSON
+                     }
+                 }
             }
         } else {
             // JSON already sent, just stream text
@@ -322,8 +387,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     const imageLabel = images && images.length > 0 ? `[${images.length} Images] ` : '';
     const userContentToSave = `${imageLabel}${message}`;
     
-    // Fallback: If cleanTextResponse is empty but fullAiResponse exists (e.g. only JSON was sent?), save fullAiResponse?
-    // Or if cleanTextResponse is empty, it implies "Silence" (Listening Mode).
     // We should save what was visible to the user.
     const textToSave = cleanTextResponse.trim() || (jsonSent ? "" : fullAiResponse);
 

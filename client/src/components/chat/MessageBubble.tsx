@@ -103,16 +103,29 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     : '';
 
   // AVATAR MAPPING (Emoji/Icon Proxy for Phase 1)
-  const getAvatar = () => {
+  const getMoodEmoji = () => {
       switch (mood) {
-          case 'happy': return '😊';
-          case 'sad': return '😔';
+          case 'happy': return '🌟';
+          case 'sad': return '💙';
           case 'concerned': return '🥺';
-          case 'sassy': return '😏';
-          case 'excited': return '🤩';
-          default: return <Sparkles size={14} className="text-white" />;
+          case 'sassy': return '🔥';
+          case 'excited': return '⚡';
+          case 'calm': return '🧘';
+          default: return null;
       }
   };
+
+  const moodColor = useMemo(() => {
+      switch (mood) {
+          case 'happy': return '#F59E0B'; // Amber
+          case 'sad': return '#3B82F6'; // Blue
+          case 'concerned': return '#8B5CF6'; // Violet
+          case 'sassy': return '#EF4444'; // Red
+          case 'excited': return '#10B981'; // Emerald
+          case 'calm': return '#06B6D4'; // Cyan
+          default: return currentTheme.primaryColor;
+      }
+  }, [mood, currentTheme]);
 
   return (
     <motion.div
@@ -139,19 +152,34 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
       </AnimatePresence>
 
-      {/* Assistant avatar (desktop only) */}
+      {/* Assistant avatar (Dynamic) */}
       {!isUser && (
-        <div className="hidden md:flex flex-shrink-0 mr-3 self-end">
+        <div className="hidden md:flex flex-shrink-0 mr-3 self-end relative">
           <div
-            className="w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all duration-500"
+            className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-500 overflow-hidden border-2"
             style={{
-              background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #111827)`,
-              boxShadow: `0 0 10px ${currentTheme.primaryColor}40`,
+              borderColor: moodColor,
+              boxShadow: `0 0 15px ${moodColor}50`,
+              background: '#000'
             }}
           >
-             {/* If mood is a string (emoji), render text. Else icon. */}
-             {typeof getAvatar() === 'string' ? <span className="text-sm">{getAvatar()}</span> : getAvatar()}
+             {/*
+                Phase 2 Placeholder:
+                Ideally <img src={`/avatars/${mood}.png`} />
+                For now, we use a generic icon + badge
+             */}
+             <Sparkles size={18} style={{ color: moodColor }} />
           </div>
+
+          {/* Mood Badge Overlay */}
+          {getMoodEmoji() && (
+             <motion.div
+                initial={{ scale: 0 }} animate={{ scale: 1 }}
+                className="absolute -bottom-1 -right-1 w-5 h-5 bg-black/80 rounded-full border border-white/20 flex items-center justify-center text-[10px]"
+             >
+                 {getMoodEmoji()}
+             </motion.div>
+          )}
         </div>
       )}
 
@@ -190,8 +218,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               ? {
                   background: isMobile
                     ? '#111827'
-                    : `linear-gradient(135deg, ${currentTheme.primaryColor}20, #00000070)`,
-                  borderLeft: `3px solid ${currentTheme.primaryColor}`,
+                    : `linear-gradient(135deg, ${moodColor}15, #00000080)`,
+                  borderLeft: `3px solid ${moodColor}`,
                 }
               : {
                   background: isMobile

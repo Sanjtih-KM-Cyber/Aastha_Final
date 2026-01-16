@@ -7,6 +7,7 @@ export interface IDiaryEntry extends Document {
   mood?: string;
   moodKeywords?: string;
   tags: string[];
+  entryDate: Date; // NEW: The specific date this entry belongs to (user-selected)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,6 +19,7 @@ const diaryEntrySchema = new Schema<IDiaryEntry>({
   mood: { type: String, required: false },
   moodKeywords: { type: String, required: false }, // Unencrypted keywords for Ghosting Service
   tags: [{ type: String }],
+  entryDate: { type: Date, required: true, default: Date.now, index: true } // Index for fast lookup
 }, {
   timestamps: true
 });
