@@ -104,7 +104,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [uiAction, setUiAction] = useState<'none' | 'listen' | 'block_widget'>('none');
   const [currentMood, setCurrentMood] = useState('neutral');
   const [suggestedChips, setSuggestedChips] = useState<string[]>([]); // New State for Chips
-  
+
   // Patience / Listening Mode State
   const [isWaitingForPermission, setIsWaitingForPermission] = useState(false);
   const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -772,21 +772,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  <AnimatePresence mode="wait">
                     {!isSearchOpen && (
                         isWaitingForPermission ? (
-                             <motion.div 
-                                initial={{ opacity: 0, scale: 0.9, y: -10 }} 
-                                animate={{ opacity: 1, scale: 1, y: 0 }} 
+                             <motion.div
+                                initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.9, y: -10 }}
                                 className="flex items-center gap-3 px-2 py-1.5 rounded-full bg-[#1F2937] border border-white/10 shadow-2xl cursor-pointer"
                              >
                                 <span className="text-xs text-white/80 ml-2 font-medium">Can I reply?</span>
                                 <div className="flex items-center gap-1">
-                                    <button 
+                                    <button
                                         onClick={() => handleSend(undefined, 'PERMISSION_GRANT_REPLY')}
                                         className="p-1 rounded-full bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white transition-colors"
                                     >
                                         <Check size={14} />
                                     </button>
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             setIsWaitingForPermission(false);
                                             // Reset timer to wait another 15s
@@ -800,10 +800,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                 </div>
                              </motion.div>
                         ) : (
-                            <motion.div 
-                                initial={{ opacity: 0, y: -10 }} 
-                                animate={{ opacity: 1, y: 0 }} 
-                                exit={{ opacity: 0, y: -10 }} 
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
                                 className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/5 shadow-lg"
                             >
                                 <div className={`w-2 h-2 rounded-full ${currentActivity === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-400 animate-pulse'}`} />

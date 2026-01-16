@@ -40,7 +40,7 @@ export interface SubconsciousBlock {
 
 // THE BRAIN (Groq Llama 3)
 export const generateSubconscious = async (
-    history: ChatMessage[], 
+    history: ChatMessage[],
     userContext: string,
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
@@ -50,7 +50,7 @@ export const generateSubconscious = async (
     const systemPrompt = `
     You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha (or Aastik).
     Your job is NOT to speak to the user. Your job is to THINK, FEEL, and DECIDE.
-    
+
     User Context:
     ${userContext}
 
@@ -65,13 +65,13 @@ export const generateSubconscious = async (
        - **Music/Jam:** If user asks for songs -> 'control_widget' (jam).
        - **Focus/Pomodoro:** If user wants to focus -> 'control_widget' (pomodoro).
        - **Soundscape:** If user wants background noise -> 'control_widget' (soundscape).
-    
+
     **TOOLS AVAILABLE:**
     - \`write_diary\`: { "title": string, "content": string } (Drafts an entry for the user).
     - \`read_diary\`: { "query": string } (Analyzes past entries).
-    - \`control_widget\`: { 
-         "widget": "jam" | "pomodoro" | "soundscape" | "breathing" | "mood", 
-         "params": object 
+    - \`control_widget\`: {
+         "widget": "jam" | "pomodoro" | "soundscape" | "breathing" | "mood",
+         "params": object
       }
       - Jam Params: { "mood"?: string, "genre"?: string, "year"?: string, "language"?: string }
       - Pomodoro Params: { "mode": "focus"|"break", "focusDuration"?: number, "breakDuration"?: number }
@@ -82,26 +82,27 @@ export const generateSubconscious = async (
       "internal_monologue": "Raw thought process here. E.g., 'He sounds angry. I should tread carefully.'",
       "mood": "happy" | "sad" | "concerned" | "sassy" | "calm" | "excited" | "neutral",
       "status_display": "Short 2-3 word status for the UI pill. E.g., 'Listening...', 'Vibing', 'Concerned'",
-      "ui_action": "listen" | "none", 
+      "ui_action": "listen" | "none",
       "strategy": "reply" | "listen",
       "reaction": "emoji" (e.g. 😟, ❤️, 🔥) - REACTION IS MANDATORY IF STRATEGY IS 'listen',
       "suggested_replies": ["Short phrase 1", "Short phrase 2", "Short phrase 3"] (Max 3 contextual replies for the user to CLICK. Examples: 'I'm sad', 'Tell me more', 'Sure'. NOT questions from you.),
-      "tool_calls": [] 
+      "tool_calls": []
     }
-    
+
     **CRITICAL RULES:**
     - **Mature & Grounded Tone:** Your thoughts should be mature, empathetic, and grounded. Do NOT use excessive pet names like "sweetheart" or "my love". Be a peer/friend, not a melodramatic lover.
     - **User-Centric Chips:** 'suggested_replies' MUST be written from the USER'S perspective (e.g. "I'm feeling better", "What do you think?"). Do NOT write them as questions from you to the user.
     - If strategy is 'listen', 'ui_action' MUST be 'listen'.
+    - If strategy is 'reply', 'ui_action' MUST be 'none'.
     - DO NOT OUTPUT MARKDOWN. OUTPUT RAW JSON.
     `;
 
     // Construct Messages
     const messages: any[] = [
         { role: 'system', content: systemPrompt },
-        ...history.map(m => ({ 
-            role: m.role, 
-            content: typeof m.content === 'string' ? m.content : '[Image/Media]' 
+        ...history.map(m => ({
+            role: m.role,
+            content: typeof m.content === 'string' ? m.content : '[Image/Media]'
         }))
     ];
 
@@ -119,7 +120,14 @@ export const generateSubconscious = async (
         });
 
         const raw = response.choices[0]?.message?.content || "{}";
-        return JSON.parse(raw) as SubconsciousBlock;
+        const parsed = JSON.parse(raw) as SubconsciousBlock;
+
+        // FAILSAFE: Enforce consistency
+        if (parsed.strategy === 'reply') {
+            parsed.ui_action = 'none';
+        }
+
+        return parsed;
 
     } catch (error) {
         console.error("Groq Brain Error:", error);
