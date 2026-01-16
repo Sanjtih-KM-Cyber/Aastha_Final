@@ -224,16 +224,16 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   // --- MANAGER MODE: Auto-Generate Playlist from Params ---
   useEffect(() => {
       if (initialParams && isOpen) {
-          const { mood, genre } = initialParams;
-          if (mood || genre) {
+          const { mood, genre, year, language } = initialParams; // Added year/language
+
+          if (mood || genre || language || year) {
              // Reset UI selections to match manager request
              if (mood) setSelectedMoods([mood]);
              if (genre) setSelectedGenres([genre]);
+             if (language) setSelectedLanguages([language]);
 
-             // Trigger generation immediately
-             // We need to wrap in timeout to ensure state is ready?
-             // Better to call the API function directly with these params.
-             generateVibePlaylist(mood, genre);
+             // Trigger generation immediately with EXTRA params
+             generateVibePlaylist(mood, genre, language, year);
           }
       }
   }, [initialParams, isOpen]);
@@ -566,15 +566,17 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       }
   };
 
-  const generateVibePlaylist = async (overrideMood?: string, overrideGenre?: string) => {
+  // Updated to include Year and Language Override
+  const generateVibePlaylist = async (overrideMood?: string, overrideGenre?: string, overrideLang?: string, overrideYear?: string) => {
       setShowConfigModal(false);
       setIsSearching(true);
       
       // Clear queue explicitly to avoid "stuck" state
       setQueue([]);
 
-      const langsToSend = selectedLanguages.length > 0 ? selectedLanguages : ["English"];
-      
+      let langsToSend = selectedLanguages.length > 0 ? selectedLanguages : ["English"];
+      if (overrideLang) langsToSend = [overrideLang];
+
       const moodsToSend = overrideMood ? [overrideMood] : selectedMoods;
       const genresToSend = overrideGenre ? [overrideGenre] : selectedGenres;
 
@@ -583,6 +585,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               languages: langsToSend,
               moods: moodsToSend,
               genres: genresToSend,
+              year: overrideYear, // Pass year if present
               duration: targetDuration
           });
           
@@ -654,7 +657,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               <span className="text-xs font-bold text-white truncate leading-tight">
                   {currentTrackData?.title || "No Track"}
               </span>
-              <span className="text-[10px] text-white/50 truncate leading-tight">
+              <span className="text-xs text-white/50 truncate leading-tight">
                   {currentTrackData?.artist || "Aastha's Jam"}
               </span>
           </div>

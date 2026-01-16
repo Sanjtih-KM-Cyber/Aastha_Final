@@ -105,6 +105,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [currentMood, setCurrentMood] = useState('neutral');
   const [suggestedChips, setSuggestedChips] = useState<string[]>([]); // New State for Chips
 
+  // Patience / Listening Mode State
+  const [isWaitingForPermission, setIsWaitingForPermission] = useState(false);
+  const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Media Menu State
   const [showMediaMenu, setShowMediaMenu] = useState(false);
 
@@ -150,6 +154,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     });
     return unsubscribe;
   }, [subscribe]);
+
+  // Silence Timer Logic (Listening Mode)
+  useEffect(() => {
+    if (uiAction === 'listen') {
+        // Reset timer on any input or message
+        if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+        setIsWaitingForPermission(false);
+
+        silenceTimeoutRef.current = setTimeout(() => {
+            setIsWaitingForPermission(true);
+        }, 15000); // 15 seconds silence
+    } else {
+        setIsWaitingForPermission(false);
+        if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+    }
+    return () => {
+        if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+    };
+  }, [uiAction, messages, input]); // Reset on new messages or typing
 
   useEffect(() => {
       if (user) {
@@ -421,6 +444,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         if (storedInfo) token = JSON.parse(storedInfo).token;
       } catch(e) {}
 
+      // ADDED: Permission Grant Flag
+      const isPermissionGrant = finalContent === 'PERMISSION_GRANT_REPLY';
+      const actualContent = isPermissionGrant ? "Please reply now." : finalContent;
+
       const streamResponse = await fetch(getApiUrl('/chat'), {
         method: 'POST',
         headers: { 
@@ -429,8 +456,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         },
         credentials: 'include', 
         body: JSON.stringify({
-            message: finalContent,
-            images: attachedImage ? [attachedImage] : []
+            message: actualContent,
+            images: attachedImage ? [attachedImage] : [],
+            forceReply: isPermissionGrant // Tell backend to override listening mode
         }),
       });
 
@@ -486,13 +514,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             }
 
                             if (thought.reaction) {
-                                // Add sticky reaction to USER'S last message
-                                setMessages(prev => prev.map(m => {
-                                    if (m.id === userMsg.id) {
-                                        return { ...m, reaction: thought.reaction };
+                                // Add sticky reaction to USER'S last message (or the one we replied to)
+                                // If we are granting permission, we might want to react to the *previous* user msg.
+                                // For now, simplest is react to the most recent user msg in the local state.
+                                setMessages(prev => {
+                                    // Find last user message
+                                    const reversed = [...prev].reverse();
+                                    const lastUserMsg = reversed.find(m => m.role === 'user');
+                                    if (lastUserMsg) {
+                                        return prev.map(m => m.id === lastUserMsg.id ? { ...m, reaction: thought.reaction } : m);
                                     }
-                                    return m;
-                                }));
+                                    return prev;
+                                });
                             }
                         }
 
@@ -729,13 +762,48 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  </button>
              </div>
 
-             <div className="absolute left-1/2 -translate-x-1/2 z-10 flex items-center justify-center w-full pointer-events-none">
-                 <AnimatePresence>
+             <div className="absolute left-1/2 -translate-x-1/2 z-10 flex items-center justify-center w-full pointer-events-auto">
+                 <AnimatePresence mode="wait">
                     {!isSearchOpen && (
-                        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/5 shadow-lg">
-                            <div className={`w-2 h-2 rounded-full ${currentActivity === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-400 animate-pulse'}`} />
-                            <span className="text-xs font-medium text-white/80 tracking-wide uppercase">{statusDisplay}</span>
-                        </motion.div>
+                        isWaitingForPermission ? (
+                             <motion.div
+                                initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                                className="flex items-center gap-3 px-2 py-1.5 rounded-full bg-[#1F2937] border border-white/10 shadow-2xl cursor-pointer"
+                             >
+                                <span className="text-xs text-white/80 ml-2 font-medium">Can I reply?</span>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => handleSend(undefined, 'PERMISSION_GRANT_REPLY')}
+                                        className="p-1 rounded-full bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white transition-colors"
+                                    >
+                                        <Check size={14} />
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setIsWaitingForPermission(false);
+                                            // Reset timer to wait another 15s
+                                            if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+                                            silenceTimeoutRef.current = setTimeout(() => setIsWaitingForPermission(true), 15000);
+                                        }}
+                                        className="p-1 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                             </motion.div>
+                        ) : (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/5 shadow-lg"
+                            >
+                                <div className={`w-2 h-2 rounded-full ${currentActivity === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-400 animate-pulse'}`} />
+                                <span className="text-xs font-medium text-white/80 tracking-wide uppercase">{statusDisplay}</span>
+                            </motion.div>
+                        )
                     )}
                  </AnimatePresence>
              </div>

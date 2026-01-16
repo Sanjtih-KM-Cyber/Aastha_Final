@@ -10,6 +10,11 @@ interface PomodoroWidgetProps {
   onClose: () => void;
   zIndex?: number;
   onFocus?: () => void;
+  initialParams?: {
+      mode?: 'focus' | 'break';
+      focusDuration?: number;
+      breakDuration?: number;
+  };
 }
 
 const MESSAGES = {
@@ -43,7 +48,7 @@ const MESSAGES = {
   ]
 };
 
-export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
+export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose, zIndex, onFocus, initialParams }) => {
   const { currentTheme } = useTheme();
   const { setPreventAutoLock } = useAuth();
   
@@ -76,6 +81,26 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
       setPreventAutoLock('pomodoro-widget', isActive);
       return () => setPreventAutoLock('pomodoro-widget', false);
   }, [isActive, setPreventAutoLock]);
+
+  // GOD MODE: Apply AI Instructions
+  useEffect(() => {
+      if (isOpen && initialParams) {
+          if (initialParams.focusDuration) setFocusDuration(initialParams.focusDuration);
+          if (initialParams.breakDuration) setBreakDuration(initialParams.breakDuration);
+
+          if (initialParams.mode) {
+              setMode(initialParams.mode);
+              // Auto-start if instructed? Or just prep?
+              // Let's prep it.
+              const duration = initialParams.mode === 'focus'
+                 ? (initialParams.focusDuration || focusDuration)
+                 : (initialParams.breakDuration || breakDuration);
+
+              setTimeLeft(duration * 60);
+              setIsActive(true); // Auto-start for seamless experience
+          }
+      }
+  }, [isOpen, initialParams]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
