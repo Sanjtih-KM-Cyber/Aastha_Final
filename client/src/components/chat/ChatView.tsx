@@ -18,6 +18,7 @@ interface ChatMessage {
   timestamp?: number;
   warning?: string;
   id?: string;
+  reaction?: string; // New field for sticky reaction
 }
 
 interface ChatViewProps {
@@ -97,6 +98,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
+
+  // Subconscious State
+  const [statusDisplay, setStatusDisplay] = useState(currentActivity || 'Online');
+  const [uiAction, setUiAction] = useState<'none' | 'listen' | 'block_widget'>('none');
+  const [currentMood, setCurrentMood] = useState('neutral');
 
   // Media Menu State
   const [showMediaMenu, setShowMediaMenu] = useState(false);
@@ -373,6 +379,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
     const tempBotId = `temp-${Date.now()}`;
     
+    // Save the user's message immediately
     setMessages(prev => [
         ...prev, 
         userMsg,
@@ -382,6 +389,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     setInput(''); setAttachedImage(null); setShowEmojiPicker(false); 
     setIsTyping(true); 
     setError(null);
+    setStatusDisplay('Thinking...'); // Reset status
     autoResizeTextarea();
 
     try {
@@ -441,7 +449,27 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             setModelMode(data.meta.mode); 
                             setIsStandardMode(data.meta.mode === 'standard'); 
                         }
-                        if (data.content) {
+
+                        // Handle Hidden Thought
+                        if (data.type === 'thought' && data.content) {
+                            const thought = data.content;
+                            console.log("Subconscious:", thought);
+                            if (thought.status_display) setStatusDisplay(thought.status_display);
+                            if (thought.ui_action) setUiAction(thought.ui_action);
+                            if (thought.mood) setCurrentMood(thought.mood);
+                            if (thought.reaction) {
+                                // Add sticky reaction to USER'S last message
+                                setMessages(prev => prev.map(m => {
+                                    if (m.id === userMsg.id) {
+                                        return { ...m, reaction: thought.reaction };
+                                    }
+                                    return m;
+                                }));
+                            }
+                        }
+
+                        // Handle Content Stream
+                        if (data.content && !data.type) { // Standard content has no type usually, or text
                             aiContentRaw += data.content;
                             const cleanContent = processMagicTags(aiContentRaw);
                             setMessages(prev => prev.map(msg => {
@@ -458,6 +486,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
       
       const cleanFinal = processMagicTags(aiContentRaw);
+
+      // If listen mode, clear any partial text if it was empty/minimal?
+      // Actually, standard content stream will be empty if AI obeyed instructions, so cleanFinal will be empty.
+      // If AI disobeyed and sent text despite 'listen', we show it (better safe).
+
       if ((isVoiceMode || ttsEnabled) && aiContentRaw) speakMessage(cleanFinal);
 
     } catch (error: any) {
@@ -569,6 +602,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         role={msg.role} 
                         content={msg.content} 
                         timestamp={msg.timestamp}
+                        reaction={msg.reaction} // Pass Reaction
+                        mood={currentMood} // Pass Mood for Avatar
                         onReply={() => handleReply(msg.content)} 
                         onCopy={copyToClipboard}
                         onOpenWidget={onOpenWidget}
@@ -671,7 +706,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     {!isSearchOpen && (
                         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/5 shadow-lg">
                             <div className={`w-2 h-2 rounded-full ${currentActivity === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-400 animate-pulse'}`} />
-                            <span className="text-xs font-medium text-white/80 tracking-wide uppercase">{currentActivity === 'Online' ? botName : currentActivity}</span>
+                            <span className="text-xs font-medium text-white/80 tracking-wide uppercase">{statusDisplay}</span>
                         </motion.div>
                     )}
                  </AnimatePresence>
@@ -775,7 +810,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 })()}
              </div>
 
-             <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border border-white/5 p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
+            {/* INPUT AREA (MODIFIED FOR LISTEN MODE) */}
+             <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border ${uiAction === 'listen' ? 'border-teal-500/50 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'border-white/5'} p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
+                 {uiAction === 'listen' && (
+                     <div className="absolute -top-8 left-0 right-0 flex justify-center pointer-events-none">
+                         <motion.div
+                             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                             className="bg-teal-500/20 text-teal-200 text-xs px-3 py-1 rounded-full backdrop-blur-md border border-teal-500/30 flex items-center gap-2"
+                         >
+                             <Headphones size={12} /> Listening Mode Active
+                         </motion.div>
+                     </div>
+                 )}
+
                  <div className="flex items-center gap-1 relative">
                      {/* UNIFIED MEDIA BUTTON */}
                      {isMobile ? (
@@ -831,7 +878,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                          value={input} 
                          onChange={handleInput}
                          onKeyDown={handleKeyPress}
-                         placeholder={isDictating ? "Listening..." : "Type a message..."} 
+                         placeholder={isDictating ? "Listening..." : (uiAction === 'listen' ? "I'm listening..." : "Type a message...")}
                          className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base font-light py-3 px-2 resize-none max-h-32 scrollbar-hide"
                          rows={1}
                      />

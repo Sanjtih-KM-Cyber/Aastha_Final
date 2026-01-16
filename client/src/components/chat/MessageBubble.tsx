@@ -7,6 +7,8 @@ interface MessageBubbleProps {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp?: number;
+  reaction?: string;
+  mood?: string;
   onReply?: (content: string) => void;
   onCopy?: (content: string) => void;
   onOpenWidget?: (widget: string, params?: any) => void;
@@ -43,6 +45,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   role,
   content,
   timestamp,
+  reaction,
+  mood,
   onReply,
   onCopy,
   onOpenWidget,
@@ -98,29 +102,55 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       })
     : '';
 
+  // AVATAR MAPPING (Emoji/Icon Proxy for Phase 1)
+  const getAvatar = () => {
+      switch (mood) {
+          case 'happy': return '😊';
+          case 'sad': return '😔';
+          case 'concerned': return '🥺';
+          case 'sassy': return '😏';
+          case 'excited': return '🤩';
+          default: return <Sparkles size={14} className="text-white" />;
+      }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
-      className={`group flex w-full ${
+      className={`group flex w-full relative ${
         isUser ? 'justify-end' : 'justify-start'
       } ${isMobile ? 'mb-10' : 'mb-6'}`}
       onMouseEnter={() => !isMobile && setIsHovered(true)}
       onMouseLeave={() => !isMobile && setIsHovered(false)}
       onClick={() => isMobile && setIsHovered(!isHovered)}
     >
+      {/* Sticky Reaction (User Side) */}
+      <AnimatePresence>
+          {isUser && reaction && (
+              <motion.div
+                  initial={{ scale: 0, opacity: 0, rotate: -20 }}
+                  animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                  className="absolute -left-2 -bottom-2 z-20 text-xl bg-white/10 rounded-full p-1 border border-white/20 backdrop-blur-md shadow-lg"
+              >
+                  {reaction}
+              </motion.div>
+          )}
+      </AnimatePresence>
+
       {/* Assistant avatar (desktop only) */}
       {!isUser && (
         <div className="hidden md:flex flex-shrink-0 mr-3 self-end">
           <div
-            className="w-8 h-8 rounded-full flex items-center justify-center shadow-lg"
+            className="w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all duration-500"
             style={{
               background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #111827)`,
               boxShadow: `0 0 10px ${currentTheme.primaryColor}40`,
             }}
           >
-            <Sparkles size={14} className="text-white" />
+             {/* If mood is a string (emoji), render text. Else icon. */}
+             {typeof getAvatar() === 'string' ? <span className="text-sm">{getAvatar()}</span> : getAvatar()}
           </div>
         </div>
       )}
@@ -147,6 +177,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             text-[15px] md:text-base
             leading-relaxed
             shadow-lg
+            break-words
             ${
               isUser
                 ? 'rounded-[22px] rounded-br-none border border-white/10'
@@ -154,8 +185,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             }
             ${!isMobile ? 'backdrop-blur-xl' : 'backdrop-blur-none'}
           `}
-          style={
-            !isUser
+          style={{
+             ...( !isUser
               ? {
                   background: isMobile
                     ? '#111827'
@@ -166,8 +197,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   background: isMobile
                     ? '#1f2937'
                     : `linear-gradient(135deg, #1f293780, #11182780)`,
-                }
-          }
+                }),
+                // 🛡️ FIX 1: Strict Mobile Wrapping
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere'
+          }}
         >
           {isThinking ? (
             <div className="flex items-center gap-3 h-6">
@@ -185,7 +219,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               {visibleContent.split('\n').map((line, i) => (
                 <p
                   key={i}
-                  className="break-words whitespace-pre-wrap text-white/95 font-light"
+                  className="whitespace-pre-wrap text-white/95 font-light"
                 >
                   {renderContent(line)}
                 </p>
