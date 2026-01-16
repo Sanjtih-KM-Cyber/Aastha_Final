@@ -116,7 +116,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     // Limit context for "Brain" to save speed/cost
     const historyWindow: ChatMessage[] = chatSession.messages.slice(-15).map(m => ({
-        role: m.role as 'user' | 'assistant',
+        role: m.role as 'user' | 'assistant' | 'system',
         content: decrypt(m.content)
     }));
 
@@ -143,7 +143,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     `;
 
     // Add current user message to history for the brain
-    const brainHistory = [...historyWindow, { role: 'user', content: newUserMsgContent }];
+    const brainHistory: ChatMessage[] = [...historyWindow, { role: 'user', content: newUserMsgContent }];
 
     // Generate Subconscious Thought
     const subconscious = await generateSubconscious(brainHistory, userContextString, forceReply);
@@ -221,10 +221,15 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     if (subconscious.tool_calls && subconscious.tool_calls.length > 0) {
         const toolInstructions = subconscious.tool_calls.map(t => {
             if (t.name === 'control_widget') return `EXECUTE: <proposal tool="${t.params.widget}" params='${JSON.stringify(t.params.params || t.params)}' reason="Subconscious command" />`;
-            if (t.name === 'write_diary') return `EXECUTE: <proposal tool="diary" params='${JSON.stringify(t.params)}' reason="Drafting diary entry" />`;
+            // Ensure write_diary params are correctly stringified and passed as prompt/content
+            if (t.name === 'write_diary') {
+                 // Map 'content' to 'prompt' or 'content' depending on what Diary.tsx expects.
+                 // Diary.tsx checks 'title' and 'prompt' (or 'content').
+                 return `EXECUTE: <proposal tool="diary" params='${JSON.stringify(t.params)}' reason="Drafting diary entry" />`;
+            }
             return "";
         }).join('\n');
-        voiceSystemPrompt += `\n\n[MANDATORY COMMANDS]\nThe Brain has commanded you to execute these tools. You MUST include these tags in your output:\n${toolInstructions}`;
+        voiceSystemPrompt += `\n\n[MANDATORY COMMANDS]\nThe Brain has commanded you to execute these tools. You MUST include these exact XML tags in your response (at the end):\n${toolInstructions}`;
     }
 
     // Stream

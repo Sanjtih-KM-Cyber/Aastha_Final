@@ -85,7 +85,7 @@ export const generateSubconscious = async (
       "ui_action": "listen" | "none",
       "strategy": "reply" | "listen",
       "reaction": "emoji" (e.g. 😟, ❤️, 🔥) - REACTION IS MANDATORY IF STRATEGY IS 'listen',
-      "suggested_replies": ["Short phrase 1", "Short phrase 2", "Short phrase 3"] (Max 3 contextual replies for the user to click)
+      "suggested_replies": ["Short phrase 1", "Short phrase 2", "Short phrase 3"] (Max 3 contextual replies for the user to CLICK. Examples: 'I'm sad', 'Tell me more', 'Sure'. NOT questions from you.),
       "tool_calls": []
     }
 

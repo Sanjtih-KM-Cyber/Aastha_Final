@@ -505,7 +505,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             const thought = data.content;
                             console.log("Subconscious:", thought);
                             if (thought.status_display) setStatusDisplay(thought.status_display);
-                            if (thought.ui_action) setUiAction(thought.ui_action);
+                            if (thought.ui_action) {
+                                setUiAction(thought.ui_action);
+                                // If listening, remove the optimistic bot bubble so it doesn't look like an empty message
+                                if (thought.ui_action === 'listen') {
+                                    setMessages(prev => prev.filter(m => m.id !== tempBotId));
+                                }
+                            }
                             if (thought.mood) setCurrentMood(thought.mood);
 
                             // Handle Dynamic Suggested Chips
