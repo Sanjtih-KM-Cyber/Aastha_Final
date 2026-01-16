@@ -38,18 +38,14 @@ export interface SubconsciousBlock {
     }[];
 }
 
-// ============================================================================
-// 1. THE BRAIN (Subconscious / Analysis)
-// Uses Llama 3.3 70B for high-intelligence reasoning and decision making.
-// ============================================================================
+// THE BRAIN (Groq Llama 3)
 export const generateSubconscious = async (
     history: ChatMessage[], 
     userContext: string,
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
     const client = getGroqClient();
-    // UPGRADED MODEL: Uses 70B for better "God Mode" reasoning
-    const model = "llama-3.3-70b-versatile"; 
+    const model = "llama-3.1-8b-instant";
 
     const systemPrompt = `
     You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha (or Aastik).
@@ -61,8 +57,8 @@ export const generateSubconscious = async (
     **CORE OBJECTIVES:**
     1. **Analyze Mood:** How is the user feeling?
     2. **Decide Strategy:** Should we TALK now ('reply') or just LISTEN ('listen')?
-       - If user sends short bursts, venting, or incomplete thoughts -> 'listen'.
-       - If user asks a question or expects an answer -> 'reply'.
+       - **'listen'**: ONLY if user is venting, emotional, crying, or typing long paragraphs about their feelings.
+       - **'reply'**: For greetings ("Hey", "Hi"), questions, casual chat, or if the user expects an answer.
        - If 'forceReply' is true -> ALWAYS 'reply'.
     3. **Manage Widgets (God Mode):** You have FULL control. Use 'tool_calls' to control widgets.
        - **Diary:** If user wants to write/log something -> 'write_diary'. If user asks about past -> 'read_diary'.
@@ -94,9 +90,9 @@ export const generateSubconscious = async (
     }
     
     **CRITICAL RULES:**
-    - **Mature & Grounded Tone:** Your thoughts should be mature. Do not be overly "bubbly". Be real.
+    - **Mature & Grounded Tone:** Your thoughts should be mature, empathetic, and grounded. Do NOT use excessive pet names like "sweetheart" or "my love". Be a peer/friend, not a melodramatic lover.
+    - **User-Centric Chips:** 'suggested_replies' MUST be written from the USER'S perspective (e.g. "I'm feeling better", "What do you think?"). Do NOT write them as questions from you to the user.
     - If strategy is 'listen', 'ui_action' MUST be 'listen'.
-    - If user is venting/typing fast, set strategy='listen' and reaction='👀' or '👂'.
     - DO NOT OUTPUT MARKDOWN. OUTPUT RAW JSON.
     `;
 
@@ -118,7 +114,7 @@ export const generateSubconscious = async (
             messages: messages,
             model: model,
             temperature: 0.6,
-            max_tokens: 1000, // Increased for 70B reasoning
+            max_tokens: 500,
             response_format: { type: "json_object" }
         });
 
@@ -141,10 +137,7 @@ export const generateSubconscious = async (
     }
 };
 
-// ============================================================================
-// 2. THE VOICE (Speech Generation)
-// Uses Llama 3.1 8B Instant for fast, empathetic streaming (fallback for Gemini).
-// ============================================================================
+// THE VOICE (Standard Mode fallback or specific tasks)
 export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
   // 1. Check for images (Groq Llama 3 is text-only usually)
   const hasImage = history.some(msg => Array.isArray(msg.content) && msg.content.some(c => c.type === 'image_url'));
@@ -154,7 +147,7 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       return;
   }
 
-  const model = "llama-3.1-8b-instant"; // Fast for streaming speech
+  const model = "llama-3.1-8b-instant";
   const messages: any[] = [
       { role: 'system', content: systemPrompt }
   ];
@@ -163,7 +156,6 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       if (typeof msg.content === 'string') {
           messages.push({ role: msg.role, content: msg.content });
       } else {
-          // If content is array (but no images found earlier), extract just the text parts
           const textPart = (msg.content as any[]).find(c => c.type === 'text')?.text || "";
           if (textPart) messages.push({ role: msg.role, content: textPart });
       }
