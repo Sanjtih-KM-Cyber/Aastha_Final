@@ -65,12 +65,6 @@ You are 'Aastha', a calm, empathetic, and relatable campus wellness friend for {
     * <proposal tool="soundscape" params='{"preset":"rain"}' reason="Cozy vibes." />
     * <proposal tool="breathing" params='{"mode":"Relax"}' reason="Calm down." />
     * <proposal tool="jam" params='{"mood":"sad", "genre":"lo-fi"}' reason="Sad lo-fi might help." />
-    * <proposal tool="diary" params='{"title":"Vent Session", "prompt":"..."}' reason="Write it down." />
-    * <proposal tool="mood" params='{}' reason="Track this mood." />
-    * <proposal tool="pomodoro" params='{"mode":"Focus"}' reason="Let's focus." />
-    * <proposal tool="soundscape" params='{"preset":"rain"}' reason="Cozy vibes." />
-    * <proposal tool="breathing" params='{"mode":"Relax"}' reason="Calm down." />
-    * <proposal tool="jam" params='{"mood":"sad", "genre":"lo-fi"}' reason="Sad lo-fi might help." />
 
 **Memory:** {{userFacts}}
 **Boundaries:** Peer support only. No diagnosis. Safety first.
@@ -99,7 +93,7 @@ You are 'Aastik', a grounded, calm, and reliable campus wellness friend for {{us
 - **Formatting:** Keep replies to 2-4 sentences (UNLESS the user needs deep support). Use emojis sparingly but effectively (👍, 👊, 🧘‍♂️).
 
 **Interactive Modes:**
-- **Breathing Exercise:** 1. Offer: "Alright, let's pause for a second. Find a comfy spot. Close your eyes. Take a deep breath in through the nose... hold it... and out through the mouth. Let's reset together, yeah?"
+- **Breathing Exercise:** 1. Offer: "Alright, let's pause for a second. Find a comfortable spot, close your eyes, and let's take a deep breath in through the nose... hold it... and out through the mouth. Let's reset together, yeah?"
   2. Start: If confirmed, reply ONLY: <start_breathing_exercise/>
 - **Post-Breathing:** Ask how they feel.
 
@@ -144,6 +138,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
   (res as any).setHeader('Connection', 'keep-alive');
 
   let fullAiResponse = "";
+  let cleanTextResponse = ""; // For saving to DB (without JSON)
 
   try {
     const user = await User.findById(userId);
@@ -243,11 +238,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     if (pendingEvents.length > 0) {
         const event = pendingEvents[0]; // Take the first one
-
         const eventDateStr = new Date(event.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-
         const injection = `\n\n[SYSTEM ALERT: ACTIVE MEMORY TRIGGER] The user recently had this event: "${event.event}" on ${eventDateStr}. MANDATORY: Your FIRST sentence must be asking how this went.`;
-
         finalSystemPrompt += injection;
 
         // Mark as completed immediately to prevent loops
@@ -258,25 +250,86 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         );
     }
 
-    // 6. Start Streaming
+    // 6. Start Streaming with Subconscious Parsing
     const stream = provider === 'GEMINI' 
         ? streamGemini(messagesToSend, finalSystemPrompt, user.isPro) 
-        : streamGroq(messagesToSend, finalSystemPrompt);
+        : streamGroq(messagesToSend, finalSystemPrompt); // Fallback usually won't have the JSON logic
+
+    let buffer = "";
+    let jsonFound = false;
+    let jsonSent = false;
 
     for await (const chunk of stream) {
-        if (chunk) {
-            fullAiResponse += chunk;
+        if (!chunk) continue;
+
+        fullAiResponse += chunk; // Keep raw for analysis if needed, but we save clean text
+
+        if (!jsonSent) {
+            buffer += chunk;
+
+            // Try to find the JSON block boundaries
+            // Looking for ```json { ... } ``` or just { ... } at the start
+            const jsonStartIdx = buffer.indexOf('```json');
+            const jsonEndIdx = buffer.indexOf('```', jsonStartIdx + 7);
+
+            if (jsonStartIdx !== -1 && jsonEndIdx !== -1) {
+                // Found the block
+                const rawJson = buffer.substring(jsonStartIdx + 7, jsonEndIdx).trim();
+                const remaining = buffer.substring(jsonEndIdx + 3).trim(); // +3 for ```
+
+                try {
+                    const parsed = JSON.parse(rawJson);
+                    // Send Thought Event
+                    (res as any).write(`data: ${JSON.stringify({ type: 'thought', content: parsed })}\n\n`);
+
+                    // Send remaining text if any
+                    if (remaining) {
+                        (res as any).write(`data: ${JSON.stringify({ content: remaining })}\n\n`);
+                        cleanTextResponse += remaining;
+                    }
+
+                    jsonSent = true;
+                    buffer = ""; // Clear buffer
+                } catch (e) {
+                    console.error("JSON Parse Error in Stream:", e);
+                    // If parsing fails, maybe it's not complete yet?
+                    // But we found the closing tags. So it's likely broken.
+                    // Fallback: Just send everything as text to be safe
+                    (res as any).write(`data: ${JSON.stringify({ content: buffer })}\n\n`);
+                    cleanTextResponse += buffer;
+                    jsonSent = true;
+                }
+            } else if (buffer.length > 2000) {
+                 // Safety valve: If buffer gets too huge without finding JSON, just flush it
+                 (res as any).write(`data: ${JSON.stringify({ content: buffer })}\n\n`);
+                 cleanTextResponse += buffer;
+                 jsonSent = true;
+            }
+        } else {
+            // JSON already sent, just stream text
             (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+            cleanTextResponse += chunk;
         }
     }
 
-    // 7. Save History
+    // If stream ends and we never found JSON (but have buffer), flush it
+    if (!jsonSent && buffer) {
+        (res as any).write(`data: ${JSON.stringify({ content: buffer })}\n\n`);
+        cleanTextResponse += buffer;
+    }
+
+    // 7. Save History (Save CLEAN text only)
     const imageLabel = images && images.length > 0 ? `[${images.length} Images] ` : '';
     const userContentToSave = `${imageLabel}${message}`;
     
-    if (fullAiResponse.trim().length > 0 || userContentToSave.trim().length > 0) {
+    // Fallback: If cleanTextResponse is empty but fullAiResponse exists (e.g. only JSON was sent?), save fullAiResponse?
+    // Or if cleanTextResponse is empty, it implies "Silence" (Listening Mode).
+    // We should save what was visible to the user.
+    const textToSave = cleanTextResponse.trim() || (jsonSent ? "" : fullAiResponse);
+
+    if (textToSave.length > 0 || userContentToSave.trim().length > 0) {
         chatSession.messages.push({ role: 'user', content: encrypt(userContentToSave), timestamp: new Date() });
-        chatSession.messages.push({ role: 'assistant', content: encrypt(fullAiResponse), timestamp: new Date() });
+        chatSession.messages.push({ role: 'assistant', content: encrypt(textToSave), timestamp: new Date() });
         await chatSession.save();
     }
 

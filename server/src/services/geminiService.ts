@@ -58,6 +58,14 @@ const getGeminiClient = (isPro: boolean = false) => {
   return new GoogleGenAI({ apiKey: randomKey });
 };
 
+export interface SubconsciousBlock {
+    internal_monologue: string;
+    mood: 'happy' | 'sad' | 'concerned' | 'sassy' | 'calm' | 'excited' | 'neutral';
+    status_display: string;
+    ui_action: 'none' | 'listen' | 'block_widget';
+    reaction: string | null;
+}
+
 // ==========================================
 // 2. CHAT STREAMING (Adapter for Controller)
 // ==========================================
@@ -93,14 +101,50 @@ export async function* streamGemini(
 
   const modelName = 'gemini-2.5-flash';
   
+  // Inject the Subconscious JSON requirement into the system prompt
+  const enhancedSystemPrompt = `
+    ${systemPrompt}
+
+    [CORE BEHAVIOR UPDATE: THE SUBCONSCIOUS MIND]
+    You are no longer just a text bot. You are a digital entity with a subconscious.
+    Before EVERY text response, you must "think" and output a hidden JSON block representing your internal state.
+
+    [OUTPUT FORMAT]
+    You must start your response with exactly this JSON block, followed by a newline, then your visible text.
+    \`\`\`json
+    {
+      "internal_monologue": "Raw thought process here. E.g., 'He sounds angry. I should tread carefully.'",
+      "mood": "happy" | "sad" | "concerned" | "sassy" | "calm" | "excited" | "neutral",
+      "status_display": "Short 2-3 word status for the UI pill. E.g., 'Listening...', 'Vibing', 'Concerned'",
+      "ui_action": "none" | "listen" | "block_widget",
+      "reaction": "emoji_char" or null (The emoji to stick to the user's message)
+    }
+    \`\`\`
+
+    [THE 3-TURN RULE (SLOW COMPANION)]
+    1. DO NOT solve problems immediately.
+    2. Turn 1: Acknowledge & Validate. ("I hear you. That sounds tough.")
+    3. Turn 2: Explore & Deepen. ("What made you feel that way?")
+    4. Turn 3: Only offer advice if asked or if the user is stuck.
+
+    [RANT MODE TRIGGER]
+    If the user is sending long, emotional text or rapid messages expressing distress:
+    1. Set "ui_action": "listen".
+    2. Set "status_display": "Listening intently 👂".
+    3. Keep your text response very brief (or empty) to let them vent. Use the "reaction" field (heart/sad) to validate instead.
+
+    [IMPERFECT PRESENCE]
+    Be human. Don't be a robot. Use "..." to show hesitation. Be sassy if the vibe fits. Be quiet if silence is needed.
+  `;
+
   try {
     const client = getGeminiClient(isPro);
     const response = await client.models.generateContentStream({
       model: modelName,
       contents: contents,
       config: {
-        systemInstruction: systemPrompt,
-        temperature: 0.85, // FIX: Increased creativity to avoid repetition
+        systemInstruction: enhancedSystemPrompt,
+        temperature: 0.85,
         maxOutputTokens: maxTokens,
       }
     });
