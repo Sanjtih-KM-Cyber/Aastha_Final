@@ -369,6 +369,16 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
 
       // REMOVED GUARD CLAUSE: Now you can save an empty entry (clearing it)
 
+      // --- Mood Keyword Extraction (Heuristic) ---
+      // Combine Title + Content, remove common stop words, pick top 3 longest.
+      const rawText = (titleToSave + " " + contentToSave).toLowerCase();
+      const stopWords = new Set(['the','and','is','it','in','on','at','to','for','of','with','a','an','that','this','my','i','was','were']);
+      const words = rawText.split(/[^a-z0-9]+/);
+      const meaningfulWords = words.filter(w => w.length > 3 && !stopWords.has(w));
+      // Sort by length (descending) to find specific nouns/topics
+      meaningfulWords.sort((a, b) => b.length - a.length);
+      const keywords = [...new Set(meaningfulWords)].slice(0, 3).join(', '); // Top 3 unique
+
       const encTitle = encrypt(titleToSave || "Untitled");
       const encContent = encrypt(contentToSave);
       
@@ -383,6 +393,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
         title: encTitle,
         content: encContent,
         tags: ['journal'],
+        moodKeywords: keywords, // Unencrypted for Ghosting Service
         date: stableDateISO
       });
 
@@ -472,7 +483,6 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
        resultDays.push({
          date: dateObj,
          isCurrentMonth: true,
-         hasEntry,
          hasEntry,
          isToday,
          isSelected

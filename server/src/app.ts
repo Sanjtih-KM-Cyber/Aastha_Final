@@ -15,6 +15,7 @@ import authRoutes from './routes/authRoutes';
 import chatRoutes from './routes/chatRoutes';
 import dataRoutes from './routes/dataRoutes';
 import aiRoutes from './routes/aiRoutes';
+import * as ghostService from './services/ghostService';
 
 // --- CRITICAL SECURITY CHECK ---
 const requiredEnvVars = ['JWT_SECRET', 'SERVER_ENCRYPTION_KEY', 'MONGO_URI'];
@@ -27,6 +28,9 @@ if (missingVars.length > 0) {
 
 connectDB();
 
+// Init Ghost Service
+ghostService.init();
+
 const app = express();
 const server = createServer(app);
 
@@ -36,77 +40,89 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 const clients = new Map<string, Set<WebSocket>>();
 
 wss.on('connection', (ws, req) => {
-    // Extract userId AND token from query params
-    const url = new URL(req.url || '', `http://${req.headers.host}`);
-    const userId = url.searchParams.get('userId');
-    const token = url.searchParams.get('token'); // ✅ Get Token
+    let isAuthenticated = false;
+    let authenticatedUserId: string | null = null;
 
-    // 1. Validation: Must have both ID and Token
-    if (!userId || !token) {
-        console.log('[WS] Connection rejected: Missing credentials');
-        ws.close(4001, 'Unauthorized: Missing credentials');
-        return;
-    }
-
-    // 2. Security: Verify Token
-    try {
-        const secret = process.env.JWT_SECRET as string;
-        const decoded = jwt.verify(token, secret) as any;
-        
-        // 3. ID Match: Ensure the token actually belongs to the user asking for connection
-        if (decoded.id !== userId) {
-             console.log(`[WS] Security Alert: ID Mismatch. Token(${decoded.id}) vs Req(${userId})`);
-             ws.close(4003, 'Forbidden: ID Mismatch');
-             return;
+    // Timeout: If auth not received in 5s, close.
+    const authTimeout = setTimeout(() => {
+        if (!isAuthenticated) {
+            console.log('[WS] Auth timeout, closing.');
+            ws.close(4001, 'Auth Timeout');
         }
+    }, 5000);
 
-        // --- AUTH SUCCESSFUL ---
-        
-        // Add to client set
-        if (!clients.has(userId)) {
-            clients.set(userId, new Set());
-        }
-        clients.get(userId)?.add(ws);
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message.toString());
 
-        console.log(`[WS] Client connected: ${userId}. Active devices: ${clients.get(userId)?.size}`);
+            // --- AUTH HANDSHAKE ---
+            if (!isAuthenticated) {
+                if (data.type === 'AUTH' && data.token && data.userId) {
+                    try {
+                        const secret = process.env.JWT_SECRET as string;
+                        const decoded = jwt.verify(data.token, secret) as any;
 
-        ws.on('message', (message) => {
-            try {
-                const data = JSON.parse(message.toString());
-                // console.log(`[WS] Broadcast from ${userId}:`, data.type);
+                        if (decoded.id !== data.userId) {
+                            console.log(`[WS] Security Alert: ID Mismatch.`);
+                            ws.close(4003, 'Forbidden: ID Mismatch');
+                            return;
+                        }
 
-                // Broadcast to ALL devices (including the sender)
-                const userSockets = clients.get(userId);
+                        // Success
+                        isAuthenticated = true;
+                        authenticatedUserId = data.userId;
+                        clearTimeout(authTimeout);
+
+                        // Add to client set
+                        if (!clients.has(authenticatedUserId!)) {
+                            clients.set(authenticatedUserId!, new Set());
+                        }
+                        clients.get(authenticatedUserId!)?.add(ws);
+
+                        console.log(`[WS] Client authenticated: ${authenticatedUserId}`);
+                        return; // Handshake complete, don't broadcast this message
+                    } catch (e) {
+                         console.error('[WS] Invalid Token');
+                         ws.close(4001, 'Invalid Token');
+                         return;
+                    }
+                } else {
+                    // First message MUST be AUTH
+                    console.log('[WS] First message not AUTH, closing.');
+                    ws.close(4001, 'Protocol Error: First message must be AUTH');
+                    return;
+                }
+            }
+
+            // --- NORMAL MESSAGES ---
+            if (isAuthenticated && authenticatedUserId) {
+                const userSockets = clients.get(authenticatedUserId);
                 if (userSockets) {
                     userSockets.forEach(client => {
-                        // ✅ FIX: Removed "client !== ws".
-                        // We MUST echo back to the sender so the frontend knows to open the window.
                         if (client.readyState === WebSocket.OPEN) {
                             client.send(JSON.stringify(data));
                         }
                     });
                 }
-            } catch (e) {
-                console.error('[WS] Error processing message', e);
             }
-        });
 
-        ws.on('close', () => {
-            console.log(`[WS] Client disconnected: ${userId}`);
-            const userSockets = clients.get(userId);
+        } catch (e) {
+            console.error('[WS] Error processing message', e);
+        }
+    });
+
+    ws.on('close', () => {
+        if (authenticatedUserId) {
+            console.log(`[WS] Client disconnected: ${authenticatedUserId}`);
+            const userSockets = clients.get(authenticatedUserId);
             if (userSockets) {
                 userSockets.delete(ws);
                 if (userSockets.size === 0) {
-                    clients.delete(userId);
+                    clients.delete(authenticatedUserId);
                 }
             }
-        });
-
-    } catch (err) {
-        console.error('[WS] Auth Failed: Invalid Token');
-        ws.close(4001, 'Unauthorized: Invalid Token');
-        return;
-    }
+        }
+    });
 });
 
 // --- DEFENSE IN DEPTH ---

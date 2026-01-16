@@ -60,8 +60,9 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }
 
-    // 2. ATTACH TOKEN TO URL (The Fix)
-    const wsUrl = `${protocol}//${host}/ws?userId=${userId}&token=${token}`;
+    // 2. REMOVE TOKEN FROM URL (Security Fix)
+    // Auth is now done via the first message handshake
+    const wsUrl = `${protocol}//${host}/ws`;
 
     const connect = () => {
         // Prevent multiple connections
@@ -71,7 +72,9 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-            console.log('[Sync] Connected');
+            console.log('[Sync] Connected. Sending Handshake...');
+            // AUTH HANDSHAKE
+            ws.send(JSON.stringify({ type: 'AUTH', token: token, userId: userId }));
             setIsConnected(true);
             if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         };
