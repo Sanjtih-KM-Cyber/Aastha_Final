@@ -308,19 +308,33 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
     if (isOpen && isUnlocked) fetchEntries();
   }, [isOpen, isUnlocked, user]);
 
+  const prevActiveDateRef = useRef<string>(toDateString(activeDate));
+
   useEffect(() => {
       const dateKey = toDateString(activeDate);
+      const prevDateKey = prevActiveDateRef.current;
+
+      const hasDateChanged = dateKey !== prevDateKey;
       const entry = entriesMap[dateKey];
-      if (entry) {
-          setEditTitle(entry.title);
-          setEditContent(entry.content);
-          setEditMode('view');
-      } else {
-          setEditTitle('');
-          setEditContent('');
-          setEditMode('edit'); 
+
+      // LOGIC FIX: Only reset/load content if:
+      // 1. The user explicitly switched dates (Navigation)
+      // 2. OR The entry exists and we are NOT currently editing it (Background sync/Initial load)
+      // This prevents the autosave-response from overwriting the user's current typing.
+
+      if (hasDateChanged || (entry && editMode !== 'edit')) {
+          if (entry) {
+              setEditTitle(entry.title);
+              setEditContent(entry.content);
+              setEditMode('view');
+          } else {
+              setEditTitle('');
+              setEditContent('');
+              setEditMode('edit');
+          }
+          prevActiveDateRef.current = dateKey;
       }
-  }, [activeDate, entriesMap]);
+  }, [activeDate, entriesMap, editMode]);
 
   const fetchEntries = async () => {
     setIsLoading(true);
@@ -421,7 +435,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
           setIsSaving(true);
           autoSaveTimerRef.current = setTimeout(() => {
               handleSaveEntry(true);
-          }, 1000);
+          }, 5000); // FIX: Increased to 5s as requested
       }
       return () => {
           if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
