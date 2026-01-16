@@ -67,7 +67,8 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 
     const encryptionSalt = crypto.randomUUID();
     // Optimization: Reduced salt rounds to 8 for faster performance on Render
-    const salt = await bcrypt.genSalt(8);
+    // UPDATE: The Fortress requires 12 rounds for stronger security.
+    const salt = await bcrypt.genSalt(12);
     const hashedPassword = await bcrypt.hash(password, salt);
     let hashedDiaryPassword = undefined;
     if (diaryPassword) hashedDiaryPassword = await bcrypt.hash(diaryPassword, salt);
@@ -290,14 +291,17 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           needsSave = true;
       }
       
-      // Update Visit Time Logic
-      if (!user.lastVisit) { user.lastVisit = new Date(); needsSave = true; }
-      const lastVisitTime = new Date(user.lastVisit).getTime();
-      const todayTime = now.getTime();
+      // Update Visit Time Logic & Reset Ghost Status
+      user.lastVisit = now; // Always update on login
+      user.ghostNotificationSent = false;
+      user.moodStatus = 'happy';
+      needsSave = true;
 
-      // Only update lastVisit if > 60s passed (prevents spam saves)
-      if (Math.abs(todayTime - lastVisitTime) > 60000) {
-          user.lastVisit = now;
+      // Lazy Migration: Upgrade Hash Strength
+      if (user.passwordHash.startsWith('$2a$08$')) {
+          console.log(`[The Fortress] Upgrading hash for user ${user._id}`);
+          const newSalt = await bcrypt.genSalt(12);
+          user.passwordHash = await bcrypt.hash(password, newSalt);
           needsSave = true;
       }
 

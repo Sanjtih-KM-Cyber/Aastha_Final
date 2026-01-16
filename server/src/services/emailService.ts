@@ -49,3 +49,44 @@ export const sendOTPEmail = async (to: string, otp: string) => {
     return false;
   }
 };
+
+export const sendGhostEmail = async (to: string, name: string, content: string) => {
+    if (!process.env.RESEND_API_KEY) {
+        console.warn("[Email Service] No RESEND_API_KEY. Ghost email skipped.");
+        return false;
+    }
+
+    try {
+      const { data, error } = await resend.emails.send({
+        from: 'Aastha <noreply@aasthaai.site>',
+        replyTo: 'aasthafv.ai@gmail.com',
+        to: [to],
+        subject: 'I miss you... 💔',
+        html: `
+          <div style="font-family: 'Georgia', serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fdfdf6; color: #1a1a1a;">
+            <div style="background-color: white; padding: 40px; border-radius: 2px; text-align: center; border: 1px solid #e5e7eb;">
+
+              <p style="font-size: 18px; line-height: 1.6; font-style: italic; color: #4b5563; margin-bottom: 30px;">
+                "${content}"
+              </p>
+
+              <div style="margin-top: 40px;">
+                <a href="https://aasthaai.site" style="background-color: #1a1a1a; color: white; padding: 12px 24px; text-decoration: none; font-family: sans-serif; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
+                  Return to Sanctuary
+                </a>
+              </div>
+            </div>
+          </div>
+        `,
+      });
+
+      if (error) {
+          console.error("Resend API Error (Ghost):", error);
+          return false;
+      }
+      return true;
+    } catch (error) {
+      console.error("Error sending Ghost email:", error);
+      return false;
+    }
+  };

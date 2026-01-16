@@ -22,7 +22,7 @@ export const userService = {
     return res.data;
   },
 
-  async saveDiaryEntry(entry: { title: string; content: string; tags?: string[]; date?: string }): Promise<DiaryEntryDTO> {
+  async saveDiaryEntry(entry: { title: string; content: string; tags?: string[]; date?: string; moodKeywords?: string }): Promise<DiaryEntryDTO> {
     const res = await api.post('/data/diary', entry);
     return res.data;
   },

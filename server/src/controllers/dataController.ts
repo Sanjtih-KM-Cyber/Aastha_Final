@@ -28,7 +28,7 @@ export const getDiaryEntries = async (req: AuthRequest, res: Response) => {
 export const createDiaryEntry = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-    const { title, content, tags, date } = (req as any).body;
+    const { title, content, tags, date, moodKeywords } = (req as any).body;
     
     if (!content) return (res as any).status(400).json({ message: 'Content is required.' });
     
@@ -49,6 +49,7 @@ export const createDiaryEntry = async (req: AuthRequest, res: Response) => {
         title: encTitle,
         content: encContent,   
         tags: tags || [],
+        moodKeywords: moodKeywords || "",
         createdAt: entryDate 
       },
       { new: true, upsert: true, setDefaultsOnInsert: true }
@@ -57,7 +58,8 @@ export const createDiaryEntry = async (req: AuthRequest, res: Response) => {
     (res as any).status(201).json({
         ...updatedEntry.toObject(),
         title: finalTitle,
-        content: content
+        content: content,
+        moodKeywords: moodKeywords
     });
   } catch (error) {
     console.error("POST Diary Failed:", error); 
