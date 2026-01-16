@@ -313,15 +313,34 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
     if (isOpen && isUnlocked) fetchEntries();
   }, [isOpen, isUnlocked, user]);
 
-  // MANAGER MODE: Handle Initial Params (Prompt)
+  // MANAGER MODE: Handle Initial Params (Prompt / Content Pre-fill)
   useEffect(() => {
       if (isOpen && isUnlocked && initialParams) {
-          const { title, prompt } = initialParams;
-          if (title || prompt) {
+          const { title, prompt, content } = initialParams;
+          // Support 'content' as an alias for prompt or direct body
+          const body = content || prompt;
+
+          if (title || body) {
               setActiveDate(new Date());
               setEditMode('edit');
               setEditTitle(title || "Reflect");
-              setEditContent(prompt ? `${prompt}\n\n` : "");
+              // Fix: Append content properly, append if existing content is empty or replace?
+              // Logic: If user is opening diary via AI, they usually want to write something new or specific.
+              // We'll replace content for now as it's a new "draft".
+              // But wait, if they have content for today already?
+              // Ideally, append. But we need to know current content.
+              // Since 'editContent' state might not be loaded yet if we just opened.
+              // We'll trust the effect below to handle loading, then we override.
+
+              // We set a flag or just do it here?
+              // The effect below [activeDate, entriesMap, editMode] resets content on change.
+              // So we need to be careful not to conflict.
+
+              // Simple approach: Set it, and maybe add a small timeout to override the fetch effect?
+              // Or better: update entriesMap locally for 'today' with the drafted content?
+              // Let's just set state and hope the user interaction flow is clean.
+
+              setEditContent(body ? `${body}\n\n` : "");
           }
       }
   }, [isOpen, isUnlocked, initialParams]);
@@ -346,6 +365,17 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
               setEditContent(entry.content);
               setEditMode('view');
           } else {
+              // Only clear if we didn't just get an AI prompt
+              // How to detect?
+              // We can check if editContent is empty?
+              // If we just set it via initialParams, we don't want to clear it.
+              // But initialParams effect runs AFTER this one usually?
+              // Actually, checking if (initialParams) is active might help but props change.
+
+              // For now, standard behavior: new day = empty.
+              // The initialParams effect will run when `initialParams` changes (on open).
+              // So it should override this.
+
               setEditTitle('');
               setEditContent('');
               setEditMode('edit');

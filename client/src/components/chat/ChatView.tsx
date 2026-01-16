@@ -104,6 +104,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [uiAction, setUiAction] = useState<'none' | 'listen' | 'block_widget'>('none');
   const [currentMood, setCurrentMood] = useState('neutral');
   const [suggestedChips, setSuggestedChips] = useState<string[]>([]); // New State for Chips
+  
+  // Patience / Listening Mode State
+  const [isWaitingForPermission, setIsWaitingForPermission] = useState(false);
+  const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Media Menu State
   const [showMediaMenu, setShowMediaMenu] = useState(false);
@@ -150,6 +154,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     });
     return unsubscribe;
   }, [subscribe]);
+
+  // Silence Timer Logic (Listening Mode)
+  useEffect(() => {
+    if (uiAction === 'listen') {
+        // Reset timer on any input or message
+        if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+        setIsWaitingForPermission(false);
+
+        silenceTimeoutRef.current = setTimeout(() => {
+            setIsWaitingForPermission(true);
+        }, 15000); // 15 seconds silence
+    } else {
+        setIsWaitingForPermission(false);
+        if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+    }
+    return () => {
+        if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+    };
+  }, [uiAction, messages, input]); // Reset on new messages or typing
 
   useEffect(() => {
       if (user) {
@@ -278,8 +301,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             setTranscript(currentText);
             if (currentText.trim().length > 0) {
                 if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-                // WAIT LONGER: 3.5s patience window (User Request: "Patience")
-                silenceTimerRef.current = setTimeout(() => { handleVoiceSend(currentText); }, 3500);
+                silenceTimerRef.current = setTimeout(() => { handleVoiceSend(currentText); }, 1500);
             }
         }
       };
@@ -422,6 +444,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         if (storedInfo) token = JSON.parse(storedInfo).token;
       } catch(e) {}
 
+      // ADDED: Permission Grant Flag
+      const isPermissionGrant = finalContent === 'PERMISSION_GRANT_REPLY';
+      const actualContent = isPermissionGrant ? "Please reply now." : finalContent;
+
       const streamResponse = await fetch(getApiUrl('/chat'), {
         method: 'POST',
         headers: { 
@@ -430,8 +456,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         },
         credentials: 'include', 
         body: JSON.stringify({
-            message: finalContent,
-            images: attachedImage ? [attachedImage] : []
+            message: actualContent,
+            images: attachedImage ? [attachedImage] : [],
+            forceReply: isPermissionGrant // Tell backend to override listening mode
         }),
       });
 
@@ -478,7 +505,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             const thought = data.content;
                             console.log("Subconscious:", thought);
                             if (thought.status_display) setStatusDisplay(thought.status_display);
-                            if (thought.ui_action) setUiAction(thought.ui_action);
+                            if (thought.ui_action) {
+                                setUiAction(thought.ui_action);
+                                // If listening, remove the optimistic bot bubble so it doesn't look like an empty message
+                                if (thought.ui_action === 'listen') {
+                                    setMessages(prev => prev.filter(m => m.id !== tempBotId));
+                                }
+                            }
                             if (thought.mood) setCurrentMood(thought.mood);
 
                             // Handle Dynamic Suggested Chips
@@ -487,13 +520,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             }
 
                             if (thought.reaction) {
-                                // Add sticky reaction to USER'S last message
-                                setMessages(prev => prev.map(m => {
-                                    if (m.id === userMsg.id) {
-                                        return { ...m, reaction: thought.reaction };
+                                // Add sticky reaction to USER'S last message (or the one we replied to)
+                                // If we are granting permission, we might want to react to the *previous* user msg.
+                                // For now, simplest is react to the most recent user msg in the local state.
+                                setMessages(prev => {
+                                    // Find last user message
+                                    const reversed = [...prev].reverse();
+                                    const lastUserMsg = reversed.find(m => m.role === 'user');
+                                    if (lastUserMsg) {
+                                        return prev.map(m => m.id === lastUserMsg.id ? { ...m, reaction: thought.reaction } : m);
                                     }
-                                    return m;
-                                }));
+                                    return prev;
+                                });
                             }
                         }
 
@@ -730,13 +768,48 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  </button>
              </div>
 
-             <div className="absolute left-1/2 -translate-x-1/2 z-10 flex items-center justify-center w-full pointer-events-none">
-                 <AnimatePresence>
+             <div className="absolute left-1/2 -translate-x-1/2 z-10 flex items-center justify-center w-full pointer-events-auto">
+                 <AnimatePresence mode="wait">
                     {!isSearchOpen && (
-                        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/5 shadow-lg">
-                            <div className={`w-2 h-2 rounded-full ${currentActivity === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-400 animate-pulse'}`} />
-                            <span className="text-xs font-medium text-white/80 tracking-wide uppercase">{statusDisplay}</span>
-                        </motion.div>
+                        isWaitingForPermission ? (
+                             <motion.div 
+                                initial={{ opacity: 0, scale: 0.9, y: -10 }} 
+                                animate={{ opacity: 1, scale: 1, y: 0 }} 
+                                exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                                className="flex items-center gap-3 px-2 py-1.5 rounded-full bg-[#1F2937] border border-white/10 shadow-2xl cursor-pointer"
+                             >
+                                <span className="text-xs text-white/80 ml-2 font-medium">Can I reply?</span>
+                                <div className="flex items-center gap-1">
+                                    <button 
+                                        onClick={() => handleSend(undefined, 'PERMISSION_GRANT_REPLY')}
+                                        className="p-1 rounded-full bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white transition-colors"
+                                    >
+                                        <Check size={14} />
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            setIsWaitingForPermission(false);
+                                            // Reset timer to wait another 15s
+                                            if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+                                            silenceTimeoutRef.current = setTimeout(() => setIsWaitingForPermission(true), 15000);
+                                        }}
+                                        className="p-1 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                             </motion.div>
+                        ) : (
+                            <motion.div 
+                                initial={{ opacity: 0, y: -10 }} 
+                                animate={{ opacity: 1, y: 0 }} 
+                                exit={{ opacity: 0, y: -10 }} 
+                                className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/5 shadow-lg"
+                            >
+                                <div className={`w-2 h-2 rounded-full ${currentActivity === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-400 animate-pulse'}`} />
+                                <span className="text-xs font-medium text-white/80 tracking-wide uppercase">{statusDisplay}</span>
+                            </motion.div>
+                        )
                     )}
                  </AnimatePresence>
              </div>
@@ -816,14 +889,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  )}
              </AnimatePresence>
 
-             {/* SMART CONTEXT CHIPS (Redesigned) */}
+             {/* SMART CONTEXT CHIPS */}
              <AnimatePresence>
              {suggestedChips.length > 0 || messages.length <= 2 ? (
                 <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="overflow-x-auto scrollbar-hide flex gap-2 mb-3 px-1 relative pr-8 items-center"
+                    className="overflow-x-auto scrollbar-hide flex gap-2 mb-2 px-1 relative pr-8"
                 >
                     {(() => {
                         const hour = new Date().getHours();
@@ -841,7 +914,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             <button
                                 key={i}
                                 onClick={() => handleSend(undefined, chip)}
-                                className="shrink-0 px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/15 text-xs font-medium text-white/90 whitespace-nowrap transition-all shadow-sm backdrop-blur-md"
+                                className="shrink-0 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-xs text-white/70 whitespace-nowrap transition-colors"
                             >
                                 {chip}
                             </button>
@@ -851,9 +924,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     {/* Dismiss Button */}
                     <button
                         onClick={() => setSuggestedChips([])}
-                        className="sticky right-0 bg-black/60 backdrop-blur-xl p-1.5 rounded-full border border-white/10 text-white/40 hover:text-white hover:bg-white/10 ml-2 shadow-lg"
+                        className="sticky right-0 bg-black/40 backdrop-blur-sm p-1.5 rounded-full border border-white/10 text-white/40 hover:text-white hover:bg-white/10 ml-2"
                     >
-                        <X size={14} />
+                        <X size={12} />
                     </button>
                 </motion.div>
              ) : null}

@@ -151,7 +151,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               <motion.div
                   initial={{ scale: 0, opacity: 0, rotate: -20 }}
                   animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                  className="absolute -left-2 -bottom-2 z-20 text-xl bg-black/60 rounded-full p-1.5 border border-white/20 backdrop-blur-xl shadow-lg"
+                  className="absolute -left-2 -bottom-2 z-20 text-xl bg-white/10 rounded-full p-1 border border-white/20 backdrop-blur-md shadow-lg"
               >
                   {reaction}
               </motion.div>

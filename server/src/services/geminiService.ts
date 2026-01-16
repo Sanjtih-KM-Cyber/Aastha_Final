@@ -100,44 +100,19 @@ export async function* streamGemini(
     if (parts.length > 0) contents.push({ role, parts });
   }
 
-  const modelName = 'gemini-2.0-flash'; // Upgraded from 1.5-flash for better speed/quality
+  const modelName = 'gemini-2.5-flash';
   
-  // NOTE: The "Subconscious" logic is now handled by Groq in the controller.
-  // This prompt focuses purely on generation and voice.
-  const enhancedSystemPrompt = `
-    ${systemPrompt}
-
-    [AGENCY & TOOLS - CRITICAL]
-    You have access to widgets. USE THEM PROACTIVELY based on the conversation context.
-    1. **Jam (Music/Audio):** Use this for songs, podcasts, white noise, news, or ANY audio request.
-       - NEVER refuse an audio request by saying "I am text only". Just use the tool.
-       - If the user asks for "Podcasts", treat it as a song search (e.g., "Tech News Podcast").
-    2. **Soundscape (Ambient):** You can mix sounds by sending a comma-separated string in the 'preset' param.
-       - Example: params='{"preset": "rain,thunder,night"}' (Mixes Rain, Thunder, and Night).
-    3. **Diary:** If the user wants to write or reflect, open the diary.
-       - You can pre-fill it! params='{"title": "Today", "prompt": "User content..."}'.
-       - If the user asks to "Write this in my diary", put their text in the "prompt" param.
-
-    [MUSIC CONTEXT AWARENESS]
-    If the user asks for music or songs (e.g., "Play happy Tamil songs"), you MUST use the <proposal tool="jam"> tag.
-    Use the 'genre' param for language/genre combos (e.g. "Tamil Pop") and 'mood' for mood.
-    BUT IMPORTANT: You must also output the detected Language if possible in the 'genre' field if it's not standard English.
-    Example: <proposal tool="jam" params='{"mood":"happy", "genre":"Tamil"} ' reason="Playing Tamil vibes." />
-
-    [THE 3-TURN RULE (SLOW COMPANION)]
-    1. DO NOT solve problems immediately.
-    2. Turn 1: Acknowledge & Validate. ("I hear you. That sounds tough.")
-    3. Turn 2: Explore & Deepen. ("What made you feel that way?")
-    4. Turn 3: Only offer advice if asked or if the user is stuck.
-  `;
-
+  // NOTE: The "Subconscious" logic has moved to Groq. 
+  // Gemini is now Pure Voice.
+  // We keep the system prompt clean but enforce XML tags if provided in instructions.
+  
   try {
     const client = getGeminiClient(isPro);
     const response = await client.models.generateContentStream({
       model: modelName,
       contents: contents,
       config: {
-        systemInstruction: enhancedSystemPrompt,
+        systemInstruction: systemPrompt, // Pure prompt passed from controller
         temperature: 0.85,
         maxOutputTokens: maxTokens,
       }
@@ -175,7 +150,7 @@ export const generateMemoryAnalysis = async (chatHistory: ChatMessage[], previou
         const currentDate = new Date().toISOString().split('T')[0];
 
         const response = await client.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash',
             contents: `
                 Analyze the recent chat history and return a valid JSON object (no markdown formatting).
 
@@ -241,7 +216,7 @@ export const mergeLoreDescription = async (oldDesc: string, newContext: string):
     const client = getGeminiClient(false);
     try {
         const response = await client.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash',
             contents: `
                 Update the description of a person/place/goal in the user's life.
                 Old Description: "${oldDesc}"
@@ -274,7 +249,7 @@ export const extractThemeFromImage = async (base64Image: string): Promise<any> =
   
   try {
     const response = await client.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents: {
         parts: [
           { inlineData: { mimeType: matches[1], data: matches[2] } },
@@ -318,7 +293,7 @@ export const analyzeSentiment = async (text: string): Promise<string> => {
     const client = getGeminiClient(false);
     try {
         const response = await client.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash',
             contents: `Classify sentiment: Happy, Calm, Sad, Anxious, Neutral, Excited. Text: "${text}"`,
         });
         return response.text?.trim() || "Neutral";
@@ -332,7 +307,7 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
   
   try {
     const response = await client.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents: `
         You are an expert DJ AI.
         User Request: "${prompt}"
@@ -389,7 +364,7 @@ export const analyzeDiaryEntries = async (entries: any[]): Promise<any> => {
     try {
         const textData = entries.map(e => `[${e.createdAt}]: ${e.content}`).join('\n\n');
         const response = await client.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash',
             contents: `Analyze these diary entries. Write a warm, empathetic 3-4 sentence summary and 1 piece of actionable advice.\n\n${textData}`,
             config: { 
                 responseMimeType: "application/json",
@@ -411,7 +386,7 @@ export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> =>
     try {
         const textData = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
         const response = await client.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash',
             contents: `Analyze this chat history. Provide a warm 2-sentence emotional summary and 1 sentence of gentle advice.\n\n${textData}`
         });
         return response.text || "I need more conversations to understand you better.";
@@ -428,7 +403,7 @@ export const getVibePlaylist = async (chatHistory: any[], languages: string[], u
         const safeCount = Math.min(Math.max(count, 3), 30);
 
         const response = await client.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash',
             contents: `
                 Create a curated playlist of exactly ${safeCount} songs based on this chat context.
                 Languages: ${languages.join(',') || 'English'}.
