@@ -31,14 +31,18 @@ export const createDiaryEntry = async (req: AuthRequest, res: Response) => {
     const { title, content, tags, date, moodKeywords } = (req as any).body;
     
     if (!content) return (res as any).status(400).json({ message: 'Content is required.' });
+    if (!date) return (res as any).status(400).json({ message: 'Date is required.' }); // STRICT CHECK
     
     const finalTitle = title || "Untitled"; 
     const encTitle = encrypt(finalTitle);
     const encContent = encrypt(content);
     
-    const entryDate = date ? new Date(date) : new Date();
-    const startOfDay = new Date(entryDate); startOfDay.setHours(0,0,0,0);
-    const endOfDay = new Date(entryDate); endOfDay.setHours(23,59,59,999);
+    const entryDate = new Date(date);
+    // Use UTC methods to ensure consistent day boundaries regardless of server timezone
+    const startOfDay = new Date(entryDate); startOfDay.setUTCHours(0,0,0,0);
+    const endOfDay = new Date(entryDate); endOfDay.setUTCHours(23,59,59,999);
+
+    console.log(`[Diary] Saving entry for User ${req.user._id} at ${entryDate.toISOString()} (Range: ${startOfDay.toISOString()} - ${endOfDay.toISOString()})`);
 
     const updatedEntry = await Diary.findOneAndUpdate(
       { 
