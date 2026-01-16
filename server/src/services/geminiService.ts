@@ -64,7 +64,7 @@ export interface SubconsciousBlock {
     status_display: string;
     ui_action: 'none' | 'listen' | 'block_widget';
     reaction: string | null;
-    suggested_replies: string[]; // NEW FIELD
+    suggested_replies: string[];
 }
 
 // ==========================================
@@ -122,27 +122,31 @@ export async function* streamGemini(
       "suggested_replies": ["Short phrase 1", "Short phrase 2", "Short phrase 3"] (Max 3 contextual replies for the user to click)
     }
     \`\`\`
+    NO TEXT BEFORE THIS JSON BLOCK.
 
-    [THE 3-TURN RULE (SLOW COMPANION)]
-    1. DO NOT solve problems immediately.
-    2. Turn 1: Acknowledge & Validate. ("I hear you. That sounds tough.")
-    3. Turn 2: Explore & Deepen. ("What made you feel that way?")
-    4. Turn 3: Only offer advice if asked or if the user is stuck.
-
-    [RANT MODE TRIGGER]
-    If the user is sending long, emotional text or rapid messages expressing distress:
-    1. Set "ui_action": "listen".
-    2. Set "status_display": "Listening intently 👂".
-    3. Keep your text response very brief (or empty) to let them vent. Use the "reaction" field (heart/sad) to validate instead.
-
-    [IMPERFECT PRESENCE]
-    Be human. Don't be a robot. Use "..." to show hesitation. Be sassy if the vibe fits. Be quiet if silence is needed.
+    [AGENCY & TOOLS - CRITICAL]
+    You have access to widgets. USE THEM PROACTIVELY.
+    1. **Jam (Music/Audio):** Use this for songs, podcasts, white noise, news, or ANY audio request.
+       - NEVER refuse an audio request by saying "I am text only". Just use the tool.
+       - If the user asks for "Podcasts", treat it as a song search (e.g., "Tech News Podcast").
+    2. **Soundscape (Ambient):** You can mix sounds by sending a comma-separated string in the 'preset' param.
+       - Example: params='{"preset": "rain,thunder,night"}' (Mixes Rain, Thunder, and Night).
+       - You can set volume (0.0 to 1.0) using 'volume' param. Example: params='{"preset":"rain", "volume":0.3}'
+    3. **Diary:** If the user wants to write or reflect, open the diary.
+       - You can pre-fill it! params='{"title": "Today", "prompt": "User content..."}'.
+       - If the user asks to "Write this in my diary", put their text in the "prompt" param.
 
     [MUSIC CONTEXT AWARENESS]
     If the user asks for music or songs (e.g., "Play happy Tamil songs"), you MUST use the <proposal tool="jam"> tag.
     Use the 'genre' param for language/genre combos (e.g. "Tamil Pop") and 'mood' for mood.
     BUT IMPORTANT: You must also output the detected Language if possible in the 'genre' field if it's not standard English.
     Example: <proposal tool="jam" params='{"mood":"happy", "genre":"Tamil"} ' reason="Playing Tamil vibes." />
+
+    [THE 3-TURN RULE (SLOW COMPANION)]
+    1. DO NOT solve problems immediately.
+    2. Turn 1: Acknowledge & Validate. ("I hear you. That sounds tough.")
+    3. Turn 2: Explore & Deepen. ("What made you feel that way?")
+    4. Turn 3: Only offer advice if asked or if the user is stuck.
   `;
 
   try {
@@ -312,15 +316,8 @@ export const extractThemeFromImage = async (base64Image: string): Promise<any> =
     return JSON.parse(response.text || '{}');
   } catch (error: any) {
     console.error("Theme Extraction Error:", error);
-
-    // Graceful Handling for Overloaded Model (503) or other API errors
     if (error?.status === 503 || error?.code === 503 || error?.message?.includes('overloaded')) {
-        console.warn("Gemini Model Overloaded. Returning fallback theme.");
-        return {
-            primaryColor: "#8b5cf6", // Default Violet
-            accentColor: "#f472b6", // Default Pink
-            themeName: "Sanctuary Fallback"
-        };
+        return { primaryColor: "#8b5cf6", accentColor: "#f472b6", themeName: "Sanctuary Fallback" };
     }
     throw error;
   }
@@ -365,8 +362,9 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
         3. **AUDIOPHILE QUALITY CONTROL (CRITICAL):**
            - For 'searchQuery', you MUST append " - Topic" to the artist/title. This finds the official high-quality audio track on YouTube Music.
            - EXPLICITLY EXCLUDE keywords: "Cover", "Reaction", "Live", "Review", "Remix" (unless asked).
-           - **LANGUAGE AWARENESS:** If the user request contains a specific language (e.g., "Tamil", "Hindi", "Spanish"), YOU MUST include that language keyword in the 'searchQuery' to ensure correct results.
-           - Example Query: "Happy Tamil Songs - Topic"
+           - **LANGUAGE & GENRE AWARENESS:**
+             - If the user request contains a specific language (e.g., "Tamil", "Hindi") or Genre (e.g. "Pop", "Lo-fi"), YOU MUST include those keywords in the 'searchQuery'.
+             - Format: "Title Artist Language Genre - Topic" (e.g. "Happy Songs Tamil Pop - Topic").
 
         Output JSON format.
       `,
@@ -379,7 +377,7 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
             properties: {
               title: { type: Type.STRING, description: "Song Title - Artist" },
               artist: { type: Type.STRING },
-              searchQuery: { type: Type.STRING, description: "Title + Artist + Language + ' - Topic'" },
+              searchQuery: { type: Type.STRING, description: "Title + Artist + Language + Genre + ' - Topic'" },
               reason: { type: Type.STRING }
             }
           }
