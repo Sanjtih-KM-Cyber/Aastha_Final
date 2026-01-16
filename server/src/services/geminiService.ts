@@ -310,8 +310,10 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
         **INSTRUCTIONS:**
         1. **Search Mode:** If the user asks for a SPECIFIC song (e.g., "Play Faint by Linkin Park"), return ONLY that song.
         2. **Recommendation Mode:** If the user asks for a mood/suggestion (e.g., "I'm sad", "Play something pop"), return 3 distinct songs.
-        3. **QUALITY CONTROL (CRITICAL):** - You MUST append "Official Video" or "Official Audio" to the song title for the YouTube search query.
-           - This ensures we get proper music channels, NOT shorts or fan uploads.
+        3. **AUDIOPHILE QUALITY CONTROL (CRITICAL):**
+           - For 'searchQuery', you MUST append " - Topic" to the artist/title. This finds the official high-quality audio track on YouTube Music.
+           - EXPLICITLY EXCLUDE keywords: "Cover", "Reaction", "Live", "Review", "Remix" (unless asked).
+           - Example Query: "Linkin Park Numb - Topic"
 
         Output JSON format.
       `,
@@ -324,7 +326,7 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
             properties: {
               title: { type: Type.STRING, description: "Song Title - Artist" },
               artist: { type: Type.STRING },
-              searchQuery: { type: Type.STRING, description: "Title + Artist + 'Official Video'" },
+              searchQuery: { type: Type.STRING, description: "Title + Artist + ' - Topic'" },
               reason: { type: Type.STRING }
             }
           }
@@ -337,7 +339,7 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
     if (results.length > 0) {
        return results.map((track: any) => ({
           name: track.title,
-          url: `https://www.youtube.com/results?search_query=${encodeURIComponent(track.searchQuery || track.title + " Official Video")}`,
+          url: `https://www.youtube.com/results?search_query=${encodeURIComponent(track.searchQuery || track.title + " - Topic")}`,
           ...track
        }));
     }
@@ -399,9 +401,12 @@ export const getVibePlaylist = async (chatHistory: any[], languages: string[], u
                 Languages: ${languages.join(',') || 'English'}.
                 Mood: ${userMoods.join(',')}.
                 
-                **CRITICAL RULE:** Only select songs that have "Official Music Videos" or "Official Audio" on YouTube. Avoid obscure tracks that only have low-quality uploads.
+                **AUDIOPHILE RULE:**
+                - We need High Quality Official Audio.
+                - Append " - Topic" to every song string (this triggers YouTube Music official tracks).
+                - Do NOT include "Cover", "Live", or "Reaction" tracks.
                 
-                Return simple strings: "Song Title - Artist"
+                Return simple strings: "Song Title - Artist - Topic"
                 
                 Context:
                 ${textData}
@@ -415,5 +420,48 @@ export const getVibePlaylist = async (chatHistory: any[], languages: string[], u
         return Array.isArray(result) ? result : [];
     } catch (error) {
         return ["Lo-Fi Beats - Lofi Girl"];
+    }
+};
+
+// ==========================================
+// 5. AGE-BASED PERSONA ENGINE
+// ==========================================
+export const getAgePersonaPrompt = (dob?: Date): string => {
+    if (!dob) return ""; // Default fallback (handled by controller)
+
+    const now = new Date();
+    let age = now.getFullYear() - dob.getFullYear();
+    const m = now.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) {
+        age--;
+    }
+
+    if (age < 18) {
+        return `
+        [PSYCHOLOGICAL PROFILE: THE MENTOR]
+        User Age: ${age} (Teen).
+        Role: Supportive Big Sister / Cool Mentor.
+        Focus: School, peer pressure, self-esteem, family issues.
+        Tone: Protective, encouraging, safe. Use mild Gen Z slang (no cringe).
+        Key Directive: Be a safe space. If they mention danger, gently guide them to safety.
+        `;
+    } else if (age >= 18 && age < 25) {
+        return `
+        [PSYCHOLOGICAL PROFILE: THE PEER]
+        User Age: ${age} (Young Adult).
+        Role: Hype Woman / Productivity Partner.
+        Focus: University, early career, dating, "adulting", identity.
+        Tone: Energetic, relatable, fun, "bestie" vibes.
+        Key Directive: Push them to be their best self. Validate their hustle and their feelings.
+        `;
+    } else {
+        return `
+        [PSYCHOLOGICAL PROFILE: THE COACH]
+        User Age: ${age} (Professional).
+        Role: Executive Assistant / Wellness Coach.
+        Focus: Work-life balance, burnout, long-term goals, relationships, health.
+        Tone: Sophisticated, warm, calm, professional yet personal.
+        Key Directive: Help them find clarity and peace amidst chaos.
+        `;
     }
 };

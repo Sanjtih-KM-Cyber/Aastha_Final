@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
-import { streamGemini, generateMemoryAnalysis, mergeLoreDescription } from '../services/geminiService';
+import { streamGemini, generateMemoryAnalysis, mergeLoreDescription, getAgePersonaPrompt } from '../services/geminiService';
 import { streamGroq, ChatMessage } from '../services/groqService';
 import User, { ILore, IOpenLoop } from '../models/User';
 import Chat from '../models/Chat';
@@ -59,12 +59,18 @@ You are 'Aastha', a calm, empathetic, and relatable campus wellness friend for {
 - **Color Change:** First reply nicely ("Ohh blue? Beautiful choice! 💙"), THEN add tag: <color>blue</color>
 - **Farewell:** <farewell>true</farewell>
 - **UI Commands:** Reply **supportively (if sad)** or **happily (if happy)** first, then add tag:
-    * <open_diary/>
-    * <open_mood_tracker/>
-    * <open_pomodoro/>
-    * <open_soundscape/>
-    * <open_breathing/>
-    * <open_jam-with-aastha/>
+    * <proposal tool="diary" params='{"title":"Vent Session", "prompt":"..."}' reason="Write it down." />
+    * <proposal tool="mood" params='{}' reason="Track this mood." />
+    * <proposal tool="pomodoro" params='{"mode":"Focus"}' reason="Let's focus." />
+    * <proposal tool="soundscape" params='{"preset":"rain"}' reason="Cozy vibes." />
+    * <proposal tool="breathing" params='{"mode":"Relax"}' reason="Calm down." />
+    * <proposal tool="jam" params='{"mood":"sad", "genre":"lo-fi"}' reason="Sad lo-fi might help." />
+    * <proposal tool="diary" params='{"title":"Vent Session", "prompt":"..."}' reason="Write it down." />
+    * <proposal tool="mood" params='{}' reason="Track this mood." />
+    * <proposal tool="pomodoro" params='{"mode":"Focus"}' reason="Let's focus." />
+    * <proposal tool="soundscape" params='{"preset":"rain"}' reason="Cozy vibes." />
+    * <proposal tool="breathing" params='{"mode":"Relax"}' reason="Calm down." />
+    * <proposal tool="jam" params='{"mood":"sad", "genre":"lo-fi"}' reason="Sad lo-fi might help." />
 
 **Memory:** {{userFacts}}
 **Boundaries:** Peer support only. No diagnosis. Safety first.
@@ -222,7 +228,10 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         baseTemplate = AASTIK_PROMPT;
     }
 
-    let finalSystemPrompt = baseTemplate
+    // 5A. INJECT AGE PERSONA
+    const agePersona = getAgePersonaPrompt(user.dateOfBirth);
+
+    let finalSystemPrompt = (agePersona + "\n" + baseTemplate)
       .replace(/{{userName}}/g, userName || 'Friend')
       .replace(/{{userFacts}}/g, factsString);
 
@@ -343,7 +352,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                                         mentionCount: 1,
                                         isUnlocked: false,
                                         lastMentioned: new Date()
-                                    });
+                                    } as ILore); // Mongoose will add _id
                                     loreChanged = true;
                                 }
                             }

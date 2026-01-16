@@ -34,16 +34,23 @@ const escapeRegex = (text: string) => {
 // --- REGISTER ---
 export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, username, password, diaryPassword, securityQuestions } = (req as any).body;
+    const { name, email, username, password, diaryPassword, securityQuestions, dateOfBirth } = (req as any).body;
 
     if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string' || typeof username !== 'string') {
         (res as any).status(400).json({ message: 'Invalid input format. Strings required.' });
         return;
     }
 
-    if (!name || !email || !password || !username) {
-      (res as any).status(400).json({ message: 'Please add all required fields (including Username)' });
+    if (!name || !email || !password || !username || !dateOfBirth) {
+      (res as any).status(400).json({ message: 'Please add all required fields (including Username and Date of Birth)' });
       return;
+    }
+
+    // Validate DOB
+    const dob = new Date(dateOfBirth);
+    if (isNaN(dob.getTime())) {
+        (res as any).status(400).json({ message: 'Invalid Date of Birth.' });
+        return;
     }
 
     const cleanEmail = email.toLowerCase().trim();
@@ -118,6 +125,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
       dailyPremiumUsage: 0,
       streak: 1, 
       lastVisit: new Date(),
+      dateOfBirth: dob,
       // --- STRICT VERIFICATION MODE ---
       isVerified: false,
       otpCode: otpCodeHash,

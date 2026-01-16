@@ -87,6 +87,12 @@ export interface IUser extends Document {
   memorySummary?: string;
   ghostNotificationSent?: boolean;
 
+  // Age Foundation
+  dateOfBirth?: Date;
+
+  // The Mirror (Secret Diary)
+  mirrorEntries?: { date: Date; content: string }[];
+
   // Active Memory & Lore
   openLoops: IOpenLoop[];
   lore: ILore[];
@@ -162,6 +168,15 @@ const userSchema = new Schema<IUser>({
   // Memory
   memorySummary: { type: String, default: "" },
   ghostNotificationSent: { type: Boolean, default: false },
+
+  // Age Foundation
+  dateOfBirth: { type: Date, required: false },
+
+  // The Mirror (Secret Diary)
+  mirrorEntries: [{
+    date: { type: Date, default: Date.now },
+    content: { type: String, required: true }
+  }],
 
   // 1. Open Loops (Future Event Tracking)
   openLoops: [{

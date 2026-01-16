@@ -63,7 +63,7 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
         if (match) {
             setActiveMode(match as keyof typeof MODES);
             setPhaseIndex(0);
-            setIsActive(false);
+            setIsActive(true); // MANAGER: Auto-start
         }
     }
   }, [initialMode, isOpen]);

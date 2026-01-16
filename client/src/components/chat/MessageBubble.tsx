@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Copy, Reply, Sparkles } from 'lucide-react';
+import { Copy, Reply, Sparkles, Wand2 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
 interface MessageBubbleProps {
@@ -9,11 +9,35 @@ interface MessageBubbleProps {
   timestamp?: number;
   onReply?: (content: string) => void;
   onCopy?: (content: string) => void;
+  onOpenWidget?: (widget: string, params?: any) => void;
   searchQuery?: string;
   isStreaming?: boolean;
   currentMatchIndex?: number;
   isMobile?: boolean;
 }
+
+// Helper to parse hidden <proposal> tags
+const extractProposals = (text: string) => {
+    const proposalRegex = /<proposal tool="([^"]+)" params='([^']+)' reason="([^"]+)" \/>/g;
+    const proposals = [];
+    let cleanText = text;
+    let match;
+
+    while ((match = proposalRegex.exec(text)) !== null) {
+        try {
+            proposals.push({
+                tool: match[1],
+                params: JSON.parse(match[2]),
+                reason: match[3]
+            });
+            // Remove the tag from visible text
+            cleanText = cleanText.replace(match[0], '');
+        } catch (e) {
+            console.error("Failed to parse proposal:", e);
+        }
+    }
+    return { cleanText, proposals };
+};
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
   role,
@@ -21,6 +45,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   timestamp,
   onReply,
   onCopy,
+  onOpenWidget,
   searchQuery,
   isStreaming,
   currentMatchIndex = -1,
@@ -30,7 +55,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const { currentTheme } = useTheme();
   const [isHovered, setIsHovered] = useState(false);
 
-  const isThinking = isStreaming && (!content || content.length === 0);
+  // Parse Content for Proposals
+  const { cleanText: visibleContent, proposals } = useMemo(() => {
+      if (isUser) return { cleanText: content, proposals: [] };
+      return extractProposals(content);
+  }, [content, isUser]);
+
+  const isThinking = isStreaming && (!visibleContent || visibleContent.length === 0);
 
   const renderContent = (text: string) => {
     if (!searchQuery || !text) return text;
@@ -151,7 +182,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
           ) : (
             <div className="space-y-1">
-              {content.split('\n').map((line, i) => (
+              {visibleContent.split('\n').map((line, i) => (
                 <p
                   key={i}
                   className="break-words whitespace-pre-wrap text-white/95 font-light"
@@ -160,6 +191,29 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </p>
               ))}
             </div>
+          )}
+
+          {/* SMART ACTION CHIPS (The Manager) */}
+          {proposals.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                  {proposals.map((p, idx) => (
+                      <button
+                          key={idx}
+                          onClick={() => onOpenWidget?.(p.tool, p.params)}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition-colors text-xs font-medium text-white/90"
+                      >
+                          <Wand2 size={12} className="text-teal-400" />
+                          <span>
+                            {p.tool === 'jam' && "Play Music"}
+                            {p.tool === 'breathing' && "Start Breathing"}
+                            {p.tool === 'diary' && "Open Diary"}
+                            {p.tool === 'pomodoro' && "Start Focus"}
+                            {p.tool === 'mood' && "Track Mood"}
+                            {p.tool === 'soundscape' && "Play Sounds"}
+                          </span>
+                      </button>
+                  ))}
+              </div>
           )}
 
           <div
