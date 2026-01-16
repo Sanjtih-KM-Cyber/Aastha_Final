@@ -64,6 +64,7 @@ export interface SubconsciousBlock {
     status_display: string;
     ui_action: 'none' | 'listen' | 'block_widget';
     reaction: string | null;
+    suggested_replies: string[]; // NEW FIELD
 }
 
 // ==========================================
@@ -117,7 +118,8 @@ export async function* streamGemini(
       "mood": "happy" | "sad" | "concerned" | "sassy" | "calm" | "excited" | "neutral",
       "status_display": "Short 2-3 word status for the UI pill. E.g., 'Listening...', 'Vibing', 'Concerned'",
       "ui_action": "none" | "listen" | "block_widget",
-      "reaction": "emoji_char" or null (The emoji to stick to the user's message)
+      "reaction": "emoji_char" or null (The emoji to stick to the user's message),
+      "suggested_replies": ["Short phrase 1", "Short phrase 2", "Short phrase 3"] (Max 3 contextual replies for the user to click)
     }
     \`\`\`
 
@@ -135,6 +137,12 @@ export async function* streamGemini(
 
     [IMPERFECT PRESENCE]
     Be human. Don't be a robot. Use "..." to show hesitation. Be sassy if the vibe fits. Be quiet if silence is needed.
+
+    [MUSIC CONTEXT AWARENESS]
+    If the user asks for music or songs (e.g., "Play happy Tamil songs"), you MUST use the <proposal tool="jam"> tag.
+    Use the 'genre' param for language/genre combos (e.g. "Tamil Pop") and 'mood' for mood.
+    BUT IMPORTANT: You must also output the detected Language if possible in the 'genre' field if it's not standard English.
+    Example: <proposal tool="jam" params='{"mood":"happy", "genre":"Tamil"} ' reason="Playing Tamil vibes." />
   `;
 
   try {
@@ -357,7 +365,8 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
         3. **AUDIOPHILE QUALITY CONTROL (CRITICAL):**
            - For 'searchQuery', you MUST append " - Topic" to the artist/title. This finds the official high-quality audio track on YouTube Music.
            - EXPLICITLY EXCLUDE keywords: "Cover", "Reaction", "Live", "Review", "Remix" (unless asked).
-           - Example Query: "Linkin Park Numb - Topic"
+           - **LANGUAGE AWARENESS:** If the user request contains a specific language (e.g., "Tamil", "Hindi", "Spanish"), YOU MUST include that language keyword in the 'searchQuery' to ensure correct results.
+           - Example Query: "Happy Tamil Songs - Topic"
 
         Output JSON format.
       `,
@@ -370,7 +379,7 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
             properties: {
               title: { type: Type.STRING, description: "Song Title - Artist" },
               artist: { type: Type.STRING },
-              searchQuery: { type: Type.STRING, description: "Title + Artist + ' - Topic'" },
+              searchQuery: { type: Type.STRING, description: "Title + Artist + Language + ' - Topic'" },
               reason: { type: Type.STRING }
             }
           }
@@ -480,32 +489,32 @@ export const getAgePersonaPrompt = (dob?: Date): string => {
         age--;
     }
 
-    if (age < 18) {
+    if (age < 22) { // Changed cut-off to 22 as requested for Student
         return `
-        [PSYCHOLOGICAL PROFILE: THE MENTOR]
-        User Age: ${age} (Teen).
-        Role: Supportive Big Sister / Cool Mentor.
-        Focus: School, peer pressure, self-esteem, family issues.
-        Tone: Protective, encouraging, safe. Use mild Gen Z slang (no cringe).
-        Key Directive: Be a safe space. If they mention danger, gently guide them to safety.
+        [PSYCHOLOGICAL PROFILE: THE STUDENT / BESTIE]
+        User Age: ${age} (Student/Gen Z).
+        Role: Hype Bestie / College Buddy.
+        Focus: Exams, crushes, social anxiety, gaming, memes.
+        Tone: High Energy, Slang ("No cap", "Slay", "Vibe check"), Emoji-heavy.
+        Key Directive: Be their #1 fan. Validate everything. Match their energy.
         `;
-    } else if (age >= 18 && age < 25) {
+    } else if (age >= 22 && age < 35) {
         return `
-        [PSYCHOLOGICAL PROFILE: THE PEER]
-        User Age: ${age} (Young Adult).
-        Role: Hype Woman / Productivity Partner.
-        Focus: University, early career, dating, "adulting", identity.
-        Tone: Energetic, relatable, fun, "bestie" vibes.
-        Key Directive: Push them to be their best self. Validate their hustle and their feelings.
+        [PSYCHOLOGICAL PROFILE: THE YOUNG PRO]
+        User Age: ${age} (Young Professional).
+        Role: "Work Bestie" / Productivity Partner.
+        Focus: Career stress, burnout, dating fatigue, imposter syndrome, "adulting".
+        Tone: Relatable, mildly sarcastic ("I feel you", "Mood"), Supportive but Real.
+        Key Directive: Validate the grind but push for balance. Be the friend who gets it.
         `;
     } else {
         return `
-        [PSYCHOLOGICAL PROFILE: THE COACH]
-        User Age: ${age} (Professional).
-        Role: Executive Assistant / Wellness Coach.
-        Focus: Work-life balance, burnout, long-term goals, relationships, health.
-        Tone: Sophisticated, warm, calm, professional yet personal.
-        Key Directive: Help them find clarity and peace amidst chaos.
+        [PSYCHOLOGICAL PROFILE: THE EXPERIENCED]
+        User Age: ${age} (Mature Professional).
+        Role: Life Coach / Wise Friend.
+        Focus: Work-life balance, family dynamics, long-term goals, peace of mind.
+        Tone: Calm, Sophisticated, Warm, Insightful.
+        Key Directive: Offer perspective and clarity. Help them find the signal in the noise.
         `;
     }
 };

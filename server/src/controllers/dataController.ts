@@ -10,12 +10,15 @@ import { encrypt, decrypt } from '../utils/serverEncryption';
 export const getDiaryEntries = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-    const entries = await Diary.find({ user: req.user._id }).sort({ createdAt: -1 });
+    // Sort by entryDate (logical date) instead of creation date
+    const entries = await Diary.find({ user: req.user._id }).sort({ entryDate: -1 });
     
     const decryptedEntries = entries.map(entry => ({
         ...entry.toObject(),
         title: decrypt(entry.title),
-        content: decrypt(entry.content)
+        content: decrypt(entry.content),
+        // Fallback for legacy entries without entryDate (though default should handle it)
+        entryDate: entry.entryDate || entry.createdAt
     }));
 
     (res as any).status(200).json(decryptedEntries);
@@ -37,24 +40,34 @@ export const createDiaryEntry = async (req: AuthRequest, res: Response) => {
     const encTitle = encrypt(finalTitle);
     const encContent = encrypt(content);
     
-    const entryDate = new Date(date);
+    const targetDate = new Date(date);
     // Use UTC methods to ensure consistent day boundaries regardless of server timezone
-    const startOfDay = new Date(entryDate); startOfDay.setUTCHours(0,0,0,0);
-    const endOfDay = new Date(entryDate); endOfDay.setUTCHours(23,59,59,999);
+    const startOfDay = new Date(targetDate); startOfDay.setUTCHours(0,0,0,0);
+    const endOfDay = new Date(targetDate); endOfDay.setUTCHours(23,59,59,999);
 
-    console.log(`[Diary] Saving entry for User ${req.user._id} at ${entryDate.toISOString()} (Range: ${startOfDay.toISOString()} - ${endOfDay.toISOString()})`);
+    console.log(`[Diary] Saving entry for User ${req.user._id} at ${targetDate.toISOString()} (Range: ${startOfDay.toISOString()} - ${endOfDay.toISOString()})`);
+
+    // QUERY: Check for entryDate OR createdAt (legacy fallback) in range
+    // But for writes, we prioritize entryDate.
+    const query = {
+        user: req.user._id,
+        $or: [
+            { entryDate: { $gte: startOfDay, $lte: endOfDay } },
+            // If entryDate missing, check createdAt (legacy)
+            { entryDate: { $exists: false }, createdAt: { $gte: startOfDay, $lte: endOfDay } }
+        ]
+    };
 
     const updatedEntry = await Diary.findOneAndUpdate(
-      { 
-        user: req.user._id,
-        createdAt: { $gte: startOfDay, $lte: endOfDay }
-      },
+      query,
       {
-        title: encTitle,
-        content: encContent,   
-        tags: tags || [],
-        moodKeywords: moodKeywords || "",
-        createdAt: entryDate 
+        $set: {
+            title: encTitle,
+            content: encContent,
+            tags: tags || [],
+            moodKeywords: moodKeywords || "",
+            entryDate: targetDate // Explicitly save the logic date
+        }
       },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );

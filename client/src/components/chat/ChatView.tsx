@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Menu, Headphones, AlertCircle, Smile, 
   Mic, MicOff, X, Search, Image as ImageIcon, Plus, Camera,
-  ShieldAlert, Loader2, ChevronDown
+  ShieldAlert, Loader2, ChevronDown, Reply
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
@@ -103,6 +103,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [statusDisplay, setStatusDisplay] = useState(currentActivity || 'Online');
   const [uiAction, setUiAction] = useState<'none' | 'listen' | 'block_widget'>('none');
   const [currentMood, setCurrentMood] = useState('neutral');
+  const [suggestedChips, setSuggestedChips] = useState<string[]>([]); // New State for Chips
 
   // Media Menu State
   const [showMediaMenu, setShowMediaMenu] = useState(false);
@@ -307,9 +308,30 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     // @ts-ignore
     if (!window.SpeechRecognition && !window.webkitSpeechRecognition) { setError("Browser not supported."); return; }
     if (isStandardMode) { alert("Voice Mode requires Premium."); return; }
-    if (isVoiceMode) { stopListening(); setIsVoiceMode(false); } else {
-        if (isDictating) { setIsDictating(false); setIsVoiceMode(true); return; }
-        setIsVoiceMode(true); startListening();
+
+    if (isVoiceMode) {
+        // EXITING VOICE MODE
+        stopListening();
+        setIsVoiceMode(false);
+        setTtsEnabled(false); // Auto-disable TTS
+        localStorage.setItem('user_tts_enabled', 'false');
+    } else {
+        // ENTERING VOICE MODE
+        if (isDictating) { setIsDictating(false); }
+
+        setIsVoiceMode(true);
+        setTtsEnabled(true); // Auto-enable TTS
+        localStorage.setItem('user_tts_enabled', 'true');
+
+        // Select Indian Voice if available
+        const voices = window.speechSynthesis.getVoices();
+        const indianVoice = voices.find(v => v.lang.includes('IN') || v.name.includes('India'));
+        if (indianVoice) {
+            setSelectedVoiceURI(indianVoice.voiceURI);
+            localStorage.setItem('user_voice_uri', indianVoice.voiceURI);
+        }
+
+        startListening();
     }
   };
   
@@ -457,6 +479,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             if (thought.status_display) setStatusDisplay(thought.status_display);
                             if (thought.ui_action) setUiAction(thought.ui_action);
                             if (thought.mood) setCurrentMood(thought.mood);
+
+                            // Handle Dynamic Suggested Chips
+                            if (thought.suggested_replies && Array.isArray(thought.suggested_replies)) {
+                                setSuggestedChips(thought.suggested_replies);
+                            }
+
                             if (thought.reaction) {
                                 // Add sticky reaction to USER'S last message
                                 setMessages(prev => prev.map(m => {
@@ -742,7 +770,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      )}
                  </div>
 
-                 <button id="voice-mode-btn" onClick={toggleVoiceMode} className="shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg bg-black/20 hover:bg-white/10">
+                 <button id="voice-mode-btn" onClick={toggleVoiceMode} className={`shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg ${isVoiceMode ? 'bg-white/20 text-white' : 'bg-black/20 hover:bg-white/10'}`}>
                     <Headphones size={18} />
                  </button>
              </div>
@@ -788,27 +816,47 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              </AnimatePresence>
 
              {/* SMART CONTEXT CHIPS */}
-             <div className="overflow-x-auto scrollbar-hide flex gap-2 mb-2 px-1">
-                {(() => {
-                    const hour = new Date().getHours();
-                    const isLateNight = hour >= 23 || hour < 5;
-                    const isNewUser = messages.length <= 2;
+             <AnimatePresence>
+             {suggestedChips.length > 0 || messages.length <= 2 ? (
+                <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-x-auto scrollbar-hide flex gap-2 mb-2 px-1 relative pr-8"
+                >
+                    {(() => {
+                        const hour = new Date().getHours();
+                        const isLateNight = hour >= 23 || hour < 5;
+                        const isNewUser = messages.length <= 2;
 
-                    let chips = ["Roast me", "Inspire me", "Let's jam"];
-                    if (isNewUser) chips = ["Who are you?", "What can you do?", "I'm stressed"];
-                    else if (isLateNight) chips = ["I can't sleep", "Tell me a story", "Play night sounds"];
+                        // Use AI suggestions if available, else fall back to heuristics
+                        let chips = suggestedChips.length > 0 ? suggestedChips : (
+                             isNewUser ? ["Who are you?", "What can you do?", "I'm stressed"] :
+                             isLateNight ? ["I can't sleep", "Tell me a story", "Play night sounds"] :
+                             ["Roast me", "Inspire me", "Let's jam"]
+                        );
 
-                    return chips.map((chip, i) => (
-                        <button
-                            key={i}
-                            onClick={() => handleSend(undefined, chip)}
-                            className="shrink-0 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-xs text-white/70 whitespace-nowrap transition-colors"
-                        >
-                            {chip}
-                        </button>
-                    ));
-                })()}
-             </div>
+                        return chips.map((chip, i) => (
+                            <button
+                                key={i}
+                                onClick={() => handleSend(undefined, chip)}
+                                className="shrink-0 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-xs text-white/70 whitespace-nowrap transition-colors"
+                            >
+                                {chip}
+                            </button>
+                        ));
+                    })()}
+
+                    {/* Dismiss Button */}
+                    <button
+                        onClick={() => setSuggestedChips([])}
+                        className="sticky right-0 bg-black/40 backdrop-blur-sm p-1.5 rounded-full border border-white/10 text-white/40 hover:text-white hover:bg-white/10 ml-2"
+                    >
+                        <X size={12} />
+                    </button>
+                </motion.div>
+             ) : null}
+             </AnimatePresence>
 
             {/* INPUT AREA (MODIFIED FOR LISTEN MODE) */}
              <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border ${uiAction === 'listen' ? 'border-teal-500/50 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'border-white/5'} p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
