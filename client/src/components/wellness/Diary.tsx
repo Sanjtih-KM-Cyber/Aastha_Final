@@ -443,17 +443,21 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   }, [editContent, editTitle]);
 
   const createNewEntry = () => {
+    if (editMode === 'edit') handleSaveEntry(true);
     setActiveDate(new Date());
     setEditMode('edit');
   };
 
   const changeMonth = (offset: number) => {
+      // Month change doesn't change activeDate, so no save needed unless specific logic required.
       const newDate = new Date(currentMonth);
       newDate.setMonth(newDate.getMonth() + offset);
       setCurrentMonth(newDate);
   };
 
   const changeDay = (offset: number) => {
+      if (editMode === 'edit') handleSaveEntry(true);
+
       if (isMobile) {
           setActiveDate(prev => addDays(prev, offset));
           return;
@@ -469,6 +473,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
   };
   
   const handleCalendarClick = (day: number) => {
+      if (editMode === 'edit') handleSaveEntry(true);
       const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
       setActiveDate(newDate);
       if (isMobile) {
@@ -519,6 +524,9 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       const isRightSwipe = distance < -50;
 
       if (!isFlipping) {
+          if (isLeftSwipe || isRightSwipe) {
+             if (editMode === 'edit') handleSaveEntry(true);
+          }
           if (isLeftSwipe) changeDay(1);
           if (isRightSwipe) changeDay(-1);
       }
@@ -526,9 +534,14 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus }
       setTouchEnd(null);
   }
 
+  const handleClose = () => {
+      if (editMode === 'edit') handleSaveEntry(true);
+      onClose();
+  };
+
   return (
     <DraggableWindow 
-      isOpen={isOpen} onClose={onClose} title="Personal Journal"
+      isOpen={isOpen} onClose={handleClose} title="Personal Journal"
       initialWidth={900} initialHeight={650} defaultPosition={{ x: 100, y: 80 }}
       zIndex={zIndex || 20} onFocus={onFocus || (() => {})}
       icon={BookOpen}
