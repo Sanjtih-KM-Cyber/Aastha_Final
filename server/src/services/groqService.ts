@@ -71,35 +71,29 @@ export const generateSubconscious = async (
     - **Good:** "I'm exhausted", "That makes sense", "Let's distract me." (User answering AI)
 
     **3. GOD MODE TOOLS (The Hands):**
-    You have full control. Anticipate needs.
+    You have full control. Anticipate needs. Use 'control_widget' for most things.
+
+    **Structure:** { "name": "control_widget", "params": { "widget": "...", "params": { ... } } }
+
     - **Music (Jam):**
-      - If user asks for specific song/podcast: { "widget": "jam", "params": { "query": "Play <Song Name> <Artist>", "autoplay": true } }
-      - If user says "Play music" (General): { "widget": "jam", "params": { "mood": "chill", "genre": "lofi", "autoplay": true } }
-      - If user specifies language/year: { "widget": "jam", "params": { "language": "Hindi", "year": "2024", "autoplay": true } }
+      - Song/Podcast: { "name": "control_widget", "params": { "widget": "jam", "params": { "query": "Play <Name>", "autoplay": true } } }
+      - General: { "name": "control_widget", "params": { "widget": "jam", "params": { "mood": "chill", "genre": "lofi", "autoplay": true } } }
 
     - **Soundscape (ASMR DJ):**
-      - Mix sounds for specific vibes. Always vary the mix slightly.
-      - Params: { "widget": "soundscape", "params": { "preset": "rain:0.6,fire:0.3,thunder:0.1", "volume": 0.8 } }
-      - For "Work": "cafe:0.7,rain:0.3"
-      - For "Sleep": "night:0.6,wind:0.2"
+      - Mix sounds (rain, forest, fire, ocean, night, wind, thunder, birds).
+      - { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6,fire:0.3", "volume": 0.8 } } }
 
     - **Focus (Pomodoro):**
-      - If user wants to work/study: { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 25, "breakDuration": 5 } }
-      - If user specifies time ("Work for 50 mins"): { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 50 } }
+      - { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 25 } } }
 
     - **Breathing:**
-      - Anxiety/Stress -> { "widget": "breathing", "params": { "mode": "Grounding" } }
-      - Sleep/Insomnia -> { "widget": "breathing", "params": { "mode": "Relax" } } (4-7-8)
-      - Focus/Energy -> { "widget": "breathing", "params": { "mode": "Box" } }
+      - { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
 
     - **Diary:**
-      - If user says "Note this down" or "Dear Diary": { "widget": "diary", "params": { "action": "write", "title": "Auto Entry", "content": "<Summarize user input>" } }
+      - { "name": "write_diary", "params": { "title": "Auto Entry", "content": "<Summarize user input>" } }
 
     - **Social Detective (The Web):**
-      - If the user mentions a specific person (friend/ex/family) and reveals something new about them:
-      - Call 'update_dossier' -> { "name": "Bob", "deltaScore": -5, "verdict": "SUSPECT", "newTrait": "Flakes last minute" }
-      - deltaScore: Negative for bad actions, Positive for good.
-      - Verdict: Set if clear pattern emerges (TOXIC/KEEPER/SUSPECT/NPC).
+      - { "name": "update_dossier", "params": { "name": "Bob", "deltaScore": -5, "verdict": "SUSPECT", "newTrait": "Flakes" } }
 
     **OUTPUT JSON ONLY (Strict Format):**
     {

@@ -16,7 +16,6 @@ const BreathingWidget = React.lazy(() => import('../components/widgets/Breathing
 const MoodTracker = React.lazy(() => import('../components/widgets/MoodTracker').then(m => ({ default: m.MoodTracker })));
 // REPLACED MemoryWall with TheWebWidget
 const TheWebWidget = React.lazy(() => import('../components/widgets/TheWebWidget').then(m => ({ default: m.TheWebWidget })));
-const MirrorWidget = React.lazy(() => import('../components/widgets/MirrorWidget').then(m => ({ default: m.MirrorWidget })));
 
 // Memoized Wrappers to prevent parent re-renders affecting heavy widgets
 const MemoDiary = memo(Diary);
@@ -26,7 +25,6 @@ const MemoSoundscape = memo(Soundscape);
 const MemoBreathing = memo(BreathingWidget);
 const MemoMood = memo(MoodTracker);
 const MemoWeb = memo(TheWebWidget); // New Name
-const MemoMirror = memo(MirrorWidget);
 
 const DESKTOP_TOUR_STEPS: TourStep[] = [
   {
@@ -162,7 +160,6 @@ export const Sanctuary: React.FC = () => {
     breathing: false,
     mood: false,
     lore: false, // Keeps ID as 'lore' for compatibility with old state, but UI shows "The Web"
-    mirror: false,
   });
 
   // Derived Status for Smart Header
@@ -181,7 +178,6 @@ export const Sanctuary: React.FC = () => {
     breathing: 50,
     mood: 50,
     lore: 50,
-    mirror: 50,
   });
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -339,17 +335,6 @@ export const Sanctuary: React.FC = () => {
                   onClose={() => closeWidget('lore')}
                   zIndex={zIndices.lore}
                   onFocus={() => bringToFront('lore')}
-              />
-            </React.Suspense>
-          </div>
-
-          <div style={{ pointerEvents: 'auto' }}>
-            <React.Suspense fallback={null}>
-              <MemoMirror
-                  isOpen={widgets.mirror}
-                  onClose={() => closeWidget('mirror')}
-                  zIndex={zIndices.mirror}
-                  onFocus={() => bringToFront('mirror')}
               />
             </React.Suspense>
           </div>
