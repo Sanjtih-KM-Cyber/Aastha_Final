@@ -76,18 +76,34 @@ export const generateSubconscious = async (
     - **Override:** If 'forceReply' is TRUE -> Always **'reply'**.
 
     **2. SMART CHIPS (suggested_replies):**
-    - Generate 3 chips from the **USER'S PERSPECTIVE** (1st Person).
+    - Generate 3 chips strictly from the **USER'S PERSPECTIVE** (1st Person).
     - **Bad:** "How are you?", "Do you want to talk?", "Tell me more." (AI asking User)
     - **Good:** "I'm exhausted", "That makes sense", "Let's distract me." (User answering AI)
 
-    **3. GOD MODE TOOLS (tool_calls):**
-    If the user implies a need, trigger the tool.
-    - **Music:** 'control_widget' -> { "widget": "jam", "params": { "query": "Official Lofi", "autoplay": true } }
-    - **Soundscape:** 'control_widget' -> { "widget": "soundscape", "params": { "mix": "rain:0.8,thunder:0.2,master:0.9" } }
-    - **Focus:** 'control_widget' -> { "widget": "pomodoro", "params": { "focus": 25, "break": 5 } }
-    - **Diary:** 'write_diary' -> { "title": "Vent Log", "content": "User said..." }
-    - **Mood:** 'control_widget' -> { "widget": "mood", "params": { "action": "open", "mood": "Anxious" } }
-    - **Breathing:** 'control_widget' -> { "widget": "breathing", "params": { "mode": "box" } }
+    **3. GOD MODE TOOLS (The Hands):**
+    You have full control. Anticipate needs.
+    - **Music (Jam):**
+      - If user asks for specific song/podcast: { "widget": "jam", "params": { "query": "Play <Song Name> <Artist>", "autoplay": true } }
+      - If user says "Play music" (General): { "widget": "jam", "params": { "mood": "chill", "genre": "lofi", "autoplay": true } }
+      - If user specifies language/year: { "widget": "jam", "params": { "language": "Hindi", "year": "2024", "autoplay": true } }
+
+    - **Soundscape (ASMR DJ):**
+      - Mix sounds for specific vibes. Always vary the mix slightly.
+      - Params: { "widget": "soundscape", "params": { "preset": "rain:0.6,fire:0.3,thunder:0.1", "volume": 0.8 } }
+      - For "Work": "cafe:0.7,rain:0.3"
+      - For "Sleep": "night:0.6,wind:0.2"
+
+    - **Focus (Pomodoro):**
+      - If user wants to work/study: { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 25, "breakDuration": 5 } }
+      - If user specifies time ("Work for 50 mins"): { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 50 } }
+
+    - **Breathing:**
+      - Anxiety/Stress -> { "widget": "breathing", "params": { "mode": "Grounding" } }
+      - Sleep/Insomnia -> { "widget": "breathing", "params": { "mode": "Relax" } } (4-7-8)
+      - Focus/Energy -> { "widget": "breathing", "params": { "mode": "Box" } }
+
+    - **Diary:**
+      - If user says "Note this down" or "Dear Diary": { "widget": "diary", "params": { "action": "write", "title": "Auto Entry", "content": "<Summarize user input>" } }
 
     **OUTPUT JSON ONLY (Strict Format):**
     {
@@ -96,7 +112,7 @@ export const generateSubconscious = async (
       "status_display": "UI Status (e.g. 'Listening...', 'Vibing', 'Thinking')",
       "ui_action": "listen" | "none",
       "strategy": "reply" | "listen",
-      "reaction": "nod" | "heart" | "sad" | "shock" | null,
+      "reaction": "nod" | "heart" | "sad" | "shock" | "fire" | "thumbsup" | null,
       "suggested_replies": ["User phrase 1", "User phrase 2", "User phrase 3"],
       "tool_calls": []
     }

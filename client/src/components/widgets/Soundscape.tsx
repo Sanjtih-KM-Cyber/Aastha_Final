@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import { SOUND_URLS } from '../../constants'; // IMPORTED CONSTANT
 import { 
@@ -117,33 +117,48 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
   useEffect(() => {
       if (isOpen) {
           if (preset) {
-              // PRESET PARSER: "rain:0.8,fire:0.2" or "rain,fire" (defaults to 0.5)
-              const parts = preset.split(',');
-              const newActive: Record<string, number> = {};
-
-              // Clear existing
-              setActiveLoops({});
-
-              parts.forEach(part => {
-                  const [name, volStr] = part.split(':');
-                  const cleanName = name.trim().toLowerCase();
-                  const vol = volStr ? parseFloat(volStr) : 0.5;
-
-                  const match = SOUNDS.find(s => s.id === cleanName || s.label.toLowerCase() === cleanName);
-                  if (match) {
-                      newActive[match.id] = isNaN(vol) ? 0.5 : vol;
-                      getAudio(match.id);
+              if (preset === 'random') {
+                  // Generate random mix
+                  const newActive: Record<string, number> = {};
+                  // Pick 2-3 random sounds
+                  const available = SOUNDS.filter(s => !erroredSounds.has(s.id));
+                  const count = 2 + Math.floor(Math.random() * 2);
+                  for (let i = 0; i < count; i++) {
+                      const rand = available[Math.floor(Math.random() * available.length)];
+                      if (rand && !newActive[rand.id]) {
+                          newActive[rand.id] = 0.3 + Math.random() * 0.5; // Random volume 0.3-0.8
+                          getAudio(rand.id);
+                      }
                   }
-              });
+                  setActiveLoops(newActive);
+              } else {
+                  // Parse specific string: "rain:0.8,fire:0.2"
+                  const parts = preset.split(',');
+                  const newActive: Record<string, number> = {};
 
-              setActiveLoops(newActive);
+                  // Clear existing? No, maybe merge or clear. Clear is safer for "setting a scene".
+                  setActiveLoops({});
+
+                  parts.forEach(part => {
+                      const [name, volStr] = part.split(':');
+                      const cleanName = name.trim().toLowerCase();
+                      const vol = volStr ? parseFloat(volStr) : 0.5;
+
+                      const match = SOUNDS.find(s => s.id === cleanName || s.label.toLowerCase() === cleanName);
+                      if (match) {
+                          newActive[match.id] = isNaN(vol) ? 0.5 : vol;
+                          getAudio(match.id);
+                      }
+                  });
+                  setActiveLoops(newActive);
+              }
           }
 
           if (volume !== undefined) {
               setMasterVolume(Math.max(0, Math.min(1, volume)));
           }
       }
-  }, [isOpen, preset, volume]);
+  }, [isOpen, preset, volume]); // Added volume dependency
 
   // Cleanup on unmount or close
   useEffect(() => {
@@ -202,7 +217,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
       color="#06B6D4"
     >
       <div className="flex flex-col h-full w-full font-sans select-none">
-        {/* ... (UI JSX code same as provided previously) ... */}
         
         {/* --- TOP 35%: Master Control --- */}
         <div 

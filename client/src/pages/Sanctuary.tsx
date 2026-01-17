@@ -214,6 +214,7 @@ export const Sanctuary: React.FC = () => {
         setWidgets(newWidgets);
         bringToFront(key);
     } else {
+        // Even if open, update config (e.g. changing song)
         bringToFront(key);
     }
   };
@@ -301,6 +302,7 @@ export const Sanctuary: React.FC = () => {
                   zIndex={zIndices.soundscape}
                   onFocus={() => bringToFront('soundscape')}
                   preset={widgetConfigs.soundscape?.preset}
+                  volume={widgetConfigs.soundscape?.volume}
               />
             </React.Suspense>
           </div>

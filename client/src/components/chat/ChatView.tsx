@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Menu, Headphones, AlertCircle, Smile, 
   Mic, MicOff, X, Search, Image as ImageIcon, Plus, Camera,
-  ShieldAlert, Loader2, ChevronDown, Reply, Check
+  ShieldAlert, Loader2, ChevronDown, Reply, Check, ArrowDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
@@ -114,6 +114,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // Media Menu State
   const [showMediaMenu, setShowMediaMenu] = useState(false);
+
+  // Scroll State
+  const [showScrollDown, setShowScrollDown] = useState(false);
 
   // --- SEARCH STATE ---
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -312,8 +315,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   const autoResizeTextarea = () => {
     if (textareaRef.current) {
+        // Reset height to calculate correct scrollHeight
         textareaRef.current.style.height = 'auto';
-        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+        const newHeight = Math.min(textareaRef.current.scrollHeight, 120);
+        textareaRef.current.style.height = `${newHeight}px`;
     }
   };
 
@@ -374,6 +379,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
   useEffect(() => scrollToBottom(), [messages, isTyping]);
 
+  const handleScroll = () => {
+      if (!messagesContainerRef.current) return;
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+      const isBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setShowScrollDown(!isBottom);
+  };
+
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (isStandardMode) { setError("Vision Analysis requires Premium."); return; }
       const files = e.target.files;
@@ -394,6 +406,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
+    // Debounce resize slightly or just run it.
+    // It's usually fast enough, but let's ensure it doesn't cause layout thrashing too much.
+    // React state update is async, so we can resize after render or in effect.
+    // But for instant feedback, calling it directly is better.
+    // Lag is often due to re-rendering the whole message list.
+    // MessageBubble is memoized (conceptually), but we should ensure it.
     autoResizeTextarea();
   };
 
@@ -426,7 +444,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     setIsTyping(true); 
     setError(null);
     setStatusDisplay('Thinking...'); 
-    autoResizeTextarea();
+    // Reset textarea height
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     // 2. TRIGGER SUBCONSCIOUS BRAIN (Client-Side)
     let brainStrategy = 'reply';
@@ -853,13 +872,29 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       {/* --- SECTION 2: CHAT AREA --- */}
       <div 
           ref={messagesContainerRef}
+          onScroll={handleScroll}
           className="flex-1 w-full mx-auto overflow-y-auto px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
           style={{ overscrollBehaviorY: 'contain' }}
       >
-          <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40">
+          <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40 relative">
               <div className="h-4" /> 
               {renderMessages()}
               <div ref={messagesEndRef} />
+
+              {/* Jump to Bottom Button */}
+              <AnimatePresence>
+                {showScrollDown && (
+                    <motion.button
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        onClick={scrollToBottom}
+                        className="fixed bottom-32 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-20 hover:bg-white/10 hover:text-white transition-colors"
+                    >
+                        <ArrowDown size={20} />
+                    </motion.button>
+                )}
+              </AnimatePresence>
           </div>
       </div>
 
@@ -1021,4 +1056,3 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     </div>
   );
 };
-
