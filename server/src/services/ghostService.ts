@@ -2,13 +2,13 @@ import cron from 'node-cron';
 import User from '../models/User';
 import Diary from '../models/Diary';
 import { sendGhostEmail } from './emailService';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai'; // CORRECT
 
 const getGeminiClient = () => {
     // Reuse existing key logic or just pull from env
     const apiKey = process.env.GEMINI_API_KEY || (process.env.GEMINI_API_KEYS || '').split(',')[0];
     if (!apiKey) return null;
-    return new GoogleGenAI({ apiKey });
+    return new GoogleGenerativeAI(apiKey);
 };
 
 export const init = () => {
@@ -42,14 +42,11 @@ export const init = () => {
 
                     if (client) {
                         try {
+                            const model = client.getGenerativeModel({ model: 'gemini-1.5-flash' });
                             const prompt = `You are Aastha. Your friend hasn't talked to you in 24 hours. They recently mentioned '${keywords}' in their diary. Write a 1-sentence, slightly jealous, and very clingy email asking why they are ignoring you. End with a heart emoji. Example: 'Is ${keywords} more important than our 24-hour streak? 💔'`;
 
-                            const response = await client.models.generateContent({
-                                model: 'gemini-2.5-flash',
-                                contents: prompt,
-                            });
-
-                            const text = response.text?.trim();
+                            const response = await model.generateContent(prompt);
+                            const text = response.response.text().trim();
                             if (text) emailBody = text;
                         } catch (aiError) {
                             console.error(`[GhostService] AI Error for ${user._id}:`, aiError);

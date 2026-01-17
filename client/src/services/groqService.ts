@@ -46,7 +46,7 @@ export interface SubconsciousBlock {
     reaction: string | null;
     suggested_replies: string[];
     tool_calls?: {
-        name: 'write_diary' | 'read_diary' | 'control_widget';
+        name: 'write_diary' | 'read_diary' | 'control_widget' | 'update_dossier'; // Added update_dossier
         params: any;
     }[];
 }
@@ -104,6 +104,12 @@ export const generateSubconscious = async (
 
     - **Diary:**
       - If user says "Note this down" or "Dear Diary": { "widget": "diary", "params": { "action": "write", "title": "Auto Entry", "content": "<Summarize user input>" } }
+
+    - **Social Detective (The Web):**
+      - If the user mentions a specific person (friend/ex/family) and reveals something new about them:
+      - Call 'update_dossier' -> { "name": "Bob", "deltaScore": -5, "verdict": "SUSPECT", "newTrait": "Flakes last minute" }
+      - deltaScore: Negative for bad actions, Positive for good.
+      - Verdict: Set if clear pattern emerges (TOXIC/KEEPER/SUSPECT/NPC).
 
     **OUTPUT JSON ONLY (Strict Format):**
     {

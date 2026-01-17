@@ -14,7 +14,8 @@ const JamWithAasthaWidget = React.lazy(() => import('../components/widgets/JamWi
 const Soundscape = React.lazy(() => import('../components/widgets/Soundscape').then(m => ({ default: m.Soundscape })));
 const BreathingWidget = React.lazy(() => import('../components/widgets/BreathingWidget').then(m => ({ default: m.BreathingWidget })));
 const MoodTracker = React.lazy(() => import('../components/widgets/MoodTracker').then(m => ({ default: m.MoodTracker })));
-const MemoryWall = React.lazy(() => import('../components/widgets/MemoryWall').then(m => ({ default: m.MemoryWall })));
+// REPLACED MemoryWall with TheWebWidget
+const TheWebWidget = React.lazy(() => import('../components/widgets/TheWebWidget').then(m => ({ default: m.TheWebWidget })));
 const MirrorWidget = React.lazy(() => import('../components/widgets/MirrorWidget').then(m => ({ default: m.MirrorWidget })));
 
 // Memoized Wrappers to prevent parent re-renders affecting heavy widgets
@@ -24,7 +25,7 @@ const MemoJam = memo(JamWithAasthaWidget);
 const MemoSoundscape = memo(Soundscape);
 const MemoBreathing = memo(BreathingWidget);
 const MemoMood = memo(MoodTracker);
-const MemoLore = memo(MemoryWall);
+const MemoWeb = memo(TheWebWidget); // New Name
 const MemoMirror = memo(MirrorWidget);
 
 const DESKTOP_TOUR_STEPS: TourStep[] = [
@@ -160,7 +161,7 @@ export const Sanctuary: React.FC = () => {
     soundscape: false,
     breathing: false,
     mood: false,
-    lore: false,
+    lore: false, // Keeps ID as 'lore' for compatibility with old state, but UI shows "The Web"
     mirror: false,
   });
 
@@ -330,9 +331,10 @@ export const Sanctuary: React.FC = () => {
             </React.Suspense>
           </div>
 
+          {/* UPDATED: THE WEB WIDGET */}
           <div style={{ pointerEvents: 'auto' }}>
             <React.Suspense fallback={null}>
-              <MemoLore
+              <MemoWeb
                   isOpen={widgets.lore}
                   onClose={() => closeWidget('lore')}
                   zIndex={zIndices.lore}

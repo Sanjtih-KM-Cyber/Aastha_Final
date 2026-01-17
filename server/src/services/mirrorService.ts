@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import User from '../models/User';
 import Chat from '../models/Chat';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai'; // CORRECT
 import { decrypt, encrypt } from '../utils/serverEncryption';
 import dotenv from 'dotenv';
 
@@ -9,7 +9,7 @@ dotenv.config();
 
 const getClient = () => {
     const key = process.env.GEMINI_API_KEYS?.split(',')[0] || process.env.API_KEY || '';
-    return new GoogleGenAI({ apiKey: key });
+    return new GoogleGenerativeAI(key);
 };
 
 // ==========================================
@@ -66,13 +66,9 @@ export const initMirrorService = () => {
                         ${textContext}
                     `;
 
-                    const response = await client.models.generateContent({
-                        model: 'gemini-1.5-flash',
-                        contents: prompt,
-                        config: { temperature: 0.7 }
-                    });
-
-                    const diaryContent = response.text || "They were quiet today. I hope they are okay.";
+                    const model = client.getGenerativeModel({ model: 'gemini-1.5-flash' });
+                    const response = await model.generateContent(prompt);
+                    const diaryContent = response.response.text() || "They were quiet today. I hope they are okay.";
 
                     // Save to User's Mirror Entries
                     // Use updateOne to avoid fetching full user doc if we iterate large lists
