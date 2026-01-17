@@ -147,6 +147,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let chatSession = await Chat.findOne({ user: userId });
     if (!chatSession) chatSession = await Chat.create({ user: userId, messages: [] });
 
+    // FIX 1: TYPE ASSERTION FOR HISTORY WINDOW
+    // We cast 'role' to the specific union type required by ChatMessage
     const historyWindow: ChatMessage[] = chatSession.messages.slice(-15).map(m => ({
         role: m.role as 'user' | 'assistant' | 'system',
         content: decrypt(m.content)
@@ -164,7 +166,12 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // STEP 1: THE BRAIN (Groq) - Always runs to decide Strategy
     // =================================================================================
     const userContextString = `User: ${userName}, Mood: ${user.moodStatus}, Facts: ${user.facts.join(', ')}`;
-    const brainHistory = [...historyWindow, { role: 'user', content: newUserMsgContent }];
+    
+    // FIX 2: TYPE ASSERTION FOR BRAIN HISTORY
+    const brainHistory: ChatMessage[] = [
+        ...historyWindow, 
+        { role: 'user', content: newUserMsgContent }
+    ];
     
     const subconscious = await generateSubconscious(brainHistory, userContextString, forceReply);
 
@@ -176,7 +183,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
     if (subconscious.strategy === 'listen') {
         // We purposefully END the stream here.
-        // The Frontend sees 'ui_action: listen' in the thought block above and handles the UI.
         (res as any).write('data: [DONE]\n\n');
         (res as any).end();
 
@@ -201,7 +207,10 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     // Prepare System Prompt
-    let baseTemplate = (user.persona === 'aarav' || user.persona === 'aastik') ? AASTIK_PROMPT : AASTHA_PROMPT;
+    // FIX 3: CAST USER.PERSONA TO STRING TO AVOID TS2367
+    const currentPersona = user.persona as string;
+    let baseTemplate = (currentPersona === 'aarav' || currentPersona === 'aastik') ? AASTIK_PROMPT : AASTHA_PROMPT;
+    
     let voiceSystemPrompt = baseTemplate
         .replace('{{userName}}', userName || 'Friend')
         .replace('{{subconsciousContext}}', JSON.stringify(subconscious.internal_monologue))
@@ -268,6 +277,10 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
   }
 };
+
+// ==========================================
+// 3. GET HISTORY (FIX FOR MISSING EXPORT)
+// ==========================================
 export const getChatHistory = async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
