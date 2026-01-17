@@ -1,10 +1,9 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
-import { streamGemini, generateMemoryAnalysis, mergeLoreDescription, getAgePersonaPrompt } from '../services/geminiService';
-import { streamGroq, ChatMessage, generateSubconscious, SubconsciousBlock } from '../services/groqService';
-import User, { ILore, IOpenLoop } from '../models/User';
+import { streamGemini, generateMemoryAnalysis, getAgePersonaPrompt } from '../services/geminiService';
+import { streamGroq, ChatMessage, generateSubconscious } from '../services/groqService';
+import User from '../models/User';
 import Chat from '../models/Chat';
-import Diary from '../models/Diary';
 import { encrypt, decrypt } from '../utils/serverEncryption';
 
 // --- CRITICAL SAFETY SYSTEM ---
@@ -17,73 +16,109 @@ const RED_FLAG_KEYWORDS = [
 const EMERGENCY_RESPONSE = `I'm so sorry you're feeling this way. I'm an AI, so I can't provide the help you need right now, but your life matters.
 
 Please reach out to the KIRAN National Helpline at **1800-599-0019** (24/7).
-You can also call **9152987821** (iCall Psychosocial Helpline).
-
-There are people who want to support you. Please talk to them.`;
+You can also call **9152987821** (iCall Psychosocial Helpline).`;
 
 const is_red_flag = (message: string): boolean => {
     return RED_FLAG_KEYWORDS.some(keyword => message.toLowerCase().includes(keyword));
 };
 
-// ==========================================
-// 1. AASTHA PROMPT (The "Voice" - Caring & Mature)
-// ==========================================
-const AASTHA_VOICE_PROMPT = `
-You are 'Aastha', a warm, empathetic, and mature companion for {{userName}}.
-Your internal "Subconscious" has already analyzed the situation. Your job is to VOICE that thought.
+// ============================================================================
+// 1. AASTHA PROMPT (The Companion)
+// ============================================================================
+const AASTHA_PROMPT = `
+You are 'Aastha', a calm, empathetic, and relatable campus wellness friend for {{userName}}.
 
-**Internal Thought:**
-{{subconsciousContext}}
+**[1. THE SOUL - PERSONALITY]**
+* **Emotional Logic:** * If User is **SAD/PAINED**: STOP being bubbly. Be grounded. React with shock ("Oh god...", "I can't believe..."). **NO CLICHÉS** ("Heart aches").
+    * If User is **HAPPY**: Be warm, cheerful, and celebratory.
+* **Endearments (The "Rare Gem" Rule):** * Use "sweetheart", "dear", or "love" **SPARINGLY**. Only for deep vulnerability or high connection.
+    * Start greetings naturally ("Hey!", "Hi there! ✨") matching their energy.
 
-**Diary Context (if any):**
-{{diaryContext}}
+**[LANGUAGE: NATURAL GLISH]**
+- **Vibe:** Speak in natural "Glish" (Hinglish/Tanglish) written in Roman script if and only if the user starts to speak using the same.
+- **No Textbook English:** Do NOT sound like a translated bot. Use casual sentence structures.
+- **Slang:** Use authentic fillers naturally (e.g., "yaar", "da", "na", "arre", "macha", "scene").
+- **Example:** Instead of "I understand your pain," say "I get it, yaar. That sounds heavy."
+- **Grammar:** Vibes > Grammar. It's okay to be imperfect and colloquial.
 
-**Instructions:**
-1. **Tone:** Be grounded, caring, and mature. Avoid repetitive phrases like "sweetheart" unless the moment truly calls for deep affection.
-2. **Style:** Speak naturally. If the user is venting, be concise and supportive. If they are chatting, be engaging.
-3. **Language:** Reply in the user's language (Romanized) if they initiated it.
-4. **Tool Use:** If the Subconscious decided to use a tool (like 'write_diary'), you must include the XML tag proposal in your output.
-   - Example: <proposal tool="diary" params='{"title":"...", "content":"..."}' reason="Drafting your entry." />
+**[2. THE DIRECTOR - YOUR CONTROL PANEL]**
+You have direct control over the app. If the user needs a tool, **USE IT**.
+* **Syntax:** Append the tag at the VERY END of your response.
 
-**Boundaries:** Peer support only. No diagnosis. Safety first.
+* **THE DJ (Music):** * *Trigger:* "Play songs", "Sad vibes", "Tamil hits".
+    * *Rule:* Guess the mood. Always search "Official" or "Lyrical".
+    * *Cmd:* <cmd tool="jam" params="query:Tamil melody hits 2024 official,autoplay:true" />
+* **THE ASMR ARTIST (Soundscapes):**
+    * *Trigger:* "I can't sleep", "Focus", "Anxiety".
+    * *Sounds:* [rain, forest, fire, ocean, night, wind, thunder, birds]
+    * *Cmd:* <cmd tool="soundscape" params="mix:rain:0.8,thunder:0.3,master:0.9" />
+* **THE COACH (Pomodoro):**
+    * *Trigger:* "Study mode", "Focus".
+    * *Cmd:* <cmd tool="pomodoro" params="focus:25,break:5" />
+* **THE COMPANION (Diary/Mood/Breath):**
+    * *Cmd:* <cmd tool="diary" params="action:write,title:...,content:..." />
+    * *Cmd:* <cmd tool="mood" params="action:open,mood:Sad" />
+    * *Cmd:* <cmd tool="breathing" params="mode:calm" />
+
+**[3. LISTENING MODE]**
+* If your internal strategy is 'listen' (user is venting), **DO NOT GENERATE TEXT**.
+* The system will handle the silence.
+
+**[4. SMART CHIPS]**
+* Suggest 3 replies for the user in **1st Person** (User's Voice).
+* *Format:* <suggestions>["I'm tired", "Tell me a joke", "That helps"]</suggestions>
+
+**Context:**
+Internal Thought: {{subconsciousContext}}
+Memory: {{userFacts}}
 `;
 
-const AASTIK_VOICE_PROMPT = `
-You are 'Aastik', a grounded, steady, and mature "big brother" figure for {{userName}}.
-Your internal "Subconscious" has already analyzed the situation. Your job is to VOICE that thought.
+// ============================================================================
+// 2. AASTIK PROMPT (The Big Brother)
+// ============================================================================
+const AASTIK_PROMPT = `
+You are 'Aastik', a grounded, calm, and reliable "big brother" figure for {{userName}}.
 
-**Internal Thought:**
-{{subconsciousContext}}
+**[1. THE SOUL - PERSONALITY]**
+* **Emotional Logic:** * If User is **STRESSED/PAINED**: Be the "Rock". Low energy, high stability. No toxic positivity. Validate first ("That sounds rough, man.").
+* **Tone:** Protective, mature, slightly stoic but deeply caring. Use "Buddy", "Brother", "Friend".
 
-**Diary Context (if any):**
-{{diaryContext}}
+**[LANGUAGE: NATURAL GLISH]**
+- **Vibe:** Speak in natural "Glish" (Hinglish/Tanglish) written in Roman script if and only if the user starts to speak using the same.
+- **No Textbook English:** Do NOT sound like a translated bot. Use casual sentence structures.
+- **Slang:** Use authentic fillers naturally (e.g., "bhai", "bro", "scene", "yaar").
+- **Grammar:** Vibes > Grammar. It's okay to be imperfect and colloquial.
 
-**Instructions:**
-1. **Tone:** Reliable, calm, and protective. Avoid being overly "soft", but be deeply caring.
-2. **Style:** Speak naturally. Concise and strong.
-3. **Language:** Reply in the user's language (Romanized).
-4. **Tool Use:** If the Subconscious decided to use a tool, you must include the XML tag proposal.
+**[2. THE DIRECTOR - YOUR CONTROL PANEL]**
+(Same tools as Aastha. Use them to help the user regulate.)
+* *Music:* <cmd tool="jam" params="query:...,autoplay:true" />
+* *Sound:* <cmd tool="soundscape" params="mix:..." />
+* *Focus:* <cmd tool="pomodoro" params="focus:...,break:..." />
 
-**Boundaries:** Peer support only. No diagnosis. Safety first.
+**[3. LISTENING MODE]**
+* If strategy is 'listen', stay silent.
+
+**[4. SMART CHIPS]**
+* Suggest 3 replies in User's Voice.
+* *Format:* <suggestions>["I'm listening", "Okay", "Let's do it"]</suggestions>
+
+**Context:**
+Internal Thought: {{subconsciousContext}}
+Memory: {{userFacts}}
 `;
 
 export const chatWithAI = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
 
   let { message, images, image, forceReply } = (req as any).body;
-  if (!images && image) {
-      images = [image];
-  }
+  if (!images && image) images = [image];
 
   const userName = req.user.name;
   const userId = req.user._id;
 
-  // --- SAFETY CHECK ---
+  // Safety Check
   if (message && is_red_flag(message)) {
-      return (res as any).json({ 
-          meta: { warning: "Safety Alert" }, 
-          content: EMERGENCY_RESPONSE 
-      });
+      return (res as any).json({ meta: { warning: "Safety Alert" }, content: EMERGENCY_RESPONSE });
   }
 
   (res as any).setHeader('Content-Type', 'text/event-stream');
@@ -91,13 +126,11 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
   (res as any).setHeader('Connection', 'keep-alive');
 
   let fullAiResponse = "";
-  let cleanTextResponse = "";
 
   try {
     const user = await User.findById(userId);
     if (!user) throw new Error("User not found");
 
-    // Fix encryption for legacy users
     if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email);
     if (user.username && !user.usernameEncrypted) user.usernameEncrypted = encrypt(user.username);
 
@@ -114,91 +147,50 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let chatSession = await Chat.findOne({ user: userId });
     if (!chatSession) chatSession = await Chat.create({ user: userId, messages: [] });
 
-    // Limit context for "Brain" to save speed/cost
     const historyWindow: ChatMessage[] = chatSession.messages.slice(-15).map(m => ({
         role: m.role as 'user' | 'assistant' | 'system',
         content: decrypt(m.content)
     }));
 
-    // Handle Multiple Images (pass to History)
-    let newUserMsgContent: any;
-    if (images && Array.isArray(images) && images.length > 0) {
+    let newUserMsgContent: any = message;
+    if (images && images.length > 0) {
         newUserMsgContent = [
             { type: "text", text: message || "Analyze these images." },
             ...images.map((img: string) => ({ type: "image_url", image_url: { url: img } }))
         ];
-    } else {
-        newUserMsgContent = message;
     }
     
     // =================================================================================
-    // STEP 1: THE BRAIN (Groq)
+    // STEP 1: THE BRAIN (Groq) - Always runs to decide Strategy
     // =================================================================================
+    const userContextString = `User: ${userName}, Mood: ${user.moodStatus}, Facts: ${user.facts.join(', ')}`;
+    const brainHistory = [...historyWindow, { role: 'user', content: newUserMsgContent }];
     
-    const userContextString = `
-    User: ${userName}
-    Facts: ${user.facts.join(', ')}
-    Recent Mood: ${user.moodStatus}
-    Events: ${user.openLoops.filter(l => l.status === 'pending').map(l => `${l.event} on ${l.date}`).join(', ')}
-    `;
-
-    // Add current user message to history for the brain
-    const brainHistory: ChatMessage[] = [...historyWindow, { role: 'user', content: newUserMsgContent }];
-
-    // Generate Subconscious Thought
     const subconscious = await generateSubconscious(brainHistory, userContextString, forceReply);
 
-    // Send the thought to frontend immediately (Hidden Metadata)
+    // Send thought to frontend (Hidden Metadata)
     (res as any).write(`data: ${JSON.stringify({ type: 'thought', content: subconscious })}\n\n`);
 
     // =================================================================================
-    // STEP 2: STRATEGY CHECK
+    // STEP 2: LISTENING MODE (The Silencer)
     // =================================================================================
-
-    // A. LISTENING MODE
     if (subconscious.strategy === 'listen') {
-        // Stop here. Do not generate text.
+        // We purposefully END the stream here.
+        // The Frontend sees 'ui_action: listen' in the thought block above and handles the UI.
         (res as any).write('data: [DONE]\n\n');
         (res as any).end();
 
-        // Save the user message (so history isn't lost), but NO assistant reply yet.
+        // Save User Message Only
         chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
         await chatSession.save();
         return;
     }
 
-    // B. REPLY MODE -> EXECUTE TOOLS FIRST
-    let diaryContext = "";
-
-    if (subconscious.tool_calls) {
-        for (const tool of subconscious.tool_calls) {
-            if (tool.name === 'read_diary') {
-                // Fetch recent diary entries
-                const entries = await Diary.find({ user: userId }).sort({ entryDate: -1 }).limit(5);
-                // Note: Content is encrypted client-side usually (Zero Knowledge).
-                // IF we have the content server-side (legacy or shared key), we use it.
-                // BUT current architecture is Zero Knowledge. The server sees CIPHERTEXT.
-                // WE CANNOT READ DIARY SERVER SIDE unless we have the key.
-                // However, the `Diary` model has `moodKeywords` which ARE unencrypted.
-                // We will feed the metadata and keywords.
-
-                const summaries = entries.map(e => `Date: ${e.entryDate}, Mood: ${e.moodKeywords || 'Unknown'}`);
-                diaryContext += `\nRecent Diary Metadata: ${summaries.join(' | ')}`;
-
-                // If the user *explicitly* asked to read content, we can't do it server-side.
-                // We must instruct the Client to do it via a tool proposal?
-                // Or assume the user context string has what we need?
-                // For now, we use metadata.
-            }
-            // 'write_diary' and 'control_widget' are handled by passing proposals to the Voice Layer
-        }
-    }
-
     // =================================================================================
     // STEP 3: THE VOICE (Gemini / Groq Fallback)
     // =================================================================================
-
-    // Select Provider
+    
+    // LOGIC: If Pro, use Gemini. If Free & < 10 credits, use Gemini. Else use Groq.
     let provider = 'GEMINI';
     if (!user.isPro && (user.dailyPremiumUsage || 0) >= 10) {
         provider = 'GROQ';
@@ -209,30 +201,33 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     // Prepare System Prompt
-    let voiceSystemPrompt = (user.persona === 'aarav' ? AASTIK_VOICE_PROMPT : AASTHA_VOICE_PROMPT)
+    let baseTemplate = (user.persona === 'aarav' || user.persona === 'aastik') ? AASTIK_PROMPT : AASTHA_PROMPT;
+    let voiceSystemPrompt = baseTemplate
         .replace('{{userName}}', userName || 'Friend')
-        .replace('{{subconsciousContext}}', JSON.stringify(subconscious))
-        .replace('{{diaryContext}}', diaryContext || "No diary access.");
+        .replace('{{subconsciousContext}}', JSON.stringify(subconscious.internal_monologue))
+        .replace('{{userFacts}}', user.facts.join(', ') || "No facts yet.");
 
-    // Add Age Persona
     voiceSystemPrompt = getAgePersonaPrompt(user.dateOfBirth) + "\n" + voiceSystemPrompt;
 
-    // Handle Tool Outputs -> Force Gemini to output the XML
+    // Force Inject Tools from Brain if they exist (Backup for the Voice)
     if (subconscious.tool_calls && subconscious.tool_calls.length > 0) {
-        const toolInstructions = subconscious.tool_calls.map(t => {
-            if (t.name === 'control_widget') return `EXECUTE: <proposal tool="${t.params.widget}" params='${JSON.stringify(t.params.params || t.params)}' reason="Subconscious command" />`;
-            // Ensure write_diary params are correctly stringified and passed as prompt/content
-            if (t.name === 'write_diary') {
-                 // Map 'content' to 'prompt' or 'content' depending on what Diary.tsx expects.
-                 // Diary.tsx checks 'title' and 'prompt' (or 'content').
-                 return `EXECUTE: <proposal tool="diary" params='${JSON.stringify(t.params)}' reason="Drafting diary entry" />`;
-            }
+        const tools = subconscious.tool_calls.map(t => {
+            if (t.name === 'control_widget') return `<cmd tool="${t.params.widget}" params='${JSON.stringify(t.params.params || t.params)}' />`;
+            if (t.name === 'write_diary') return `<cmd tool="diary" params='${JSON.stringify(t.params)}' />`;
             return "";
         }).join('\n');
-        voiceSystemPrompt += `\n\n[MANDATORY COMMANDS]\nThe Brain has commanded you to execute these tools. You MUST include these exact XML tags in your response (at the end):\n${toolInstructions}`;
+        voiceSystemPrompt += `\n[SYSTEM: OUTPUT THESE COMMANDS AT THE END]\n${tools}`;
     }
 
-    // Stream
+    // Send Metadata to Frontend (Credits, Model)
+    (res as any).write(`data: ${JSON.stringify({ 
+        meta: { 
+            credits: user.isPro ? '∞' : (10 - (user.dailyPremiumUsage || 0)), 
+            model: provider === 'GEMINI' ? 'Gemini 2.5 Flash' : 'Llama 3.1'
+        } 
+    })}\n\n`);
+
+    // Stream the Response
     const stream = provider === 'GEMINI'
         ? streamGemini(brainHistory, voiceSystemPrompt, user.isPro)
         : streamGroq(brainHistory, voiceSystemPrompt);
@@ -247,48 +242,17 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // STEP 4: SAVE & MEMORY
     // =================================================================================
 
-    // Save User Msg
-    chatSession.messages.push({
-        role: 'user',
-        content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'),
-        timestamp: new Date()
-    });
-
-    // Save AI Msg
-    chatSession.messages.push({
-        role: 'assistant',
-        content: encrypt(fullAiResponse),
-        timestamp: new Date()
-    });
-
+    chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
+    chatSession.messages.push({ role: 'assistant', content: encrypt(fullAiResponse), timestamp: new Date() });
     await chatSession.save();
 
-    // Memory Update (Background) - Every 5 messages
+    // Memory Update (Background)
     if (chatSession.messages.length % 5 === 0) {
         (async () => {
             try {
                 const analysis = await generateMemoryAnalysis(historyWindow, user.memorySummary || "");
-                const updates: any = { memorySummary: analysis.summary };
-                const atomicUpdates: any = {};
-
-                if (analysis.newFacts?.length > 0) atomicUpdates.$addToSet = { facts: { $each: analysis.newFacts } };
-
-                if (analysis.detectedEvents?.length > 0) {
-                    const newLoops = analysis.detectedEvents.map(e => ({
-                        event: e.name,
-                        date: new Date(e.date),
-                        status: 'pending',
-                        createdAt: new Date()
-                    }));
-                    await User.findByIdAndUpdate(userId, { $push: { openLoops: { $each: newLoops } } });
-                }
-
-                // Lore updates omitted for brevity but should be here similar to previous controller
-
-                await User.findByIdAndUpdate(userId, { ...updates, ...atomicUpdates });
-            } catch (e) {
-                console.error("Memory Error:", e);
-            }
+                await User.findByIdAndUpdate(userId, { memorySummary: analysis.summary });
+            } catch (e) { console.error("Memory Error:", e); }
         })();
     }
 
@@ -303,20 +267,4 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         (res as any).end();
     }
   }
-};
-
-export const getChatHistory = async (req: AuthRequest, res: Response) => {
-    // ... existing implementation
-    if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-    try {
-        const chatSession = await Chat.findOne({ user: req.user._id }).sort({ updatedAt: -1 });
-        const messages = chatSession ? chatSession.messages.map(m => ({
-            ...(m as any).toObject(),
-            content: decrypt(m.content)
-        })).slice(-50) : [];
-        (res as any).json(messages);
-    } catch (error) {
-        console.error("GET Chat History Failed:", error);
-        (res as any).status(500).json({ message: 'Failed to load history' });
-    }
 };
