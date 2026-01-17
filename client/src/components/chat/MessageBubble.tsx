@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Copy, Reply, Sparkles, Wand2 } from 'lucide-react';
+import { Copy, Reply, Sparkles, Wand2, ShieldAlert } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
 interface MessageBubbleProps {
@@ -18,13 +18,28 @@ interface MessageBubbleProps {
   isMobile?: boolean;
 }
 
+// Helper: Map Brain keywords to Emojis
+const getReactionEmoji = (type?: string) => {
+  if (!type) return null;
+  const map: Record<string, string> = {
+    nod: "👀",       // Listening/Acknowledging
+    heart: "❤️",      // Empathy
+    sad: "😢",        // Sympathy
+    shock: "😲",      // Surprise
+    laugh: "😂",      // Humor
+    confused: "🤔",   // Clarification
+    celebrate: "🎉",  // Achievement
+    fire: "🔥",       // Sassy/Hot
+    thumbsup: "👍",   // Agreement
+  };
+  // Return the mapped emoji, or the raw string if it's already an emoji
+  return map[type.toLowerCase()] || type;
+};
+
 // Helper to parse hidden <proposal> tags AND STRIP LEAKED JSON
 const extractProposals = (text: string) => {
     // 1. Remove leaked Subconscious JSON block if it appears in text
-    // Matches { "internal_monologue": ... } including newlines, non-greedy
     let cleanText = text.replace(/\{[\s\S]*?"internal_monologue"[\s\S]*?\}/g, '').trim();
-
-    // Also remove markdown json blocks if they leaked
     cleanText = cleanText.replace(/```json[\s\S]*?```/g, '').trim();
 
     const proposalRegex = /<proposal tool="([^"]+)" params='([^']+)' reason="([^"]+)" \/>/g;
@@ -38,7 +53,6 @@ const extractProposals = (text: string) => {
                 params: JSON.parse(match[2]),
                 reason: match[3]
             });
-            // Remove the tag from visible text
             cleanText = cleanText.replace(match[0], '');
         } catch (e) {
             console.error("Failed to parse proposal:", e);
@@ -108,7 +122,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       })
     : '';
 
-  // AVATAR MAPPING (Emoji/Icon Proxy for Phase 1)
+  // AVATAR MAPPING
   const getMoodEmoji = () => {
       switch (mood) {
           case 'happy': return '🌟';
@@ -151,9 +165,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               <motion.div
                   initial={{ scale: 0, opacity: 0, rotate: -20 }}
                   animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                  className="absolute -left-2 -bottom-2 z-20 text-xl bg-white/10 rounded-full p-1 border border-white/20 backdrop-blur-md shadow-lg"
+                  className="absolute -left-3 -bottom-3 z-20 text-xl bg-gray-900/80 rounded-full w-8 h-8 flex items-center justify-center border border-white/10 backdrop-blur-md shadow-lg"
               >
-                  {reaction}
+                  {getReactionEmoji(reaction)}
               </motion.div>
           )}
       </AnimatePresence>
@@ -169,11 +183,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               background: '#000'
             }}
           >
-             {/*
-                Phase 2 Placeholder:
-                Ideally <img src={`/avatars/${mood}.png`} />
-                For now, we use a generic icon + badge
-             */}
              <Sparkles size={18} style={{ color: moodColor }} />
           </div>
 
@@ -192,26 +201,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       {/* Bubble wrapper */}
       <div
         className="
-          relative
-          w-fit
-          min-w-[120px]
-          max-w-[90%]
-          sm:max-w-[80%]
-          md:max-w-[70%]
-          lg:max-w-[60%]
-          xl:max-w-[55%]
+          relative w-fit min-w-[120px] max-w-[90%] sm:max-w-[80%] md:max-w-[70%] lg:max-w-[60%] xl:max-w-[55%]
         "
       >
         <div
           className={`
-            relative
-            overflow-hidden
-            px-4 py-3
-            md:px-5 md:py-3.5
-            text-[15px] md:text-base
-            leading-relaxed
-            shadow-lg
-            break-words
+            relative overflow-hidden px-4 py-3 md:px-5 md:py-3.5 text-[15px] md:text-base leading-relaxed shadow-lg break-words
             ${
               isUser
                 ? 'rounded-[22px] rounded-br-none border border-white/10'
@@ -232,7 +227,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     ? '#1f2937'
                     : `linear-gradient(135deg, #1f293780, #11182780)`,
                 }),
-                // 🛡️ FIX 1: Strict Mobile Wrapping
                 wordBreak: 'break-word',
                 overflowWrap: 'anywhere'
           }}
@@ -293,7 +287,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         </div>
 
-        {/* Actions */}
+        {/* Actions Menu */}
         <AnimatePresence>
           {(isHovered || (isMobile && isHovered)) && !isThinking && (
             <motion.div
