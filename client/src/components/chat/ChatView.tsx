@@ -11,9 +11,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { useSync } from '../../context/SyncContext';
-
-// --- FIXED IMPORT HERE ---
-import { generateSubconscious } from '../../services/groqService'; 
+import api from '../../services/api';
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -199,7 +197,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          setIsInitializing(true);
          setConnectionStatus(`Connecting to ${botName}...`);
          try {
-             const { default: api } = await import('../../services/api');
              const res = await api.get('/chat/history');
              if (isMounted) {
                  if (Array.isArray(res.data) && res.data.length > 0) {
@@ -422,7 +419,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     }
   };
 
-  // --- 5. SEND LOGIC (INTEGRATED WITH BRAIN) ---
+  // --- 5. SEND LOGIC (INTEGRATED WITH SERVER BRAIN) ---
   const handleSend = async (e?: React.FormEvent, overrideInput?: string) => {
     if (e) e.preventDefault();
     
@@ -447,61 +444,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     // Reset textarea height
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    // 2. TRIGGER SUBCONSCIOUS BRAIN (Client-Side)
-    let brainStrategy = 'reply';
-    try {
-        const userContext = `User: ${user?.name || 'Friend'}. Current Activity: ${currentActivity}.`;
-        const brain = await generateSubconscious(
-            updatedMessages.map(m => ({ role: m.role, content: m.content })), 
-            userContext,
-            finalContent === 'PERMISSION_GRANT_REPLY'
-        );
-
-        // Update UI based on Brain
-        if (brain.mood) setCurrentMood(brain.mood);
-        if (brain.status_display) setStatusDisplay(brain.status_display);
-        if (brain.suggested_replies) setSuggestedChips(brain.suggested_replies);
-        if (brain.ui_action) setUiAction(brain.ui_action as any);
-        brainStrategy = brain.strategy;
-
-        // Sticky Reaction Logic
-        if (brain.reaction) {
-             setMessages(prev => {
-                const newList = [...prev];
-                const targetIdx = newList.findIndex(m => m.id === userMsg.id);
-                if (targetIdx !== -1) {
-                    newList[targetIdx] = { ...newList[targetIdx], reaction: brain.reaction || undefined };
-                }
-                return newList;
-             });
-        }
-
-        // --- NEW: HANDLE GOD MODE TOOLS (THE HANDS) ---
-        if (brain.tool_calls && brain.tool_calls.length > 0) {
-            brain.tool_calls.forEach(tool => {
-                if (tool.name === 'control_widget') {
-                     onOpenWidget?.(tool.params.widget, tool.params.params || tool.params);
-                } else if (tool.name === 'write_diary') {
-                     onOpenWidget?.('diary', tool.params);
-                } else if (tool.name === 'read_diary') {
-                    onOpenWidget?.('diary', { mode: 'read' });
-                }
-            });
-        }
-
-    } catch (err) {
-        console.warn("Brain fuzz:", err);
-    }
-
-    // 3. STOP IF BRAIN SAYS "LISTEN" (Don't call backend)
-    if (brainStrategy === 'listen' && finalContent !== 'PERMISSION_GRANT_REPLY') {
-        // Remove the optimistic bot message since we aren't replying yet
-        setMessages(prev => prev.filter(m => m.id !== tempBotId));
-        setIsTyping(false);
-        return;
-    }
-
-    // 4. CALL BACKEND (If Strategy is Reply)
+    // 2. CALL BACKEND
     try {
       let token = '';
       try {
@@ -558,12 +501,62 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     if (dataStr.trim() === '[DONE]') break;
                     try {
                         const data = JSON.parse(dataStr);
+
+                        // A. HANDLE THOUGHT (THE BRAIN)
+                        if (data.type === 'thought') {
+                            const brain = data.content;
+                            if (brain) {
+                                if (brain.mood) setCurrentMood(brain.mood);
+                                if (brain.status_display) setStatusDisplay(brain.status_display);
+                                if (brain.suggested_replies) setSuggestedChips(brain.suggested_replies);
+                                if (brain.ui_action) setUiAction(brain.ui_action as any);
+
+                                // Sticky Reaction
+                                if (brain.reaction) {
+                                     setMessages(prev => {
+                                        const newList = [...prev];
+                                        const targetIdx = newList.findIndex(m => m.id === userMsg.id);
+                                        if (targetIdx !== -1) {
+                                            newList[targetIdx] = { ...newList[targetIdx], reaction: brain.reaction };
+                                        }
+                                        return newList;
+                                     });
+                                }
+
+                                // GOD MODE TOOLS (THE HANDS)
+                                if (brain.tool_calls && brain.tool_calls.length > 0) {
+                                    brain.tool_calls.forEach((tool: any) => {
+                                        if (tool.name === 'control_widget') {
+                                             onOpenWidget?.(tool.params.widget, tool.params.params || tool.params);
+                                        } else if (tool.name === 'write_diary') {
+                                             onOpenWidget?.('diary', tool.params);
+                                        } else if (tool.name === 'read_diary') {
+                                            onOpenWidget?.('diary', { mode: 'read' });
+                                        } else if (tool.name === 'update_dossier') {
+                                            onOpenWidget?.('lore', tool.params);
+                                        }
+                                    });
+                                }
+
+                                // Stop typing indicator if listening
+                                if (brain.strategy === 'listen') {
+                                    setIsTyping(false);
+                                    // Remove the temp bot message if it's empty
+                                    if (!aiContentRaw) {
+                                        setMessages(prev => prev.filter(m => m.id !== tempBotId));
+                                    }
+                                }
+                            }
+                        }
+
+                        // B. HANDLE META
                         if (data.meta) { 
                             setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits)); 
                             setModelMode(data.meta.mode); 
                             setIsStandardMode(data.meta.mode === 'standard'); 
                         }
 
+                        // C. HANDLE CONTENT (THE VOICE)
                         if (data.content && !data.type) { 
                             aiContentRaw += data.content;
                             const cleanContent = processMagicTags(aiContentRaw);

@@ -16,7 +16,6 @@ import chatRoutes from './routes/chatRoutes';
 import dataRoutes from './routes/dataRoutes';
 import aiRoutes from './routes/aiRoutes';
 import * as ghostService from './services/ghostService';
-import { initMirrorService } from './services/mirrorService';
 
 // --- CRITICAL SECURITY CHECK ---
 const requiredEnvVars = ['JWT_SECRET', 'SERVER_ENCRYPTION_KEY', 'MONGO_URI'];
@@ -31,7 +30,6 @@ connectDB();
 
 // Init Ghost Service
 ghostService.init();
-initMirrorService();
 
 const app = express();
 const server = createServer(app);
