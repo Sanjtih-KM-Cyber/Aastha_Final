@@ -4,6 +4,7 @@ import Diary from '../models/Diary';
 import Mood from '../models/Mood';
 import axios from 'axios';
 import { encrypt, decrypt } from '../utils/serverEncryption';
+import { detectiveService } from '../services/detectiveService';
 
 // --- Diary Controllers ---
 
@@ -181,4 +182,30 @@ export const searchVideos = async (req: AuthRequest, res: Response) => {
     console.error("Search Video Error:", error);
     (res as any).json([]);
   }
+};
+
+// --- DETECTIVE WEB CONTROLLERS ---
+
+export const getDetectiveWeb = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+        const web = await detectiveService.getWeb(req.user._id);
+        (res as any).json(web);
+    } catch (e) {
+        console.error("Get Web Error:", e);
+        (res as any).status(500).json({ message: 'Error fetching web' });
+    }
+};
+
+export const triggerRetroScan = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+
+        // Run in background (don't await fully if it takes long, but for now we await to see result)
+        const result = await detectiveService.runRetroactiveScan(req.user._id);
+        (res as any).json(result);
+    } catch (e) {
+        console.error("Scan Error:", e);
+        (res as any).status(500).json({ message: 'Scan failed' });
+    }
 };
