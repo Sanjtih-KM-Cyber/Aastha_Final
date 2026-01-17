@@ -12,8 +12,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { useSync } from '../../context/SyncContext';
 
-// IMPORT THE BRAIN
-import { generateSubconscious } from '../../lib/brain'; 
+// --- FIXED IMPORT HERE ---
+import { generateSubconscious } from '../../services/groqService'; 
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -21,7 +21,7 @@ interface ChatMessage {
   timestamp?: number;
   warning?: string;
   id?: string;
-  reaction?: string; // New field for sticky reaction
+  reaction?: string; // Sticky reaction field
 }
 
 interface ChatViewProps {
@@ -106,7 +106,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [statusDisplay, setStatusDisplay] = useState(currentActivity || 'Online');
   const [uiAction, setUiAction] = useState<'none' | 'listen' | 'block_widget'>('none');
   const [currentMood, setCurrentMood] = useState('neutral');
-  const [suggestedChips, setSuggestedChips] = useState<string[]>([]); // Smart Chips
+  const [suggestedChips, setSuggestedChips] = useState<string[]>([]);
 
   // Patience / Listening Mode State
   const [isWaitingForPermission, setIsWaitingForPermission] = useState(false);
@@ -435,7 +435,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         const brain = await generateSubconscious(
             updatedMessages.map(m => ({ role: m.role, content: m.content })), 
             userContext,
-            finalContent === 'PERMISSION_GRANT_REPLY' // Force reply if permission granted
+            finalContent === 'PERMISSION_GRANT_REPLY'
         );
 
         // Update UI based on Brain
@@ -449,7 +449,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         if (brain.reaction) {
              setMessages(prev => {
                 const newList = [...prev];
-                // Find the user message we just added (second to last, because last is temp bot)
                 const targetIdx = newList.findIndex(m => m.id === userMsg.id);
                 if (targetIdx !== -1) {
                     newList[targetIdx] = { ...newList[targetIdx], reaction: brain.reaction || undefined };
@@ -457,6 +456,20 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 return newList;
              });
         }
+
+        // --- NEW: HANDLE GOD MODE TOOLS (THE HANDS) ---
+        if (brain.tool_calls && brain.tool_calls.length > 0) {
+            brain.tool_calls.forEach(tool => {
+                if (tool.name === 'control_widget') {
+                     onOpenWidget?.(tool.params.widget, tool.params.params || tool.params);
+                } else if (tool.name === 'write_diary') {
+                     onOpenWidget?.('diary', tool.params);
+                } else if (tool.name === 'read_diary') {
+                    onOpenWidget?.('diary', { mode: 'read' });
+                }
+            });
+        }
+
     } catch (err) {
         console.warn("Brain fuzz:", err);
     }
@@ -559,7 +572,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const processMagicTags = (text: string) => {
-    // Legacy Tag Processing (Retained for backward compat, but Proposal tags are handled in MessageBubble)
+    // Legacy Tag Processing (Retained for backward compat)
     const tagRegex = /<[^>]+>/g;
     const matches = text.match(tagRegex);
     if (matches) {
@@ -593,7 +606,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                   processedTagsRef.current.add('<color>');
                   processedTagsRef.current.add('</color>');
             }
-            // Only handle LEGACY simple tags here. Complex proposals are handled by MessageBubble click.
             if (onOpenWidget) {
                 if (lowerTag.startsWith('<proposal')) {
                     // Do nothing, MessageBubble handles parsing
@@ -611,7 +623,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         });
     }
     let cleanText = text.replace(/<color>[\s\S]*?<\/color>/gi, '');
-    // Don't strip proposal tags here, MessageBubble needs them
     cleanText = cleanText.replace(/<(?!proposal)[^>]+>/g, '');
     return cleanText;
   };
@@ -658,8 +669,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         role={msg.role} 
                         content={msg.content} 
                         timestamp={msg.timestamp}
-                        reaction={msg.reaction} // Pass Reaction
-                        mood={currentMood} // Pass Mood for Avatar
+                        reaction={msg.reaction}
+                        mood={currentMood}
                         onReply={() => handleReply(msg.content)} 
                         onCopy={copyToClipboard}
                         onOpenWidget={onOpenWidget}
@@ -697,6 +708,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       );
   }
 
+  // --- RETURN JSX ---
   return (
     <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden bg-transparent">
       
@@ -869,7 +881,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  )}
              </AnimatePresence>
 
-             {/* SMART CONTEXT CHIPS (Brain-Powered) */}
+             {/* SMART CONTEXT CHIPS */}
              <AnimatePresence>
              {suggestedChips.length > 0 || messages.length <= 2 ? (
                 <motion.div
@@ -880,10 +892,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 >
                     {(() => {
                         const isNewUser = messages.length <= 2;
-                        // Use AI suggestions if available, else fall back to heuristics
                         let chips = suggestedChips.length > 0 ? suggestedChips : (
                              isNewUser ? ["Who are you?", "What can you do?", "I'm stressed"] :
-                             ["Roast me", "Inspire me", "Let's jam"] // Simple fallback
+                             ["Roast me", "Inspire me", "Let's jam"]
                         );
 
                         return chips.map((chip, i) => (
@@ -908,7 +919,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              ) : null}
              </AnimatePresence>
 
-            {/* INPUT AREA (MODIFIED FOR LISTEN MODE) */}
+             {/* INPUT AREA */}
              <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border ${uiAction === 'listen' ? 'border-teal-500/50 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'border-white/5'} p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
                  {uiAction === 'listen' && (
                      <div className="absolute -top-8 left-0 right-0 flex justify-center pointer-events-none">
