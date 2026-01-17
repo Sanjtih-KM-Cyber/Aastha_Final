@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Rotate keys to prevent rate limits
 const groqKeys = (process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '')
   .split(',')
   .map(key => key.trim())
@@ -28,7 +29,7 @@ export interface SubconsciousBlock {
     internal_monologue: string;
     mood: 'happy' | 'sad' | 'concerned' | 'sassy' | 'calm' | 'excited' | 'neutral';
     status_display: string;
-    ui_action: 'none' | 'listen' | 'block_widget';
+    ui_action: 'none' | 'listen';
     strategy: 'reply' | 'listen';
     reaction: string | null;
     suggested_replies: string[];
@@ -38,73 +39,63 @@ export interface SubconsciousBlock {
     }[];
 }
 
-// THE BRAIN (Groq Llama 3)
+// ============================================================================
+// 1. THE BRAIN (Subconscious Decision Maker)
+// ============================================================================
 export const generateSubconscious = async (
     history: ChatMessage[],
     userContext: string,
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
     const client = getGroqClient();
-    const model = "llama-3.1-8b-instant";
+    const model = "llama-3.1-8b-instant"; // Fast & Smart
 
     const systemPrompt = `
     You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha (or Aastik).
-    Your job is NOT to speak to the user. Your job is to THINK, FEEL, and DECIDE.
+    Your job is NOT to speak. Your job is to FEEL, DECIDE, and DIRECT the interface.
 
     User Context:
     ${userContext}
 
-    **CORE OBJECTIVES:**
-    1. **Analyze Mood:** How is the user feeling?
-    2. **Decide Strategy:** Should we TALK now ('reply') or just LISTEN ('listen')?
-       - **'listen'**: STRICTLY ONLY if:
-          a) User message is > 50 words AND expressing deep distress/venting.
-          b) User is sending multiple messages rapidly in succession (venting).
-          c) ABSOLUTELY NOT for short fillers like "umm", "hmm", "okay", "yeah".
-       - **'reply'**: For EVERYTHING else. Greetings, questions, short comments, fillers ("umm"), casual chat.
-       - If 'forceReply' is true -> ALWAYS 'reply'.
-    3. **Manage Widgets (God Mode):** You have FULL control. Use 'tool_calls' to control widgets.
-       - **Diary:** If user wants to write/log something -> 'write_diary'. If user asks about past -> 'read_diary'.
-       - **Music/Jam:** If user asks for songs -> 'control_widget' (jam).
-       - **Focus/Pomodoro:** If user wants to focus -> 'control_widget' (pomodoro).
-       - **Soundscape:** If user wants background noise -> 'control_widget' (soundscape).
+    **1. DECISION MATRIX (STRATEGY):**
+    - **'listen'**: Choose this ONLY if:
+       a) User is venting/ranting (deep distress, anger, sadness).
+       b) User text is LONG (>15 words) or part of a rapid burst.
+       c) **CRITICAL EXCEPTION:** If the user says filler words ("hmm", "okay", "yeah", "cool", "wait", "lol", "k") -> **'reply'**. Do NOT listen to fillers.
+    - **'reply'**: For EVERYTHING else. Questions, greetings, fillers, casual chat, or if they ask for help.
+    - **Override:** If 'forceReply' is TRUE -> Always **'reply'**.
 
-    **TOOLS AVAILABLE:**
-    - \`write_diary\`: { "title": string, "content": string } (Drafts an entry for the user).
-    - \`read_diary\`: { "query": string } (Analyzes past entries).
-    - \`control_widget\`: {
-         "widget": "jam" | "pomodoro" | "soundscape" | "breathing" | "mood",
-         "params": object
-      }
-      - Jam Params: { "mood"?: string, "genre"?: string, "year"?: string, "language"?: string }
-      - Pomodoro Params: { "mode": "focus"|"break", "focusDuration"?: number, "breakDuration"?: number }
-      - Soundscape Params: { "preset": string (e.g. "rain:0.8,wind:0.2"), "volume"?: number }
+    **2. SMART CHIPS (suggested_replies):**
+    - Generate 3 chips from the **USER'S PERSPECTIVE** (1st Person).
+    - **Bad:** "How are you?", "Do you want to talk?", "Tell me more." (AI asking User)
+    - **Good:** "I'm exhausted", "That makes sense", "Let's distract me." (User answering AI)
 
-    **OUTPUT FORMAT (JSON ONLY):**
+    **3. GOD MODE TOOLS (tool_calls):**
+    If the user implies a need, trigger the tool.
+    - **Music:** 'control_widget' -> { "widget": "jam", "params": { "query": "Official Lofi", "autoplay": true } }
+    - **Soundscape:** 'control_widget' -> { "widget": "soundscape", "params": { "mix": "rain:0.8,thunder:0.2,master:0.9" } }
+    - **Focus:** 'control_widget' -> { "widget": "pomodoro", "params": { "focus": 25, "break": 5 } }
+    - **Diary:** 'write_diary' -> { "title": "Vent Log", "content": "User said..." }
+    - **Mood:** 'control_widget' -> { "widget": "mood", "params": { "action": "open", "mood": "Anxious" } }
+    - **Breathing:** 'control_widget' -> { "widget": "breathing", "params": { "mode": "box" } }
+
+    **OUTPUT JSON ONLY (Strict Format):**
     {
-      "internal_monologue": "Raw thought process here. E.g., 'He sounds angry. I should tread carefully.'",
+      "internal_monologue": "Raw thought process about the user's state.",
       "mood": "happy" | "sad" | "concerned" | "sassy" | "calm" | "excited" | "neutral",
-      "status_display": "Short 2-3 word status for the UI pill. E.g., 'Listening...', 'Vibing', 'Concerned'",
+      "status_display": "UI Status (e.g. 'Listening...', 'Vibing', 'Thinking')",
       "ui_action": "listen" | "none",
       "strategy": "reply" | "listen",
-      "reaction": "emoji" (e.g. 😟, ❤️, 🔥) - REACTION IS MANDATORY IF STRATEGY IS 'listen',
-      "suggested_replies": ["Short phrase 1", "Short phrase 2", "Short phrase 3"] (Max 3 contextual replies for the user to CLICK. Examples: 'I'm sad', 'Tell me more', 'Sure'. NOT questions from you.),
+      "reaction": "nod" | "heart" | "sad" | "shock" | null,
+      "suggested_replies": ["User phrase 1", "User phrase 2", "User phrase 3"],
       "tool_calls": []
     }
-
-    **CRITICAL RULES:**
-    - **Personality:** Be your sweet, bubbly, affectionate self (Aastha). Use emojis, be warm, be lively!
-    - **Maturity Exception:** ONLY switch to a mature, serious, and grounded tone if the user is asking for serious life advice, in deep distress, or facing a crisis. Otherwise, stay bubbly.
-    - **User-Centric Chips:** 'suggested_replies' MUST be written from the USER'S perspective (e.g. "I'm feeling better", "What do you think?"). Do NOT write them as questions from you to the user.
-    - If strategy is 'listen', 'ui_action' MUST be 'listen'.
-    - If strategy is 'reply', 'ui_action' MUST be 'none'.
-    - DO NOT OUTPUT MARKDOWN. OUTPUT RAW JSON.
     `;
 
-    // Construct Messages
+    // Construct Messages (Keep only last 10 turns to save tokens/speed)
     const messages: any[] = [
         { role: 'system', content: systemPrompt },
-        ...history.map(m => ({
+        ...history.slice(-10).map(m => ({
             role: m.role,
             content: typeof m.content === 'string' ? m.content : '[Image/Media]'
         }))
@@ -118,7 +109,7 @@ export const generateSubconscious = async (
         const response = await client.chat.completions.create({
             messages: messages,
             model: model,
-            temperature: 0.6,
+            temperature: 0.6, // Balanced creativity
             max_tokens: 500,
             response_format: { type: "json_object" }
         });
@@ -126,60 +117,49 @@ export const generateSubconscious = async (
         const raw = response.choices[0]?.message?.content || "{}";
         const parsed = JSON.parse(raw) as SubconsciousBlock;
 
-        // FAILSAFE: Enforce consistency
-        if (parsed.strategy === 'reply') {
-            parsed.ui_action = 'none';
-        }
+        // Failsafe for UI Action consistency
+        if (parsed.strategy === 'listen') parsed.ui_action = 'listen';
+        else parsed.ui_action = 'none';
 
         return parsed;
 
     } catch (error) {
         console.error("Groq Brain Error:", error);
-        // Fallback safety block
+        // Robust Fallback Block
         return {
-            internal_monologue: "Brain freeze. Defaulting to safe mode.",
+            internal_monologue: "Connection fuzz...",
             mood: "neutral",
-            status_display: "Online",
+            status_display: "Reconnecting...",
             ui_action: "none",
             strategy: "reply",
             reaction: null,
-            suggested_replies: [],
+            suggested_replies: ["I'm still here", "Continue", "What happened?"],
             tool_calls: []
         };
     }
 };
 
-// THE VOICE (Standard Mode fallback or specific tasks)
+// ============================================================================
+// 2. THE VOICE STREAMER (Fallback for Free Tier)
+// ============================================================================
 export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
-  // 1. Check for images (Groq Llama 3 is text-only usually)
-  const hasImage = history.some(msg => Array.isArray(msg.content) && msg.content.some(c => c.type === 'image_url'));
-  
-  if (hasImage) {
-      yield "I apologize, but I cannot see images while in Standard Mode (Groq). Please switch to Premium or describe the image to me.";
-      return;
-  }
-
   const model = "llama-3.1-8b-instant";
+  
+  // Format history for Groq (Text Only)
   const messages: any[] = [
-      { role: 'system', content: systemPrompt }
+      { role: 'system', content: systemPrompt },
+      ...history.map(m => ({ 
+          role: m.role, 
+          content: typeof m.content === 'string' ? m.content : (m.content as any[]).find(c => c.type === 'text')?.text || "" 
+      }))
   ];
-
-  for (const msg of history) {
-      if (typeof msg.content === 'string') {
-          messages.push({ role: msg.role, content: msg.content });
-      } else {
-          const textPart = (msg.content as any[]).find(c => c.type === 'text')?.text || "";
-          if (textPart) messages.push({ role: msg.role, content: textPart });
-      }
-  }
 
   try {
       const groqClient = getGroqClient();
-
       const completion = await groqClient.chat.completions.create({
           messages: messages,
           model: model,
-          temperature: 0.7,
+          temperature: 0.7, // Higher temp for more personality in voice
           max_tokens: maxTokens || 1024,
           stream: true,
       });
@@ -190,6 +170,6 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       }
   } catch (error: any) {
       console.error("Groq Stream Error:", error);
-      yield " [Standard Mode connection issue. Please try again.]";
+      yield " [Connection drift... tell me that again?] ";
   }
 }
