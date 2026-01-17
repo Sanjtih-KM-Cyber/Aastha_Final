@@ -159,19 +159,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       onMouseLeave={() => !isMobile && setIsHovered(false)}
       onClick={() => isMobile && setIsHovered(!isHovered)}
     >
-      {/* Sticky Reaction (User Side) */}
-      <AnimatePresence>
-          {isUser && reaction && (
-              <motion.div
-                  initial={{ scale: 0, opacity: 0, rotate: -20 }}
-                  animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                  className="absolute -left-3 -bottom-3 z-20 text-xl bg-gray-900/80 rounded-full w-8 h-8 flex items-center justify-center border border-white/10 backdrop-blur-md shadow-lg"
-              >
-                  {getReactionEmoji(reaction)}
-              </motion.div>
-          )}
-      </AnimatePresence>
-
       {/* Assistant avatar (Dynamic) */}
       {!isUser && (
         <div className="hidden md:flex flex-shrink-0 mr-3 self-end relative">
@@ -204,6 +191,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           relative w-fit min-w-[120px] max-w-[90%] sm:max-w-[80%] md:max-w-[70%] lg:max-w-[60%] xl:max-w-[55%]
         "
       >
+        {/* Sticky Reaction (Attached to Bubble) */}
+        <AnimatePresence>
+            {isUser && reaction && (
+                <motion.div
+                    initial={{ scale: 0, opacity: 0, rotate: -20 }}
+                    animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                    className="absolute -left-3 -bottom-3 z-20 text-xl bg-gray-900/80 rounded-full w-8 h-8 flex items-center justify-center border border-white/10 backdrop-blur-md shadow-lg"
+                >
+                    {getReactionEmoji(reaction)}
+                </motion.div>
+            )}
+        </AnimatePresence>
+
         <div
           className={`
             relative overflow-hidden px-4 py-3 md:px-5 md:py-3.5 text-[15px] md:text-base leading-relaxed shadow-lg break-words
@@ -324,4 +324,3 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     </motion.div>
   );
 };
-

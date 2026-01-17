@@ -56,15 +56,31 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
   const phaseLabel = currentSteps[phaseIndex];
   const duration = currentPattern[phaseIndex];
 
-  // Handle AI Pre-selection
+  // Handle AI Pre-selection (Updated for flexibility)
   useEffect(() => {
     if (initialMode && isOpen) {
-        const match = Object.keys(MODES).find(k => k.toLowerCase() === initialMode.toLowerCase() || MODES[k as keyof typeof MODES].label.toLowerCase().includes(initialMode.toLowerCase()));
-        if (match) {
-            setActiveMode(match as keyof typeof MODES);
+        // Normalize input: lowercase, trim
+        const term = initialMode.toLowerCase().trim();
+
+        // 1. Direct Match (e.g., 'box', 'relax')
+        const directMatch = Object.keys(MODES).find(k => k.toLowerCase() === term);
+        if (directMatch) {
+            setActiveMode(directMatch as keyof typeof MODES);
             setPhaseIndex(0);
-            setIsActive(true); // MANAGER: Auto-start
+            setIsActive(true);
+            return;
         }
+
+        // 2. Semantic Mapping (Brain terms -> Internal Modes)
+        if (term.includes('sleep') || term.includes('insomnia')) setActiveMode('Relax');
+        else if (term.includes('anxiety') || term.includes('stress') || term.includes('panic')) setActiveMode('Grounding');
+        else if (term.includes('focus') || term.includes('work')) setActiveMode('Box');
+        else if (term.includes('energy') || term.includes('awake')) setActiveMode('Energy');
+        else if (term.includes('balance') || term.includes('reset')) setActiveMode('Resonance');
+
+        // If mapped, auto-start
+        setPhaseIndex(0);
+        setIsActive(true);
     }
   }, [initialMode, isOpen]);
 
