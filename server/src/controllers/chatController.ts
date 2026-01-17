@@ -268,3 +268,23 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
   }
 };
+export const getChatHistory = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+        
+        const chatSession = await Chat.findOne({ user: req.user._id });
+        if (!chatSession) return (res as any).json([]);
+
+        // Return decrypted messages
+        const history = chatSession.messages.map(m => ({
+            role: m.role,
+            content: decrypt(m.content),
+            timestamp: m.timestamp
+        }));
+
+        (res as any).json(history);
+    } catch (error) {
+        console.error("History Error:", error);
+        (res as any).status(500).json({ message: "Failed to fetch history" });
+    }
+};
