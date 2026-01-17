@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Menu, Headphones, AlertCircle, Smile, 
   Mic, MicOff, X, Search, Image as ImageIcon, Plus, Camera,
-  ShieldAlert, Loader2, ChevronDown, Reply, Check
+  ShieldAlert, Loader2, ChevronDown, Reply, Check, ArrowDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
@@ -11,9 +11,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { useSync } from '../../context/SyncContext';
-
-// --- FIXED IMPORT HERE ---
-import { generateSubconscious } from '../../services/groqService'; 
+import api from '../../services/api';
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -115,6 +113,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   // Media Menu State
   const [showMediaMenu, setShowMediaMenu] = useState(false);
 
+  // Scroll State
+  const [showScrollDown, setShowScrollDown] = useState(false);
+
   // --- SEARCH STATE ---
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -196,7 +197,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          setIsInitializing(true);
          setConnectionStatus(`Connecting to ${botName}...`);
          try {
-             const { default: api } = await import('../../services/api');
              const res = await api.get('/chat/history');
              if (isMounted) {
                  if (Array.isArray(res.data) && res.data.length > 0) {
@@ -312,8 +312,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   const autoResizeTextarea = () => {
     if (textareaRef.current) {
+        // Reset height to calculate correct scrollHeight
         textareaRef.current.style.height = 'auto';
-        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+        const newHeight = Math.min(textareaRef.current.scrollHeight, 120);
+        textareaRef.current.style.height = `${newHeight}px`;
     }
   };
 
@@ -374,6 +376,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
   useEffect(() => scrollToBottom(), [messages, isTyping]);
 
+  const handleScroll = () => {
+      if (!messagesContainerRef.current) return;
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+      const isBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setShowScrollDown(!isBottom);
+  };
+
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (isStandardMode) { setError("Vision Analysis requires Premium."); return; }
       const files = e.target.files;
@@ -394,6 +403,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
+    // Debounce resize slightly or just run it.
+    // It's usually fast enough, but let's ensure it doesn't cause layout thrashing too much.
+    // React state update is async, so we can resize after render or in effect.
+    // But for instant feedback, calling it directly is better.
+    // Lag is often due to re-rendering the whole message list.
+    // MessageBubble is memoized (conceptually), but we should ensure it.
     autoResizeTextarea();
   };
 
@@ -404,7 +419,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     }
   };
 
-  // --- 5. SEND LOGIC (INTEGRATED WITH BRAIN) ---
+  // --- 5. SEND LOGIC (INTEGRATED WITH SERVER BRAIN) ---
   const handleSend = async (e?: React.FormEvent, overrideInput?: string) => {
     if (e) e.preventDefault();
     
@@ -426,63 +441,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     setIsTyping(true); 
     setError(null);
     setStatusDisplay('Thinking...'); 
-    autoResizeTextarea();
+    // Reset textarea height
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    // 2. TRIGGER SUBCONSCIOUS BRAIN (Client-Side)
-    let brainStrategy = 'reply';
-    try {
-        const userContext = `User: ${user?.name || 'Friend'}. Current Activity: ${currentActivity}.`;
-        const brain = await generateSubconscious(
-            updatedMessages.map(m => ({ role: m.role, content: m.content })), 
-            userContext,
-            finalContent === 'PERMISSION_GRANT_REPLY'
-        );
-
-        // Update UI based on Brain
-        if (brain.mood) setCurrentMood(brain.mood);
-        if (brain.status_display) setStatusDisplay(brain.status_display);
-        if (brain.suggested_replies) setSuggestedChips(brain.suggested_replies);
-        if (brain.ui_action) setUiAction(brain.ui_action as any);
-        brainStrategy = brain.strategy;
-
-        // Sticky Reaction Logic
-        if (brain.reaction) {
-             setMessages(prev => {
-                const newList = [...prev];
-                const targetIdx = newList.findIndex(m => m.id === userMsg.id);
-                if (targetIdx !== -1) {
-                    newList[targetIdx] = { ...newList[targetIdx], reaction: brain.reaction || undefined };
-                }
-                return newList;
-             });
-        }
-
-        // --- NEW: HANDLE GOD MODE TOOLS (THE HANDS) ---
-        if (brain.tool_calls && brain.tool_calls.length > 0) {
-            brain.tool_calls.forEach(tool => {
-                if (tool.name === 'control_widget') {
-                     onOpenWidget?.(tool.params.widget, tool.params.params || tool.params);
-                } else if (tool.name === 'write_diary') {
-                     onOpenWidget?.('diary', tool.params);
-                } else if (tool.name === 'read_diary') {
-                    onOpenWidget?.('diary', { mode: 'read' });
-                }
-            });
-        }
-
-    } catch (err) {
-        console.warn("Brain fuzz:", err);
-    }
-
-    // 3. STOP IF BRAIN SAYS "LISTEN" (Don't call backend)
-    if (brainStrategy === 'listen' && finalContent !== 'PERMISSION_GRANT_REPLY') {
-        // Remove the optimistic bot message since we aren't replying yet
-        setMessages(prev => prev.filter(m => m.id !== tempBotId));
-        setIsTyping(false);
-        return;
-    }
-
-    // 4. CALL BACKEND (If Strategy is Reply)
+    // 2. CALL BACKEND
     try {
       let token = '';
       try {
@@ -539,12 +501,62 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     if (dataStr.trim() === '[DONE]') break;
                     try {
                         const data = JSON.parse(dataStr);
+
+                        // A. HANDLE THOUGHT (THE BRAIN)
+                        if (data.type === 'thought') {
+                            const brain = data.content;
+                            if (brain) {
+                                if (brain.mood) setCurrentMood(brain.mood);
+                                if (brain.status_display) setStatusDisplay(brain.status_display);
+                                if (brain.suggested_replies) setSuggestedChips(brain.suggested_replies);
+                                if (brain.ui_action) setUiAction(brain.ui_action as any);
+
+                                // Sticky Reaction
+                                if (brain.reaction) {
+                                     setMessages(prev => {
+                                        const newList = [...prev];
+                                        const targetIdx = newList.findIndex(m => m.id === userMsg.id);
+                                        if (targetIdx !== -1) {
+                                            newList[targetIdx] = { ...newList[targetIdx], reaction: brain.reaction };
+                                        }
+                                        return newList;
+                                     });
+                                }
+
+                                // GOD MODE TOOLS (THE HANDS)
+                                if (brain.tool_calls && brain.tool_calls.length > 0) {
+                                    brain.tool_calls.forEach((tool: any) => {
+                                        if (tool.name === 'control_widget') {
+                                             onOpenWidget?.(tool.params.widget, tool.params.params || tool.params);
+                                        } else if (tool.name === 'write_diary') {
+                                             onOpenWidget?.('diary', tool.params);
+                                        } else if (tool.name === 'read_diary') {
+                                            onOpenWidget?.('diary', { mode: 'read' });
+                                        } else if (tool.name === 'update_dossier') {
+                                            onOpenWidget?.('lore', tool.params);
+                                        }
+                                    });
+                                }
+
+                                // Stop typing indicator if listening
+                                if (brain.strategy === 'listen') {
+                                    setIsTyping(false);
+                                    // Remove the temp bot message if it's empty
+                                    if (!aiContentRaw) {
+                                        setMessages(prev => prev.filter(m => m.id !== tempBotId));
+                                    }
+                                }
+                            }
+                        }
+
+                        // B. HANDLE META
                         if (data.meta) { 
                             setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits)); 
                             setModelMode(data.meta.mode); 
                             setIsStandardMode(data.meta.mode === 'standard'); 
                         }
 
+                        // C. HANDLE CONTENT (THE VOICE)
                         if (data.content && !data.type) { 
                             aiContentRaw += data.content;
                             const cleanContent = processMagicTags(aiContentRaw);
@@ -853,13 +865,29 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       {/* --- SECTION 2: CHAT AREA --- */}
       <div 
           ref={messagesContainerRef}
+          onScroll={handleScroll}
           className="flex-1 w-full mx-auto overflow-y-auto px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
           style={{ overscrollBehaviorY: 'contain' }}
       >
-          <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40">
+          <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40 relative">
               <div className="h-4" /> 
               {renderMessages()}
               <div ref={messagesEndRef} />
+
+              {/* Jump to Bottom Button */}
+              <AnimatePresence>
+                {showScrollDown && (
+                    <motion.button
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        onClick={scrollToBottom}
+                        className="fixed bottom-32 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-20 hover:bg-white/10 hover:text-white transition-colors"
+                    >
+                        <ArrowDown size={20} />
+                    </motion.button>
+                )}
+              </AnimatePresence>
           </div>
       </div>
 
@@ -1021,4 +1049,3 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     </div>
   );
 };
-

@@ -73,20 +73,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
   const progress = totalTime > 0 ? ((totalTime - timeLeft) / totalTime) : 0;
 
   useEffect(() => {
-      // Simple "Ding" sound (Base64) to avoid external dependency 403s
-      const base64Audio = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTSV******"; // Truncated for brevity in thought, but I will use a real short one.
-      // Actually, I will use a very short, valid base64 mp3 string.
-      // Since I cannot browse the web for a file to encode, I will use a known short base64 string for a beep.
-      // Or better, I will use a reliable public URL if I can find one, OR just a simple Oscillator if I could write logic, but this expects an Audio object.
-      // I'll use a placeholder URL from a more reliable source if possible, or a minimal base64.
-      // Let's use a standard reliable one from a CDN like Google sounds or similar if known.
-      // Alternatively, I'll use a hardcoded short beep base64.
-
-      const beep = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"; // Very short, might be invalid.
-
-      // Let's go with a known reliable CDN for a simple bell.
-      // https://codeskulptor-demos.commondatastorage.googleapis.com/assets/sound/bell.mp3
-
+      // Use a reliable CDN for a simple bell.
       audioRef.current = new Audio('https://codeskulptor-demos.commondatastorage.googleapis.com/assets/sound/bell.mp3');
   }, []);
 
@@ -99,19 +86,31 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
   // GOD MODE: Apply AI Instructions
   useEffect(() => {
       if (isOpen && initialParams) {
-          if (initialParams.focusDuration) setFocusDuration(initialParams.focusDuration);
-          if (initialParams.breakDuration) setBreakDuration(initialParams.breakDuration);
+          let shouldReset = false;
+          if (initialParams.focusDuration && initialParams.focusDuration !== focusDuration) {
+             setFocusDuration(initialParams.focusDuration);
+             shouldReset = true;
+          }
+          if (initialParams.breakDuration && initialParams.breakDuration !== breakDuration) {
+             setBreakDuration(initialParams.breakDuration);
+             shouldReset = true;
+          }
 
           if (initialParams.mode) {
               setMode(initialParams.mode);
-              // Auto-start if instructed? Or just prep?
-              // Let's prep it.
-              const duration = initialParams.mode === 'focus'
+              shouldReset = true;
+          }
+
+          if (shouldReset) {
+              const duration = (initialParams.mode || mode) === 'focus'
                  ? (initialParams.focusDuration || focusDuration)
                  : (initialParams.breakDuration || breakDuration);
 
-              setTimeLeft(duration * 60);
-              setIsActive(true); // Auto-start for seamless experience
+              // Only reset if duration changed significantly or user asked for it
+              if (Math.abs(timeLeft - duration * 60) > 10) {
+                  setTimeLeft(duration * 60);
+                  setIsActive(true); // Auto-start
+              }
           }
       }
   }, [isOpen, initialParams]);

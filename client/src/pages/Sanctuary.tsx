@@ -14,8 +14,8 @@ const JamWithAasthaWidget = React.lazy(() => import('../components/widgets/JamWi
 const Soundscape = React.lazy(() => import('../components/widgets/Soundscape').then(m => ({ default: m.Soundscape })));
 const BreathingWidget = React.lazy(() => import('../components/widgets/BreathingWidget').then(m => ({ default: m.BreathingWidget })));
 const MoodTracker = React.lazy(() => import('../components/widgets/MoodTracker').then(m => ({ default: m.MoodTracker })));
-const MemoryWall = React.lazy(() => import('../components/widgets/MemoryWall').then(m => ({ default: m.MemoryWall })));
-const MirrorWidget = React.lazy(() => import('../components/widgets/MirrorWidget').then(m => ({ default: m.MirrorWidget })));
+// REPLACED MemoryWall with TheWebWidget
+const TheWebWidget = React.lazy(() => import('../components/widgets/TheWebWidget').then(m => ({ default: m.TheWebWidget })));
 
 // Memoized Wrappers to prevent parent re-renders affecting heavy widgets
 const MemoDiary = memo(Diary);
@@ -24,8 +24,7 @@ const MemoJam = memo(JamWithAasthaWidget);
 const MemoSoundscape = memo(Soundscape);
 const MemoBreathing = memo(BreathingWidget);
 const MemoMood = memo(MoodTracker);
-const MemoLore = memo(MemoryWall);
-const MemoMirror = memo(MirrorWidget);
+const MemoWeb = memo(TheWebWidget); // New Name
 
 const DESKTOP_TOUR_STEPS: TourStep[] = [
   {
@@ -160,8 +159,7 @@ export const Sanctuary: React.FC = () => {
     soundscape: false,
     breathing: false,
     mood: false,
-    lore: false,
-    mirror: false,
+    lore: false, // Keeps ID as 'lore' for compatibility with old state, but UI shows "The Web"
   });
 
   // Derived Status for Smart Header
@@ -180,7 +178,6 @@ export const Sanctuary: React.FC = () => {
     breathing: 50,
     mood: 50,
     lore: 50,
-    mirror: 50,
   });
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -214,6 +211,7 @@ export const Sanctuary: React.FC = () => {
         setWidgets(newWidgets);
         bringToFront(key);
     } else {
+        // Even if open, update config (e.g. changing song)
         bringToFront(key);
     }
   };
@@ -301,6 +299,7 @@ export const Sanctuary: React.FC = () => {
                   zIndex={zIndices.soundscape}
                   onFocus={() => bringToFront('soundscape')}
                   preset={widgetConfigs.soundscape?.preset}
+                  volume={widgetConfigs.soundscape?.volume}
               />
             </React.Suspense>
           </div>
@@ -328,24 +327,14 @@ export const Sanctuary: React.FC = () => {
             </React.Suspense>
           </div>
 
+          {/* UPDATED: THE WEB WIDGET */}
           <div style={{ pointerEvents: 'auto' }}>
             <React.Suspense fallback={null}>
-              <MemoLore
+              <MemoWeb
                   isOpen={widgets.lore}
                   onClose={() => closeWidget('lore')}
                   zIndex={zIndices.lore}
                   onFocus={() => bringToFront('lore')}
-              />
-            </React.Suspense>
-          </div>
-
-          <div style={{ pointerEvents: 'auto' }}>
-            <React.Suspense fallback={null}>
-              <MemoMirror
-                  isOpen={widgets.mirror}
-                  onClose={() => closeWidget('mirror')}
-                  zIndex={zIndices.mirror}
-                  onFocus={() => bringToFront('mirror')}
               />
             </React.Suspense>
           </div>

@@ -6,7 +6,9 @@ import {
   deleteDiaryEntry,
   getMoods, 
   createMood,
-  searchVideos
+  searchVideos,
+  getDetectiveWeb, // New
+  triggerRetroScan // New
 } from '../controllers/dataController';
 
 const router = express.Router();
@@ -22,5 +24,9 @@ router.post('/moods', protect as any, createMood as any);
 
 // Video Routes
 router.get('/videos/search', protect as any, searchVideos as any);
+
+// Detective Web Routes
+router.get('/web', protect as any, getDetectiveWeb as any);
+router.post('/web/scan', protect as any, triggerRetroScan as any);
 
 export default router;

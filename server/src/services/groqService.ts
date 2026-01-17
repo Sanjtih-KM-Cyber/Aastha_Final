@@ -34,7 +34,7 @@ export interface SubconsciousBlock {
     reaction: string | null;
     suggested_replies: string[];
     tool_calls?: {
-        name: 'write_diary' | 'read_diary' | 'control_widget';
+        name: 'write_diary' | 'read_diary' | 'control_widget' | 'update_dossier';
         params: any;
     }[];
 }
@@ -61,7 +61,10 @@ export const generateSubconscious = async (
     - **'listen'**: Choose this ONLY if:
        a) User is venting/ranting (deep distress, anger, sadness).
        b) User text is LONG (>15 words) or part of a rapid burst.
-       c) **CRITICAL EXCEPTION:** If the user says filler words ("hmm", "okay", "yeah", "cool", "wait", "lol", "k") -> **'reply'**. Do NOT listen to fillers.
+       c) **CRITICAL EXCEPTIONS:**
+          - If user says filler words ("hmm", "okay", "yeah", "cool", "wait", "lol", "k") -> **'reply'**.
+          - If user requests a TOOL (Music, Focus, Timer, etc.) -> **'reply'**.
+          - If user gives a command ("Let's focus", "Play music") -> **'reply'**.
     - **'reply'**: For EVERYTHING else. Questions, greetings, fillers, casual chat, or if they ask for help.
     - **Override:** If 'forceReply' is TRUE -> Always **'reply'**.
 
@@ -70,14 +73,31 @@ export const generateSubconscious = async (
     - **Bad:** "How are you?", "Do you want to talk?", "Tell me more." (AI asking User)
     - **Good:** "I'm exhausted", "That makes sense", "Let's distract me." (User answering AI)
 
-    **3. GOD MODE TOOLS (tool_calls):**
-    If the user implies a need, trigger the tool.
-    - **Music:** 'control_widget' -> { "widget": "jam", "params": { "query": "Official Lofi", "autoplay": true } }
-    - **Soundscape:** 'control_widget' -> { "widget": "soundscape", "params": { "mix": "rain:0.8,thunder:0.2,master:0.9" } }
-    - **Focus:** 'control_widget' -> { "widget": "pomodoro", "params": { "focus": 25, "break": 5 } }
-    - **Diary:** 'write_diary' -> { "title": "Vent Log", "content": "User said..." }
-    - **Mood:** 'control_widget' -> { "widget": "mood", "params": { "action": "open", "mood": "Anxious" } }
-    - **Breathing:** 'control_widget' -> { "widget": "breathing", "params": { "mode": "box" } }
+    **3. GOD MODE TOOLS (The Hands):**
+    You have full control. Anticipate needs. Use 'control_widget' for most things.
+
+    **Structure:** { "name": "control_widget", "params": { "widget": "...", "params": { ... } } }
+
+    - **Music (Jam):**
+      - Song/Podcast: { "name": "control_widget", "params": { "widget": "jam", "params": { "query": "Play <Name>", "autoplay": true } } }
+      - General: { "name": "control_widget", "params": { "widget": "jam", "params": { "mood": "chill", "genre": "lofi", "autoplay": true } } }
+
+    - **Soundscape (ASMR DJ):**
+      - Mix sounds (rain, forest, fire, ocean, night, wind, thunder, birds).
+      - { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6,fire:0.3", "volume": 0.8 } } }
+
+    - **Focus (Pomodoro):**
+      - Trigger: "Let's focus", "Study mode", "Work time".
+      - { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 25 } } }
+
+    - **Breathing:**
+      - { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
+
+    - **Diary:**
+      - { "name": "write_diary", "params": { "title": "Auto Entry", "content": "<Summarize user input>" } }
+
+    - **Social Detective (The Web):**
+      - { "name": "update_dossier", "params": { "name": "Bob", "deltaScore": -5, "verdict": "SUSPECT", "newTrait": "Flakes" } }
 
     **OUTPUT JSON ONLY (Strict Format):**
     {
@@ -86,7 +106,7 @@ export const generateSubconscious = async (
       "status_display": "UI Status (e.g. 'Listening...', 'Vibing', 'Thinking')",
       "ui_action": "listen" | "none",
       "strategy": "reply" | "listen",
-      "reaction": "nod" | "heart" | "sad" | "shock" | null,
+      "reaction": "nod" | "heart" | "sad" | "shock" | "fire" | "thumbsup" | null,
       "suggested_replies": ["User phrase 1", "User phrase 2", "User phrase 3"],
       "tool_calls": []
     }

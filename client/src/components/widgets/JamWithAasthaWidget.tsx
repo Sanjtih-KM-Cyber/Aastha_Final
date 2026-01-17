@@ -224,8 +224,16 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   // --- MANAGER MODE: Auto-Generate Playlist from Params ---
   useEffect(() => {
       if (initialParams && isOpen) {
-          const { mood, genre, year, language } = initialParams; // Added year/language
+          const { mood, genre, year, language, query, autoplay } = initialParams;
 
+          // 1. SPECIFIC SONG SEARCH
+          if (query) {
+             setQuery(query); // Update UI
+             handleSearch(undefined, query); // Force search
+             return;
+          }
+
+          // 2. VIBE GENERATION (If no query)
           if (mood || genre || language || year) {
              // Reset UI selections to match manager request
              if (mood) setSelectedMoods([mood]);
@@ -468,13 +476,15 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
   // --- Handlers ---
 
-  const handleSearch = async (e?: React.FormEvent) => {
+  const handleSearch = async (e?: React.FormEvent, overrideQuery?: string) => {
       e?.preventDefault();
-      if (!query.trim()) return;
+      const q = overrideQuery || query;
+      if (!q.trim()) return;
+
       setIsSearching(true);
       try {
           // Using your backend search endpoint
-          const res = await api.get(`/data/videos/search?q=${encodeURIComponent(query)}`);
+          const res = await api.get(`/data/videos/search?q=${encodeURIComponent(q)}`);
           
           if (Array.isArray(res.data) && res.data.length > 0) {
               const newTrack = {
@@ -495,10 +505,10 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               if (queue.length === 0) setCurrentIndex(0);
               
           } else {
-              console.warn("No results found for query:", query);
+              console.warn("No results found for query:", q);
           }
       } catch (e) { console.error("Search failed", e); } 
-      finally { setIsSearching(false); setQuery(''); }
+      finally { setIsSearching(false); if(!overrideQuery) setQuery(''); }
   };
 
   // UPDATED QUEUE HANDLER FOR REORDER

@@ -7,7 +7,7 @@ import {
   Clock, 
   Smile, 
   Sliders, 
-  BookOpen, // Lore Icon
+  Network, // Replaces BookOpen (Lore)
   Settings, 
   Sparkles, 
   Flame,
@@ -31,12 +31,11 @@ interface WellnessHubProps {
 const WIDGETS = [
   { id: 'diary', label: 'Journal', icon: Book, color: 'text-teal-300', barColor: 'bg-teal-400', glow: 'shadow-teal-500/20', from: 'from-teal-500/20', desc: 'Reflect on your day' },
   { id: 'mood', label: 'Mood', icon: Smile, color: 'text-amber-300', barColor: 'bg-amber-400', glow: 'shadow-amber-500/20', from: 'from-amber-500/20', desc: 'Track your emotions' },
-  { id: 'lore', label: 'Lore', icon: BookOpen, color: 'text-blue-300', barColor: 'bg-blue-400', glow: 'shadow-blue-500/20', from: 'from-blue-500/20', desc: 'Your Memory Wall' },
+  { id: 'lore', label: 'The Web', icon: Network, color: 'text-blue-300', barColor: 'bg-blue-400', glow: 'shadow-blue-500/20', from: 'from-blue-500/20', desc: 'Social Detective Board' },
   { id: 'breathing', label: 'Breathing', icon: Wind, color: 'text-cyan-300', barColor: 'bg-cyan-400', glow: 'shadow-cyan-500/20', from: 'from-cyan-500/20', desc: 'Calm your mind' },
   { id: 'jam', label: 'Music', icon: Music, color: 'text-violet-300', barColor: 'bg-violet-400', glow: 'shadow-violet-500/20', from: 'from-violet-500/20', desc: 'Listen together' },
   { id: 'soundscape', label: 'Sounds', icon: Sliders, color: 'text-emerald-300', barColor: 'bg-emerald-400', glow: 'shadow-emerald-500/20', from: 'from-emerald-500/20', desc: 'Ambient noise' },
   { id: 'pomodoro', label: 'Focus', icon: Clock, color: 'text-rose-300', barColor: 'bg-rose-400', glow: 'shadow-rose-500/20', from: 'from-rose-500/20', desc: 'Deep work timer' },
-  { id: 'mirror', label: 'Mirror', icon: Ghost, color: 'text-purple-300', barColor: 'bg-purple-400', glow: 'shadow-purple-500/20', from: 'from-purple-500/20', desc: 'Her secret diary' },
   { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-300', barColor: 'bg-slate-400', glow: 'shadow-slate-500/20', from: 'from-slate-500/20', desc: 'Configure Aastha' },
 ];
 
@@ -383,4 +382,4 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
 
       </motion.aside>
   );
-};
+}
