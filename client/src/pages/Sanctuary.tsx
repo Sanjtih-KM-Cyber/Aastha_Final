@@ -203,9 +203,13 @@ export const Sanctuary: React.FC = () => {
   };
 
   const openWidget = (key: string, config?: any) => {
+    // If config provided, update it. If not, we might want to keep old or reset.
+    // Current behavior: if config is undefined, keep old.
+    // If you want to reset, you should pass {} or handle it.
     if (config) {
         setWidgetConfigs(prev => ({ ...prev, [key]: config }));
     }
+
     if (!widgets[key]) {
         const newWidgets = { ...widgets, [key]: true };
         setWidgets(newWidgets);
