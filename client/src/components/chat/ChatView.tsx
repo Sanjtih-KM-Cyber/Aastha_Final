@@ -142,8 +142,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedTagsRef = useRef<Set<string>>(new Set());
 
-  // --- 1. SYNC & WEBSOCKET ---
+  // --- 1. SYNC & WEBSOCKET & HEARTBEAT ---
   useEffect(() => {
+    // Heartbeat: Refresh user data (streak, etc.) on focus
+    const handleFocus = () => {
+        api.get('/users/me').catch(console.error); // Silent refresh
+    };
+    window.addEventListener('focus', handleFocus);
+
     const unsubscribe = subscribe('message', (data: any) => {
         if (data && data.content) {
             setMessages(prev => {
@@ -156,7 +162,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             setIsTyping(false);
         }
     });
-    return unsubscribe;
+    return () => {
+        window.removeEventListener('focus', handleFocus);
+        unsubscribe();
+    };
   }, [subscribe]);
 
   // Silence Timer Logic (Listening Mode)
@@ -200,7 +209,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              const res = await api.get('/chat/history');
              if (isMounted) {
                  if (Array.isArray(res.data) && res.data.length > 0) {
-                     setMessages(res.data);
+                     // Performance: Slice to last 50 messages initially
+                     const history = res.data;
+                     setMessages(history.slice(-50));
                  } else {
                      setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. How can I support you right now?`, timestamp: Date.now() }]);
                  }
@@ -435,7 +446,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     
     // 1. UPDATE UI IMMEDIATELY
     const updatedMessages = [...messages, userMsg];
-    setMessages([...updatedMessages, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }]);
+    // Keep only last 100 messages for performance, but ensure we don't lose context for Search (search uses backend history if needed, or we accept local limit)
+    // Actually, user requested "last week". Let's stick to a safe number like 50 for rendering.
+    // Ideally we filter at render time, but slicing state keeps memory low.
+    const SLICE_LIMIT = 50;
+    const nextState = [...updatedMessages, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
+    setMessages(nextState.length > SLICE_LIMIT ? nextState.slice(nextState.length - SLICE_LIMIT) : nextState);
     
     setInput(''); setAttachedImage(null); setShowEmojiPicker(false); 
     setIsTyping(true); 
@@ -523,21 +539,42 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                      });
                                 }
 
-                                // GOD MODE TOOLS (THE HANDS)
+                                // GOD MODE TOOLS (THE HANDS) -> TRANSFORM TO PROPOSALS
                                 if (brain.tool_calls && brain.tool_calls.length > 0) {
+                                    // Instead of auto-opening, we append a proposal to the message content
+                                    // The MessageBubble component already handles <proposal> tags!
+                                    // So we just need to append the tag to aiContentRaw.
+
                                     brain.tool_calls.forEach((tool: any) => {
+                                        let toolName = '';
+                                        let params = {};
+                                        let reason = "I can help with that";
+
                                         if (tool.name === 'control_widget') {
-                                             onOpenWidget?.(tool.params.widget, tool.params.params || tool.params);
+                                            toolName = tool.params.widget;
+                                            params = tool.params.params || tool.params;
                                         } else if (tool.name === 'write_diary') {
-                                             onOpenWidget?.('diary', {
+                                            toolName = 'diary';
+                                            params = {
                                                 title: tool.params.title,
                                                 content: tool.params.content,
-                                                date: tool.params.date // Pass date if available
-                                             });
+                                                date: tool.params.date
+                                            };
+                                            reason = "Write in Diary";
                                         } else if (tool.name === 'read_diary') {
-                                            onOpenWidget?.('diary', { mode: 'read' });
+                                            toolName = 'diary';
+                                            params = { mode: 'read' };
+                                            reason = "Read Diary";
                                         } else if (tool.name === 'update_dossier') {
-                                            onOpenWidget?.('lore', tool.params);
+                                            // Lore updates happen silently usually, but if UI is needed:
+                                            // onOpenWidget?.('lore', tool.params);
+                                            // Skipping visual proposal for lore updates as it might be background
+                                            return;
+                                        }
+
+                                        if (toolName) {
+                                            const proposalTag = `\n<proposal tool="${toolName}" params='${JSON.stringify(params)}' reason="${reason}" />`;
+                                            aiContentRaw += proposalTag;
                                         }
                                     });
                                 }
