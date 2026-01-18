@@ -2,13 +2,14 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
 import Diary from '../models/Diary';
 import Mood from '../models/Mood';
+import { Person } from '../models/Person';
 import axios from 'axios';
 import { encrypt, decrypt } from '../utils/serverEncryption';
 import { detectiveService } from '../services/detectiveService';
 
 // --- Diary Controllers ---
 
-export const getDiaryEntries = async (req: AuthRequest, res: Response) => {
+export const getDiaryEntry = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
     // Sort by entryDate (logical date) instead of creation date
@@ -207,5 +208,28 @@ export const triggerRetroScan = async (req: AuthRequest, res: Response) => {
     } catch (e) {
         console.error("Scan Error:", e);
         (res as any).status(500).json({ message: 'Scan failed' });
+    }
+};
+
+// --- MUGSHOT UPLOAD CONTROLLER ---
+export const updateMugshot = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+
+        const { personId, image } = (req as any).body;
+        if (!personId || !image) return (res as any).status(400).json({ message: 'Missing Data' });
+
+        const person = await Person.findOneAndUpdate(
+            { _id: personId, userId: req.user._id },
+            { mugshot: image }, // Base64 string storage
+            { new: true }
+        );
+
+        if (!person) return (res as any).status(404).json({ message: 'Person not found' });
+
+        (res as any).json(person);
+    } catch (e) {
+        console.error("Mugshot Error:", e);
+        (res as any).status(500).json({ message: 'Upload failed' });
     }
 };
