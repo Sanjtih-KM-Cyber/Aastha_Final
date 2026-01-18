@@ -3,7 +3,7 @@ import {
   Send, Menu, Headphones, AlertCircle, Smile, 
   Mic, MicOff, X, Search, Image as ImageIcon, Plus, Camera,
   ShieldAlert, Loader2, ChevronDown, Reply, Check, ArrowDown,
-  UserPlus, Battery, Play, Pause, Lock, Zap
+  UserPlus, Battery, Play, Pause, Lock, Zap, Settings // <--- Added Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
@@ -13,6 +13,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { useSync } from '../../context/SyncContext';
 import api from '../../services/api';
+import { SettingsPanel } from '../settings/SettingsPanel'; // <--- Import
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -173,6 +174,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [isCloneMode, setIsCloneMode] = useState(false);
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [cloneUploadVisible, setCloneUploadVisible] = useState(false);
+
+  // --- SETTINGS STATE ---
+  const [showSettings, setShowSettings] = useState(false);
 
   // --- CREDITS ---
   const [localCredits, setLocalCredits] = useState(user?.credits || 0);
@@ -876,6 +880,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          </div>
       )}
 
+      {/* SETTINGS PANEL */}
+      <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
+
       {/* --- SECTION 1: HEADER (SMART HEADER) --- */}
       <div className={`shrink-0 w-full z-30 pt-safe px-4 pb-2 pointer-events-auto ${isMobile ? 'bg-gradient-to-b from-black/80 to-transparent' : 'md:absolute md:top-0 md:pt-6 bg-none'}`}>
           <div className="flex items-center gap-3 h-14 justify-between relative">
@@ -974,8 +981,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      )}
                  </motion.div>
 
-                 <button id="clone-mode-btn" onClick={() => { setCloneUploadVisible(true); fileInputRef.current?.click(); }} className={`shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg ${isCloneMode ? 'bg-purple-500/20 text-purple-200' : 'bg-black/20 hover:bg-white/10'}`}>
-                    <UserPlus size={18} />
+                 {/* SETTINGS BUTTON */}
+                 <button onClick={() => setShowSettings(true)} className="shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg bg-black/20 hover:bg-white/10">
+                    <Settings size={18} />
                  </button>
              </div>
           </div>

@@ -4,12 +4,13 @@ import {
   X, Upload, Trash2, Shield, User, Palette, Check,
   ToggleLeft, ToggleRight, AlertTriangle, Mic, Edit2,
   Save, Camera, CreditCard, Sparkles, Zap, Image as ImageIcon,
-  Headphones, ChevronLeft, ChevronRight, Clock // <--- Added Clock
+  Headphones, ChevronLeft, ChevronRight, Clock, UserPlus // <--- Added UserPlus
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLowPowerMode } from '../../hooks/useLowPowerMode';
 import api from '../../services/api';
+import { PersonaSettings } from './PersonaSettings'; // <--- Import New Component
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ interface SettingsPanelProps {
 const tabs = [
   { id: 'appearance', label: 'Appearance', icon: Palette, desc: 'Themes & Wallpaper' },
   { id: 'voice', label: 'Voice & Sound', icon: Mic, desc: 'TTS & Persona' },
+  { id: 'persona', label: 'Clone & Persona', icon: UserPlus, desc: 'Mimicry & Voice Cloning' }, // <--- New Tab
   { id: 'account', label: 'Account', icon: User, desc: 'Profile & Details' },
   { id: 'security', label: 'Security', icon: Shield, desc: 'Password & Diary' },
   { id: 'subscription', label: 'Subscription', icon: CreditCard, desc: 'Pro Access' },
@@ -228,11 +230,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
           await api.post('/users/delete-account', { reason: deleteReason });
           // Force logout and redirect to login page
           await logout();
-          // Do not reload, as it might just refresh the current protected route (Sanctuary)
-          // logout() in AuthContext clears local storage and state.
-          // App.tsx should detect isAuthenticated=false and redirect to /login?
-          // To be safe, we can manually redirect or let the context update happen.
-          // window.location.href = '/login'; is a hard redirect that works.
           window.location.href = '/login';
       } catch (e) { setIsDeleting(false); }
   };
@@ -396,6 +393,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                    </section>
               </>
           )}
+
+          {activeTab === 'persona' && <PersonaSettings />}
 
           {activeTab === 'account' && (
             <>
