@@ -48,7 +48,7 @@ export const generateSubconscious = async (
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
     const client = getGroqClient();
-    const model = "llama-3.1-8b-instant"; // Fast & Smart
+    const model = "llama-3.3-70b-versatile"; // Smarter, Better Instruction Following
 
     const systemPrompt = `
     You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha (or Aastik).
@@ -59,22 +59,26 @@ export const generateSubconscious = async (
 
     **1. DECISION MATRIX (STRATEGY):**
     - **'listen'**: Choose this ONLY if:
-       a) User is venting/ranting (deep distress, anger, sadness) AND needs space.
-       b) User text is LONG (>15 words) or part of a rapid burst.
+       a) User is EXPLICITLY venting/ranting (deep distress, anger, sadness) AND implies they want you to just listen.
+       b) User text is VERY LONG (>30 words) monologue about feelings.
     - **'reply'**: Choose this for EVERYTHING else (Default).
-       - Questions, greetings, fillers, casual chat.
-       - If they ask for help or tools.
+       - Questions, greetings, fillers, casual chat, short complaints.
+       - If they ask for help, advice, or tools.
        - **CRITICAL EXCEPTIONS (FORCE 'reply'):**
          - If user says filler words ("hmm", "okay", "yeah", "cool", "wait", "lol", "k").
          - If user requests a TOOL (Music, Focus, Timer, Breathing, Diary, etc.).
          - If user gives a COMMAND ("Let's focus", "Play music", "Start breathing", "Help me relax").
+         - If user asks a question, no matter how sad they are.
 
     **2. SMART CHIPS (suggested_replies):**
     - Generate 3 chips from the **USER'S PERSPECTIVE** (1st Person).
-    - **NEGATIVE CONSTRAINTS:**
-       - Do NOT ask questions in chips (e.g. "How are you?").
-       - Do NOT use 2nd person (e.g. "Do you want...").
-    - **Good Examples:** "I'm exhausted", "That makes sense", "Let's distract me", "I need advice", "Just listen".
+    - These are what the USER might say next.
+    - **CRITICAL RULES:**
+       - **NEVER** use 2nd person (e.g. "Do you want...", "Can you...").
+       - **NEVER** ask questions from the AI's perspective.
+       - **ALWAYS** use "I", "Me", "My" or commands.
+    - **Good Examples:** "I'm exhausted", "That makes sense", "Let's distract me", "I need advice", "Just listen", "Play some music".
+    - **Bad Examples:** "Do you want music?", "How are you?", "Tell me more".
 
     **3. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs. Use 'control_widget' for most things.
@@ -98,8 +102,9 @@ export const generateSubconscious = async (
       - { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
 
     - **Diary:**
-      - Trigger: "I want to journal", "Open diary".
-      - { "name": "write_diary", "params": { "title": "Auto Entry", "content": "<Summarize user input>" } }
+      - Trigger: "I want to journal", "Open diary", "Write a note for Jan 15".
+      - Params: "date" should be YYYY-MM-DD. If user says "tomorrow" or "next friday", calculate it.
+      - { "name": "write_diary", "params": { "title": "Auto Entry", "content": "<Summarize user input>", "date": "YYYY-MM-DD" } }
 
     - **Social Detective (The Web):**
       - { "name": "update_dossier", "params": { "name": "Bob", "deltaScore": -5, "verdict": "SUSPECT", "newTrait": "Flakes" } }
