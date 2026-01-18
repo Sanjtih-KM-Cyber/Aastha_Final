@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Menu, Headphones, AlertCircle, Smile, 
   Mic, MicOff, X, Search, Image as ImageIcon, Plus, Camera,
-  ShieldAlert, Loader2, ChevronDown, Reply, Check, ArrowDown
+  ShieldAlert, Loader2, ChevronDown, Reply, Check, ArrowDown,
+  UserPlus, Battery, Play, Pause, Lock, Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
@@ -71,6 +72,43 @@ const mapColorToTheme = (colorName: string): string => {
     return 'aurora';
 };
 
+// --- AUDIO RECORDER ---
+const AudioRecorder: React.FC<{ onSend: (blob: Blob) => void; onCancel: () => void }> = ({ onSend, onCancel }) => {
+    const [isRecording, setIsRecording] = useState(true);
+    const mediaRecorder = useRef<MediaRecorder | null>(null);
+    const chunks = useRef<Blob[]>([]);
+
+    useEffect(() => {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            const recorder = new MediaRecorder(stream);
+            mediaRecorder.current = recorder;
+            recorder.ondataavailable = (e) => chunks.current.push(e.data);
+            recorder.onstop = () => {
+                const blob = new Blob(chunks.current, { type: 'audio/m4a' }); // Or webm/mp3
+                onSend(blob);
+                stream.getTracks().forEach(track => track.stop());
+            };
+            recorder.start();
+        });
+    }, [onSend]);
+
+    const stop = () => {
+        if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
+            setIsRecording(false);
+            mediaRecorder.current.stop();
+        }
+    };
+
+    return (
+        <div className="flex items-center gap-4 bg-red-500/10 px-4 py-2 rounded-full border border-red-500/30 w-full animate-pulse">
+            <div className="w-3 h-3 rounded-full bg-red-500 animate-ping" />
+            <span className="text-red-300 text-sm font-medium flex-1">Recording Voice Note...</span>
+            <button onClick={onCancel} className="p-2 bg-white/10 rounded-full text-white/70 hover:bg-white/20"><X size={16} /></button>
+            <button onClick={stop} className="p-2 bg-red-500 rounded-full text-white hover:bg-red-600"><Check size={16} /></button>
+        </div>
+    );
+};
+
 export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false, currentActivity = 'Online' }) => {
   const { user } = useAuth();
   const { setTheme, currentTheme } = useTheme();
@@ -105,6 +143,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [uiAction, setUiAction] = useState<'none' | 'listen' | 'block_widget'>('none');
   const [currentMood, setCurrentMood] = useState('neutral');
   const [suggestedChips, setSuggestedChips] = useState<string[]>([]);
+  const [socialBattery, setSocialBattery] = useState(100); // UI Only for now
 
   // Patience / Listening Mode State
   const [isWaitingForPermission, setIsWaitingForPermission] = useState(false);
@@ -130,6 +169,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem('user_tts_enabled') === 'true');
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(() => localStorage.getItem('user_voice_uri'));
   
+  // --- CLONE MODE & VOICE INPUT ---
+  const [isCloneMode, setIsCloneMode] = useState(false);
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const [cloneUploadVisible, setCloneUploadVisible] = useState(false);
+
   // --- CREDITS ---
   const [localCredits, setLocalCredits] = useState(user?.credits || 0);
   const [modelMode, setModelMode] = useState<'pro' | 'eco'>(user?.credits && user.credits > 0 ? 'pro' : 'eco');
@@ -192,6 +236,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           setIsStandardMode(!isPremium);
           setLocalCredits(user.isPro ? 9999 : credits);
           setModelMode(isPremium ? 'pro' : 'eco');
+          if (user.socialBattery !== undefined) setSocialBattery(user.socialBattery);
+          if (user.cloneMode?.isActive) setIsCloneMode(true);
       }
   }, [user]);
 
@@ -400,10 +446,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       if (files && files.length > 0) {
           try {
               const compressed = await compressImage(files[0]);
-              setAttachedImage(compressed);
+              if (cloneUploadVisible) {
+                 // Clone Mode Logic
+                 handleCloneUpload(compressed);
+              } else {
+                 setAttachedImage(compressed);
+              }
           } catch (err) { setError("Failed to process image."); }
       }
       if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleCloneUpload = async (img: string) => {
+     // TODO: Implement Clone Mode Activation
+     setCloneUploadVisible(false);
+     setIsCloneMode(true);
+     setMessages(prev => [...prev, { role: 'system', content: 'SYSTEM: Clone Mode Activated. Upload a screenshot to mimic.', timestamp: Date.now() }]);
+     // Just for now, we simulate activation. Ideally send to /chat to activate.
+     // We will treat this as a "message" with intent to clone.
+     handleSend(undefined, 'ACTIVATE_CLONE_MODE', img);
   };
 
   const copyToClipboard = (text: string) => {
@@ -436,12 +497,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
-    // Debounce resize slightly or just run it.
-    // It's usually fast enough, but let's ensure it doesn't cause layout thrashing too much.
-    // React state update is async, so we can resize after render or in effect.
-    // But for instant feedback, calling it directly is better.
-    // Lag is often due to re-rendering the whole message list.
-    // MessageBubble is memoized (conceptually), but we should ensure it.
     autoResizeTextarea();
   };
 
@@ -453,33 +508,40 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   // --- 5. SEND LOGIC (INTEGRATED WITH SERVER BRAIN) ---
-  const handleSend = async (e?: React.FormEvent, overrideInput?: string) => {
+  const handleSend = async (e?: React.FormEvent, overrideInput?: string, overrideImage?: string, audioBlob?: Blob) => {
     if (e) e.preventDefault();
     
+    // Audio Handling
+    let audioBase64 = null;
+    if (audioBlob) {
+        audioBase64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(audioBlob);
+        });
+    }
+
     const textToSend = overrideInput || input;
-    if (!textToSend.trim() && !attachedImage) return;
+    if (!textToSend.trim() && !attachedImage && !overrideImage && !audioBlob) return;
 
     let finalContent = textToSend;
     if (replyingTo) { finalContent = `> Replying to: "${replyingTo}"\n\n${textToSend}`; setReplyingTo(null); }
-    if (attachedImage) { finalContent = `[Image Attached] ${finalContent}`; }
+    if (attachedImage || overrideImage) { finalContent = `[Image Attached] ${finalContent}`; }
+    if (audioBlob) { finalContent = `[Voice Note]`; }
 
     const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
     const tempBotId = `temp-${Date.now()}`;
     
     // 1. UPDATE UI IMMEDIATELY
     const updatedMessages = [...messages, userMsg];
-    // Keep only last 100 messages for performance, but ensure we don't lose context for Search (search uses backend history if needed, or we accept local limit)
-    // Actually, user requested "last week". Let's stick to a safe number like 50 for rendering.
-    // Ideally we filter at render time, but slicing state keeps memory low.
     const SLICE_LIMIT = 50;
     const nextState = [...updatedMessages, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
     setMessages(nextState.length > SLICE_LIMIT ? nextState.slice(nextState.length - SLICE_LIMIT) : nextState);
     
-    setInput(''); setAttachedImage(null); setShowEmojiPicker(false); 
+    setInput(''); setAttachedImage(null); setShowEmojiPicker(false); setIsRecordingAudio(false);
     setIsTyping(true); 
     setError(null);
     setStatusDisplay('Thinking...'); 
-    // Reset textarea height
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     // 2. CALL BACKEND
@@ -502,7 +564,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         credentials: 'include', 
         body: JSON.stringify({
             message: actualContent,
-            images: attachedImage ? [attachedImage] : [],
+            images: overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []),
+            audio: audioBase64,
             forceReply: isPermissionGrant
         }),
       });
@@ -563,10 +626,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
                                 // GOD MODE TOOLS (THE HANDS) -> TRANSFORM TO PROPOSALS
                                 if (brain.tool_calls && brain.tool_calls.length > 0) {
-                                    // Instead of auto-opening, we append a proposal to the message content
-                                    // The MessageBubble component already handles <proposal> tags!
-                                    // So we just need to append the tag to aiContentRaw.
-
                                     brain.tool_calls.forEach((tool: any) => {
                                         let toolName = '';
                                         let params = {};
@@ -577,21 +636,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                             params = tool.params.params || tool.params;
                                         } else if (tool.name === 'write_diary') {
                                             toolName = 'diary';
-                                            params = {
-                                                title: tool.params.title,
-                                                content: tool.params.content,
-                                                date: tool.params.date
-                                            };
+                                            params = tool.params;
                                             reason = "Write in Diary";
-                                        } else if (tool.name === 'read_diary') {
-                                            toolName = 'diary';
-                                            params = { mode: 'read' };
-                                            reason = "Read Diary";
-                                        } else if (tool.name === 'update_dossier') {
-                                            // Lore updates happen silently usually, but if UI is needed:
-                                            // onOpenWidget?.('lore', tool.params);
-                                            // Skipping visual proposal for lore updates as it might be background
-                                            return;
+                                        }
+
+                                        // Special Widget: Voice Hug
+                                        if (toolName === 'voice_hug') {
+                                            // Append audio placeholder
+                                            const hugTag = `\n\n[Voice Hug Playing 🎵]`;
+                                            aiContentRaw += hugTag;
                                         }
 
                                         if (toolName) {
@@ -604,7 +657,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                 // Stop typing indicator if listening
                                 if (brain.strategy === 'listen') {
                                     setIsTyping(false);
-                                    // Remove the temp bot message if it's empty
                                     if (!aiContentRaw) {
                                         setMessages(prev => prev.filter(m => m.id !== tempBotId));
                                     }
@@ -616,7 +668,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         if (data.meta) { 
                             setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits)); 
                             setModelMode(data.meta.mode); 
-                            setIsStandardMode(data.meta.mode === 'standard'); 
+                            setIsStandardMode(data.meta.mode === 'standard');
+                            if (data.meta.battery !== undefined) setSocialBattery(data.meta.battery);
+                            if (data.meta.limitReached) {
+                                setIsCloneMode(false);
+                            }
                         }
 
                         // C. HANDLE CONTENT (THE VOICE)
@@ -812,24 +868,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
               <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.2 }} transition={{ duration: 0.8, ease: "easeInOut" }} className="fixed inset-0 z-[100] pointer-events-none" style={{ backgroundColor: targetFlashColor }} />
           )}
       </AnimatePresence>
-      <AnimatePresence>
-        {isVoiceMode && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/90 backdrop-blur-3xl flex flex-col items-center justify-center">
-              <button onClick={toggleVoiceMode} className="absolute top-8 right-8 text-white/50 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors"><X size={24} /></button>
-              <div className="relative mb-12">
-                 <motion.div animate={{ scale: isListening ? [1, 1.4, 1] : 1, opacity: isListening ? [0.4, 0.8, 0.4] : 0.2 }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }} className="absolute inset-0 rounded-full blur-3xl" style={{ backgroundColor: currentTheme.primaryColor }} />
-                 <div className="w-48 h-48 rounded-full border border-white/10 bg-black/50 backdrop-blur-2xl relative z-10 flex items-center justify-center">
-                     <Headphones size={64} className={isListening ? "text-white" : "text-white/30"} />
-                 </div>
-              </div>
-              <h3 className="text-3xl font-serif text-white mb-6">{isListening ? "Listening..." : "Thinking..."}</h3>
-              <p className="text-white/50 text-lg max-w-lg text-center px-4 min-h-[3rem]">{transcript || "..."}</p>
-              <button onClick={isListening ? stopListening : startListening} className="mt-12 p-6 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
-                  {isListening ? <Mic size={32} /> : <MicOff size={32} className="text-red-400" />}
-              </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
+      {/* CLONE MODE HEADER OVERLAY */}
+      {isCloneMode && (
+         <div className="absolute top-0 left-0 right-0 h-14 z-20 bg-purple-500/20 backdrop-blur-md flex items-center justify-center pointer-events-none">
+             <span className="text-purple-200 font-bold tracking-wider text-xs uppercase animate-pulse">Clone Mode Active</span>
+         </div>
+      )}
 
       {/* --- SECTION 1: HEADER (SMART HEADER) --- */}
       <div className={`shrink-0 w-full z-30 pt-safe px-4 pb-2 pointer-events-auto ${isMobile ? 'bg-gradient-to-b from-black/80 to-transparent' : 'md:absolute md:top-0 md:pt-6 bg-none'}`}>
@@ -838,6 +883,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  <button id="mobile-menu-btn" onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 bg-black/20 ${!isMobile ? 'md:hidden' : ''}`}>
                     <Menu size={20} />
                  </button>
+                 {/* Social Battery Indicator */}
+                 <div className="ml-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 border border-white/5 backdrop-blur-md">
+                    <Battery size={14} className={socialBattery < 20 ? "text-red-400 animate-pulse" : "text-green-400"} />
+                    <span className="text-[10px] font-bold text-white/80">{socialBattery}%</span>
+                 </div>
              </div>
 
              <div className="absolute left-1/2 -translate-x-1/2 z-10 flex items-center justify-center w-full pointer-events-auto">
@@ -924,8 +974,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      )}
                  </motion.div>
 
-                 <button id="voice-mode-btn" onClick={toggleVoiceMode} className={`shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg ${isVoiceMode ? 'bg-white/20 text-white' : 'bg-black/20 hover:bg-white/10'}`}>
-                    <Headphones size={18} />
+                 <button id="clone-mode-btn" onClick={() => { setCloneUploadVisible(true); fileInputRef.current?.click(); }} className={`shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg ${isCloneMode ? 'bg-purple-500/20 text-purple-200' : 'bg-black/20 hover:bg-white/10'}`}>
+                    <UserPlus size={18} />
                  </button>
              </div>
           </div>
@@ -1031,90 +1081,97 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      </div>
                  )}
 
-                 <div className="flex items-center gap-1 relative">
-                     {/* UNIFIED MEDIA BUTTON */}
-                     {isMobile ? (
-                         <div className="relative">
-                             <button
-                                 type="button"
-                                 onClick={() => setShowMediaMenu(!showMediaMenu)}
-                                 disabled={isStandardMode}
-                                 className={`p-2.5 rounded-full transition-all ${showMediaMenu || attachedImage ? 'bg-white/10 text-white rotate-45' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
-                             >
-                                 <Plus size={22} />
-                             </button>
-                             <AnimatePresence>
-                                 {showMediaMenu && (
-                                     <motion.div
-                                         initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                                         exit={{ opacity: 0, scale: 0.8, y: 10 }}
-                                         className="fixed bottom-24 left-6 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden min-w-[160px] z-[100] flex flex-col p-1.5"
-                                      >
-                                          <button onClick={() => { cameraInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
-                                              <div className="w-8 h-8 rounded-full bg-teal-500/20 flex items-center justify-center"><Camera size={16} className="text-teal-400" /></div> Camera
-                                          </button>
-                                          <button onClick={() => { fileInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
-                                              <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center"><ImageIcon size={16} className="text-violet-400" /></div> Gallery
-                                          </button>
-                                      </motion.div>
-                                 )}
-                             </AnimatePresence>
-                         </div>
-                     ) : (
-                         <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isStandardMode}
-                            className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
-                         >
-                             <ImageIcon size={20} />
-                         </button>
-                     )}
+                 {/* RECORDING OVERLAY */}
+                 {isRecordingAudio ? (
+                    <AudioRecorder onSend={(blob) => handleSend(undefined, undefined, undefined, blob)} onCancel={() => setIsRecordingAudio(false)} />
+                 ) : (
+                    <>
+                    <div className="flex items-center gap-1 relative">
+                        {/* UNIFIED MEDIA BUTTON */}
+                        {isMobile ? (
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowMediaMenu(!showMediaMenu)}
+                                    disabled={isStandardMode}
+                                    className={`p-2.5 rounded-full transition-all ${showMediaMenu || attachedImage ? 'bg-white/10 text-white rotate-45' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                                >
+                                    <Plus size={22} />
+                                </button>
+                                <AnimatePresence>
+                                    {showMediaMenu && (
+                                        <motion.div
+                                            initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                            exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                                            className="fixed bottom-24 left-6 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden min-w-[160px] z-[100] flex flex-col p-1.5"
+                                        >
+                                            <button onClick={() => { cameraInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
+                                                <div className="w-8 h-8 rounded-full bg-teal-500/20 flex items-center justify-center"><Camera size={16} className="text-teal-400" /></div> Camera
+                                            </button>
+                                            <button onClick={() => { fileInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
+                                                <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center"><ImageIcon size={16} className="text-violet-400" /></div> Gallery
+                                            </button>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isStandardMode}
+                                className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                            >
+                                <ImageIcon size={20} />
+                            </button>
+                        )}
 
-                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
-                     <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
-                     
-                     <button onClick={toggleDictation} className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>
-                         {isDictating ? <MicOff size={20} /> : <Mic size={20} />}
-                     </button>
-                 </div>
+                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
+                        <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
 
-                 <form onSubmit={handleSend} className="flex-1 flex items-center relative h-full">
-                     <textarea 
-                         ref={textareaRef}
-                         value={input} 
-                         onChange={handleInput}
-                         onKeyDown={handleKeyPress}
-                         onPaste={handlePaste}
-                         placeholder={isDictating ? "Listening..." : (uiAction === 'listen' ? "I'm listening..." : "Type a message...")}
-                         className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base font-light py-3 px-2 resize-none max-h-32 scrollbar-hide"
-                         rows={1}
-                     />
-                     <div className="relative">
-                         <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
-                             <Smile size={20} />
-                         </button>
-                         {showEmojiPicker && (
-                             <div className="absolute bottom-14 right-0 shadow-2xl z-50">
-                                 <EmojiPicker
-                                     theme={Theme.DARK}
-                                     emojiStyle={EmojiStyle.APPLE}
-                                     onEmojiClick={(e) => { setInput(prev => prev + e.emoji); }}
-                                     lazyLoadEmojis={true}
-                                     width={300}
-                                     height={400}
-                                     searchDisabled={false}
-                                     skinTonesDisabled={false}
-                                 />
-                             </div>
-                         )}
-                     </div>
-                 </form>
+                        <button onClick={() => setIsRecordingAudio(true)} className="p-2.5 rounded-full transition-all text-white/40 hover:bg-white/5 hover:text-white">
+                            <Mic size={20} />
+                        </button>
+                    </div>
 
-                 <button onClick={(e) => handleSend(e)} disabled={!input.trim() && !attachedImage} className="p-3.5 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-1" style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #4f46e5)` }}>
-                     <Send size={18} className="ml-0.5" fill="currentColor" />
-                 </button>
+                    <form onSubmit={handleSend} className="flex-1 flex items-center relative h-full">
+                        <textarea
+                            ref={textareaRef}
+                            value={input}
+                            onChange={handleInput}
+                            onKeyDown={handleKeyPress}
+                            onPaste={handlePaste}
+                            placeholder={isDictating ? "Listening..." : (uiAction === 'listen' ? "I'm listening..." : "Type a message...")}
+                            className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base font-light py-3 px-2 resize-none max-h-32 scrollbar-hide"
+                            rows={1}
+                        />
+                        <div className="relative">
+                            <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
+                                <Smile size={20} />
+                            </button>
+                            {showEmojiPicker && (
+                                <div className="absolute bottom-14 right-0 shadow-2xl z-50">
+                                    <EmojiPicker
+                                        theme={Theme.DARK}
+                                        emojiStyle={EmojiStyle.APPLE}
+                                        onEmojiClick={(e) => { setInput(prev => prev + e.emoji); }}
+                                        lazyLoadEmojis={true}
+                                        width={300}
+                                        height={400}
+                                        searchDisabled={false}
+                                        skinTonesDisabled={false}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </form>
+
+                    <button onClick={(e) => handleSend(e)} disabled={!input.trim() && !attachedImage} className="p-3.5 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-1" style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #4f46e5)` }}>
+                        <Send size={18} className="ml-0.5" fill="currentColor" />
+                    </button>
+                    </>
+                 )}
              </div>
           </div>
       </div>

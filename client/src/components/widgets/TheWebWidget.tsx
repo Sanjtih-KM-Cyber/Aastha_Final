@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
-import { Network, Search, RefreshCw, User, Skull, Heart, CircleDashed, Fingerprint, FileText } from 'lucide-react';
+import { Network, Search, RefreshCw, User, Skull, Heart, CircleDashed, Fingerprint, FileText, Camera } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -30,7 +30,50 @@ const VERDICT_COLORS = {
     NPC: 'text-gray-400 border-gray-500/50 bg-gray-500/10'
 };
 
-const CaseFile: React.FC<{ person: Person; onClose: () => void }> = ({ person, onClose }) => {
+const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 400; // Smaller for mugshots
+                const scaleSize = MAX_WIDTH / img.width;
+                canvas.width = MAX_WIDTH;
+                canvas.height = img.height * scaleSize;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.7));
+                }
+            };
+        };
+        reader.onerror = (error) => reject(error);
+    });
+};
+
+const CaseFile: React.FC<{ person: Person; onClose: () => void; onUpdate: () => void }> = ({ person, onClose, onUpdate }) => {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isUploading, setIsUploading] = useState(false);
+
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        try {
+            const compressed = await compressImage(file);
+            await api.post('/data/web/mugshot', { personId: person._id, image: compressed });
+            onUpdate(); // Refresh parent
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
     return (
         <motion.div
             initial={{ y: 50, opacity: 0, scale: 0.95 }}
@@ -51,13 +94,24 @@ const CaseFile: React.FC<{ person: Person; onClose: () => void }> = ({ person, o
             <div className="flex-1 p-6 overflow-y-auto">
                 <div className="flex gap-6">
                     {/* Mugshot Area */}
-                    <div className="w-32 h-40 bg-gray-200 border-2 border-gray-400 shadow-inner flex items-center justify-center shrink-0 relative rotate-1">
+                    <div
+                        className="w-32 h-40 bg-gray-200 border-2 border-gray-400 shadow-inner flex items-center justify-center shrink-0 relative rotate-1 cursor-pointer group overflow-hidden"
+                        onClick={() => !isUploading && fileInputRef.current?.click()}
+                    >
                         {person.mugshot ? (
-                            <img src={person.mugshot} alt={person.name} className="w-full h-full object-cover grayscale contrast-125" />
+                            <img src={person.mugshot} alt={person.name} className={`w-full h-full object-cover grayscale contrast-125 ${isUploading ? 'opacity-50' : ''}`} />
                         ) : (
                             <User size={48} className="text-gray-400" />
                         )}
-                        <div className="absolute -bottom-4 bg-black text-white px-2 py-0.5 text-xs font-bold uppercase tracking-widest">
+
+                        {/* Hover Overlay */}
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            {isUploading ? <RefreshCw className="animate-spin text-white" /> : <Camera size={24} className="text-white" />}
+                        </div>
+
+                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
+
+                        <div className="absolute -bottom-4 bg-black text-white px-2 py-0.5 text-xs font-bold uppercase tracking-widest z-10">
                             {person._id.slice(-6)}
                         </div>
                     </div>
@@ -121,6 +175,11 @@ export const TheWebWidget: React.FC<TheWebProps> = ({ isOpen, onClose, zIndex, o
         try {
             const res = await api.get('/data/web');
             setPeople(res.data || []);
+            // Update selected person ref if open
+            if (selectedPerson) {
+                const updated = res.data.find((p: Person) => p._id === selectedPerson._id);
+                if (updated) setSelectedPerson(updated);
+            }
         } catch (e) { console.error(e); }
         finally { setIsLoading(false); }
     };
@@ -297,7 +356,7 @@ export const TheWebWidget: React.FC<TheWebProps> = ({ isOpen, onClose, zIndex, o
                 {/* --- CASE FILE OVERLAY --- */}
                 <AnimatePresence>
                     {selectedPerson && (
-                        <CaseFile person={selectedPerson} onClose={() => setSelectedPerson(null)} />
+                        <CaseFile person={selectedPerson} onClose={() => setSelectedPerson(null)} onUpdate={fetchWeb} />
                     )}
                 </AnimatePresence>
 

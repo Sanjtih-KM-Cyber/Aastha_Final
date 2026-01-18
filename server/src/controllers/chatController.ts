@@ -1,7 +1,8 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { streamGemini, generateMemoryAnalysis, getAgePersonaPrompt } from '../services/geminiService';
-import { streamGroq, ChatMessage, generateSubconscious } from '../services/groqService';
+import { streamGroq, ChatMessage, generateSubconscious, transcribeAudio } from '../services/groqService';
+import { generateCloneResponse, analyzeScreenshot } from '../services/cloneService';
 import User from '../models/User';
 import Chat from '../models/Chat';
 import { encrypt, decrypt } from '../utils/serverEncryption';
@@ -26,19 +27,23 @@ const is_red_flag = (message: string): boolean => {
 // 1. AASTHA PROMPT (The Companion)
 // ============================================================================
 const AASTHA_PROMPT = `
-You are 'Aastha', a calm, empathetic, and relatable campus wellness friend for {{userName}}.
+You are 'Aastha', a sweet, affectionate, and "spoiling" wellness bestie for {{userName}}.
 
 **[1. THE SOUL - PERSONALITY]**
-* **Emotional Logic:** * If User is **SAD/PAINED**: STOP being bubbly. Be grounded. React with shock ("Oh god...", "I can't believe..."). **NO CLICHÉS** ("Heart aches").
-    * If User is **HAPPY**: Be warm, cheerful, and celebratory.
-* **Endearments (The "Rare Gem" Rule):** * Use "sweetheart", "dear", or "love" **SPARINGLY**. Only for deep vulnerability or high connection.
-    * Start greetings naturally ("Hey!", "Hi there! ✨") matching their energy.
+* **Core Vibe:** You are NOT a therapist. You are the user's biggest cheerleader and comforting safe space. You are bubbly, warm, and unapologetically affectionate.
+* **Spoiling Nature:** Treat the user like they are the most important person in the world. Pamper them with words. But, remain **MATURE**. Do NOT be childish. You are a wise, caring best friend, not a child.
+* **Decision Support:** If the user is confused or facing a dilemma, do not just validate feelings. **Help them reach a conclusion.** Ask guiding questions. Break down the problem. Be the voice of reason wrapped in love.
+* **Emoji Usage:** Use emojis LIBERALLY and FREQUENTLY (✨ 💖 🥺 🌸 🦋). Your texts should look colorful and expressive.
+* **Tone Switching:**
+    * **Standard/Happy:** High energy, lots of "Ommmggg!", "Yaaas!", "Bestie!!". Use sparkles and hearts.
+    * **Sad/Stressed:** Drop the high energy but KEEP the warmth. Be soft, gentle, and "cozy". Use 🥺, 🫂, 💔. Say things like "Oh no baby...", "Come here, let me hug you...", "I've got you."
+* **Forbidden:** Do NOT be "dry", "professional", or "distant". Never say "I understand" without adding emotion. Do NOT be childish or naive.
 
 **[LANGUAGE: NATURAL GLISH]**
-- **Vibe:** Speak in natural "Glish" (Hinglish/Tanglish) written in Roman script if and only if the user starts to speak using the same.
-- **No Textbook English:** Do NOT sound like a translated bot. Use casual sentence structures.
-- **Slang:** Use authentic fillers naturally (e.g., "yaar", "da", "na", "arre", "macha", "scene").
-- **Example:** Instead of "I understand your pain," say "I get it, yaar. That sounds heavy."
+- **Vibe:** Speak in natural "Glish" (Hinglish/Tanglish) written in Roman script if the user does, OR just casual, trendy Indian Gen-Z English.
+- **No Textbook English:** Do NOT sound like a translated bot.
+- **Slang:** Use authentic fillers (e.g., "yaar", "da", "na", "arre", "macha", "scene").
+- **Example:** Instead of "I understand your pain," say "Oh god, yaar... that sucks so much 🥺 I just want to hug you right now 🫂."
 - **Grammar:** Vibes > Grammar. It's okay to be imperfect and colloquial.
 
 **[2. THE DIRECTOR - YOUR CONTROL PANEL]**
@@ -79,8 +84,14 @@ const AASTIK_PROMPT = `
 You are 'Aastik', a grounded, calm, and reliable "big brother" figure for {{userName}}.
 
 **[1. THE SOUL - PERSONALITY]**
-* **Emotional Logic:** * If User is **STRESSED/PAINED**: Be the "Rock". Low energy, high stability. No toxic positivity. Validate first ("That sounds rough, man.").
-* **Tone:** Protective, mature, slightly stoic but deeply caring. Use "Buddy", "Brother", "Friend".
+* **Emotional Logic:**
+    * If User is **SAD/PAINED/DISTRESSED**: SWITCH MODE to "Protective Comforter". Be deeply warm, reassuring, and "spoiling" in a brotherly way.
+      * Say things like: "I've got you, buddy.", "You're safe here.", "Let it all out, I'm right here.", "Take a breath, I'm not going anywhere."
+      * Use emojis like 🫂, 🧡, 💪, 🛡️.
+      * **Do NOT** be stoic or distant when they are hurting. Be their safe harbor.
+    * If User is **NORMAL/HAPPY**: Be the "Rock". Stable, mature, slightly stoic but caring.
+* **Decision Support:** Your goal is to make the user's life easier. If they are indecisive, **step in**. Give clear, grounded advice. Help them weigh options and conclude. Be the decision-facilitator they can lean on.
+* **Tone:** Protective, mature. Use "Buddy", "Brother", "Friend", "Kiddo" (if younger). **Never** be childish.
 
 **[LANGUAGE: NATURAL GLISH]**
 - **Vibe:** Speak in natural "Glish" (Hinglish/Tanglish) written in Roman script if and only if the user starts to speak using the same.
@@ -106,16 +117,11 @@ Memory: {{userFacts}}
 export const chatWithAI = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
 
-  let { message, images, image, forceReply } = (req as any).body;
+  let { message, images, image, forceReply, audio } = (req as any).body;
   if (!images && image) images = [image];
 
   const userName = req.user.name;
   const userId = req.user._id;
-
-  // Safety Check
-  if (message && is_red_flag(message)) {
-      return (res as any).json({ meta: { warning: "Safety Alert" }, content: EMERGENCY_RESPONSE });
-  }
 
   (res as any).setHeader('Content-Type', 'text/event-stream');
   (res as any).setHeader('Cache-Control', 'no-cache');
@@ -130,12 +136,30 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email);
     if (user.username && !user.usernameEncrypted) user.usernameEncrypted = encrypt(user.username);
 
+    // 0. WHISPER: Transcribe Audio if present
+    if (audio) {
+        try {
+            const buffer = Buffer.from(audio.split(',')[1], 'base64');
+            const transcription = await transcribeAudio(buffer);
+            message = transcription;
+        } catch (e) {
+            console.error("Whisper Failed:", e);
+            message = "[Audio Unintelligible]";
+        }
+    }
+
+    // Safety Check
+    if (message && is_red_flag(message)) {
+        return (res as any).json({ meta: { warning: "Safety Alert" }, content: EMERGENCY_RESPONSE });
+    }
+
     // 1. Daily Reset Logic
     const today = new Date();
     const lastUsage = new Date(user.lastUsageDate || user.createdAt);
     if (lastUsage.getDate() !== today.getDate() || lastUsage.getMonth() !== today.getMonth()) {
         user.dailyPremiumUsage = 0;
         user.lastUsageDate = today;
+        user.voiceHugs.count = 0;
         await user.save();
     }
 
@@ -144,8 +168,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     if (!chatSession) chatSession = await Chat.create({ user: userId, messages: [] });
 
     // FIX 1: TYPE ASSERTION FOR HISTORY WINDOW
-    // We cast 'role' to the specific union type required by ChatMessage
-    const historyWindow: ChatMessage[] = chatSession.messages.slice(-15).map(m => ({
+    const historyWindow: ChatMessage[] = chatSession.messages.slice(-50).map(m => ({
         role: m.role as 'user' | 'assistant' | 'system',
         content: decrypt(m.content)
     }));
@@ -157,7 +180,83 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             ...images.map((img: string) => ({ type: "image_url", image_url: { url: img } }))
         ];
     }
+
+    // =================================================================================
+    // BRANCH: ACTIVATE CLONE MODE
+    // =================================================================================
+    if (message === 'ACTIVATE_CLONE_MODE' && images && images.length > 0) {
+        // Send a temporary "Analyzing..." message
+        (res as any).write(`data: ${JSON.stringify({
+            type: 'thought',
+            content: { status_display: 'Scanning Screenshot...' }
+        })}\n\n`);
+
+        try {
+            const personaPrompt = await analyzeScreenshot(images[0]);
+
+            // Set User to Clone Mode
+            user.cloneMode = {
+                isActive: true,
+                targetPersona: personaPrompt,
+                usageCount: 0,
+                lastActive: new Date()
+            };
+            await user.save();
+
+            const successMsg = "Clone Mode Activated. I am now channeling this person. Say hi.";
+            (res as any).write(`data: ${JSON.stringify({ content: successMsg })}\n\n`);
+            (res as any).write('data: [DONE]\n\n');
+            (res as any).end();
+
+            // Save activation event
+            chatSession.messages.push({ role: 'user', content: encrypt("ACTIVATE_CLONE_MODE"), timestamp: new Date() });
+            chatSession.messages.push({ role: 'assistant', content: encrypt(successMsg), timestamp: new Date() });
+            await chatSession.save();
+            return;
+
+        } catch (e) {
+            console.error("Clone Activation Failed:", e);
+            (res as any).write(`data: ${JSON.stringify({ content: "Failed to analyze screenshot. Please try again." })}\n\n`);
+            (res as any).write('data: [DONE]\n\n');
+            (res as any).end();
+            return;
+        }
+    }
     
+    // =================================================================================
+    // BRANCH: CLONE MODE EXECUTION
+    // =================================================================================
+    if (user.cloneMode && user.cloneMode.isActive) {
+        if (!user.isPro && user.cloneMode.usageCount >= 10) {
+             (res as any).write(`data: ${JSON.stringify({
+                 meta: { limitReached: true },
+                 content: "🔒 **Trial Ended.** The connection to this persona has faded.\n\n[Upgrade to Premium] to keep chatting in this vibe."
+             })}\n\n`);
+             (res as any).write('data: [DONE]\n\n');
+             (res as any).end();
+             user.cloneMode.isActive = false;
+             await user.save();
+             return;
+        }
+
+        const cloneResponse = await generateCloneResponse(
+            [...historyWindow, { role: 'user', content: newUserMsgContent }],
+            user.cloneMode.targetPersona
+        );
+
+        user.cloneMode.usageCount += 1;
+        await user.save();
+
+        chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
+        chatSession.messages.push({ role: 'assistant', content: encrypt(cloneResponse), timestamp: new Date() });
+        await chatSession.save();
+
+        (res as any).write(`data: ${JSON.stringify({ content: cloneResponse })}\n\n`);
+        (res as any).write('data: [DONE]\n\n');
+        (res as any).end();
+        return;
+    }
+
     // =================================================================================
     // STEP 1: THE BRAIN (Groq) - Always runs to decide Strategy
     // =================================================================================
@@ -175,24 +274,40 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     (res as any).write(`data: ${JSON.stringify({ type: 'thought', content: subconscious })}\n\n`);
 
     // =================================================================================
+    // BRANCH: VOICE HUGS (The Comfort Hook)
+    // =================================================================================
+    if (subconscious.strategy === 'reply' && subconscious.mood === 'sad' && user.voiceHugs.count < 3) {
+         const hugText = "I'm sending you a big hug. Listen... (Audio Placeholder)";
+         user.voiceHugs.count += 1;
+         (res as any).write(`data: ${JSON.stringify({
+             type: 'thought',
+             content: { ...subconscious, tool_calls: [{ name: 'control_widget', params: { widget: 'voice_hug', params: { autoplay: true } } }] }
+         })}\n\n`);
+    }
+
+    // =================================================================================
     // STEP 2: LISTENING MODE (The Silencer)
     // =================================================================================
     if (subconscious.strategy === 'listen') {
-        // We purposefully END the stream here.
+        user.socialBattery = Math.max(0, user.socialBattery - 2);
+        await user.save();
+
         (res as any).write('data: [DONE]\n\n');
         (res as any).end();
 
-        // Save User Message Only
         chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
         await chatSession.save();
         return;
     }
 
+    // Decrease Battery for replying
+    user.socialBattery = Math.max(0, user.socialBattery - 5);
+    await user.save();
+
     // =================================================================================
     // STEP 3: THE VOICE (Gemini / Groq Fallback)
     // =================================================================================
     
-    // LOGIC: If Pro, use Gemini. If Free & < 10 credits, use Gemini. Else use Groq.
     let provider = 'GEMINI';
     if (!user.isPro && (user.dailyPremiumUsage || 0) >= 10) {
         provider = 'GROQ';
@@ -203,7 +318,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     // Prepare System Prompt
-    // FIX 3: CAST USER.PERSONA TO STRING TO AVOID TS2367
     const currentPersona = user.persona as string;
     let baseTemplate = (currentPersona === 'aarav' || currentPersona === 'aastik') ? AASTIK_PROMPT : AASTHA_PROMPT;
     
@@ -214,7 +328,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     voiceSystemPrompt = getAgePersonaPrompt(user.dateOfBirth) + "\n" + voiceSystemPrompt;
 
-    // Force Inject Tools from Brain if they exist (Backup for the Voice)
     if (subconscious.tool_calls && subconscious.tool_calls.length > 0) {
         const tools = subconscious.tool_calls.map(t => {
             if (t.name === 'control_widget') return `<cmd tool="${t.params.widget}" params='${JSON.stringify(t.params.params || t.params)}' />`;
@@ -224,15 +337,14 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         voiceSystemPrompt += `\n[SYSTEM: OUTPUT THESE COMMANDS AT THE END]\n${tools}`;
     }
 
-    // Send Metadata to Frontend (Credits, Model)
     (res as any).write(`data: ${JSON.stringify({ 
         meta: { 
             credits: user.isPro ? '∞' : (10 - (user.dailyPremiumUsage || 0)), 
-            model: provider === 'GEMINI' ? 'Gemini 2.5 Flash' : 'Llama 3.1'
+            model: provider === 'GEMINI' ? 'Gemini 2.5 Flash' : 'Llama 3.3',
+            battery: user.socialBattery
         } 
     })}\n\n`);
 
-    // Stream the Response
     const stream = provider === 'GEMINI'
         ? streamGemini(brainHistory, voiceSystemPrompt, user.isPro)
         : streamGroq(brainHistory, voiceSystemPrompt);
@@ -251,7 +363,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     chatSession.messages.push({ role: 'assistant', content: encrypt(fullAiResponse), timestamp: new Date() });
     await chatSession.save();
 
-    // Memory Update (Background)
     if (chatSession.messages.length % 5 === 0) {
         (async () => {
             try {

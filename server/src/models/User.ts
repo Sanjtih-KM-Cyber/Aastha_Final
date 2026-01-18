@@ -33,6 +33,20 @@ export interface ILore {
   lastMentioned: Date;
 }
 
+// 3. Clone Mode (The Viral Hook)
+export interface ICloneMode {
+  isActive: boolean;
+  targetPersona: string; // The "System Prompt" extracted from the screenshot
+  usageCount: number; // Max 10 for free users
+  lastActive: Date;
+}
+
+// 4. Voice Hugs (The Comfort Hook)
+export interface IVoiceHugs {
+  count: number; // Max 3 per week for free
+  lastReset: Date;
+}
+
 export interface IUser extends Document {
   // --- Encrypted Fields (Sensitive PII - Stored Encrypted) ---
   nameEncrypted?: string;
@@ -99,6 +113,12 @@ export interface IUser extends Document {
 
   // Onboarding
   isOnboardingComplete?: boolean;
+
+  // --- NEW FIELDS FOR "MONEY MACHINE" ---
+  socialBattery: number; // 0-100
+  cloneMode: ICloneMode;
+  voiceHugs: IVoiceHugs;
+  faceTags: Map<string, string>; // faceId -> personId (For "The Eyes")
 }
 
 const securityQuestionSchema = new Schema({
@@ -112,6 +132,18 @@ const paymentRecordSchema = new Schema({
   amount: { type: Number, required: true },
   status: { type: String, required: true },
   date: { type: Date, default: Date.now }
+}, { _id: false });
+
+const cloneModeSchema = new Schema({
+  isActive: { type: Boolean, default: false },
+  targetPersona: { type: String, default: "" },
+  usageCount: { type: Number, default: 0 },
+  lastActive: { type: Date, default: Date.now }
+}, { _id: false });
+
+const voiceHugsSchema = new Schema({
+  count: { type: Number, default: 0 },
+  lastReset: { type: Date, default: Date.now }
 }, { _id: false });
 
 const userSchema = new Schema<IUser>({
@@ -197,7 +229,13 @@ const userSchema = new Schema<IUser>({
   }],
 
   // Onboarding (Default false = New users see it)
-  isOnboardingComplete: { type: Boolean, default: false }
+  isOnboardingComplete: { type: Boolean, default: false },
+
+  // --- NEW FIELDS ---
+  socialBattery: { type: Number, default: 100, min: 0, max: 100 },
+  cloneMode: { type: cloneModeSchema, default: () => ({ isActive: false, targetPersona: '', usageCount: 0 }) as any },
+  voiceHugs: { type: voiceHugsSchema, default: () => ({ count: 0, lastReset: Date.now() }) as any },
+  faceTags: { type: Map, of: String, default: {} }
 }, {
   timestamps: true,
 });
