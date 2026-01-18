@@ -48,7 +48,7 @@ export const generateSubconscious = async (
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
     const client = getGroqClient();
-    const model = "llama-3.3-70b-versatile"; // Smarter, Better Instruction Following
+    const model = "meta-llama/llama-4-maverick-17b-128e-instruct"; // Llama 4 (State of the Art)
 
     const systemPrompt = `
     You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha (or Aastik).
@@ -64,9 +64,9 @@ export const generateSubconscious = async (
        c) User is typing in ALL CAPS (Rage/Panic).
     - **'reply'**: Choose this for EVERYTHING else (Default 95% of cases).
        - **MANDATORY REPLY IF:**
-         - Message is SHORT (< 10 words).
+         - Message is SHORT (< 30 words).
          - Message contains a QUESTION ("?", "what", "how").
-         - Message is a FILLER ("hmm", "ok", "lol", "yeah", "cool").
+         - Message is a FILLER ("hmm", "ok", "lol", "yeah", "cool", "umm").
          - User requests a TOOL or HELP.
          - User says "Hello", "Hi", "Bye".
          - User asks "Are you there?".
@@ -75,8 +75,9 @@ export const generateSubconscious = async (
     - Generate 3 chips from the **USER'S PERSPECTIVE** (1st Person).
     - **STRICT RULE:** These must be phrases the USER clicks to send to YOU.
     - **FORMAT:** Short, casual, clear.
-    - **Examples:** "Tell me more", "I'm sad", "Play music", "That helps", "I'm confused".
+    - **Examples:** "Tell me more", "I'm sad", "Play music", "That helps", "I'm confused", "Just listen".
     - **FORBIDDEN:** "Do you want help?", "How are you?", "I understand". (These are AI phrases).
+    - **FORBIDDEN:** Questions (e.g. "Can we talk?", "What do you think?").
 
     **3. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs.
@@ -185,10 +186,10 @@ export const generateSubconscious = async (
 };
 
 // ============================================================================
-// 2. THE VOICE STREAMER (Fallback for Free Tier)
+// 2. THE VOICE STREAMER (Fallback for Free Tier / Pro Brain)
 // ============================================================================
 export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
-  const model = "llama-3.1-8b-instant";
+  const model = "meta-llama/llama-4-maverick-17b-128e-instruct"; // Llama 4
   
   // Format history for Groq (Text Only)
   const messages: any[] = [
