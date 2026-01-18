@@ -828,10 +828,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              </div>
 
              <div className="shrink-0 flex items-center gap-3 justify-end z-20">
-                 <div style={{ willChange: 'width' }} className={`flex items-center transition-all duration-300 ease-spring ${isSearchOpen ? 'w-[200px] md:w-[300px] bg-black/40 border-white/10 px-3' : 'w-10 bg-black/20 border-transparent justify-center'} h-10 rounded-full ${isSearchOpen && isMobile ? '' : 'backdrop-blur-xl'} border`}>
+                 <motion.div
+                    initial={false}
+                    animate={{ width: isSearchOpen ? (isMobile ? 200 : 300) : 40 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    className={`flex items-center h-10 rounded-full border ${isSearchOpen ? 'bg-black/60 border-white/10 px-3' : 'bg-black/20 border-transparent justify-center'}`}
+                 >
                      {isSearchOpen ? (
                          <>
-                            <input
+                            <motion.input
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.1 }}
                                 autoFocus
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -855,7 +863,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             <Search size={18} />
                          </button>
                      )}
-                 </div>
+                 </motion.div>
 
                  <button id="voice-mode-btn" onClick={toggleVoiceMode} className={`shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg ${isVoiceMode ? 'bg-white/20 text-white' : 'bg-black/20 hover:bg-white/10'}`}>
                     <Headphones size={18} />
