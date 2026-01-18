@@ -139,8 +139,17 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://checkout.razorpay.com", "https://www.youtube.com", "https://s.ytimg.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-      // ✅ FIX: Added YouTube to connectSrc
-      connectSrc: ["'self'", "ws:", "wss:", "https://aasthaai.site", "https://aastha-final.onrender.com", "http://localhost:*", "https://lumberjack.razorpay.com", "https://www.youtube.com"],
+      // ✅ FIX: Added YouTube to connectSrc + BRAIN SERVER (HF)
+      connectSrc: [
+          "'self'",
+          "ws:", "wss:",
+          "https://aasthaai.site",
+          "https://aastha-final.onrender.com",
+          "http://localhost:*",
+          "https://lumberjack.razorpay.com",
+          "https://www.youtube.com",
+          "https://sking0123-aastha-voice.hf.space" // <--- Brain Server Whitelist
+      ],
       // ✅ FIX: Added YouTube thumbnails to imgSrc
       imgSrc: ["'self'", "data:", "https:", "blob:", "https://i.ytimg.com", "https://www.youtube.com"],
       // ✅ FIX: Added YouTube to frameSrc (Critical for Widget)
