@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+python-multipart
+torch
+transformers
+scipy
+soundfile
+numpy
+Pillow
+accelerate
+# Kokoro (Using the huggingface library or onnx)
+kokoro-onnx
+# For F5-TTS, we usually need to install from git, but for HF Spaces we can use requirements.txt special syntax or just install dependencies
+einops
+vocos
+vector_quantize_pytorch
+tqdm
