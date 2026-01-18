@@ -412,6 +412,28 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   
   const handleReply = (content: string) => { setReplyingTo(content); textareaRef.current?.focus(); };
 
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const items = e.clipboardData.items;
+      for (let i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf('image') !== -1) {
+              e.preventDefault();
+              if (isStandardMode) { setError("Vision Analysis requires Premium."); return; }
+
+              const blob = items[i].getAsFile();
+              if (blob) {
+                  try {
+                      // Compress/Format image using existing util
+                      const compressed = await compressImage(blob);
+                      setAttachedImage(compressed);
+                  } catch (err) {
+                      setError("Failed to process pasted image.");
+                  }
+              }
+              return; // Stop after first image
+          }
+      }
+  };
+
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     // Debounce resize slightly or just run it.
@@ -1064,6 +1086,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                          value={input} 
                          onChange={handleInput}
                          onKeyDown={handleKeyPress}
+                         onPaste={handlePaste}
                          placeholder={isDictating ? "Listening..." : (uiAction === 'listen' ? "I'm listening..." : "Type a message...")}
                          className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base font-light py-3 px-2 resize-none max-h-32 scrollbar-hide"
                          rows={1}
