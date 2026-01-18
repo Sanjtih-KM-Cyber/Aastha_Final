@@ -59,16 +59,22 @@ export const generateSubconscious = async (
 
     **1. DECISION MATRIX (STRATEGY):**
     - **'listen'**: Choose this ONLY if:
-       a) User is venting/ranting (deep distress, anger, sadness).
+       a) User is venting/ranting (deep distress, anger, sadness) AND needs space.
        b) User text is LONG (>15 words) or part of a rapid burst.
-       c) **CRITICAL EXCEPTION:** If the user says filler words ("hmm", "okay", "yeah", "cool", "wait", "lol", "k") -> **'reply'**. Do NOT listen to fillers.
-    - **'reply'**: For EVERYTHING else. Questions, greetings, fillers, casual chat, or if they ask for help.
-    - **Override:** If 'forceReply' is TRUE -> Always **'reply'**.
+    - **'reply'**: Choose this for EVERYTHING else (Default).
+       - Questions, greetings, fillers, casual chat.
+       - If they ask for help or tools.
+       - **CRITICAL EXCEPTIONS (FORCE 'reply'):**
+         - If user says filler words ("hmm", "okay", "yeah", "cool", "wait", "lol", "k").
+         - If user requests a TOOL (Music, Focus, Timer, Breathing, Diary, etc.).
+         - If user gives a COMMAND ("Let's focus", "Play music", "Start breathing", "Help me relax").
 
     **2. SMART CHIPS (suggested_replies):**
     - Generate 3 chips from the **USER'S PERSPECTIVE** (1st Person).
-    - **Bad:** "How are you?", "Do you want to talk?", "Tell me more." (AI asking User)
-    - **Good:** "I'm exhausted", "That makes sense", "Let's distract me." (User answering AI)
+    - **NEGATIVE CONSTRAINTS:**
+       - Do NOT ask questions in chips (e.g. "How are you?").
+       - Do NOT use 2nd person (e.g. "Do you want...").
+    - **Good Examples:** "I'm exhausted", "That makes sense", "Let's distract me", "I need advice", "Just listen".
 
     **3. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs. Use 'control_widget' for most things.
@@ -77,19 +83,22 @@ export const generateSubconscious = async (
 
     - **Music (Jam):**
       - Song/Podcast: { "name": "control_widget", "params": { "widget": "jam", "params": { "query": "Play <Name>", "autoplay": true } } }
-      - General: { "name": "control_widget", "params": { "widget": "jam", "params": { "mood": "chill", "genre": "lofi", "autoplay": true } } }
+      - Mood/Vibe: { "name": "control_widget", "params": { "widget": "jam", "params": { "mood": "chill", "genre": "lofi", "autoplay": true } } }
 
-    - **Soundscape (ASMR DJ):**
+    - **Soundscape (Ambient Mixer):**
       - Mix sounds (rain, forest, fire, ocean, night, wind, thunder, birds).
       - { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6,fire:0.3", "volume": 0.8 } } }
 
     - **Focus (Pomodoro):**
+      - Trigger: "Let's focus", "Study mode", "Work time".
       - { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 25 } } }
 
     - **Breathing:**
+      - Trigger: "I'm anxious", "Panic attack", "Help me breathe".
       - { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
 
     - **Diary:**
+      - Trigger: "I want to journal", "Open diary".
       - { "name": "write_diary", "params": { "title": "Auto Entry", "content": "<Summarize user input>" } }
 
     - **Social Detective (The Web):**
@@ -98,7 +107,7 @@ export const generateSubconscious = async (
     **OUTPUT JSON ONLY (Strict Format):**
     {
       "internal_monologue": "Raw thought process about the user's state.",
-      "mood": "happy" | "sad" | "concerned" | "sassy" | "calm" | "excited" | "neutral",
+      "mood": "happy" | "sad" | "concerned" | "sassy" | 'calm' | 'excited' | 'neutral',
       "status_display": "UI Status (e.g. 'Listening...', 'Vibing', 'Thinking')",
       "ui_action": "listen" | "none",
       "strategy": "reply" | "listen",
@@ -136,6 +145,15 @@ export const generateSubconscious = async (
         // Failsafe for UI Action consistency
         if (parsed.strategy === 'listen') parsed.ui_action = 'listen';
         else parsed.ui_action = 'none';
+
+        // FORCE CORRECT CHIP PERSPECTIVE (FAILSAFE)
+        // If chips look like questions, try to sanitize them simply
+        if (parsed.suggested_replies) {
+             parsed.suggested_replies = parsed.suggested_replies.map(chip => {
+                 if (chip.endsWith('?')) return chip.replace('?', '.');
+                 return chip;
+             });
+        }
 
         return parsed;
 
