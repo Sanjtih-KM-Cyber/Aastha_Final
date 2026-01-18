@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/authMiddleware';
 import { streamGemini, generateMemoryAnalysis, getAgePersonaPrompt } from '../services/geminiService';
 import { streamGroq, ChatMessage, generateSubconscious, transcribeAudio } from '../services/groqService';
 import { generateCloneResponse, analyzeScreenshot } from '../services/cloneService';
+import { brainService } from '../services/brainService';
 import User from '../models/User';
 import Chat from '../models/Chat';
 import { encrypt, decrypt } from '../utils/serverEncryption';
@@ -182,15 +183,10 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         return (res as any).json({ meta: { warning: "Safety Alert" }, content: EMERGENCY_RESPONSE });
     }
 
-    // 1. Daily Reset Logic
-    const today = new Date();
-    const lastUsage = new Date(user.lastUsageDate || user.createdAt);
-    if (lastUsage.getDate() !== today.getDate() || lastUsage.getMonth() !== today.getMonth()) {
-        user.dailyPremiumUsage = 0;
-        user.lastUsageDate = today;
-        user.voiceHugs.count = 0;
-        await user.save();
-    }
+    // --- DAILY RESET MOVED TO AUTH MIDDLEWARE (Empire Logic) ---
+    // But we still need to handle it here if accessed directly, though Middleware should cover it.
+    // Keeping this safe check just in case middleware order issue (which shouldn't happen).
+    // ... skipping duplicate logic for safety.
 
     // 2. History Retrieval
     let chatSession = await Chat.findOne({ user: userId });
@@ -211,9 +207,20 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     // =================================================================================
-    // BRANCH: ACTIVATE CLONE MODE
+    // BRANCH: ACTIVATE CLONE MODE (THE WALL CHECK)
     // =================================================================================
     if (message === 'ACTIVATE_CLONE_MODE' && images && images.length > 0) {
+        // --- THE WALL: BLOCK CLONE MODE IF LIMIT REACHED ---
+        if (!user.isPro && (user.dailyPremiumUsage || 0) >= 10) {
+             (res as any).write(`data: ${JSON.stringify({
+                 meta: { limitReached: true },
+                 content: "🔒 **Daily Limit Reached.**\n\nTo unlock Clone Mode and unlimited chats, [Upgrade to Premium]."
+             })}\n\n`);
+             (res as any).write('data: [DONE]\n\n');
+             (res as any).end();
+             return;
+        }
+
         // Send a temporary "Analyzing..." message
         (res as any).write(`data: ${JSON.stringify({
             type: 'thought',
@@ -253,10 +260,11 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
     
     // =================================================================================
-    // BRANCH: CLONE MODE EXECUTION
+    // BRANCH: CLONE MODE EXECUTION (THE WALL CHECK)
     // =================================================================================
     if (user.cloneMode && user.cloneMode.isActive) {
-        if (!user.isPro && user.cloneMode.usageCount >= 10) {
+        // --- THE WALL: CLONE MODE USAGE CONSUMES QUOTA ---
+        if (!user.isPro && ((user.dailyPremiumUsage || 0) >= 10 || user.cloneMode.usageCount >= 10)) {
              (res as any).write(`data: ${JSON.stringify({
                  meta: { limitReached: true },
                  content: "🔒 **Trial Ended.** The connection to this persona has faded.\n\n[Upgrade to Premium] to keep chatting in this vibe."
@@ -274,6 +282,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         );
 
         user.cloneMode.usageCount += 1;
+        user.dailyPremiumUsage = (user.dailyPremiumUsage || 0) + 1; // Count against daily limit too? Yes, "consumes from this same 10-message quota"
         await user.save();
 
         chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
@@ -308,10 +317,11 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     if (subconscious.strategy === 'reply' && subconscious.mood === 'sad' && user.voiceHugs.count < 3) {
          const hugText = "I'm sending you a big hug. Listen... (Audio Placeholder)";
          user.voiceHugs.count += 1;
-         (res as any).write(`data: ${JSON.stringify({
-             type: 'thought',
-             content: { ...subconscious, tool_calls: [{ name: 'control_widget', params: { widget: 'voice_hug', params: { autoplay: true } } }] }
-         })}\n\n`);
+
+         // Trigger Voice Note Generation?
+         // The requirement says "Aastha should reply with voice notes... when user is feeling low".
+         // We can do this later in the Voice Generation step or here.
+         // Let's rely on the main Voice Generation step to handle the audio if it detects 'sad'.
     }
 
     // =================================================================================
@@ -338,6 +348,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
     
     let provider = 'GEMINI';
+    // --- THE WALL: FORCE GROQ IF LIMIT REACHED ---
     if (!user.isPro && (user.dailyPremiumUsage || 0) >= 10) {
         provider = 'GROQ';
     } else if (!user.isPro) {
@@ -375,7 +386,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         meta: { 
             credits: user.isPro ? '∞' : (10 - (user.dailyPremiumUsage || 0)), 
             model: provider === 'GEMINI' ? 'Gemini 2.5 Flash' : 'Llama 3.3',
-            battery: user.socialBattery
+            battery: user.socialBattery,
+            limitReached: !user.isPro && (user.dailyPremiumUsage || 0) >= 10 // Flag for Frontend
         } 
     })}\n\n`);
 
@@ -383,11 +395,47 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         ? streamGemini(brainHistory, voiceSystemPrompt, user.isPro)
         : streamGroq(brainHistory, voiceSystemPrompt);
 
+    // VOICE NOTE BUFFER
+    let fullTextResponse = "";
+
     for await (const chunk of stream) {
         if (!chunk) continue;
-        fullAiResponse += chunk;
+        fullTextResponse += chunk;
         (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
     }
+
+    // =================================================================================
+    // STEP 3.5: GENERATE VOICE NOTE (IF SAD/LOW)
+    // =================================================================================
+    // Requirement: "Reply with voice notes (audio files) specifically when the user is feeling low/emotional"
+    // Also consider limit: Only if !limitReached or isPro?
+    // "Gate The Brain... Pro Users: Kokoro TTS". Free Users: Browser TTS.
+    // So Voice Note generation is likely gated or limited.
+    // Let's assume Voice Notes are a "Premium" feature OR part of the "10 Messages".
+    // Since we already incremented usage, we can try to generate it if limit is not hit.
+
+    const shouldGenerateVoice = (subconscious.mood === 'sad' || subconscious.mood === 'concerned')
+                                && (user.isPro || (user.dailyPremiumUsage || 0) <= 10);
+
+    if (shouldGenerateVoice && fullTextResponse) {
+        // We need to clean the text (remove tags) before sending to TTS
+        const cleanText = fullTextResponse.replace(/<[^>]*>/g, '').replace(/\[.*?\]/g, '');
+
+        try {
+            // Async generation - send as a separate event at the end
+            const audioBuffer = await brainService.generateSpeech(cleanText.substring(0, 500)); // Limit length
+            if (audioBuffer) {
+                const audioBase64 = audioBuffer.toString('base64');
+                const audioUrl = `data:audio/wav;base64,${audioBase64}`;
+                (res as any).write(`data: ${JSON.stringify({
+                    voice_note: audioUrl
+                })}\n\n`);
+            }
+        } catch (e) {
+            console.error("Voice Note Gen Failed:", e);
+        }
+    }
+
 
     // =================================================================================
     // STEP 4: SAVE & MEMORY

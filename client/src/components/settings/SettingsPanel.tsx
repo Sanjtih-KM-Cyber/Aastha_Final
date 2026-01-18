@@ -540,9 +540,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                     {showDeleteModal ? (
                         <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6">
                             <h4 className="font-medium text-red-100 mb-2">We are sad to see you go.</h4>
+                            <p className="text-xs text-red-300 mb-4">This action will permanently delete your account, chats, diary entries, and mood logs. This cannot be undone.</p>
                             <textarea className="w-full bg-black/40 border border-red-500/20 rounded-lg p-2 text-sm text-white mb-4" placeholder="Reason..." value={deleteReason} onChange={e => setDeleteReason(e.target.value)} />
                             <div className="flex gap-2">
-                                <button onClick={handleSoftDelete} disabled={!deleteReason || isDeleting} className="px-4 py-2 bg-red-600 rounded text-sm text-white font-medium">{isDeleting ? 'Processing...' : 'Confirm'}</button>
+                                <button onClick={handleSoftDelete} disabled={!deleteReason || isDeleting} className="px-4 py-2 bg-red-600 rounded text-sm text-white font-medium">{isDeleting ? 'Processing...' : 'Delete Forever'}</button>
                                 <button onClick={() => setShowDeleteModal(false)} className="px-4 py-2 text-white/60 text-sm">Cancel</button>
                             </div>
                         </div>

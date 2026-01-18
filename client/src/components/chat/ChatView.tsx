@@ -3,7 +3,7 @@ import {
   Send, Menu, Headphones, AlertCircle, Smile, 
   Mic, MicOff, X, Search, Image as ImageIcon, Plus, Camera,
   ShieldAlert, Loader2, ChevronDown, Reply, Check, ArrowDown,
-  UserPlus, Battery, Play, Pause, Lock, Zap, Settings // <--- Added Settings
+  UserPlus, Play, Pause, Lock, Zap, Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
@@ -13,7 +13,51 @@ import { useTheme } from '../../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { useSync } from '../../context/SyncContext';
 import api from '../../services/api';
-import { SettingsPanel } from '../settings/SettingsPanel'; // <--- Import
+import { SettingsPanel } from '../settings/SettingsPanel';
+
+// --- NEW COMPONENT: THOUGHT CLOUD MODAL ---
+const ThoughtCloudModal: React.FC<{ isOpen: boolean; onClose: () => void; content: any }> = ({ isOpen, onClose, content }) => {
+    if (!isOpen || !content) return null;
+
+    return (
+        <AnimatePresence>
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-md" />
+                <motion.div
+                    initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                    className="relative w-full max-w-md bg-white/10 border border-white/20 backdrop-blur-xl rounded-3xl p-6 shadow-2xl overflow-hidden"
+                >
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-400 via-violet-400 to-amber-400" />
+                    <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white"><X size={20} /></button>
+
+                    <h3 className="text-xl font-serif text-white mb-4 flex items-center gap-2">
+                        <span className="text-2xl">☁️</span> Inner Thoughts
+                    </h3>
+
+                    <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                        <div className="p-4 bg-black/20 rounded-xl border border-white/5">
+                            <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Monologue</h4>
+                            <p className="text-sm text-white/90 italic leading-relaxed">"{content.internal_monologue || 'No thoughts yet...'}"</p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="p-3 bg-black/20 rounded-xl border border-white/5">
+                                <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Mood</h4>
+                                <p className="text-sm text-white font-medium capitalize">{content.mood || 'Neutral'}</p>
+                            </div>
+                            <div className="p-3 bg-black/20 rounded-xl border border-white/5">
+                                <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Strategy</h4>
+                                <p className="text-sm text-white font-medium capitalize">{content.strategy || 'Reply'}</p>
+                            </div>
+                        </div>
+                    </div>
+                </motion.div>
+            </div>
+        </AnimatePresence>
+    );
+};
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -21,7 +65,8 @@ interface ChatMessage {
   timestamp?: number;
   warning?: string;
   id?: string;
-  reaction?: string; // Sticky reaction field
+  reaction?: string;
+  voice_note?: string;
 }
 
 interface ChatViewProps {
@@ -144,7 +189,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [uiAction, setUiAction] = useState<'none' | 'listen' | 'block_widget'>('none');
   const [currentMood, setCurrentMood] = useState('neutral');
   const [suggestedChips, setSuggestedChips] = useState<string[]>([]);
-  const [socialBattery, setSocialBattery] = useState(100); // UI Only for now
+
+  // Thought Cloud
+  const [showThoughtCloud, setShowThoughtCloud] = useState(false);
+  const [lastSubconscious, setLastSubconscious] = useState<any>(null); // Store last brain data
 
   // Patience / Listening Mode State
   const [isWaitingForPermission, setIsWaitingForPermission] = useState(false);
@@ -240,7 +288,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           setIsStandardMode(!isPremium);
           setLocalCredits(user.isPro ? 9999 : credits);
           setModelMode(isPremium ? 'pro' : 'eco');
-          if (user.socialBattery !== undefined) setSocialBattery(user.socialBattery);
           if (user.cloneMode?.isActive) setIsCloneMode(true);
       }
   }, [user]);
@@ -611,6 +658,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         if (data.type === 'thought') {
                             const brain = data.content;
                             if (brain) {
+                                setLastSubconscious(brain); // Save for Thought Cloud
                                 if (brain.mood) setCurrentMood(brain.mood);
                                 if (brain.status_display) setStatusDisplay(brain.status_display);
                                 if (brain.suggested_replies) setSuggestedChips(brain.suggested_replies);
@@ -673,13 +721,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits)); 
                             setModelMode(data.meta.mode); 
                             setIsStandardMode(data.meta.mode === 'standard');
-                            if (data.meta.battery !== undefined) setSocialBattery(data.meta.battery);
                             if (data.meta.limitReached) {
                                 setIsCloneMode(false);
                             }
                         }
 
-                        // C. HANDLE CONTENT (THE VOICE)
+                        // C. HANDLE VOICE NOTE (AUDIO URL)
+                        if (data.voice_note) {
+                            setMessages(prev => prev.map(msg => {
+                                if (msg.id === tempBotId) {
+                                    return { ...msg, voice_note: data.voice_note };
+                                }
+                                return msg;
+                            }));
+                        }
+
+                        // D. HANDLE CONTENT (THE VOICE)
                         if (data.content && !data.type) { 
                             aiContentRaw += data.content;
                             const cleanContent = processMagicTags(aiContentRaw);
@@ -805,6 +862,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         content={msg.content} 
                         timestamp={msg.timestamp}
                         reaction={msg.reaction}
+                        voice_note={msg.voice_note} // Pass Voice Note
                         mood={currentMood}
                         onReply={() => handleReply(msg.content)} 
                         onCopy={copyToClipboard}
@@ -883,6 +941,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       {/* SETTINGS PANEL */}
       <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
+      {/* THOUGHT CLOUD MODAL */}
+      <ThoughtCloudModal isOpen={showThoughtCloud} onClose={() => setShowThoughtCloud(false)} content={lastSubconscious} />
+
       {/* --- SECTION 1: HEADER (SMART HEADER) --- */}
       <div className={`shrink-0 w-full z-30 pt-safe px-4 pb-2 pointer-events-auto ${isMobile ? 'bg-gradient-to-b from-black/80 to-transparent' : 'md:absolute md:top-0 md:pt-6 bg-none'}`}>
           <div className="flex items-center gap-3 h-14 justify-between relative">
@@ -890,11 +951,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  <button id="mobile-menu-btn" onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 bg-black/20 ${!isMobile ? 'md:hidden' : ''}`}>
                     <Menu size={20} />
                  </button>
-                 {/* Social Battery Indicator */}
-                 <div className="ml-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 border border-white/5 backdrop-blur-md">
-                    <Battery size={14} className={socialBattery < 20 ? "text-red-400 animate-pulse" : "text-green-400"} />
-                    <span className="text-[10px] font-bold text-white/80">{socialBattery}%</span>
-                 </div>
              </div>
 
              <div className="absolute left-1/2 -translate-x-1/2 z-10 flex items-center justify-center w-full pointer-events-auto">
@@ -930,10 +986,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         ) : (
                             <motion.div
                                 key="status-pill"
+                                onClick={() => setShowThoughtCloud(true)} // <-- ADDED ONCLICK
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
-                                className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/5 shadow-lg"
+                                className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/5 shadow-lg cursor-pointer hover:bg-black/30 transition-colors"
                             >
                                 <div className={`w-2 h-2 rounded-full ${currentActivity === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-400 animate-pulse'}`} />
                                 <span className="text-xs font-medium text-white/80 tracking-wide uppercase">{statusDisplay}</span>
@@ -944,6 +1001,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              </div>
 
              <div className="shrink-0 flex items-center gap-3 justify-end z-20">
+                 {/* HEADPHONE ICON (CALL MODE) - RESTORED */}
+                 <button onClick={() => toggleVoiceMode()} className={`shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center transition-all shadow-lg ${isVoiceMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-black/20 text-white/70 hover:bg-white/10 hover:text-white'}`}>
+                    <Headphones size={18} />
+                 </button>
+
                  <motion.div
                     initial={false}
                     animate={{ width: isSearchOpen ? (isMobile ? 200 : 300) : 40 }}

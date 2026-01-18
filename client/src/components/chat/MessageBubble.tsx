@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Copy, Reply, Sparkles, Wand2, ShieldAlert } from 'lucide-react';
+import { Copy, Reply, Sparkles, Wand2, ShieldAlert, Play, Pause } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
 interface MessageBubbleProps {
@@ -8,6 +8,7 @@ interface MessageBubbleProps {
   content: string;
   timestamp?: number;
   reaction?: string;
+  voice_note?: string; // Audio Data URL (Base64)
   mood?: string;
   onReply?: (content: string) => void;
   onCopy?: (content: string) => void;
@@ -75,11 +76,54 @@ const getAvatarUrl = (mood: string = 'neutral') => {
     return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=transparent`;
 };
 
+// VOICE NOTE COMPONENT
+const VoiceNotePlayer: React.FC<{ src: string }> = ({ src }) => {
+    const audioRef = React.useRef<HTMLAudioElement>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [progress, setProgress] = useState(0);
+
+    const togglePlay = () => {
+        if (!audioRef.current) return;
+        if (isPlaying) {
+            audioRef.current.pause();
+        } else {
+            audioRef.current.play();
+        }
+        setIsPlaying(!isPlaying);
+    };
+
+    const handleTimeUpdate = () => {
+        if (audioRef.current) {
+            const current = audioRef.current.currentTime;
+            const duration = audioRef.current.duration || 1;
+            setProgress((current / duration) * 100);
+        }
+    };
+
+    const handleEnded = () => {
+        setIsPlaying(false);
+        setProgress(0);
+    };
+
+    return (
+        <div className="mt-2 mb-2 p-2 rounded-xl bg-black/20 border border-white/10 flex items-center gap-3">
+            <button onClick={togglePlay} className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center shrink-0 hover:scale-105 transition-transform">
+                {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+            </button>
+            <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-white/80 transition-all duration-100" style={{ width: `${progress}%` }} />
+            </div>
+            <audio ref={audioRef} src={src} onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} className="hidden" />
+        </div>
+    );
+};
+
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
   role,
   content,
   timestamp,
   reaction,
+  voice_note,
   mood,
   onReply,
   onCopy,
@@ -263,6 +307,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
           ) : (
             <div className="space-y-1">
+              {/* VOICE NOTE PLAYER */}
+              {voice_note && <VoiceNotePlayer src={voice_note} />}
+
               {visibleContent.split('\n').map((line, i) => (
                 <p
                   key={i}

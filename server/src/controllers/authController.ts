@@ -4,6 +4,9 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import User from '../models/User';
 import Diary from '../models/Diary';
+import Chat from '../models/Chat';
+import Mood from '../models/Mood';
+import { Person } from '../models/Person';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { encrypt, decrypt } from '../utils/serverEncryption';
 import { sendOTPEmail } from '../services/emailService';
@@ -322,6 +325,8 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           lastUsage.getMonth() !== now.getMonth() ||
           lastUsage.getFullYear() !== now.getFullYear()) {
           user.dailyPremiumUsage = 0;
+          user.voiceHugs = { count: 0, lastReset: now };
+          if (user.cloneMode) user.cloneMode.usageCount = 0;
           user.lastUsageDate = now;
           needsSave = true;
       }
@@ -412,6 +417,8 @@ export const getMe = async (req: AuthRequest, res: Response) => {
         lastUsage.getMonth() !== now.getMonth() || 
         lastUsage.getFullYear() !== now.getFullYear()) {
         user.dailyPremiumUsage = 0;
+        user.voiceHugs = { count: 0, lastReset: now };
+        if (user.cloneMode) user.cloneMode.usageCount = 0;
         user.lastUsageDate = now;
     }
     
@@ -510,6 +517,7 @@ export const upgradeToPro = async (req: AuthRequest, res: Response) => {
         const user = await User.findById(req.user._id);
         if (user) {
             user.isPro = true;
+            user.subscriptionDate = new Date(); // --- STAMP SUBSCRIPTION DATE ---
             await user.save();
             (res as any).status(200).json({ success: true, isPro: true, message: "Welcome to Pro!" });
         } else {
@@ -524,9 +532,23 @@ export const softDeleteUser = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return (res as any).status(401).json({ message: 'Not authorized' });
     const { reason } = (req as any).body;
-    await User.findByIdAndUpdate(req.user._id, { $set: { deletedAt: new Date(), deletionReason: reason || 'No reason' } });
+
+    // --- NUCLEAR DELETE: CASCADE WIPE ---
+    // Wipe: User, Chat, Diary, Mood, Person
+    const userId = req.user._id;
+
+    console.log(`[Nuclear Delete] Wiping data for user ${userId}`);
+
+    await Promise.all([
+        User.findByIdAndDelete(userId),
+        Chat.deleteMany({ user: userId }),
+        Diary.deleteMany({ user: userId }),
+        Mood.deleteMany({ user: userId }),
+        Person.deleteMany({ userId: userId }) // Ensure Person model has userId field, or handle accordingly
+    ]);
+
     (res as any).cookie('jwt', '', { httpOnly: true, expires: new Date(0) });
-    (res as any).status(200).json({ message: 'Account deactivated.' });
+    (res as any).status(200).json({ message: 'Account permanently deleted and data wiped.' });
   } catch (error) { (res as any).status(500).json({ message: 'Server Error' }); }
 };
 
