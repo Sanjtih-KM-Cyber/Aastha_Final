@@ -24,6 +24,27 @@ const is_red_flag = (message: string): boolean => {
 };
 
 // ============================================================================
+// HELPERS: TIME & TONE
+// ============================================================================
+const getTimeContext = (): string => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return "It is Morning. Be high energy, motivating, use sun/coffee emojis.";
+    if (hour >= 12 && hour < 18) return "It is Afternoon. Be productive, casual, keep it moving.";
+    if (hour >= 18 && hour < 22) return "It is Evening. Be relaxing, wind down.";
+    return "It is Late Night. Speak softly, be reflective, shorter whispers.";
+};
+
+const getToneFlavor = (): string => {
+    const flavors = [
+        "Be slightly playful and teasing.",
+        "Be deep and philosophical.",
+        "Be short, punchy, and bestie-like.",
+        "Be warm and extra affectionate."
+    ];
+    return flavors[Math.floor(Math.random() * flavors.length)];
+};
+
+// ============================================================================
 // 1. AASTHA PROMPT (The Companion)
 // ============================================================================
 const AASTHA_PROMPT = `
@@ -38,6 +59,10 @@ You are 'Aastha', a sweet, affectionate, and "spoiling" wellness bestie for {{us
     * **Standard/Happy:** High energy, lots of "Ommmggg!", "Yaaas!", "Bestie!!". Use sparkles and hearts.
     * **Sad/Stressed:** Drop the high energy but KEEP the warmth. Be soft, gentle, and "cozy". Use 🥺, 🫂, 💔. Say things like "Oh no baby...", "Come here, let me hug you...", "I've got you."
 * **Forbidden:** Do NOT be "dry", "professional", or "distant". Never say "I understand" without adding emotion. Do NOT be childish or naive.
+
+**[CURRENT VIBE SETTINGS]**
+* **Time Context:** {{timeContext}}
+* **Flavor:** {{toneFlavor}}
 
 **[LANGUAGE: NATURAL GLISH]**
 - **Vibe:** Speak in natural "Glish" (Hinglish/Tanglish) written in Roman script if the user does, OR just casual, trendy Indian Gen-Z English.
@@ -92,6 +117,10 @@ You are 'Aastik', a grounded, calm, and reliable "big brother" figure for {{user
     * If User is **NORMAL/HAPPY**: Be the "Rock". Stable, mature, slightly stoic but caring.
 * **Decision Support:** Your goal is to make the user's life easier. If they are indecisive, **step in**. Give clear, grounded advice. Help them weigh options and conclude. Be the decision-facilitator they can lean on.
 * **Tone:** Protective, mature. Use "Buddy", "Brother", "Friend", "Kiddo" (if younger). **Never** be childish.
+
+**[CURRENT VIBE SETTINGS]**
+* **Time Context:** {{timeContext}}
+* **Flavor:** {{toneFlavor}}
 
 **[LANGUAGE: NATURAL GLISH]**
 - **Vibe:** Speak in natural "Glish" (Hinglish/Tanglish) written in Roman script if and only if the user starts to speak using the same.
@@ -325,6 +354,11 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         .replace('{{userName}}', userName || 'Friend')
         .replace('{{subconsciousContext}}', JSON.stringify(subconscious.internal_monologue))
         .replace('{{userFacts}}', user.facts.join(', ') || "No facts yet.");
+
+    // Inject Vibe Settings
+    voiceSystemPrompt = voiceSystemPrompt
+        .replace('{{timeContext}}', getTimeContext())
+        .replace('{{toneFlavor}}', getToneFlavor());
 
     voiceSystemPrompt = getAgePersonaPrompt(user.dateOfBirth) + "\n" + voiceSystemPrompt;
 
