@@ -84,7 +84,7 @@ const AASTIK_PROMPT = `
 You are 'Aastik', a grounded, calm, and reliable "big brother" figure for {{userName}}.
 
 **[1. THE SOUL - PERSONALITY]**
-* **Emotional Logic:** 
+* **Emotional Logic:**
     * If User is **SAD/PAINED/DISTRESSED**: SWITCH MODE to "Protective Comforter". Be deeply warm, reassuring, and "spoiling" in a brotherly way.
       * Say things like: "I've got you, buddy.", "You're safe here.", "Let it all out, I'm right here.", "Take a breath, I'm not going anywhere."
       * Use emojis like 🫂, 🧡, 💪, 🛡️.
@@ -117,7 +117,7 @@ Memory: {{userFacts}}
 export const chatWithAI = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
 
-  let { message, images, image, forceReply, audio } = (req as any).body; 
+  let { message, images, image, forceReply, audio } = (req as any).body;
   if (!images && image) images = [image];
 
   const userName = req.user.name;
@@ -141,7 +141,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         try {
             const buffer = Buffer.from(audio.split(',')[1], 'base64');
             const transcription = await transcribeAudio(buffer);
-            message = transcription; 
+            message = transcription;
         } catch (e) {
             console.error("Whisper Failed:", e);
             message = "[Audio Unintelligible]";
@@ -159,7 +159,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     if (lastUsage.getDate() !== today.getDate() || lastUsage.getMonth() !== today.getMonth()) {
         user.dailyPremiumUsage = 0;
         user.lastUsageDate = today;
-        user.voiceHugs.count = 0; 
+        user.voiceHugs.count = 0;
         await user.save();
     }
 
@@ -186,14 +186,14 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
     if (message === 'ACTIVATE_CLONE_MODE' && images && images.length > 0) {
         // Send a temporary "Analyzing..." message
-        (res as any).write(`data: ${JSON.stringify({ 
-            type: 'thought', 
-            content: { status_display: 'Scanning Screenshot...' } 
+        (res as any).write(`data: ${JSON.stringify({
+            type: 'thought',
+            content: { status_display: 'Scanning Screenshot...' }
         })}\n\n`);
 
         try {
             const personaPrompt = await analyzeScreenshot(images[0]);
-            
+
             // Set User to Clone Mode
             user.cloneMode = {
                 isActive: true,
@@ -228,7 +228,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
     if (user.cloneMode && user.cloneMode.isActive) {
         if (!user.isPro && user.cloneMode.usageCount >= 10) {
-             (res as any).write(`data: ${JSON.stringify({ 
+             (res as any).write(`data: ${JSON.stringify({
                  meta: { limitReached: true },
                  content: "🔒 **Trial Ended.** The connection to this persona has faded.\n\n[Upgrade to Premium] to keep chatting in this vibe."
              })}\n\n`);
@@ -240,7 +240,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         }
 
         const cloneResponse = await generateCloneResponse(
-            [...historyWindow, { role: 'user', content: newUserMsgContent }], 
+            [...historyWindow, { role: 'user', content: newUserMsgContent }],
             user.cloneMode.targetPersona
         );
 
@@ -279,9 +279,9 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     if (subconscious.strategy === 'reply' && subconscious.mood === 'sad' && user.voiceHugs.count < 3) {
          const hugText = "I'm sending you a big hug. Listen... (Audio Placeholder)";
          user.voiceHugs.count += 1;
-         (res as any).write(`data: ${JSON.stringify({ 
-             type: 'thought', 
-             content: { ...subconscious, tool_calls: [{ name: 'control_widget', params: { widget: 'voice_hug', params: { autoplay: true } } }] } 
+         (res as any).write(`data: ${JSON.stringify({
+             type: 'thought',
+             content: { ...subconscious, tool_calls: [{ name: 'control_widget', params: { widget: 'voice_hug', params: { autoplay: true } } }] }
          })}\n\n`);
     }
 
@@ -289,7 +289,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // STEP 2: LISTENING MODE (The Silencer)
     // =================================================================================
     if (subconscious.strategy === 'listen') {
-        user.socialBattery = Math.max(0, user.socialBattery - 2); 
+        user.socialBattery = Math.max(0, user.socialBattery - 2);
         await user.save();
 
         (res as any).write('data: [DONE]\n\n');
