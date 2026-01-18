@@ -1,5 +1,6 @@
 import Groq from 'groq-sdk';
 import dotenv from 'dotenv';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -59,16 +60,19 @@ export const generateSubconscious = async (
 
     **1. DECISION MATRIX (STRATEGY):**
     - **'listen'**: Choose this ONLY if:
-       a) User is EXPLICITLY venting/ranting (deep distress, anger, sadness) AND implies they want you to just listen.
+       a) User is EXPLICITLY venting/ranting (deep distress, anger, sadness, rage) and seems to be in the middle of a thought process.
        b) User text is VERY LONG (>30 words) monologue about feelings.
+       c) User uses ALL CAPS implies rage/extreme emotion.
+       d) User seems to be typing rapidly (short bursts) or is mid-sentence.
+       e) **WAITING PROTOCOL:** If you are unsure if they are done, **STAY SILENT ('listen')**. It is better to wait than to interrupt.
     - **'reply'**: Choose this for EVERYTHING else (Default).
        - Questions, greetings, fillers, casual chat, short complaints.
        - If they ask for help, advice, or tools.
        - **CRITICAL EXCEPTIONS (FORCE 'reply'):**
-         - If user says filler words ("hmm", "okay", "yeah", "cool", "wait", "lol", "k").
+         - If user says filler words indicating they are waiting ("hmm", "okay", "yeah", "cool", "wait", "lol", "k", "um").
          - If user requests a TOOL (Music, Focus, Timer, Breathing, Diary, etc.).
          - If user gives a COMMAND ("Let's focus", "Play music", "Start breathing", "Help me relax").
-         - If user asks a question, no matter how sad they are.
+         - If user asks a question (any question), no matter how sad they are.
 
     **2. SMART CHIPS (suggested_replies):**
     - Generate 3 chips from the **USER'S PERSPECTIVE** (1st Person).
@@ -220,3 +224,32 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       yield " [Connection drift... tell me that again?] ";
   }
 }
+
+// ============================================================================
+// 3. WHISPER TRANSCRIPTION (New Capability)
+// ============================================================================
+export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
+    try {
+        const client = getGroqClient();
+
+        // Create a temporary file to upload (Groq SDK usually expects a file stream)
+        const tempPath = `/tmp/upload_${Date.now()}.m4a`;
+        fs.writeFileSync(tempPath, audioBuffer);
+
+        const transcription = await client.audio.transcriptions.create({
+            file: fs.createReadStream(tempPath),
+            model: "whisper-large-v3",
+            response_format: "json", // or "text"
+            language: "en", // Optional: Auto-detect if omitted
+            temperature: 0.0
+        });
+
+        // Cleanup
+        fs.unlinkSync(tempPath);
+
+        return transcription.text;
+    } catch (error: any) {
+        console.error("Whisper Transcription Error:", error);
+        throw new Error("Failed to transcribe audio.");
+    }
+};
