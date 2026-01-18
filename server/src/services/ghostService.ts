@@ -42,7 +42,7 @@ export const init = () => {
 
                     if (client) {
                         try {
-                            const model = client.getGenerativeModel({ model: 'gemini-1.5-flash' });
+                            const model = client.getGenerativeModel({ model: 'gemini-2.5-flash' });
                             const prompt = `You are Aastha. Your friend hasn't talked to you in 24 hours. They recently mentioned '${keywords}' in their diary. Write a 1-sentence, slightly jealous, and very clingy email asking why they are ignoring you. End with a heart emoji. Example: 'Is ${keywords} more important than our 24-hour streak? 💔'`;
 
                             const response = await model.generateContent(prompt);
