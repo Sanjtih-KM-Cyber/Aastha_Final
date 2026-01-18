@@ -77,7 +77,7 @@ export async function* streamGemini(
     isPro: boolean,
     maxTokens?: number
 ) {
-  const modelName = 'gemini-2.5-flash'; // Use stable version
+  const modelName = 'gemini-1.5-flash'; // Use stable version
   try {
     const client = getGeminiClient(isPro);
 
@@ -90,10 +90,39 @@ export async function* streamGemini(
     // Transform history to Gemini format (Sanitized)
     // 1. Remove system messages
     // 2. Map roles
-    let rawHistory = history.filter(m => m.role !== 'system').map(m => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }]
-    }));
+    let rawHistory = history.filter(m => m.role !== 'system').map(m => {
+        let parts: any[] = [];
+        if (typeof m.content === 'string') {
+            parts = [{ text: m.content }];
+        } else if (Array.isArray(m.content)) {
+            parts = m.content.map((item: any) => {
+                if (item.type === 'text') {
+                    return { text: item.text };
+                } else if (item.type === 'image_url') {
+                    // Extract Base64 and MimeType from "data:image/jpeg;base64,..."
+                    const url = item.image_url.url;
+                    const match = url.match(/^data:(.*?);base64,(.*)$/);
+                    if (match) {
+                        return {
+                            inlineData: {
+                                mimeType: match[1],
+                                data: match[2]
+                            }
+                        };
+                    }
+                }
+                return null;
+            }).filter(p => p !== null);
+        } else {
+            // Fallback for unknown objects
+            parts = [{ text: JSON.stringify(m.content) }];
+        }
+
+        return {
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: parts
+        };
+    });
 
     // 3. Merge Consecutive Roles (Gemini Strictness: User -> Model -> User)
     // If we have User, User, Model -> Merge User, User
@@ -173,7 +202,7 @@ export interface MemoryAnalysis {
 
 export const generateMemoryAnalysis = async (chatHistory: ChatMessage[], previousSummary: string): Promise<MemoryAnalysis> => {
     const client = getGeminiClient(false); 
-    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     try {
         const textData = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
@@ -203,7 +232,7 @@ export const generateMemoryAnalysis = async (chatHistory: ChatMessage[], previou
 
 export const mergeLoreDescription = async (oldDesc: string, newContext: string): Promise<string> => {
     const client = getGeminiClient(false);
-    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
     try {
         const result = await model.generateContent(`Merge lore: Old="${oldDesc}", New="${newContext}". Keep concise.`);
         return result.response.text().trim();
@@ -216,7 +245,7 @@ export const mergeLoreDescription = async (oldDesc: string, newContext: string):
 
 export const extractThemeFromImage = async (base64Image: string): Promise<any> => {
   const client = getGeminiClient(true);
-  const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
   
   try {
     // Basic implementation for build fix - assumes old text usage
@@ -237,7 +266,7 @@ export const extractColorsFromImage = async (base64Image: string, mimeType: stri
 
 export const analyzeSentiment = async (text: string): Promise<string> => {
     const client = getGeminiClient(false);
-    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
     try {
         const result = await model.generateContent(`Classify sentiment (Happy/Sad/Calm/Anxious/Neutral): "${text}"`);
         return result.response.text().trim();
@@ -246,7 +275,7 @@ export const analyzeSentiment = async (text: string): Promise<string> => {
 
 export const getMusicRecommendation = async (prompt: string, userHistory: string[] = []): Promise<any> => {
   const client = getGeminiClient(true);
-  const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
   try {
     const result = await model.generateContent(`DJ AI. Request: "${prompt}". History: ${userHistory.join(',')}. Return JSON array of songs.`);
     const text = result.response.text();
@@ -258,7 +287,7 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
 
 export const analyzeDiaryEntries = async (entries: any[]): Promise<any> => {
     const client = getGeminiClient(true);
-    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
     try {
         const textData = entries.map(e => `[${e.createdAt}]: ${e.content}`).join('\n\n');
         const result = await model.generateContent(`Analyze diary entries. Return JSON { "analysis": "string" }. \n\n${textData}`);
@@ -271,7 +300,7 @@ export const analyzeDiaryEntries = async (entries: any[]): Promise<any> => {
 
 export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> => {
     const client = getGeminiClient(true);
-    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
     try {
         const textData = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
         const result = await model.generateContent(`Emotional summary of chat: \n\n${textData}`);
@@ -281,7 +310,7 @@ export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> =>
 
 export const getVibePlaylist = async (chatHistory: any[], languages: string[], userMoods: string[], duration?: number): Promise<string[]> => {
     const client = getGeminiClient(true);
-    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
     try {
         const textData = chatHistory.slice(-15).map(m => `${m.role}: ${m.content}`).join('\n');
         const result = await model.generateContent(`Vibe Playlist (JSON Strings). Lang: ${languages}, Mood: ${userMoods}. Context: ${textData}`);

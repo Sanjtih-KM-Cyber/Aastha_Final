@@ -59,26 +59,24 @@ export const generateSubconscious = async (
 
     **1. DECISION MATRIX (STRATEGY):**
     - **'listen'**: Choose this ONLY if:
-       a) User is EXPLICITLY venting/ranting (deep distress, anger, sadness) AND implies they want you to just listen.
-       b) User text is VERY LONG (>30 words) monologue about feelings.
-    - **'reply'**: Choose this for EVERYTHING else (Default).
-       - Questions, greetings, fillers, casual chat, short complaints.
-       - If they ask for help, advice, or tools.
-       - **CRITICAL EXCEPTIONS (FORCE 'reply'):**
-         - If user says filler words ("hmm", "okay", "yeah", "cool", "wait", "lol", "k").
-         - If user requests a TOOL (Music, Focus, Timer, Breathing, Diary, etc.).
-         - If user gives a COMMAND ("Let's focus", "Play music", "Start breathing", "Help me relax").
-         - If user asks a question, no matter how sad they are.
+       a) User input is a LONG monologue (> 40 words) about deep feelings/venting.
+       b) User indicates "Just listen" or "Don't reply yet".
+       c) User is typing in ALL CAPS (Rage/Panic).
+    - **'reply'**: Choose this for EVERYTHING else (Default 95% of cases).
+       - **MANDATORY REPLY IF:**
+         - Message is SHORT (< 10 words).
+         - Message contains a QUESTION ("?", "what", "how").
+         - Message is a FILLER ("hmm", "ok", "lol", "yeah", "cool").
+         - User requests a TOOL or HELP.
+         - User says "Hello", "Hi", "Bye".
+         - User asks "Are you there?".
 
     **2. SMART CHIPS (suggested_replies):**
     - Generate 3 chips from the **USER'S PERSPECTIVE** (1st Person).
-    - These are what the USER might say next.
-    - **CRITICAL RULES:**
-       - **NEVER** use 2nd person (e.g. "Do you want...", "Can you...").
-       - **NEVER** ask questions from the AI's perspective.
-       - **ALWAYS** use "I", "Me", "My" or commands.
-    - **Good Examples:** "I'm exhausted", "That makes sense", "Let's distract me", "I need advice", "Just listen", "Play some music".
-    - **Bad Examples:** "Do you want music?", "How are you?", "Tell me more".
+    - **STRICT RULE:** These must be phrases the USER clicks to send to YOU.
+    - **FORMAT:** Short, casual, clear.
+    - **Examples:** "Tell me more", "I'm sad", "Play music", "That helps", "I'm confused".
+    - **FORBIDDEN:** "Do you want help?", "How are you?", "I understand". (These are AI phrases).
 
     **3. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs.
@@ -130,10 +128,10 @@ export const generateSubconscious = async (
     }
     `;
 
-    // Construct Messages (Keep only last 10 turns to save tokens/speed)
+    // Construct Messages (Keep last 40 turns for deep context)
     const messages: any[] = [
         { role: 'system', content: systemPrompt },
-        ...history.slice(-10).map(m => ({
+        ...history.slice(-40).map(m => ({
             role: m.role,
             content: typeof m.content === 'string' ? m.content : '[Image/Media]'
         }))

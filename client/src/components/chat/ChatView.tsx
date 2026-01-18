@@ -647,46 +647,64 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const processMagicTags = (text: string) => {
-    // Legacy Tag Processing (Retained for backward compat)
+    // 1. Strip Markdown Code Blocks (Fix for AI wrapping tags in ```xml ... ```)
+    // We process the raw text for tags, but we return cleaner text.
+    // However, if the AI output is *inside* a code block, regex might still find it.
+    // We'll just run regex on the whole text.
+
+    // COLOR MAGIC
+    // We use a specific regex that captures the tag content.
+    // We must handle cases where AI adds spaces: <color> Blue </color>
+    const colorMatch = /<color>\s*([\s\S]*?)\s*<\/color>/i.exec(text);
+    if (colorMatch) {
+        const fullTag = colorMatch[0];
+        const colorName = colorMatch[1].trim();
+
+        if (!processedTagsRef.current.has(fullTag)) {
+             processedTagsRef.current.add(fullTag); // Mark as seen immediately
+             const mappedColor = mapColorToTheme(colorName);
+
+             // Trigger Animation
+             // We check !showCountdown to prevent double-triggering
+             if (!showCountdown) {
+                setShowCountdown(true);
+                setCountdownNum(3);
+                setTargetFlashColor(mappedColor.startsWith('#') ? mappedColor : '#ffffff');
+
+                const timer = setInterval(() => {
+                    setCountdownNum(prev => {
+                        if (prev <= 1) {
+                            clearInterval(timer);
+                            setShowCountdown(false);
+                            setShowFlash(true);
+                            setTimeout(() => {
+                                setTheme(mappedColor);
+                                setTimeout(() => setShowFlash(false), 800);
+                            }, 400);
+                            return 0;
+                        }
+                        return prev - 1;
+                    });
+                }, 1000);
+             }
+        }
+    }
+
+    // LEGACY WIDGET TAGS (Backup)
     const tagRegex = /<[^>]+>/g;
     const matches = text.match(tagRegex);
     if (matches) {
         matches.forEach(tag => {
             if (processedTagsRef.current.has(tag)) return;
             const lowerTag = tag.toLowerCase();
-            const colorMatch = /<color>([\s\S]*?)<\/color>/i.exec(text);
-            if (colorMatch && !processedTagsRef.current.has(colorMatch[0])) {
-                  const mappedColor = mapColorToTheme(colorMatch[1].trim());
-                  if (!showCountdown) {
-                    setShowCountdown(true);
-                    setCountdownNum(3);
-                    setTargetFlashColor(mappedColor.startsWith('#') ? mappedColor : '#ffffff');
-                    const timer = setInterval(() => {
-                        setCountdownNum(prev => {
-                            if (prev <= 1) {
-                                clearInterval(timer);
-                                setShowCountdown(false);
-                                setShowFlash(true);
-                                setTimeout(() => {
-                                    setTheme(mappedColor);
-                                    setTimeout(() => setShowFlash(false), 800);
-                                }, 400);
-                                return 0;
-                            }
-                            return prev - 1;
-                        });
-                    }, 1000);
-                  }
-                  processedTagsRef.current.add(colorMatch[0]);
-                  processedTagsRef.current.add('<color>');
-                  processedTagsRef.current.add('</color>');
-            }
+
             if (onOpenWidget) {
                 if (lowerTag.startsWith('<proposal')) {
-                    // Do nothing, MessageBubble handles parsing
+                     // MessageBubble handles this
                 } else {
+                    // Direct commands (legacy)
                     if (lowerTag.includes('recommend_breathing')) { const m = lowerTag.match(/mode="([^"]+)"/i); onOpenWidget('breathing', { initialMode: m ? m[1] : undefined }); }
-                    if (lowerTag.includes('open_breathing') || lowerTag.includes('start_breathing_exercise')) onOpenWidget('breathing');
+                    if (lowerTag.includes('open_breathing')) onOpenWidget('breathing');
                     if (lowerTag.includes('open_soundscape')) { const m = lowerTag.match(/preset="([^"]+)"/i); onOpenWidget('soundscape', { preset: m ? m[1] : undefined }); }
                     if (lowerTag.includes('open_diary')) onOpenWidget('diary');
                     if (lowerTag.includes('open_mood_tracker')) onOpenWidget('mood');
@@ -697,8 +715,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             processedTagsRef.current.add(tag);
         });
     }
+
+    // CLEANUP
+    // Remove <color> tags and any non-proposal tags from the visible text
     let cleanText = text.replace(/<color>[\s\S]*?<\/color>/gi, '');
+    cleanText = cleanText.replace(/```[\s\S]*?```/g, (match) => {
+         // If code block contains color tag, remove the whole block if it's just that?
+         // Or just return content? Let's keep it simple: just strip the tags.
+         return match;
+    });
+    // Remove standalone tags except proposal
     cleanText = cleanText.replace(/<(?!proposal)[^>]+>/g, '');
+
+    // Final cleanup of empty code blocks if they were just containers for tags
+    cleanText = cleanText.replace(/```xml\s*```/g, '').replace(/```\s*```/g, '');
+
     return cleanText;
   };
 
