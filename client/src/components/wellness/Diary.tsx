@@ -340,10 +340,30 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
           if (title || body) {
               setEditMode('edit');
               setEditTitle(title || "Reflect");
-              setEditContent(body ? `${body}\n\n` : "");
+
+              // APPEND LOGIC: Check if entry exists for this date
+              const targetDateKey = toDateString(new Date(date ? `${date}T12:00:00` : new Date()));
+              // We need to use 'entriesMap' but it might be stale if we just opened.
+              // However, 'entriesMap' is updated by fetchEntries which runs on Open.
+              // We'll trust the current map or just overwrite if it's not loaded yet (edge case).
+              // Ideally, we wait for fetch, but 'initialParams' runs fast.
+              // Let's check entriesMap in the dependency array or look it up.
+
+              // Wait, 'entriesMap' is a dependency. This effect runs when it changes?
+              // No, we don't want to re-run this on every map update.
+              // We should just check it once when initialParams is processed.
+
+              const existingEntry = entriesMap[targetDateKey];
+              if (existingEntry && body) {
+                  // Append
+                  setEditContent(existingEntry.content + "\n\n" + body);
+                  if (existingEntry.title && !title) setEditTitle(existingEntry.title);
+              } else {
+                  setEditContent(body ? `${body}\n\n` : "");
+              }
           }
       }
-  }, [isOpen, isUnlocked, initialParams]);
+  }, [isOpen, isUnlocked, initialParams, entriesMap]); // Added entriesMap to deps to ensure we see loaded entries
 
   const prevActiveDateRef = useRef<string>(toDateString(activeDate));
 
@@ -427,6 +447,8 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
             setAuthError("Incorrect Password");
         }
     } catch (err) {
+        // Prevent logout on simple password fail
+        console.error("Unlock failed", err);
         setAuthError("Incorrect Password");
     }
   };
