@@ -1,25 +1,37 @@
 import Groq from 'groq-sdk';
-import dotenv from 'dotenv';
 
-dotenv.config();
+// --- 1. BROWSER-SAFE ENVIRONMENT SETUP ---
+// We remove 'dotenv' because browsers can't read .env files directly.
+// We use a helper to read Vite's environment variables safely.
+
+const getEnvVar = (key: string) => {
+  // Vite uses import.meta.env
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    return import.meta.env[key] || '';
+  }
+  return '';
+};
 
 // Rotate keys to prevent rate limits
-const groqKeys = (process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '')
+const groqKeys = (getEnvVar('VITE_GROQ_API_KEYS') || getEnvVar('VITE_GROQ_API_KEY') || '')
   .split(',')
   .map(key => key.trim())
   .filter(key => key.length > 0);
 
 if (groqKeys.length === 0) {
-  console.warn("Warning: No GROQ_API_KEYS found. Basic chat mode may fail.");
+  console.warn("Warning: No VITE_GROQ_API_KEYS found. Check Vercel Env Vars.");
 }
 
 const getGroqClient = () => {
   const randomKey = groqKeys.length > 0 
     ? groqKeys[Math.floor(Math.random() * groqKeys.length)] 
     : 'dummy_key_missing';
-  return new Groq({ apiKey: randomKey });
+  
+  // 'dangerouslyAllowBrowser: true' is REQUIRED for client-side usage
+  return new Groq({ apiKey: randomKey, dangerouslyAllowBrowser: true });
 };
 
+// --- 2. TYPES ---
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
@@ -34,21 +46,19 @@ export interface SubconsciousBlock {
     reaction: string | null;
     suggested_replies: string[];
     tool_calls?: {
-        name: 'write_diary' | 'read_diary' | 'control_widget' | 'update_dossier';
+        name: 'write_diary' | 'read_diary' | 'control_widget' | 'update_dossier'; // Added update_dossier
         params: any;
     }[];
 }
 
-// ============================================================================
-// 1. THE BRAIN (Subconscious Decision Maker)
-// ============================================================================
+// --- 3. THE BRAIN (Subconscious Decision Maker) ---
 export const generateSubconscious = async (
     history: ChatMessage[],
     userContext: string,
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
     const client = getGroqClient();
-    const model = "llama-3.1-8b-instant"; // Fast & Smart
+    const model = "llama-3.1-8b-instant"; 
 
     const systemPrompt = `
     You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha (or Aastik).
@@ -61,43 +71,45 @@ export const generateSubconscious = async (
     - **'listen'**: Choose this ONLY if:
        a) User is venting/ranting (deep distress, anger, sadness).
        b) User text is LONG (>15 words) or part of a rapid burst.
-       c) **CRITICAL EXCEPTIONS:**
-          - If user says filler words ("hmm", "okay", "yeah", "cool", "wait", "lol", "k") -> **'reply'**.
-          - If user requests a TOOL (Music, Focus, Timer, etc.) -> **'reply'**.
-          - If user gives a command ("Let's focus", "Play music") -> **'reply'**.
+       c) **CRITICAL EXCEPTION:** If the user says filler words ("hmm", "okay", "yeah", "cool", "wait", "lol", "k") -> **'reply'**. Do NOT listen to fillers.
     - **'reply'**: For EVERYTHING else. Questions, greetings, fillers, casual chat, or if they ask for help.
     - **Override:** If 'forceReply' is TRUE -> Always **'reply'**.
 
     **2. SMART CHIPS (suggested_replies):**
-    - Generate 3 chips from the **USER'S PERSPECTIVE** (1st Person).
+    - Generate 3 chips strictly from the **USER'S PERSPECTIVE** (1st Person).
     - **Bad:** "How are you?", "Do you want to talk?", "Tell me more." (AI asking User)
     - **Good:** "I'm exhausted", "That makes sense", "Let's distract me." (User answering AI)
 
     **3. GOD MODE TOOLS (The Hands):**
-    You have full control. Anticipate needs. Use 'control_widget' for most things.
-
-    **Structure:** { "name": "control_widget", "params": { "widget": "...", "params": { ... } } }
-
+    You have full control. Anticipate needs.
     - **Music (Jam):**
-      - Song/Podcast: { "name": "control_widget", "params": { "widget": "jam", "params": { "query": "Play <Name>", "autoplay": true } } }
-      - General: { "name": "control_widget", "params": { "widget": "jam", "params": { "mood": "chill", "genre": "lofi", "autoplay": true } } }
-
+      - If user asks for specific song/podcast: { "widget": "jam", "params": { "query": "Play <Song Name> <Artist>", "autoplay": true } }
+      - If user says "Play music" (General): { "widget": "jam", "params": { "mood": "chill", "genre": "lofi", "autoplay": true } }
+      - If user specifies language/year: { "widget": "jam", "params": { "language": "Hindi", "year": "2024", "autoplay": true } }
+      
     - **Soundscape (ASMR DJ):**
-      - Mix sounds (rain, forest, fire, ocean, night, wind, thunder, birds).
-      - { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6,fire:0.3", "volume": 0.8 } } }
-
+      - Mix sounds for specific vibes. Always vary the mix slightly.
+      - Params: { "widget": "soundscape", "params": { "preset": "rain:0.6,fire:0.3,thunder:0.1", "volume": 0.8 } }
+      - For "Work": "cafe:0.7,rain:0.3"
+      - For "Sleep": "night:0.6,wind:0.2"
+      
     - **Focus (Pomodoro):**
-      - Trigger: "Let's focus", "Study mode", "Work time".
-      - { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 25 } } }
+      - If user wants to work/study: { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 25, "breakDuration": 5 } }
+      - If user specifies time ("Work for 50 mins"): { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 50 } }
 
     - **Breathing:**
-      - { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
+      - Anxiety/Stress -> { "widget": "breathing", "params": { "mode": "Grounding" } }
+      - Sleep/Insomnia -> { "widget": "breathing", "params": { "mode": "Relax" } } (4-7-8)
+      - Focus/Energy -> { "widget": "breathing", "params": { "mode": "Box" } }
 
-    - **Diary:**
-      - { "name": "write_diary", "params": { "title": "Auto Entry", "content": "<Summarize user input>" } }
+    - **Diary:** 
+      - If user says "Note this down" or "Dear Diary": { "widget": "diary", "params": { "action": "write", "title": "Auto Entry", "content": "<Summarize user input>" } }
 
     - **Social Detective (The Web):**
-      - { "name": "update_dossier", "params": { "name": "Bob", "deltaScore": -5, "verdict": "SUSPECT", "newTrait": "Flakes" } }
+      - If the user mentions a specific person (friend/ex/family) and reveals something new about them:
+      - Call 'update_dossier' -> { "name": "Bob", "deltaScore": -5, "verdict": "SUSPECT", "newTrait": "Flakes last minute" }
+      - deltaScore: Negative for bad actions, Positive for good.
+      - Verdict: Set if clear pattern emerges (TOXIC/KEEPER/SUSPECT/NPC).
 
     **OUTPUT JSON ONLY (Strict Format):**
     {
@@ -129,7 +141,7 @@ export const generateSubconscious = async (
         const response = await client.chat.completions.create({
             messages: messages,
             model: model,
-            temperature: 0.6, // Balanced creativity
+            temperature: 0.6,
             max_tokens: 500,
             response_format: { type: "json_object" }
         });
@@ -159,9 +171,7 @@ export const generateSubconscious = async (
     }
 };
 
-// ============================================================================
-// 2. THE VOICE STREAMER (Fallback for Free Tier)
-// ============================================================================
+// --- 4. THE VOICE STREAMER (Fallback) ---
 export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
   const model = "llama-3.1-8b-instant";
   
@@ -179,7 +189,7 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       const completion = await groqClient.chat.completions.create({
           messages: messages,
           model: model,
-          temperature: 0.7, // Higher temp for more personality in voice
+          temperature: 0.7, 
           max_tokens: maxTokens || 1024,
           stream: true,
       });

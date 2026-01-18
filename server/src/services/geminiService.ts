@@ -77,11 +77,11 @@ export async function* streamGemini(
     isPro: boolean,
     maxTokens?: number
 ) {
-  const modelName = 'gemini-1.5-flash-001'; // Use stable version
+  const modelName = 'gemini-2.5-flash'; // Use stable version
   try {
     const client = getGeminiClient(isPro);
     const model = client.getGenerativeModel({ model: modelName });
-
+    
     // Transform history to Gemini format (Sanitized)
     // 1. Remove system messages
     // 2. Ensure alternating user/model (Gemini strictness)
@@ -97,13 +97,13 @@ export async function* streamGemini(
     }
 
     // Gemini StartChat expects history WITHOUT the last message (which is sent via sendMessageStream)
-    // BUT checking the docs, startChat history acts as "context".
+    // BUT checking the docs, startChat history acts as "context". 
     // If we pass the last user message in history, Gemini might think it's already answered?
     // Standard pattern: History = Past turns. SendMessage = Current turn.
     // Our 'history' input INCLUDES the current user message (from chatController).
     // So we must POP the last message if it's from user.
-
-    let currentMessage = "continue";
+    
+    let currentMessage = "continue"; 
     if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === 'user') {
         const last = cleanHistory.pop();
         if (last) currentMessage = last.parts[0].text;
@@ -114,13 +114,13 @@ export async function* streamGemini(
         systemInstruction: systemPrompt
     });
 
-    // Send empty message to start or just last?
+    // Send empty message to start or just last? 
     // streamGemini usually takes the whole history including the latest user message.
     // We should assume the last message is new.
     // BUT typically controller calls this with full history.
     // Gemini `startChat` maintains history. `sendMessageStream` sends the NEW user input.
     // If we passed full history, we need to pop the last one to send it.
-
+    
     const result = await chat.sendMessageStream(currentMessage);
     for await (const chunk of result.stream) {
         const text = chunk.text();
@@ -144,7 +144,7 @@ export interface MemoryAnalysis {
 
 export const generateMemoryAnalysis = async (chatHistory: ChatMessage[], previousSummary: string): Promise<MemoryAnalysis> => {
     const client = getGeminiClient(false); 
-    const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     try {
         const textData = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
@@ -155,13 +155,13 @@ export const generateMemoryAnalysis = async (chatHistory: ChatMessage[], previou
             Previous Summary: "${previousSummary}"
             Current Date: ${currentDate}
             Chat Log: ${textData}
-
+            
             Return JSON with: summary (string), newFacts (string[]), detectedEvents ({name, date}[]), detectedEntities ({name, category, description}[])
         `;
 
         const result = await model.generateContent(prompt);
         const text = result.response.text();
-
+        
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (jsonMatch) return JSON.parse(jsonMatch[0]) as MemoryAnalysis;
         return { summary: previousSummary, newFacts: [], detectedEvents: [], detectedEntities: [] };
@@ -174,7 +174,7 @@ export const generateMemoryAnalysis = async (chatHistory: ChatMessage[], previou
 
 export const mergeLoreDescription = async (oldDesc: string, newContext: string): Promise<string> => {
     const client = getGeminiClient(false);
-    const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
     try {
         const result = await model.generateContent(`Merge lore: Old="${oldDesc}", New="${newContext}". Keep concise.`);
         return result.response.text().trim();
@@ -187,7 +187,7 @@ export const mergeLoreDescription = async (oldDesc: string, newContext: string):
 
 export const extractThemeFromImage = async (base64Image: string): Promise<any> => {
   const client = getGeminiClient(true);
-  const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+  const model = client.getGenerativeModel({ model: "gemini-2.5-flash" }); 
   
   try {
     // Basic implementation for build fix - assumes old text usage
@@ -208,7 +208,7 @@ export const extractColorsFromImage = async (base64Image: string, mimeType: stri
 
 export const analyzeSentiment = async (text: string): Promise<string> => {
     const client = getGeminiClient(false);
-    const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
     try {
         const result = await model.generateContent(`Classify sentiment (Happy/Sad/Calm/Anxious/Neutral): "${text}"`);
         return result.response.text().trim();
@@ -217,7 +217,7 @@ export const analyzeSentiment = async (text: string): Promise<string> => {
 
 export const getMusicRecommendation = async (prompt: string, userHistory: string[] = []): Promise<any> => {
   const client = getGeminiClient(true);
-  const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+  const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
   try {
     const result = await model.generateContent(`DJ AI. Request: "${prompt}". History: ${userHistory.join(',')}. Return JSON array of songs.`);
     const text = result.response.text();
@@ -229,7 +229,7 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
 
 export const analyzeDiaryEntries = async (entries: any[]): Promise<any> => {
     const client = getGeminiClient(true);
-    const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
     try {
         const textData = entries.map(e => `[${e.createdAt}]: ${e.content}`).join('\n\n');
         const result = await model.generateContent(`Analyze diary entries. Return JSON { "analysis": "string" }. \n\n${textData}`);
@@ -242,7 +242,7 @@ export const analyzeDiaryEntries = async (entries: any[]): Promise<any> => {
 
 export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> => {
     const client = getGeminiClient(true);
-    const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
     try {
         const textData = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
         const result = await model.generateContent(`Emotional summary of chat: \n\n${textData}`);
@@ -252,7 +252,7 @@ export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> =>
 
 export const getVibePlaylist = async (chatHistory: any[], languages: string[], userMoods: string[], duration?: number): Promise<string[]> => {
     const client = getGeminiClient(true);
-    const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
     try {
         const textData = chatHistory.slice(-15).map(m => `${m.role}: ${m.content}`).join('\n');
         const result = await model.generateContent(`Vibe Playlist (JSON Strings). Lang: ${languages}, Mood: ${userMoods}. Context: ${textData}`);
