@@ -32,13 +32,11 @@ const getReactionEmoji = (type?: string) => {
     fire: "🔥",       // Sassy/Hot
     thumbsup: "👍",   // Agreement
   };
-  // Return the mapped emoji, or the raw string if it's already an emoji
   return map[type.toLowerCase()] || type;
 };
 
 // Helper to parse hidden <proposal> tags AND STRIP LEAKED JSON
 const extractProposals = (text: string) => {
-    // 1. Remove leaked Subconscious JSON block if it appears in text
     let cleanText = text.replace(/\{[\s\S]*?"internal_monologue"[\s\S]*?\}/g, '').trim();
     cleanText = cleanText.replace(/```json[\s\S]*?```/g, '').trim();
 
@@ -59,6 +57,22 @@ const extractProposals = (text: string) => {
         }
     }
     return { cleanText, proposals };
+};
+
+// PLACEHOLDER AVATAR MAPPING (You can replace URLs later)
+const getAvatarUrl = (mood: string = 'neutral') => {
+    // Using DiceBear for dynamic generation based on mood seed
+    const seedMap: Record<string, string> = {
+        happy: 'AasthaHappy',
+        sad: 'AasthaSad',
+        concerned: 'AasthaConcerned',
+        sassy: 'AasthaSassy',
+        excited: 'AasthaExcited',
+        neutral: 'AasthaNeutral',
+        tired: 'AasthaTired'
+    };
+    const seed = seedMap[mood] || 'AasthaNeutral';
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=transparent`;
 };
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -163,14 +177,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       {!isUser && (
         <div className="hidden md:flex flex-shrink-0 mr-3 self-end relative">
           <div
-            className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-500 overflow-hidden border-2"
+            className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-500 overflow-hidden border-2 bg-black"
             style={{
               borderColor: moodColor,
               boxShadow: `0 0 15px ${moodColor}50`,
-              background: '#000'
             }}
           >
-             <Sparkles size={18} style={{ color: moodColor }} />
+             {/* Replaced Static Icon with Dynamic Avatar Image */}
+             <img
+               src={getAvatarUrl(mood)}
+               alt="Aastha"
+               className="w-full h-full object-cover scale-110"
+             />
           </div>
 
           {/* Mood Badge Overlay */}
@@ -234,12 +252,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           {isThinking ? (
             <div className="flex items-center gap-3 h-6">
               <span className="text-xs text-white/50 font-medium">
-                Thinking
+                {/* Changed text from 'Thinking' to dynamic states based on mood */}
+                {mood === 'sad' || mood === 'concerned' ? 'Thinking deeply...' : 'Typing...'}
               </span>
               <div className="flex gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce" />
-                <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce delay-150" />
-                <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce delay-300" />
+                <div className={`w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce ${mood === 'sad' ? 'duration-1000' : ''}`} />
+                <div className={`w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce delay-150 ${mood === 'sad' ? 'duration-1000' : ''}`} />
+                <div className={`w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce delay-300 ${mood === 'sad' ? 'duration-1000' : ''}`} />
               </div>
             </div>
           ) : (
@@ -272,6 +291,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                             {p.tool === 'pomodoro' && "Start Focus"}
                             {p.tool === 'mood' && "Track Mood"}
                             {p.tool === 'soundscape' && "Play Sounds"}
+                            {p.tool === 'voice_hug' && "Listen to Hug"}
                           </span>
                       </button>
                   ))}
