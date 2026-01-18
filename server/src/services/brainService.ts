@@ -1,9 +1,9 @@
 import axios from 'axios';
 import FormData from 'form-data';
 
-// The URL of your deployed Hugging Face Space or Local Docker
-// Defaulting to localhost for dev, but in prod this would be your HF Space URL
-const BRAIN_URL = process.env.BRAIN_SERVER_URL || 'http://localhost:7860';
+// The URL of your deployed Hugging Face Space
+// Defaulting to the live URL provided by the user
+const BRAIN_URL = process.env.BRAIN_SERVER_URL || 'https://sking0123-aastha-voice.hf.space';
 
 export const brainService = {
     /**
