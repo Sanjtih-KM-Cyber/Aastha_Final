@@ -316,12 +316,28 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
   // MANAGER MODE: Handle Initial Params (Prompt / Content Pre-fill)
   useEffect(() => {
       if (isOpen && isUnlocked && initialParams) {
-          const { title, prompt, content } = initialParams;
+          const { title, prompt, content, date } = initialParams;
           // Support 'content' as an alias for prompt or direct body
           const body = content || prompt;
 
+          if (date) {
+            // Parse YYYY-MM-DD from AI
+            // If we use new Date("2023-10-27"), it's UTC 00:00. In UTC-5, that's previous day.
+            // We want LOCAL date for "2023-10-27".
+            // new Date("2023-10-27T12:00:00") is safe middle of day.
+            const parsedDate = new Date(`${date}T12:00:00`);
+            if (!isNaN(parsedDate.getTime())) {
+                setActiveDate(parsedDate);
+                // Also update calendar month view
+                setCurrentMonth(parsedDate);
+            }
+          } else if (title || body) {
+              // Only default to today if no specific date requested
+              // (Existing logic: but we should respect if the user is just reading)
+              if (!date) setActiveDate(new Date());
+          }
+
           if (title || body) {
-              setActiveDate(new Date());
               setEditMode('edit');
               setEditTitle(title || "Reflect");
               setEditContent(body ? `${body}\n\n` : "");

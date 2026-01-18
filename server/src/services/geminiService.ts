@@ -77,7 +77,7 @@ export async function* streamGemini(
     isPro: boolean,
     maxTokens?: number
 ) {
-  const modelName = 'gemini-1.5-flash-001'; // Use stable version
+  const modelName = 'gemini-1.5-flash'; // Use stable version
   try {
     const client = getGeminiClient(isPro);
 
@@ -173,7 +173,7 @@ export interface MemoryAnalysis {
 
 export const generateMemoryAnalysis = async (chatHistory: ChatMessage[], previousSummary: string): Promise<MemoryAnalysis> => {
     const client = getGeminiClient(false); 
-    const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     try {
         const textData = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
@@ -203,7 +203,7 @@ export const generateMemoryAnalysis = async (chatHistory: ChatMessage[], previou
 
 export const mergeLoreDescription = async (oldDesc: string, newContext: string): Promise<string> => {
     const client = getGeminiClient(false);
-    const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
     try {
         const result = await model.generateContent(`Merge lore: Old="${oldDesc}", New="${newContext}". Keep concise.`);
         return result.response.text().trim();
@@ -216,7 +216,7 @@ export const mergeLoreDescription = async (oldDesc: string, newContext: string):
 
 export const extractThemeFromImage = async (base64Image: string): Promise<any> => {
   const client = getGeminiClient(true);
-  const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+  const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
   
   try {
     // Basic implementation for build fix - assumes old text usage
@@ -237,7 +237,7 @@ export const extractColorsFromImage = async (base64Image: string, mimeType: stri
 
 export const analyzeSentiment = async (text: string): Promise<string> => {
     const client = getGeminiClient(false);
-    const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
     try {
         const result = await model.generateContent(`Classify sentiment (Happy/Sad/Calm/Anxious/Neutral): "${text}"`);
         return result.response.text().trim();
@@ -246,7 +246,7 @@ export const analyzeSentiment = async (text: string): Promise<string> => {
 
 export const getMusicRecommendation = async (prompt: string, userHistory: string[] = []): Promise<any> => {
   const client = getGeminiClient(true);
-  const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+  const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
   try {
     const result = await model.generateContent(`DJ AI. Request: "${prompt}". History: ${userHistory.join(',')}. Return JSON array of songs.`);
     const text = result.response.text();
@@ -258,7 +258,7 @@ export const getMusicRecommendation = async (prompt: string, userHistory: string
 
 export const analyzeDiaryEntries = async (entries: any[]): Promise<any> => {
     const client = getGeminiClient(true);
-    const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
     try {
         const textData = entries.map(e => `[${e.createdAt}]: ${e.content}`).join('\n\n');
         const result = await model.generateContent(`Analyze diary entries. Return JSON { "analysis": "string" }. \n\n${textData}`);
@@ -271,7 +271,7 @@ export const analyzeDiaryEntries = async (entries: any[]): Promise<any> => {
 
 export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> => {
     const client = getGeminiClient(true);
-    const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
     try {
         const textData = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
         const result = await model.generateContent(`Emotional summary of chat: \n\n${textData}`);
@@ -281,7 +281,7 @@ export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> =>
 
 export const getVibePlaylist = async (chatHistory: any[], languages: string[], userMoods: string[], duration?: number): Promise<string[]> => {
     const client = getGeminiClient(true);
-    const model = client.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
     try {
         const textData = chatHistory.slice(-15).map(m => `${m.role}: ${m.content}`).join('\n');
         const result = await model.generateContent(`Vibe Playlist (JSON Strings). Lang: ${languages}, Mood: ${userMoods}. Context: ${textData}`);

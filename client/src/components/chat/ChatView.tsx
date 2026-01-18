@@ -529,7 +529,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                         if (tool.name === 'control_widget') {
                                              onOpenWidget?.(tool.params.widget, tool.params.params || tool.params);
                                         } else if (tool.name === 'write_diary') {
-                                             onOpenWidget?.('diary', tool.params);
+                                             onOpenWidget?.('diary', {
+                                                title: tool.params.title,
+                                                content: tool.params.content,
+                                                date: tool.params.date // Pass date if available
+                                             });
                                         } else if (tool.name === 'read_diary') {
                                             onOpenWidget?.('diary', { mode: 'read' });
                                         } else if (tool.name === 'update_dossier') {
@@ -824,7 +828,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              </div>
 
              <div className="shrink-0 flex items-center gap-3 justify-end z-20">
-                 <div className={`flex items-center transition-all duration-300 ease-spring ${isSearchOpen ? 'w-[200px] md:w-[300px] bg-black/40 border-white/10 px-3' : 'w-10 bg-black/20 border-transparent justify-center'} h-10 rounded-full backdrop-blur-xl border`}>
+                 <div style={{ willChange: 'width' }} className={`flex items-center transition-all duration-300 ease-spring ${isSearchOpen ? 'w-[200px] md:w-[300px] bg-black/40 border-white/10 px-3' : 'w-10 bg-black/20 border-transparent justify-center'} h-10 rounded-full ${isSearchOpen && isMobile ? '' : 'backdrop-blur-xl'} border`}>
                      {isSearchOpen ? (
                          <>
                             <input
