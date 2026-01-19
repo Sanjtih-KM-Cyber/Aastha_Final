@@ -23,10 +23,27 @@ export const brainService = {
 
             const response = await axios.post(`${BRAIN_URL}/speak`, form, {
                 headers: { ...form.getHeaders() },
-                responseType: 'arraybuffer' // Critical for receiving binary audio
+                responseType: 'arraybuffer', // Critical for receiving binary audio
+                validateStatus: (status) => status < 500 // Allow 400s to be caught manually if needed, but mostly we want 200
             });
 
-            return Buffer.from(response.data);
+            // 1. Check Content-Type to avoid playing JSON errors as static
+            const contentType = response.headers['content-type'];
+            if (contentType && (contentType.includes('application/json') || contentType.includes('text/plain'))) {
+                // It's an error message, not audio
+                const errorText = Buffer.from(response.data).toString('utf-8');
+                console.error("Brain TTS Server Error (Not Audio):", errorText);
+                return null;
+            }
+
+            // 2. Check Buffer Size (Empty or too small files are invalid)
+            const audioBuffer = Buffer.from(response.data);
+            if (audioBuffer.length < 100) { // arbitrary small size check (WAV header is 44 bytes)
+                console.error("Brain TTS Error: Received audio buffer too small.");
+                return null;
+            }
+
+            return audioBuffer;
         } catch (error) {
             console.error("Brain TTS Error:", error);
             return null;
