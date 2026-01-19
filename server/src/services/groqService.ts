@@ -35,7 +35,7 @@ export interface SubconsciousBlock {
     reaction: string | null;
     suggested_replies: string[];
     tool_calls?: {
-        name: 'write_diary' | 'read_diary' | 'control_widget' | 'update_dossier';
+        name: 'write_diary' | 'read_diary' | 'control_widget' | 'update_dossier' | 'change_theme';
         params: any;
     }[];
 }
@@ -112,6 +112,10 @@ export const generateSubconscious = async (
     - **Mood Tracker:**
       - Trigger: "Log my mood", "Track my mood", "I'm feeling...".
       - { "name": "control_widget", "params": { "widget": "mood", "params": { "action": "open" } } }
+
+    - **Theme (Magician):**
+      - Trigger: "Change theme to blue", "Dark mode", "Make it pink".
+      - { "name": "change_theme", "params": { "color": "blue" } }
 
     - **Social Detective (The Web):**
       - { "name": "update_dossier", "params": { "name": "Bob", "deltaScore": -5, "verdict": "SUSPECT", "newTrait": "Flakes" } }
