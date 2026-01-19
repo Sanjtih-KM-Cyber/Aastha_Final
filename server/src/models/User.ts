@@ -35,8 +35,11 @@ export interface ILore {
 
 // 3. Clone Mode (The Viral Hook)
 export interface ICloneMode {
-  isActive: boolean;
+  isActive: boolean; // Master Toggle
+  isPersonaActive: boolean; // Text Mimicry Toggle
+  isVoiceActive: boolean; // Voice Cloning Toggle
   targetPersona: string; // The "System Prompt" extracted from the screenshot
+  voiceSample: string; // Base64 Audio Data
   usageCount: number; // Max 10 for free users
   lastActive: Date;
   isPersonaActive: boolean;
@@ -140,7 +143,10 @@ const paymentRecordSchema = new Schema({
 
 const cloneModeSchema = new Schema({
   isActive: { type: Boolean, default: false },
+  isPersonaActive: { type: Boolean, default: true },
+  isVoiceActive: { type: Boolean, default: true },
   targetPersona: { type: String, default: "" },
+  voiceSample: { type: String, select: false }, // Heavy field, exclude by default
   usageCount: { type: Number, default: 0 },
   lastActive: { type: Date, default: Date.now },
   isPersonaActive: { type: Boolean, default: true },
@@ -241,7 +247,7 @@ const userSchema = new Schema<IUser>({
 
   // --- NEW FIELDS ---
   socialBattery: { type: Number, default: 100, min: 0, max: 100 },
-  cloneMode: { type: cloneModeSchema, default: () => ({ isActive: false, targetPersona: '', usageCount: 0 }) as any },
+  cloneMode: { type: cloneModeSchema, default: () => ({ isActive: false, isPersonaActive: true, isVoiceActive: true, targetPersona: '', usageCount: 0 }) as any },
   voiceHugs: { type: voiceHugsSchema, default: () => ({ count: 0, lastReset: Date.now() }) as any },
   faceTags: { type: Map, of: String, default: {} }
 }, {
