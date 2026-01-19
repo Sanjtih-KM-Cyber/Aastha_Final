@@ -42,6 +42,9 @@ export interface ICloneMode {
   voiceSample: string; // Base64 Audio Data
   usageCount: number; // Max 10 for free users
   lastActive: Date;
+  isPersonaActive: boolean;
+  isVoiceActive: boolean;
+  voiceSample: string;
 }
 
 // 4. Voice Hugs (The Comfort Hook)
@@ -145,7 +148,10 @@ const cloneModeSchema = new Schema({
   targetPersona: { type: String, default: "" },
   voiceSample: { type: String, select: false }, // Heavy field, exclude by default
   usageCount: { type: Number, default: 0 },
-  lastActive: { type: Date, default: Date.now }
+  lastActive: { type: Date, default: Date.now },
+  isPersonaActive: { type: Boolean, default: true },
+  isVoiceActive: { type: Boolean, default: false },
+  voiceSample: { type: String, default: "" }
 }, { _id: false });
 
 const voiceHugsSchema = new Schema({

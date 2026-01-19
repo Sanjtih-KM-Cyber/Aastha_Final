@@ -60,9 +60,9 @@ export const createVoiceOrder = async (req: AuthRequest, res: Response) => {
 
     const shortReceiptId = `v_rcpt_${Date.now()}`;
 
-    // PRICING: ₹25.00
+    // PRICING: ₹19.00
     const options = {
-      amount: 2500, // paise (25 INR)
+      amount: 1900, // paise (19 INR)
       currency: "INR",
       receipt: shortReceiptId,
       notes: {
