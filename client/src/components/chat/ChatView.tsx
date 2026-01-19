@@ -564,7 +564,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     const nextState = [...updatedMessages, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
     setMessages(nextState.length > SLICE_LIMIT ? nextState.slice(nextState.length - SLICE_LIMIT) : nextState);
     
-    setInput(''); setAttachedImage(null); setShowEmojiPicker(false); setIsRecordingAudio(false);
+    setInput(''); setAttachedImage(null); setShowEmojiPicker(false);
     setIsTyping(true); 
     setError(null);
     setStatusDisplay('Thinking...'); 
@@ -1168,10 +1168,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      </div>
                  )}
 
-                 {/* RECORDING OVERLAY (KEEP AS FALLBACK IF isRecordingAudio TRIGGERED BY OTHER MEANS, BUT MIC BTN NOW DOES DICTATION) */}
-                 {false ? ( // DISABLED FOR NOW IN FAVOR OF DICTATION FLOW FROM SNIPPET
-                    <AudioRecorder onSend={(blob) => handleSend(undefined, undefined, undefined, blob)} onCancel={() => setIsRecordingAudio(false)} />
-                 ) : (
+                 {/* RECORDING OVERLAY REMOVED IN FAVOR OF DICTATION */}
                     <>
                     <div className="flex items-center gap-1 relative">
                         {/* UNIFIED MEDIA BUTTON */}
@@ -1229,7 +1226,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         <Send size={18} className="ml-0.5" fill="currentColor" />
                     </button>
                     </>
-                 )}
              </div>
           </div>
       </div>
