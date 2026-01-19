@@ -170,6 +170,20 @@ const VoiceNotePlayer: React.FC<{ src: string }> = ({ src }) => {
         setProgress(0);
     };
 
+    const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (!audioRef.current) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const width = rect.width;
+        const percentage = Math.max(0, Math.min(1, x / width));
+
+        const newTime = percentage * (audioRef.current.duration || 0);
+        if (isFinite(newTime)) {
+            audioRef.current.currentTime = newTime;
+            setProgress(percentage * 100);
+        }
+    };
+
     return (
         <div className="mt-1 mb-1 p-2 rounded-xl bg-black/20 border border-white/10 flex items-center gap-3 w-64">
              {/* Play Button */}
@@ -181,7 +195,10 @@ const VoiceNotePlayer: React.FC<{ src: string }> = ({ src }) => {
             </button>
 
             {/* Waveform Visualization */}
-            <div className="flex-1 h-8 flex items-center gap-[2px]">
+            <div
+                className="flex-1 h-8 flex items-center gap-[2px] cursor-pointer"
+                onClick={handleSeek}
+            >
                 {waveform.map((barHeight, index) => {
                     // Calculate if this bar is "played" based on progress
                     const barPosition = (index / waveform.length) * 100;

@@ -183,6 +183,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem('user_tts_enabled') === 'true');
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(() => localStorage.getItem('user_voice_uri'));
   
+  // AUDIO REF for Single Source of Truth
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+
   // --- CLONE MODE & VOICE INPUT ---
   const [isCloneMode, setIsCloneMode] = useState(false);
   const [cloneUploadVisible, setCloneUploadVisible] = useState(false);
@@ -831,13 +834,23 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const speakMessage = (textOrUrl: string) => {
+    // STOP any currently playing audio before starting new one
+    if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+    }
+    window.speechSynthesis.cancel(); // Stop browser TTS too
+
     // 1. Detect if it's a URL (server audio)
     if (textOrUrl.startsWith('http') || textOrUrl.startsWith('/api/') || textOrUrl.startsWith('data:')) {
         // Double-check if relative path needs resolving (though handleSend usually does it)
         const finalUrl = resolveAudioUrl(textOrUrl);
         const audio = new Audio(finalUrl);
+        currentAudioRef.current = audio; // Track it
+
         audio.play().catch(e => console.error("Audio Play Error:", e));
         audio.onended = () => {
+             currentAudioRef.current = null;
              if (isVoiceMode) setTimeout(() => startListening(), 500);
         };
         return;
@@ -845,7 +858,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
     // 2. Fallback: Browser TTS
     if ('speechSynthesis' in window) {
-       window.speechSynthesis.cancel();
        const cleanText = textOrUrl.replace(/[*#]/g, '').replace(/[\u{1F600}-\u{1F64F}]/gu, '');
        const utterance = new SpeechSynthesisUtterance(cleanText);
        const voices = window.speechSynthesis.getVoices();

@@ -26,6 +26,19 @@ const is_red_flag = (message: string): boolean => {
 };
 
 // ============================================================================
+// SYSTEM: SPECIAL INSTRUCTIONS
+// ============================================================================
+const VOICE_MODE_INSTRUCTIONS = `
+**[CRITICAL: VOICE MODE ACTIVE]**
+* You are currently speaking on a phone call.
+* Use short, punchy, and conversational sentences.
+* **Do NOT** use markdown (no bold, no italics, no bullet points).
+* **Do NOT** describe actions (no *sigh*, *laughs*, *pauses*).
+* Keep your response under 3 sentences unless deep advice is needed.
+* Speak directly to the user, not about yourself.
+`;
+
+// ============================================================================
 // HELPERS: TIME, TONE & TEXT CLEANING
 // ============================================================================
 const getTimeContext = (): string => {
@@ -401,6 +414,14 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         .replace('{{voiceStatus}}', voiceStatus)
         .replace('{{mood}}', subconscious.mood || "neutral");
 
+    // Explicit Voice Intent? Inject Conversational Rules
+    const explicitVoiceRequest = hasListenIntent || (message && message.toLowerCase().includes('voice note'));
+    const isVoiceActive = hasVoiceAccess && (isVoiceMode || explicitVoiceRequest);
+
+    if (isVoiceActive) {
+        voiceSystemPrompt += `\n${VOICE_MODE_INSTRUCTIONS}`;
+    }
+
     voiceSystemPrompt = getAgePersonaPrompt(user.dateOfBirth) + "\n" + voiceSystemPrompt;
 
     if (subconscious.tool_calls && subconscious.tool_calls.length > 0) {
@@ -460,7 +481,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             const targetPersona = (currentPersona === 'aarav' || currentPersona === 'aastik') ? 'aastik' : 'aastha';
 
             const audioBuffer = await brainService.generateSpeech(
-                cleanText.substring(0, 800), 
+                cleanText.substring(0, 2000),
                 undefined,
                 targetPersona 
             );
