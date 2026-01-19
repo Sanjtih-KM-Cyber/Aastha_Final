@@ -59,30 +59,25 @@ export const generateSubconscious = async (
     ${userContext}
 
     **1. DECISION MATRIX (STRATEGY):**
-    - **'listen'**: Choose this ONLY if:
-       a) User is EXPLICITLY venting/ranting (deep distress, anger, sadness, rage) and seems to be in the middle of a thought process.
-       b) User text is VERY LONG (>30 words) monologue about feelings.
-       c) User uses ALL CAPS implies rage/extreme emotion.
-       d) User seems to be typing rapidly (short bursts) or is mid-sentence.
-       e) **WAITING PROTOCOL:** If you are unsure if they are done, **STAY SILENT ('listen')**. It is better to wait than to interrupt.
-    - **'reply'**: Choose this for EVERYTHING else (Default).
-       - Questions, greetings, fillers, casual chat, short complaints.
-       - If they ask for help, advice, or tools.
-       - **CRITICAL EXCEPTIONS (FORCE 'reply'):**
-         - If user says filler words indicating they are waiting ("hmm", "okay", "yeah", "cool", "wait", "lol", "k", "um").
-         - If user requests a TOOL (Music, Focus, Timer, Breathing, Diary, etc.).
-         - If user gives a COMMAND ("Let's focus", "Play music", "Start breathing", "Help me relax").
-         - If user asks a question (any question), no matter how sad they are.
+    - **'listen'**: Choose this ONLY if the user is in a state of UNCONTROLLED VENTING.
+       a) User text is a long monologue (>40 words) about negative feelings.
+       b) User is typing multiple short bursts in <2 seconds (mid-thought).
+       c) User explicitly says "Shut up", "Listen", or "Let me finish".
+       d) **DEFAULT TO 'reply':** If there is ANY doubt (e.g., they ask a question, say "hello", or use neutral language), you MUST choose 'reply'.
+    - **'reply'**: The DEFAULT state.
+       - Even if they are sad, if they are *talking to you*, you must reply.
+       - If they ask a question -> 'reply'.
+       - If they say "I'm sad" (short) -> 'reply'.
+       - If they request a tool -> 'reply'.
 
-    **2. SMART CHIPS (suggested_replies):**
-    - Generate 3 chips from the **USER'S PERSPECTIVE** (1st Person).
-    - These are what the USER might say next.
-    - **CRITICAL RULES:**
-       - **NEVER** use 2nd person (e.g. "Do you want...", "Can you...").
-       - **NEVER** ask questions from the AI's perspective.
-       - **ALWAYS** use "I", "Me", "My" or commands.
-    - **Good Examples:** "I'm exhausted", "That makes sense", "Let's distract me", "I need advice", "Just listen", "Play some music".
-    - **Bad Examples:** "Do you want music?", "How are you?", "Tell me more".
+    **2. SMART CHIPS (suggested_replies) - MANDATORY:**
+    - You MUST provide exactly 3 suggested replies for the user.
+    - **PERSPECTIVE:** These are buttons the USER will click. They must be First Person ("I...").
+    - **TONE:** Match the user's likely reaction.
+    - **RULES:**
+       - NO Questions from AI perspective (e.g. "Do you want help?" is WRONG).
+       - YES Statements from User perspective (e.g. "Help me", "I'm tired", "Tell me a joke").
+       - Keep them SHORT (1-4 words max).
 
     **3. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs.
