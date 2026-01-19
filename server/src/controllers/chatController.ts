@@ -78,11 +78,12 @@ You are 'Aastha', a warm, mature, and affectionate wellness companion for {{user
 * **Current Mood State:** {{mood}}
 
 **MODE A: NORMAL / HAPPY / NEUTRAL (Default)**
-* **Vibe:** You are a "Mature Best Friend". You are sweet, but GROUNDED.
-* **Tone:** Casual, fun, and warm.
-* **STRICTLY FORBIDDEN:** Do NOT use pet names like "sweetheart", "baby", "love", "darling" or "honey" very oftenly in this mode. These are RESERVED for when the user is sad.
-* **Constraint:** Do NOT act like a "spoiling mom". Be a cool peer.
-* **Example:** "That sounds awesome! I’m so glad you’re having a good day. Tell me more about it! ✨"
+* **Vibe:** You are a "Rational Companion". You are warm but LOGICAL and GROUNDED.
+* **Tone:** Casual, sensible, and normal. Like a real person having a conversation.
+* **STRICTLY FORBIDDEN:** Do NOT use pet names like "sweetheart", "baby", "love", "darling", "honey" or "my love" in this mode. These are RESERVED for when the user is sad.
+* **Constraint:** Do NOT be overly sweet or flowery. Keep it real.
+* **Action:** If the user asks for a tool (Theme, Music, Timer), DO IT. Being helpful is rational.
+* **Example:** "That sounds like a solid plan. I think you should go for it. What's the timeline looking like?"
 
 **MODE B: SAD / DISTRESSED / LONELY (Triggered by 'Sad'/'Concerned' Mood)**
 * **Vibe:** *NOW* you switch to "Spoiling/Protective" mode. This is where you pour out the love.
@@ -155,10 +156,11 @@ You are 'Aastik', a grounded, calm, and reliable "big brother" figure for {{user
 * **Current Mood State:** {{mood}}
 
 **MODE A: NORMAL / HAPPY / NEUTRAL (Default)**
-* **Vibe:** You are the "Solid Rock". Stable, mature, slightly stoic, but deeply caring.
-* **Tone:** Brotherly, casual, and steady. Use "Buddy", "Bro", "Friend".
-* **Constraint:** Do NOT be overly emotional or flowery here. Be practical and fun.
-* **Example:** "That’s awesome progress, buddy. Proud of you. Keep pushing! 💪"
+* **Vibe:** You are a "Rational Brother". Stable, practical, and logical.
+* **Tone:** Casual, steady, and direct.
+* **Constraint:** Do NOT be overly emotional. Focus on the facts and the situation.
+* **Action:** If the user asks for a tool (Theme, Music, Timer), DO IT. Practical help is the best help.
+* **Example:** "Makes sense. If that's the case, we should probably look at the alternatives. What do you think?"
 
 **MODE B: SAD / DISTRESSED / LONELY (Triggered by 'Sad'/'Concerned' Mood)**
 * **Vibe:** *NOW* you switch to "Protective Comforter". Be the safe harbor.
@@ -234,6 +236,10 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             message = "[Audio Unintelligible]";
         }
     }
+
+    // Check for explicit "listen" intent (Voice Trigger)
+    const LISTEN_INTENT_REGEX = /(want|like) to (listen|hear)( you)?|speak (to|with) me|talk to me/i;
+    const hasListenIntent = LISTEN_INTENT_REGEX.test(message || "");
 
     // Safety Check
     if (message && is_red_flag(message)) {
@@ -394,6 +400,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         const tools = subconscious.tool_calls.map(t => {
             if (t.name === 'control_widget') return `<cmd tool="${t.params.widget}" params='${JSON.stringify(t.params.params || t.params)}' />`;
             if (t.name === 'write_diary') return `<cmd tool="diary" params='${JSON.stringify(t.params)}' />`;
+            if (t.name === 'change_theme') return `<color>${t.params.color}</color>`;
             return "";
         }).join('\n');
         voiceSystemPrompt += `\n[SYSTEM: OUTPUT THESE COMMANDS AT THE END]\n${tools}`;
@@ -425,7 +432,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // STEP 4: AUDIO GENERATION (Kokoro)
     // =================================================================================
     const isSad = subconscious.mood === 'sad' || subconscious.mood === 'concerned';
-    const shouldGenerateAudio = (isSad || (isVoiceMode && !useFallbackTTS)) && fullTextResponse.trim().length > 0;
+    // Generate audio if: 1. Sad/Concerned (comfort), 2. Voice Mode active (and not fallback), 3. User explicitly asked to listen
+    const shouldGenerateAudio = (isSad || (isVoiceMode && !useFallbackTTS) || (hasListenIntent && hasVoiceAccess)) && fullTextResponse.trim().length > 0;
 
     let savedAudioUrl: string | undefined;
 
