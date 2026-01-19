@@ -234,10 +234,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       } catch (e) { setIsDeleting(false); }
   };
 
-  const handleSubscribe = async () => {
+  // Generic Subscribe Function
+  const handleSubscribe = async (planType: 'pro' | 'voice' = 'pro') => {
       setIsProcessing(true);
       try {
-          const orderRes = await api.post('/users/create-order');
+          const endpoint = planType === 'voice' ? '/users/create-voice-order' : '/users/create-order';
+          const orderRes = await api.post(endpoint);
           const { orderId, keyId, amount } = orderRes.data;
 
           const options = {
@@ -245,7 +247,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
               amount: amount,
               currency: "INR",
               name: "Aastha Wellness",
-              description: "Early Bird Pro Access",
+              description: planType === 'voice' ? "3-Day Voice Pass" : "Early Bird Pro Access",
               image: "https://placehold.co/256?text=Aastha",
               order_id: orderId,
               handler: async (response: any) => {
@@ -253,11 +255,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                       const verifyRes = await api.post('/users/verify-payment', {
                           razorpay_order_id: response.razorpay_order_id,
                           razorpay_payment_id: response.razorpay_payment_id,
-                          razorpay_signature: response.razorpay_signature
+                          razorpay_signature: response.razorpay_signature,
+                          planType: planType // Pass plan type to verification
                       });
 
                       if (verifyRes.data.success) {
-                          alert("Welcome to the family! Pro Access Unlocked.");
+                          alert(verifyRes.data.message || "Access Unlocked.");
                           window.location.reload();
                       } else {
                           alert("Payment verification failed.");
@@ -449,7 +452,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                               <option value="30000">30 Seconds</option>
                               <option value="60000">1 Minute</option>
                               <option value="120000">2 Minutes</option>
-                              <option value="300000">5 Minutes</option>
+                              <option value="30000">5 Minutes</option>
                               <option value="600000">10 Minutes</option>
                           </select>
                       </div>
@@ -498,6 +501,19 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                   <section>
                       <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Membership Plan</h3>
 
+                      {/* --- VOICE PASS CARD (NEW) --- */}
+                      {!user?.isPro && (
+                          <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-500/10 to-indigo-500/10 border border-purple-500/30 relative overflow-hidden mb-6">
+                              <div className="absolute top-0 right-0 p-3 opacity-10"><Headphones size={64} /></div>
+                              <h2 className="text-2xl font-serif text-white mb-2">₹25 <span className="text-sm text-white/60 font-sans font-normal">/ 3 Days</span></h2>
+                              <p className="text-sm text-white/70 mb-4">Get unlimited High-Quality Voice Calls for 3 days. Perfect for a quick vent session.</p>
+
+                              <button onClick={() => handleSubscribe('voice')} disabled={isProcessing} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all border border-white/10 flex items-center justify-center gap-2">
+                                  {isProcessing ? <span className="animate-spin">⟳</span> : <><Headphones size={16} /> Get Voice Pass</>}
+                              </button>
+                          </div>
+                      )}
+
                       {user?.isPro ? (
                           <div className="p-6 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/30">
                               <div className="flex justify-between items-start mb-4">
@@ -524,7 +540,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                                   <div className="flex items-center gap-3 text-sm text-white/80"><Headphones size={16} className="text-violet-400"/> Voice Mode</div>
                               </div>
 
-                              <button onClick={handleSubscribe} disabled={isProcessing} className="w-full py-4 bg-white text-black font-bold rounded-xl hover:scale-[1.02] transition-transform shadow-[0_0_20px_rgba(255,255,255,0.3)] flex items-center justify-center gap-2">
+                              <button onClick={() => handleSubscribe('pro')} disabled={isProcessing} className="w-full py-4 bg-white text-black font-bold rounded-xl hover:scale-[1.02] transition-transform shadow-[0_0_20px_rgba(255,255,255,0.3)] flex items-center justify-center gap-2">
                                   {isProcessing ? <span className="animate-spin">⟳</span> : <><Sparkles size={18} className="text-amber-600" /> Unlock Pro Access</>}
                               </button>
                           </div>

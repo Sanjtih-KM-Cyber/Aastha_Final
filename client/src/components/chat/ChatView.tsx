@@ -1013,8 +1013,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              </div>
 
              <div className="shrink-0 flex items-center gap-3 justify-end z-20">
-                 {/* CREDITS INDICATOR (RESTORED FROM SNIPPET) */}
-                 <div className={`px-3 py-1.5 rounded-full backdrop-blur-xl border flex items-center gap-2 shadow-lg transition-colors ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
+                 {/* CREDITS INDICATOR (HIDDEN ON MOBILE) */}
+                 <div className={`hidden md:flex px-3 py-1.5 rounded-full backdrop-blur-xl border items-center gap-2 shadow-lg transition-colors ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
                     {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-gray-400" fill="currentColor" />}
                     <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-gray-400'}`}>
                         {!isStandardMode && localCredits > 100 ? '∞' : `${localCredits} Premium`}
