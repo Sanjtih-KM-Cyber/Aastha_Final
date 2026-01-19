@@ -401,6 +401,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     return `https://aastha-final.onrender.com/api${endpoint}`;
   };
 
+  // Helper to ensure we have a full URL for audio playback
+  const resolveAudioUrl = (path: string) => {
+      if (!path) return '';
+      if (path.startsWith('http') || path.startsWith('data:')) return path;
+      if (path.startsWith('/')) {
+          // Construct absolute URL based on API base
+          // Example: getApiUrl('') -> https://.../api
+          // path -> /api/ai/stream/...
+          // We need https://.../api/ai/stream/...
+          // If we append path to domain, we might double /api if path has it
+
+          const apiBase = getApiUrl(''); // e.g. https://domain.com/api
+          const domain = apiBase.replace(/\/api\/?$/, ''); // https://domain.com
+          return `${domain}${path}`;
+      }
+      return path;
+  };
+
   const startListening = () => { if (recognitionRef.current && !isListening) { try { setTranscript(''); recognitionRef.current.start(); } catch (e) { console.error("Speech start", e); } } };
   const stopListening = () => { if (recognitionRef.current && isListening) recognitionRef.current.stop(); };
   
@@ -707,7 +725,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         if (data.voice_note) {
                             setMessages(prev => prev.map(msg => {
                                 if (msg.id === tempBotId) {
-                                    return { ...msg, voice_note: data.voice_note };
+                                    // RESOLVE URL before saving to state
+                                    return { ...msg, voice_note: resolveAudioUrl(data.voice_note) };
                                 }
                                 return msg;
                             }));
@@ -716,8 +735,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         // D. HANDLE STREAMING AUDIO (AUTO-PLAY FOR CALL MODE)
                         if (data.voice_audio) {
                             serverAudioPlayed = true;
-                            // UPDATED: Use speakMessage to handle URL playback as requested
-                            speakMessage(data.voice_audio);
+                            // RESOLVE URL before playing
+                            const resolvedUrl = resolveAudioUrl(data.voice_audio);
+                            speakMessage(resolvedUrl);
                         }
 
                         // E. HANDLE CONTENT (THE VOICE)
@@ -809,7 +829,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const speakMessage = (textOrUrl: string) => {
     // 1. Detect if it's a URL (server audio)
     if (textOrUrl.startsWith('http') || textOrUrl.startsWith('/api/') || textOrUrl.startsWith('data:')) {
-        const audio = new Audio(textOrUrl);
+        // Double-check if relative path needs resolving (though handleSend usually does it)
+        const finalUrl = resolveAudioUrl(textOrUrl);
+        const audio = new Audio(finalUrl);
         audio.play().catch(e => console.error("Audio Play Error:", e));
         audio.onended = () => {
              if (isVoiceMode) setTimeout(() => startListening(), 500);
