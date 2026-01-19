@@ -86,6 +86,7 @@ export interface IUser extends Document {
   
   // Subscription
   subscriptionDate?: Date;
+  voiceTopUpExpires?: Date; // <--- NEW: Voice Only Top-up Expiry
   paymentHistory: IPaymentRecord[];
 
   // Verification
@@ -186,6 +187,7 @@ const userSchema = new Schema<IUser>({
   
   // Subscription
   subscriptionDate: { type: Date },
+  voiceTopUpExpires: { type: Date }, // <--- NEW
   paymentHistory: { type: [paymentRecordSchema], default: [] },
 
   // Verification

@@ -407,7 +407,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const toggleVoiceMode = () => {
     // @ts-ignore
     if (!window.SpeechRecognition && !window.webkitSpeechRecognition) { setError("Browser not supported."); return; }
-    if (isStandardMode) { alert("Voice Mode requires Premium."); return; }
+    // Remove Standard Mode check for Voice Mode to allow trial usage if implemented,
+    // but backend handles enforcement. Keeping frontend check is UX friendly though.
+    // However, since we now support "10 free messages with Voice", we should ALLOW it.
+    // if (isStandardMode) { alert("Voice Mode requires Premium."); return; } <--- REMOVED
 
     if (isVoiceMode) {
         stopListening();
@@ -561,7 +564,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     const nextState = [...updatedMessages, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
     setMessages(nextState.length > SLICE_LIMIT ? nextState.slice(nextState.length - SLICE_LIMIT) : nextState);
     
-    setInput(''); setAttachedImage(null); setShowEmojiPicker(false);
+    setInput(''); setAttachedImage(null); setShowEmojiPicker(false); setIsRecordingAudio(false);
     setIsTyping(true); 
     setError(null);
     setStatusDisplay('Thinking...'); 
@@ -589,7 +592,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             message: actualContent,
             images: overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []),
             audio: audioBase64,
-            forceReply: isPermissionGrant
+            forceReply: isPermissionGrant,
+            isVoiceMode: isVoiceMode // <--- Pass Voice Mode Flag
         }),
       });
 
@@ -609,6 +613,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       
       let aiContentRaw = '';
       let buffer = '';
+      let serverAudioPlayed = false; // Flag to prevent double speaking
 
       if (reader) {
         while (true) {
@@ -698,7 +703,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             }
                         }
 
-                        // C. HANDLE VOICE NOTE (AUDIO URL)
+                        // C. HANDLE VOICE NOTE (AUDIO URL - PERSISTENT)
                         if (data.voice_note) {
                             setMessages(prev => prev.map(msg => {
                                 if (msg.id === tempBotId) {
@@ -708,7 +713,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             }));
                         }
 
-                        // D. HANDLE CONTENT (THE VOICE)
+                        // D. HANDLE STREAMING AUDIO (AUTO-PLAY FOR CALL MODE)
+                        if (data.voice_audio) {
+                            serverAudioPlayed = true;
+                            const audio = new Audio(data.voice_audio);
+                            audio.play().catch(e => console.error("Audio Play Error:", e));
+                            audio.onended = () => {
+                                if (isVoiceMode) {
+                                    setTimeout(() => startListening(), 500); // Resume listening
+                                }
+                            };
+                        }
+
+                        // E. HANDLE CONTENT (THE VOICE)
                         if (data.content && !data.type) { 
                             aiContentRaw += data.content;
                             const cleanContent = processMagicTags(aiContentRaw);
@@ -726,7 +743,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
       
       const cleanFinal = processMagicTags(aiContentRaw);
-      if ((isVoiceMode || ttsEnabled) && aiContentRaw) speakMessage(cleanFinal);
+      // Play Browser TTS only if server audio wasn't played AND (Voice Mode active OR TTS enabled)
+      if ((isVoiceMode || ttsEnabled) && aiContentRaw && !serverAudioPlayed) {
+          speakMessage(cleanFinal);
+      }
 
     } catch (error: any) {
       console.error(error);

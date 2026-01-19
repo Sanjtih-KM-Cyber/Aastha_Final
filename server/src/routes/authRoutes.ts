@@ -15,9 +15,11 @@ import {
   upgradeToPro,
   verifyOTP,
   resendOTP,
-  completeOnboarding
+  completeOnboarding,
+  uploadPersonaVoice,
+  uploadPersonaScreenshot
 } from '../controllers/authController';
-import { createOrder, verifyPayment } from '../controllers/paymentController';
+import { createOrder, verifyPayment, createVoiceOrder } from '../controllers/paymentController';
 import { protect } from '../middleware/authMiddleware';
 
 const router = express.Router();
@@ -35,8 +37,13 @@ router.put('/profile', protect, updateProfile);
 
 // Payment / pro
 router.post('/create-order', protect, createOrder);
+router.post('/create-voice-order', protect, createVoiceOrder);
 router.post('/verify-payment', protect, verifyPayment);
 router.post('/upgrade', protect, upgradeToPro);
+
+// Persona Uploads (New)
+router.post('/persona-voice', protect, uploadPersonaVoice);
+router.post('/persona-screenshot', protect, uploadPersonaScreenshot);
 
 // Account management
 router.post('/delete-account', protect, softDeleteUser);
