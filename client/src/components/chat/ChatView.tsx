@@ -3,7 +3,7 @@ import {
   Send, Menu, Headphones, AlertCircle, Smile, 
   Mic, MicOff, X, Search, Image as ImageIcon, Plus, Camera,
   ShieldAlert, Loader2, ChevronDown, Reply, Check, ArrowDown,
-  UserPlus, Play, Pause, Lock, Zap, Settings
+  UserPlus, Play, Pause, Lock, Zap, Leaf
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
@@ -118,42 +118,7 @@ const mapColorToTheme = (colorName: string): string => {
     return 'aurora';
 };
 
-// --- AUDIO RECORDER ---
-const AudioRecorder: React.FC<{ onSend: (blob: Blob) => void; onCancel: () => void }> = ({ onSend, onCancel }) => {
-    const [isRecording, setIsRecording] = useState(true);
-    const mediaRecorder = useRef<MediaRecorder | null>(null);
-    const chunks = useRef<Blob[]>([]);
-
-    useEffect(() => {
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-            const recorder = new MediaRecorder(stream);
-            mediaRecorder.current = recorder;
-            recorder.ondataavailable = (e) => chunks.current.push(e.data);
-            recorder.onstop = () => {
-                const blob = new Blob(chunks.current, { type: 'audio/m4a' }); // Or webm/mp3
-                onSend(blob);
-                stream.getTracks().forEach(track => track.stop());
-            };
-            recorder.start();
-        });
-    }, [onSend]);
-
-    const stop = () => {
-        if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
-            setIsRecording(false);
-            mediaRecorder.current.stop();
-        }
-    };
-
-    return (
-        <div className="flex items-center gap-4 bg-red-500/10 px-4 py-2 rounded-full border border-red-500/30 w-full animate-pulse">
-            <div className="w-3 h-3 rounded-full bg-red-500 animate-ping" />
-            <span className="text-red-300 text-sm font-medium flex-1">Recording Voice Note...</span>
-            <button onClick={onCancel} className="p-2 bg-white/10 rounded-full text-white/70 hover:bg-white/20"><X size={16} /></button>
-            <button onClick={stop} className="p-2 bg-red-500 rounded-full text-white hover:bg-red-600"><Check size={16} /></button>
-        </div>
-    );
-};
+const EMOJIS = ['😊', '🌿', '☁️', '✨', '💜', '🌧️', '🎵', '🧘‍♀️', '🌸', '☕', '🌙', '💪', '🤔', '🔥', '👀', '🫂'];
 
 export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false, currentActivity = 'Online' }) => {
   const { user } = useAuth();
@@ -220,7 +185,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   
   // --- CLONE MODE & VOICE INPUT ---
   const [isCloneMode, setIsCloneMode] = useState(false);
-  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [cloneUploadVisible, setCloneUploadVisible] = useState(false);
 
   // --- SETTINGS STATE ---
@@ -401,12 +365,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
            currentText += event.results[i][0].transcript;
         }
         if (isDictating) {
+            // Dictation Mode (Frontend STT)
             const isFinal = event.results[event.results.length - 1].isFinal;
             if (isFinal) {
                 setInput(prev => prev + (prev.length > 0 ? ' ' : '') + currentText);
                 autoResizeTextarea();
             }
         } else {
+            // Voice Mode (Conversational)
             setTranscript(currentText);
             if (currentText.trim().length > 0) {
                 if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -466,9 +432,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const toggleDictation = () => {
       // @ts-ignore
       if (!window.SpeechRecognition && !window.webkitSpeechRecognition) { setError("Dictation not supported."); return; }
-      if (isDictating) { recognitionRef.current?.stop(); setIsDictating(false); } else {
-          if (isVoiceMode) { setIsVoiceMode(false); setIsDictating(true); return; }
-          try { recognitionRef.current?.start(); setIsDictating(true); } catch(e) {}
+      if (isDictating) {
+          recognitionRef.current?.stop();
+          setIsDictating(false);
+      } else {
+          if (isVoiceMode) { setIsVoiceMode(false); }
+          try {
+              recognitionRef.current?.start();
+              setIsDictating(true);
+          } catch(e) {}
       }
   };
 
@@ -589,7 +561,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     const nextState = [...updatedMessages, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
     setMessages(nextState.length > SLICE_LIMIT ? nextState.slice(nextState.length - SLICE_LIMIT) : nextState);
     
-    setInput(''); setAttachedImage(null); setShowEmojiPicker(false); setIsRecordingAudio(false);
+    setInput(''); setAttachedImage(null); setShowEmojiPicker(false);
     setIsTyping(true); 
     setError(null);
     setStatusDisplay('Thinking...'); 
@@ -938,7 +910,27 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          </div>
       )}
 
-      {/* SETTINGS PANEL */}
+      {/* FULL SCREEN VOICE MODE OVERLAY */}
+      <AnimatePresence>
+        {isVoiceMode && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/90 backdrop-blur-3xl flex flex-col items-center justify-center">
+              <button onClick={toggleVoiceMode} className="absolute top-8 right-8 text-white/50 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors"><X size={24} /></button>
+              <div className="relative mb-12">
+                 <motion.div animate={{ scale: isListening ? [1, 1.4, 1] : 1, opacity: isListening ? [0.4, 0.8, 0.4] : 0.2 }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }} className="absolute inset-0 rounded-full blur-3xl" style={{ backgroundColor: currentTheme.primaryColor }} />
+                 <div className="w-48 h-48 rounded-full border border-white/10 bg-black/50 backdrop-blur-2xl relative z-10 flex items-center justify-center">
+                     <Headphones size={64} className={isListening ? "text-white" : "text-white/30"} />
+                 </div>
+              </div>
+              <h3 className="text-3xl font-serif text-white mb-6">{isListening ? "Listening..." : "Thinking..."}</h3>
+              <p className="text-white/50 text-lg max-w-lg text-center px-4 min-h-[3rem]">{transcript || "..."}</p>
+              <button onClick={isListening ? stopListening : startListening} className="mt-12 p-6 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
+                 {isListening ? <Mic size={32} /> : <MicOff size={32} className="text-red-400" />}
+              </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* SETTINGS PANEL (Keep component, but remove trigger button from header) */}
       <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
       {/* THOUGHT CLOUD MODAL */}
@@ -1001,6 +993,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              </div>
 
              <div className="shrink-0 flex items-center gap-3 justify-end z-20">
+                 {/* CREDITS INDICATOR (RESTORED FROM SNIPPET) */}
+                 <div className={`px-3 py-1.5 rounded-full backdrop-blur-xl border flex items-center gap-2 shadow-lg transition-colors ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
+                    {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-gray-400" fill="currentColor" />}
+                    <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-gray-400'}`}>
+                        {!isStandardMode && localCredits > 100 ? '∞' : `${localCredits} Premium`}
+                    </span>
+                 </div>
+
                  {/* HEADPHONE ICON (CALL MODE) - RESTORED */}
                  <button onClick={() => toggleVoiceMode()} className={`shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center transition-all shadow-lg ${isVoiceMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-black/20 text-white/70 hover:bg-white/10 hover:text-white'}`}>
                     <Headphones size={18} />
@@ -1043,10 +1043,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      )}
                  </motion.div>
 
-                 {/* SETTINGS BUTTON */}
-                 <button onClick={() => setShowSettings(true)} className="shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg bg-black/20 hover:bg-white/10">
-                    <Settings size={18} />
-                 </button>
+                 {/* SETTINGS BUTTON REMOVED AS REQUESTED */}
              </div>
           </div>
       </div>
@@ -1151,57 +1148,28 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                      </div>
                  )}
 
-                 {/* RECORDING OVERLAY */}
-                 {isRecordingAudio ? (
+                 {/* RECORDING OVERLAY (KEEP AS FALLBACK IF isRecordingAudio TRIGGERED BY OTHER MEANS, BUT MIC BTN NOW DOES DICTATION) */}
+                 {false ? ( // DISABLED FOR NOW IN FAVOR OF DICTATION FLOW FROM SNIPPET
                     <AudioRecorder onSend={(blob) => handleSend(undefined, undefined, undefined, blob)} onCancel={() => setIsRecordingAudio(false)} />
                  ) : (
                     <>
                     <div className="flex items-center gap-1 relative">
                         {/* UNIFIED MEDIA BUTTON */}
-                        {isMobile ? (
-                            <div className="relative">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowMediaMenu(!showMediaMenu)}
-                                    disabled={isStandardMode}
-                                    className={`p-2.5 rounded-full transition-all ${showMediaMenu || attachedImage ? 'bg-white/10 text-white rotate-45' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
-                                >
-                                    <Plus size={22} />
-                                </button>
-                                <AnimatePresence>
-                                    {showMediaMenu && (
-                                        <motion.div
-                                            initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                                            exit={{ opacity: 0, scale: 0.8, y: 10 }}
-                                            className="fixed bottom-24 left-6 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden min-w-[160px] z-[100] flex flex-col p-1.5"
-                                        >
-                                            <button onClick={() => { cameraInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
-                                                <div className="w-8 h-8 rounded-full bg-teal-500/20 flex items-center justify-center"><Camera size={16} className="text-teal-400" /></div> Camera
-                                            </button>
-                                            <button onClick={() => { fileInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
-                                                <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center"><ImageIcon size={16} className="text-violet-400" /></div> Gallery
-                                            </button>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isStandardMode}
-                                className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
-                            >
-                                <ImageIcon size={20} />
-                            </button>
-                        )}
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isStandardMode}
+                            className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                        >
+                            <ImageIcon size={20} />
+                        </button>
 
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
                         <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
 
-                        <button onClick={() => setIsRecordingAudio(true)} className="p-2.5 rounded-full transition-all text-white/40 hover:bg-white/5 hover:text-white">
-                            <Mic size={20} />
+                        {/* DICTATION MIC (UPDATED) */}
+                        <button onClick={toggleDictation} className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>
+                            {isDictating ? <MicOff size={20} /> : <Mic size={20} />}
                         </button>
                     </div>
 
