@@ -7,7 +7,7 @@ import { brainService } from '../services/brainService';
 import User from '../models/User';
 import Chat from '../models/Chat';
 import { encrypt, decrypt } from '../utils/serverEncryption';
-import { storeAudio } from './audioController'; // NEW
+import { storeAudio } from './audioController';
 
 // --- CRITICAL SAFETY SYSTEM ---
 const RED_FLAG_KEYWORDS = [
@@ -213,9 +213,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         return (res as any).json({ meta: { warning: "Safety Alert" }, content: EMERGENCY_RESPONSE });
     }
 
-    // 1. Daily Reset Logic is handled in Middleware but ensure consistency
-
-    // 2. History Retrieval
+    // 1. History Retrieval
     let chatSession = await Chat.findOne({ user: userId });
     if (!chatSession) chatSession = await Chat.create({ user: userId, messages: [] });
 
@@ -228,7 +226,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         content: decrypt(m.content)
     }));
 
-    // Inject Session Marker to break "Listening Mode" bias
     if (isNewSession) {
         historyWindow.push({ role: 'system', content: "[SYSTEM: NEW SESSION STARTED. PREVIOUS CONTEXT IS OLD. RESET ANY LISTENING MODES. IF USER GREETS, REPLY NORMALLY.]" });
     }
@@ -242,19 +239,20 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     // =================================================================================
-    // BRANCH: CLONE MODE
+    // BRANCH: CLONE MODE (CHAT IMITATION)
     // =================================================================================
     if (message === 'ACTIVATE_CLONE_MODE' && images && images.length > 0) {
+        // CHECK LIMIT (Included in daily 10 credits)
         if (!user.isPro && (user.dailyPremiumUsage || 0) >= 10) {
              (res as any).write(`data: ${JSON.stringify({
                  meta: { limitReached: true },
-                 content: "🔒 **Daily Limit Reached.**\n\nTo unlock Clone Mode and unlimited chats, [Upgrade to Premium]."
+                 content: "🔒 **Daily Limit Reached.**\n\nClone Mode uses your daily credits. [Upgrade to Premium] for unlimited use."
              })}\n\n`);
              (res as any).write('data: [DONE]\n\n');
              (res as any).end();
              return;
         }
-        // ... (Existing Clone Mode Activation Logic) ...
+
         try {
             const personaPrompt = await analyzeScreenshot(images[0]);
             user.cloneMode = { isActive: true, targetPersona: personaPrompt, usageCount: 0, lastActive: new Date() };
@@ -275,25 +273,33 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         }
     }
     
+    // IF CLONE MODE IS ACTIVE
     if (user.cloneMode && user.cloneMode.isActive) {
-        if (!user.isPro && ((user.dailyPremiumUsage || 0) >= 10 || user.cloneMode.usageCount >= 10)) {
+        // STRICT LIMIT CHECK
+        if (!user.isPro && (user.dailyPremiumUsage || 0) >= 10) {
              (res as any).write(`data: ${JSON.stringify({
                  meta: { limitReached: true },
-                 content: "🔒 **Trial Ended.**\n\n[Upgrade to Premium] to keep chatting in this vibe."
+                 content: "🔒 **Daily Limit Reached.**\n\n[Upgrade to Premium] to continue chatting in this vibe."
              })}\n\n`);
              (res as any).write('data: [DONE]\n\n');
              (res as any).end();
+             
+             // Auto-disable to prevent getting stuck
              user.cloneMode.isActive = false;
              await user.save();
              return;
         }
+
         const cloneResponse = await generateCloneResponse(
             [...historyWindow, { role: 'user', content: newUserMsgContent }],
             user.cloneMode.targetPersona
         );
-        user.cloneMode.usageCount += 1;
+
+        // INCREMENT USAGE
         user.dailyPremiumUsage = (user.dailyPremiumUsage || 0) + 1;
+        user.cloneMode.usageCount += 1;
         await user.save();
+
         chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
         chatSession.messages.push({ role: 'assistant', content: encrypt(cloneResponse), timestamp: new Date() });
         await chatSession.save();
@@ -304,7 +310,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     // =================================================================================
-    // STEP 1: THE BRAIN (Groq)
+    // STEP 1: THE BRAIN (Standard Chat)
     // =================================================================================
     const userContextString = `User: ${userName}, Mood: ${user.moodStatus}, Facts: ${user.facts.join(', ')}`;
     const brainHistory: ChatMessage[] = [...historyWindow, { role: 'user', content: newUserMsgContent }];
@@ -326,20 +332,21 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     await user.save();
 
     // =================================================================================
-    // STEP 3: THE VOICE (Generation)
+    // STEP 3: THE VOICE (Usage & Generation)
     // =================================================================================
     let provider = 'GEMINI';
     const dailyLimit = 10;
 
-    // Check Voice Top-up
+    // Check Voice/Premium Quota
     const hasVoiceTopUp = user.voiceTopUpExpires && new Date(user.voiceTopUpExpires) > new Date();
+    // If not pro, and no topup, and usage >= 10 -> NO VOICE ACCESS
     const hasVoiceAccess = user.isPro || hasVoiceTopUp || (user.dailyPremiumUsage || 0) < dailyLimit;
 
-    // Force GROQ fallback if strictly limited and not Voice Mode (Voice Mode handled below)
     if (!hasVoiceAccess) {
-        provider = 'GROQ';
+        provider = 'GROQ'; // Fallback to cheaper model if quota exceeded
     }
 
+    // Increment Usage for Free Users
     if (!user.isPro && !hasVoiceTopUp) {
         user.dailyPremiumUsage = (user.dailyPremiumUsage || 0) + 1;
         user.lastUsageDate = new Date();
@@ -347,16 +354,16 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     // --- VOICE MODE OVERRIDE (Call Mode) ---
-    // If isVoiceMode is TRUE, we prioritize Kokoro generation if quota allows.
-    // If quota exceeded, we send a flag to fallback to browser TTS.
     let useFallbackTTS = false;
+    // If user wants voice mode but has no credits -> Force Browser TTS
     if (isVoiceMode && !hasVoiceAccess) {
         useFallbackTTS = true;
     }
 
     // Prepare System Prompt
-    const currentPersona = user.persona as string;
+    const currentPersona = user.persona as string; // 'aastha' or 'aarav'/'aastik'
     let baseTemplate = (currentPersona === 'aarav' || currentPersona === 'aastik') ? AASTIK_PROMPT : AASTHA_PROMPT;
+    
     let voiceSystemPrompt = baseTemplate
         .replace('{{userName}}', userName || 'Friend')
         .replace('{{subconsciousContext}}', JSON.stringify(subconscious.internal_monologue))
@@ -382,7 +389,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             model: provider === 'GEMINI' ? 'Gemini 2.5 Flash' : 'Llama 3.3',
             battery: user.socialBattery,
             limitReached: !hasVoiceAccess,
-            use_fallback_tts: useFallbackTTS // Instruct Frontend to use Browser TTS
+            use_fallback_tts: useFallbackTTS 
         } 
     })}\n\n`);
 
@@ -401,32 +408,28 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
     // STEP 4: AUDIO GENERATION (Kokoro)
     // =================================================================================
-    // Triggers:
-    // 1. Sad/Low Mood (Voice Note)
-    // 2. Call Mode (isVoiceMode == true) AND Access Granted
-
     const isSad = subconscious.mood === 'sad' || subconscious.mood === 'concerned';
     const shouldGenerateAudio = (isSad || (isVoiceMode && !useFallbackTTS)) && fullTextResponse.trim().length > 0;
 
     if (shouldGenerateAudio) {
         const cleanText = fullTextResponse.replace(/<[^>]*>/g, '').replace(/\[.*?\]/g, '');
         try {
-            // Limit text length to prevent timeouts (approx 1 min speech)
-            const audioBuffer = await brainService.generateSpeech(cleanText.substring(0, 800));
+            // [CRITICAL FIX] Pass the correct PERSONA to brainService
+            // If user's persona is 'aarav' or 'aastik', we send 'aastik' (Male). Else 'aastha' (Female).
+            const targetPersona = (currentPersona === 'aarav' || currentPersona === 'aastik') ? 'aastik' : 'aastha';
+
+            const audioBuffer = await brainService.generateSpeech(
+                cleanText.substring(0, 800), 
+                undefined, // No cloning sample for standard chat
+                targetPersona // <--- THIS TELLS PYTHON WHICH VOICE TO USE
+            );
+
             if (audioBuffer) {
-                // FIXED: Store Audio in memory and send streaming URL instead of massive Base64
-                // This prevents truncation in SSE and allows raw byte serving (as requested by user)
                 const audioId = `vn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
                 storeAudio(audioId, audioBuffer);
-
-                // Construct relative URL for the proxy endpoint
                 const audioUrl = `/api/ai/stream/${audioId}`;
 
-                // Send specific event type
-                const eventPayload: any = { voice_audio: audioUrl };
-                // ALWAYS send voice_note (bubble) if audio is generated, so it is visible/playable on mobile
-                eventPayload.voice_note = audioUrl;
-
+                const eventPayload: any = { voice_audio: audioUrl, voice_note: audioUrl };
                 (res as any).write(`data: ${JSON.stringify(eventPayload)}\n\n`);
             }
         } catch (e) {
