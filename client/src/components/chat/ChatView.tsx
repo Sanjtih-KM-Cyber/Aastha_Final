@@ -271,7 +271,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              if (isMounted) {
                  if (Array.isArray(res.data) && res.data.length > 0) {
                      // Performance: Slice to last 50 messages initially
-                     const history = res.data;
+                     // [FIX] Map through history to resolve any relative audio URLs
+                     const history = res.data.map((msg: any) => ({
+                         ...msg,
+                         voice_note: msg.voice_note ? resolveAudioUrl(msg.voice_note) : undefined
+                     }));
                      setMessages(history.slice(-50));
                  } else {
                      setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. How can I support you right now?`, timestamp: Date.now() }]);

@@ -69,10 +69,10 @@ const AASTHA_PROMPT = `
 You are 'Aastha', a warm, mature, and affectionate wellness companion for {{userName}}.
 
 **[IMPORTANT: VOICE CAPABILITY AWARENESS]**
-* **You HAVE a voice.** When you reply, the user **HEARS** you speak.
-* **NEVER** say "I cannot speak", "I am text-based", or "I have no vocal cords".
-* Speak naturally, as if you are on a phone call.
-* If the user asks to hear you, say "I'm speaking right now, my love."
+* **You DO have a voice.** The user will **HEAR** your response as audio.
+* **DO NOT** say "I cannot speak" or "I am text-based".
+* If the user asks you to speak or send a voice note, just reply naturally. Your text is automatically converted to speech.
+* **Voice Credits:** {{voiceStatus}}
 
 **[1. THE SOUL - PERSONALITY & MOOD DYNAMICS]**
 * **Current Mood State:** {{mood}}
@@ -148,9 +148,10 @@ const AASTIK_PROMPT = `
 You are 'Aastik', a grounded, calm, and reliable "big brother" figure for {{userName}}.
 
 **[IMPORTANT: VOICE CAPABILITY AWARENESS]**
-* **You HAVE a voice.** When you reply, the user **HEARS** you speak.
-* **NEVER** say "I cannot speak", "I am text-based", or "I have no vocal cords".
-* Speak naturally, as if you are on a phone call.
+* **You DO have a voice.** The user will **HEAR** your response as audio.
+* **DO NOT** say "I cannot speak" or "I am text-based".
+* If the user asks you to speak or send a voice note, just reply naturally. Your text is automatically converted to speech.
+* **Voice Credits:** {{voiceStatus}}
 
 **[1. THE SOUL - PERSONALITY & MOOD DYNAMICS]**
 * **Current Mood State:** {{mood}}
@@ -386,12 +387,18 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     const currentPersona = user.persona as string;
     let baseTemplate = (currentPersona === 'aarav' || currentPersona === 'aastik') ? AASTIK_PROMPT : AASTHA_PROMPT;
     
+    // Voice Status Logic for Prompt
+    const voiceStatus = hasVoiceAccess
+        ? "Active (You are speaking)"
+        : "Depleted (You can only text today. Apologize if asked to speak.)";
+
     let voiceSystemPrompt = baseTemplate
         .replace('{{userName}}', userName || 'Friend')
         .replace('{{subconsciousContext}}', JSON.stringify(subconscious.internal_monologue))
         .replace('{{userFacts}}', user.facts.join(', ') || "No facts yet.")
         .replace('{{timeContext}}', getTimeContext())
         .replace('{{toneFlavor}}', getToneFlavor())
+        .replace('{{voiceStatus}}', voiceStatus)
         .replace('{{mood}}', subconscious.mood || "neutral");
 
     voiceSystemPrompt = getAgePersonaPrompt(user.dateOfBirth) + "\n" + voiceSystemPrompt;
@@ -432,8 +439,16 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // STEP 4: AUDIO GENERATION (Kokoro)
     // =================================================================================
     const isSad = subconscious.mood === 'sad' || subconscious.mood === 'concerned';
-    // Generate audio if: 1. Sad/Concerned (comfort), 2. Voice Mode active (and not fallback), 3. User explicitly asked to listen
-    const shouldGenerateAudio = (isSad || (isVoiceMode && !useFallbackTTS) || (hasListenIntent && hasVoiceAccess)) && fullTextResponse.trim().length > 0;
+
+    // Explicit "Send Voice" intent override
+    const explicitVoiceRequest = hasListenIntent || (message && message.toLowerCase().includes('voice note'));
+
+    // Generate audio if:
+    // 1. User has access AND (Sad OR VoiceMode OR Explicit Request)
+    // 2. Text is valid
+    const shouldGenerateAudio = hasVoiceAccess &&
+                                (isSad || (isVoiceMode && !useFallbackTTS) || explicitVoiceRequest) &&
+                                fullTextResponse.trim().length > 0;
 
     let savedAudioUrl: string | undefined;
 
@@ -453,10 +468,16 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             if (audioBuffer) {
                 const audioId = `vn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
                 storeAudio(audioId, audioBuffer);
+
+                // Construct URL - ensure it's relative as per MessageBubble expectations
                 const audioUrl = `/api/ai/stream/${audioId}`;
                 savedAudioUrl = audioUrl;
+
+                // Send SSE Event
                 const eventPayload: any = { voice_audio: audioUrl, voice_note: audioUrl };
                 (res as any).write(`data: ${JSON.stringify(eventPayload)}\n\n`);
+            } else {
+                console.warn("Brain Service returned null audio buffer.");
             }
         } catch (e) {
             console.error("Audio Gen Failed:", e);
