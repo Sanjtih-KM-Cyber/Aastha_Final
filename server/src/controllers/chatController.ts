@@ -427,6 +427,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     const isSad = subconscious.mood === 'sad' || subconscious.mood === 'concerned';
     const shouldGenerateAudio = (isSad || (isVoiceMode && !useFallbackTTS)) && fullTextResponse.trim().length > 0;
 
+    let savedAudioUrl: string | undefined;
+
     if (shouldGenerateAudio) {
         // [UPDATED] Use cleanTextForTTS to strip emojis and asterisks
         const cleanText = cleanTextForTTS(fullTextResponse);
@@ -444,6 +446,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                 const audioId = `vn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
                 storeAudio(audioId, audioBuffer);
                 const audioUrl = `/api/ai/stream/${audioId}`;
+                savedAudioUrl = audioUrl;
                 const eventPayload: any = { voice_audio: audioUrl, voice_note: audioUrl };
                 (res as any).write(`data: ${JSON.stringify(eventPayload)}\n\n`);
             }
@@ -456,7 +459,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // STEP 5: SAVE
     // =================================================================================
     chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
-    chatSession.messages.push({ role: 'assistant', content: encrypt(fullTextResponse), timestamp: new Date() });
+    chatSession.messages.push({ role: 'assistant', content: encrypt(fullTextResponse), timestamp: new Date(), voice_note: savedAudioUrl });
     await chatSession.save();
 
     if (chatSession.messages.length % 5 === 0) {
@@ -492,7 +495,8 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
         const history = chatSession.messages.map(m => ({
             role: m.role,
             content: decrypt(m.content),
-            timestamp: m.timestamp
+            timestamp: m.timestamp,
+            voice_note: m.voice_note
         }));
         (res as any).json(history);
     } catch (error) {

@@ -4,6 +4,7 @@ export interface IMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  voice_note?: string;
 }
 
 export interface IChat extends Document {
@@ -16,7 +17,8 @@ export interface IChat extends Document {
 const messageSchema = new Schema<IMessage>({
   role: { type: String, required: true, enum: ['user', 'assistant'] },
   content: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now }
+  timestamp: { type: Date, default: Date.now },
+  voice_note: { type: String }
 });
 
 const chatSchema = new Schema<IChat>({
