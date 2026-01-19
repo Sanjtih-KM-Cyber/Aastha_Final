@@ -77,7 +77,7 @@ export const generateSubconscious = async (
     - **RULES:**
        - NO Questions from AI perspective (e.g. "Do you want help?" is WRONG).
        - YES Statements from User perspective (e.g. "Help me", "I'm tired", "Tell me a joke").
-       - Keep them SHORT (1-4 words max).
+       - **LENGTH:** Natural and conversational (e.g. "That sounds interesting", "Tell me more about it", "I'm actually feeling great"). Do NOT force them to be 1 word.
 
     **3. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs.
