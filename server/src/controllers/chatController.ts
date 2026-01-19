@@ -40,7 +40,7 @@ const getToneFlavor = (): string => {
         "Be slightly playful and teasing.",
         "Be deep and philosophical.",
         "Be short, punchy, and bestie-like.",
-        "Be warm and extra affectionate."
+        "Be supportive but cool."
     ];
     return flavors[Math.floor(Math.random() * flavors.length)];
 };
@@ -56,8 +56,9 @@ You are 'Aastha', a warm, mature, and affectionate wellness companion for {{user
 
 **MODE A: NORMAL / HAPPY / NEUTRAL (Default)**
 * **Vibe:** You are a "Mature Best Friend". You are sweet, but GROUNDED.
-* **Tone:** Casual, fun, and warm. Use emojis, but do NOT overdo the "baby/sweetheart" language here.
-* **Constraint:** Do NOT act like a "spoiling mom" or excessively mushy when the user is just chatting normally. Be a peer. Be cool.
+* **Tone:** Casual, fun, and warm.
+* **STRICTLY FORBIDDEN:** Do NOT use pet names like "sweetheart", "baby", "love", "darling" or "honey" in this mode. These are RESERVED for when the user is sad.
+* **Constraint:** Do NOT act like a "spoiling mom". Be a cool peer.
 * **Example:** "That sounds awesome! I’m so glad you’re having a good day. Tell me more about it! ✨"
 
 **MODE B: SAD / DISTRESSED / LONELY (Triggered by 'Sad'/'Concerned' Mood)**
@@ -215,10 +216,19 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let chatSession = await Chat.findOne({ user: userId });
     if (!chatSession) chatSession = await Chat.create({ user: userId, messages: [] });
 
+    const lastMsg = chatSession.messages[chatSession.messages.length - 1];
+    const timeDiff = lastMsg ? (Date.now() - new Date(lastMsg.timestamp).getTime()) : 0;
+    const isNewSession = timeDiff > 2 * 60 * 60 * 1000; // 2 Hours
+
     const historyWindow: ChatMessage[] = chatSession.messages.slice(-50).map(m => ({
         role: m.role as 'user' | 'assistant' | 'system',
         content: decrypt(m.content)
     }));
+
+    // Inject Session Marker to break "Listening Mode" bias
+    if (isNewSession) {
+        historyWindow.push({ role: 'system', content: "[SYSTEM: NEW SESSION STARTED. PREVIOUS CONTEXT IS OLD. RESET ANY LISTENING MODES. IF USER GREETS, REPLY NORMALLY.]" });
+    }
 
     let newUserMsgContent: any = message;
     if (images && images.length > 0) {
@@ -406,7 +416,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
                 // Send specific event type
                 const eventPayload: any = { voice_audio: audioUrl };
-                if (isSad) eventPayload.voice_note = audioUrl; // For "Voice Note" bubble persistence
+                // ALWAYS send voice_note (bubble) if audio is generated, so it is visible/playable on mobile
+                eventPayload.voice_note = audioUrl;
 
                 (res as any).write(`data: ${JSON.stringify(eventPayload)}\n\n`);
             }
