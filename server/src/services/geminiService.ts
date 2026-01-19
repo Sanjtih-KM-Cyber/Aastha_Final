@@ -77,87 +77,82 @@ export async function* streamGemini(
     isPro: boolean,
     maxTokens?: number
 ) {
-  const modelName = 'gemini-2.5-flash'; // Use stable version
-  try {
-    const client = getGeminiClient(isPro);
+  // KEPT AS REQUESTED
+  const modelName = 'gemini-2.5-flash'; 
 
-    // Pass systemInstruction to getGenerativeModel instead of startChat to avoid 400 Bad Request in v1beta/newer SDKs
-    const model = client.getGenerativeModel({
-        model: modelName,
-        systemInstruction: systemPrompt
-    });
+  // --- CRITICAL FIX: Removed try/catch so errors bubble up to controller ---
+  const client = getGeminiClient(isPro);
 
-    // Transform history to Gemini format (Sanitized)
-    // 1. Remove system messages
-    // 2. Map roles
-    let rawHistory = history.filter(m => m.role !== 'system').map(m => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }]
-    }));
+  // Pass systemInstruction to getGenerativeModel instead of startChat to avoid 400 Bad Request in v1beta/newer SDKs
+  const model = client.getGenerativeModel({
+      model: modelName,
+      systemInstruction: systemPrompt
+  });
 
-    // 3. Merge Consecutive Roles (Gemini Strictness: User -> Model -> User)
-    // If we have User, User, Model -> Merge User, User
-    let mergedHistory: typeof rawHistory = [];
-    if (rawHistory.length > 0) {
-        mergedHistory.push(rawHistory[0]);
-        for (let i = 1; i < rawHistory.length; i++) {
-            const prev = mergedHistory[mergedHistory.length - 1];
-            const curr = rawHistory[i];
-            if (prev.role === curr.role) {
-                prev.parts[0].text += "\n\n" + curr.parts[0].text;
-            } else {
-                mergedHistory.push(curr);
-            }
-        }
-    }
+  // Transform history to Gemini format (Sanitized)
+  // 1. Remove system messages
+  // 2. Map roles
+  let rawHistory = history.filter(m => m.role !== 'system').map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }]
+  }));
 
-    // 4. Ensure History Starts with USER
-    // If first message is 'model', we must prepend a dummy user message or remove it.
-    // Removing it deletes the greeting context. Prepending is safer for context.
-    if (mergedHistory.length > 0 && mergedHistory[0].role === 'model') {
-        mergedHistory.unshift({
-            role: 'user',
-            parts: [{ text: "(Session Start)" }]
-        });
-    }
+  // 3. Merge Consecutive Roles (Gemini Strictness: User -> Model -> User)
+  // If we have User, User, Model -> Merge User, User
+  let mergedHistory: typeof rawHistory = [];
+  if (rawHistory.length > 0) {
+      mergedHistory.push(rawHistory[0]);
+      for (let i = 1; i < rawHistory.length; i++) {
+          const prev = mergedHistory[mergedHistory.length - 1];
+          const curr = rawHistory[i];
+          if (prev.role === curr.role) {
+              prev.parts[0].text += "\n\n" + curr.parts[0].text;
+          } else {
+              mergedHistory.push(curr);
+          }
+      }
+  }
 
-    // 5. Extract Current Message (Last User Message)
-    // Gemini startChat history acts as "context". The *new* message goes to sendMessageStream.
-    let currentMessage = "continue";
+  // 4. Ensure History Starts with USER
+  // If first message is 'model', we must prepend a dummy user message or remove it.
+  // Removing it deletes the greeting context. Prepending is safer for context.
+  if (mergedHistory.length > 0 && mergedHistory[0].role === 'model') {
+      mergedHistory.unshift({
+          role: 'user',
+          parts: [{ text: "(Session Start)" }]
+      });
+  }
 
-    if (mergedHistory.length > 0) {
-        const lastMsg = mergedHistory[mergedHistory.length - 1];
-        if (lastMsg.role === 'user') {
-            currentMessage = lastMsg.parts[0].text;
-            mergedHistory.pop(); // Remove it from history so we don't duplicate it
-        } else {
-            // Last message was model? This happens if AI is "continuing" or retrying.
-            // We just send "continue" to prompt more output.
-            currentMessage = "continue";
-        }
-    } else {
-        // If history is empty (new chat), currentMessage needs to be something.
-        // Usually history comes with at least one user message.
-        // If empty here, it means input was empty?
-        currentMessage = "Hello";
-    }
+  // 5. Extract Current Message (Last User Message)
+  // Gemini startChat history acts as "context". The *new* message goes to sendMessageStream.
+  let currentMessage = "continue";
 
-    // 6. Final Failsafe: Ensure history is not empty if required?
-    // Gemini startChat handles empty history fine (it just means no context).
+  if (mergedHistory.length > 0) {
+      const lastMsg = mergedHistory[mergedHistory.length - 1];
+      if (lastMsg.role === 'user') {
+          currentMessage = lastMsg.parts[0].text;
+          mergedHistory.pop(); // Remove it from history so we don't duplicate it
+      } else {
+          // Last message was model? This happens if AI is "continuing" or retrying.
+          // We just send "continue" to prompt more output.
+          currentMessage = "continue";
+      }
+  } else {
+      // If history is empty (new chat), currentMessage needs to be something.
+      // Usually history comes with at least one user message.
+      // If empty here, it means input was empty?
+      currentMessage = "Hello";
+  }
 
-    const chat = model.startChat({
-        history: mergedHistory
-        // systemInstruction moved to getGenerativeModel
-    });
+  const chat = model.startChat({
+      history: mergedHistory
+      // systemInstruction moved to getGenerativeModel
+  });
 
-    const result = await chat.sendMessageStream(currentMessage);
-    for await (const chunk of result.stream) {
-        const text = chunk.text();
-        if (text) yield text;
-    }
-  } catch (error: any) {
-    console.error("Gemini Stream Error:", error?.message || error);
-    yield " [Aastha is taking a moment to reconnect. Please try again.]";
+  const result = await chat.sendMessageStream(currentMessage);
+  for await (const chunk of result.stream) {
+      const text = chunk.text();
+      if (text) yield text;
   }
 }
 
