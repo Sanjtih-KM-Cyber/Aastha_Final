@@ -461,9 +461,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
     const isSad = subconscious.mood === 'sad' || subconscious.mood === 'concerned';
 
-    // Explicit "Send Voice" intent override
-    const explicitVoiceRequest = hasListenIntent || (message && message.toLowerCase().includes('voice note'));
-
     // Generate audio if:
     // 1. User has access AND (Sad OR VoiceMode OR Explicit Request)
     // 2. Text is valid
