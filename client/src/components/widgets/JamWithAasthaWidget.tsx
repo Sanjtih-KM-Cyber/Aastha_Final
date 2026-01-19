@@ -410,14 +410,27 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               setCurrentLoopCount(1);
           }
       } else {
-          // Loop Mode Off (Normal)
-          if (currentIndex < queue.length - 1) {
-              const nextIndex = currentIndex + 1;
-              triggerNextTrack(nextIndex);
+          // Loop Mode Off (Normal) - Auto-Remove Played Track
+          // Remove the finished track (current one)
+          const newQueue = [...queue];
+          newQueue.splice(currentIndex, 1);
+
+          setQueue(newQueue);
+
+          // Since we removed the current track at 'currentIndex', the *next* track shifts into 'currentIndex'.
+          // So we play the track at the SAME index (unless we were at the end).
+
+          if (newQueue.length > 0) {
+              // Ensure index is within bounds (e.g., if we removed the last one)
+              const nextIdx = currentIndex >= newQueue.length ? 0 : currentIndex;
+              setCurrentIndex(nextIdx);
+              // Trigger play for the new track at this position
+              loadAndPlay(newQueue[nextIdx]);
               setCurrentLoopCount(1);
           } else {
-              // End of playlist
+              // Queue empty
               setIsPlaying(false);
+              setCurrentIndex(0);
           }
       }
   };
@@ -492,17 +505,10 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                   uuid: generateUUID() // ASSIGN UUID
               };
 
-              setQueue(prev => {
-                // If queue is empty, play immediately
-                if (prev.length === 0) {
-                    setTimeout(() => loadAndPlay(newTrack), 100);
-                    return [newTrack];
-                }
-                // Otherwise append
-                return [...prev, newTrack];
-              });
-              
-              if (queue.length === 0) setCurrentIndex(0);
+              // REPLACE QUEUE Logic as requested
+              setQueue([newTrack]);
+              setCurrentIndex(0);
+              setTimeout(() => loadAndPlay(newTrack), 100);
               
           } else {
               console.warn("No results found for query:", q);

@@ -620,7 +620,7 @@ export const verifyDiaryPassword = async (req: AuthRequest, res: Response) => {
     if (!user || !user.diaryPasswordHash) return (res as any).status(400).json({ message: 'Diary setup not found' });
     const isValid = await bcrypt.compare(diaryPassword, user.diaryPasswordHash);
     if (isValid) (res as any).json({ success: true });
-    else (res as any).status(401).json({ success: false, message: 'Invalid diary password' });
+    else (res as any).status(403).json({ success: false, message: 'Invalid diary password' });
   } catch (error) { (res as any).status(500).json({ message: 'Server error' }); }
 };
 
