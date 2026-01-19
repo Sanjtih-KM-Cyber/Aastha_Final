@@ -17,7 +17,8 @@ import {
   resendOTP,
   completeOnboarding,
   uploadPersonaVoice,
-  uploadPersonaScreenshot
+  uploadPersonaScreenshot,
+  updateCloneSettings
 } from '../controllers/authController';
 import { createOrder, verifyPayment, createVoiceOrder } from '../controllers/paymentController';
 import { protect } from '../middleware/authMiddleware';
@@ -44,6 +45,7 @@ router.post('/upgrade', protect, upgradeToPro);
 // Persona Uploads (New)
 router.post('/persona-voice', protect, uploadPersonaVoice);
 router.post('/persona-screenshot', protect, uploadPersonaScreenshot);
+router.put('/clone-settings', protect, updateCloneSettings);
 
 // Account management
 router.post('/delete-account', protect, softDeleteUser);
