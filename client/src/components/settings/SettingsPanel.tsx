@@ -505,8 +505,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                       {!user?.isPro && (
                           <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-500/10 to-indigo-500/10 border border-purple-500/30 relative overflow-hidden mb-6">
                               <div className="absolute top-0 right-0 p-3 opacity-10"><Headphones size={64} /></div>
-                              <h2 className="text-2xl font-serif text-white mb-2">₹25 <span className="text-sm text-white/60 font-sans font-normal">/ 3 Days</span></h2>
-                              <p className="text-sm text-white/70 mb-4">Get unlimited High-Quality Voice Calls for 3 days. Perfect for a quick vent session.</p>
+                              <h2 className="text-2xl font-serif text-white mb-2">₹19 <span className="text-sm text-white/60 font-sans font-normal">/ 3 Days</span></h2>
+                              <p className="text-sm text-white/70 mb-4">Get unlimited High-Quality Voice Calls and Voice Notes for 3 days. Perfect for a quick vent session.</p>
 
                               <button onClick={() => handleSubscribe('voice')} disabled={isProcessing} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all border border-white/10 flex items-center justify-center gap-2">
                                   {isProcessing ? <span className="animate-spin">⟳</span> : <><Headphones size={16} /> Get Voice Pass</>}

@@ -444,16 +444,46 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         } 
     })}\n\n`);
 
-    const stream = provider === 'GEMINI'
-        ? streamGemini(brainHistory, voiceSystemPrompt, user.isPro)
-        : streamGroq(brainHistory, voiceSystemPrompt);
+    let stream;
+    try {
+        stream = provider === 'GEMINI'
+            ? streamGemini(brainHistory, voiceSystemPrompt, user.isPro)
+            : streamGroq(brainHistory, voiceSystemPrompt);
+    } catch (e) {
+        console.error("Stream Init Failed, falling back to GROQ:", e);
+        stream = streamGroq(brainHistory, voiceSystemPrompt);
+        provider = 'GROQ'; // Force provider update
+    }
 
     let fullTextResponse = "";
 
-    for await (const chunk of stream) {
-        if (!chunk) continue;
-        fullTextResponse += chunk;
-        (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+    try {
+        for await (const chunk of stream) {
+            if (!chunk) continue;
+            fullTextResponse += chunk;
+            (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+        }
+    } catch (error: any) {
+        console.error("Stream Error (likely 429):", error);
+        // Fallback to GROQ if Gemini fails mid-stream or at start
+        if (provider === 'GEMINI') {
+             console.log("⚠️ Gemini Quota Exceeded. Switching to Llama 3.3...");
+             // Send a meta update to frontend? Optional.
+
+             try {
+                const fallbackStream = streamGroq(brainHistory, voiceSystemPrompt);
+                for await (const chunk of fallbackStream) {
+                    if (!chunk) continue;
+                    fullTextResponse += chunk; // Continue appending to whatever we had (or start fresh)
+                    (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+                }
+             } catch (fallbackError) {
+                 console.error("Fallback Failed:", fallbackError);
+                 throw fallbackError; // If both fail, we are done.
+             }
+        } else {
+            throw error;
+        }
     }
 
     // =================================================================================
