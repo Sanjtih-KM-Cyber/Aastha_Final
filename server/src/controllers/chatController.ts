@@ -233,8 +233,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
   let fullAiResponse = "";
 
   try {
-    // Explicitly select voiceSample (hidden by default) if clone mode might be active
-    const user = await User.findById(userId).select('+cloneMode.voiceSample');
+    const user = await User.findById(userId);
     if (!user) throw new Error("User not found");
 
     if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email);
@@ -290,7 +289,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // BRANCH: CLONE MODE
     // =================================================================================
     if (message === 'ACTIVATE_CLONE_MODE' && images && images.length > 0) {
-        // Validation handled in frontend/auth, but good to check limits
         if (!user.isPro && (user.dailyPremiumUsage || 0) >= 10) {
              (res as any).write(`data: ${JSON.stringify({
                  meta: { limitReached: true },
@@ -303,13 +301,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         
         try {
             const personaPrompt = await analyzeScreenshot(images[0]);
-            // Preserve existing settings if any
-            user.cloneMode.targetPersona = personaPrompt;
-            user.cloneMode.isActive = true;
-            user.cloneMode.isPersonaActive = true; // Auto-enable text mimicry
-            user.cloneMode.usageCount = 0;
-            user.cloneMode.lastActive = new Date();
-
+            user.cloneMode = { isActive: true, targetPersona: personaPrompt, usageCount: 0, lastActive: new Date() };
             await user.save();
             const successMsg = "Clone Mode Activated. I am now channeling this person. Say hi.";
             (res as any).write(`data: ${JSON.stringify({ content: successMsg })}\n\n`);
@@ -327,68 +319,35 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         }
     }
     
-    // Check Clone Mode validity (3-Day Pass or Pro or Free Limit)
-    const hasVoiceTopUp = user.voiceTopUpExpires && new Date(user.voiceTopUpExpires) > new Date();
-    const canUseClone = user.isPro || hasVoiceTopUp || (user.dailyPremiumUsage || 0) < 10;
-
     if (user.cloneMode && user.cloneMode.isActive) {
-        if (!canUseClone) {
+        if (!user.isPro && ((user.dailyPremiumUsage || 0) >= 10)) {
              (res as any).write(`data: ${JSON.stringify({
                  meta: { limitReached: true },
                  content: "🔒 **Daily Limit Reached.**\n\n[Upgrade to Premium] to keep chatting in this vibe."
              })}\n\n`);
              (res as any).write('data: [DONE]\n\n');
              (res as any).end();
-             user.cloneMode.isActive = false; // Auto-off
+             user.cloneMode.isActive = false;
              await user.save();
              return;
         }
         
-        // --- 1. PERSONIFICATION CLONE (TEXT) ---
-        if (user.cloneMode.isPersonaActive && user.cloneMode.targetPersona) {
-            const cloneResponse = await generateCloneResponse(
-                [...historyWindow, { role: 'user', content: newUserMsgContent }],
-                user.cloneMode.targetPersona
-            );
-
-            user.dailyPremiumUsage = (user.dailyPremiumUsage || 0) + 1;
-            user.cloneMode.usageCount += 1;
-            await user.save();
-
-            // --- 2. VOICE CLONE (AUDIO) ---
-            let voiceUrl = undefined;
-            if (user.cloneMode.isVoiceActive && user.cloneMode.voiceSample) {
-                try {
-                    const cleanText = cleanTextForTTS(cloneResponse);
-                    const voiceBuffer = Buffer.from(user.cloneMode.voiceSample.split(',')[1], 'base64');
-
-                    const audioBuffer = await brainService.generateSpeech(
-                        cleanText.substring(0, 2000),
-                        voiceBuffer, // Pass the sample!
-                        'aastha' // Fallback persona (ignored by F5 usually if voice provided)
-                    );
-
-                    if (audioBuffer) {
-                        const audioId = `vn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                        storeAudio(audioId, audioBuffer);
-                        voiceUrl = `/api/ai/stream/${audioId}`;
-                        // Send Voice Event immediately
-                        (res as any).write(`data: ${JSON.stringify({ voice_audio: voiceUrl, voice_note: voiceUrl })}\n\n`);
-                    }
-                } catch (e) {
-                    console.error("Voice Clone Error:", e);
-                }
-            }
-
-            chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
-            chatSession.messages.push({ role: 'assistant', content: encrypt(cloneResponse), timestamp: new Date(), voice_note: voiceUrl });
-            await chatSession.save();
-
-            (res as any).write(`data: ${JSON.stringify({ content: cloneResponse })}\n\n`);
-            (res as any).write('data: [DONE]\n\n');
-            (res as any).end();
-            return;
-        }
+        const cloneResponse = await generateCloneResponse(
+            [...historyWindow, { role: 'user', content: newUserMsgContent }],
+            user.cloneMode.targetPersona
+        );
+        
+        user.dailyPremiumUsage = (user.dailyPremiumUsage || 0) + 1;
+        user.cloneMode.usageCount += 1;
+        await user.save();
+        
+        chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
+        chatSession.messages.push({ role: 'assistant', content: encrypt(cloneResponse), timestamp: new Date() });
+        await chatSession.save();
+        (res as any).write(`data: ${JSON.stringify({ content: cloneResponse })}\n\n`);
+        (res as any).write('data: [DONE]\n\n');
+        (res as any).end();
+        return;
     }
 
     // =================================================================================
@@ -419,10 +378,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let provider = 'GEMINI';
     const dailyLimit = 10;
 
-    // Re-check for standard chat flow (redundant variable declaration if not careful)
-    // hasVoiceTopUp is already declared above if we are in this scope, but let's reuse/recalc safely.
-    const isProOrTopUp = user.isPro || (user.voiceTopUpExpires && new Date(user.voiceTopUpExpires) > new Date());
-    const hasVoiceAccess = isProOrTopUp || (user.dailyPremiumUsage || 0) < dailyLimit;
+    const hasVoiceTopUp = user.voiceTopUpExpires && new Date(user.voiceTopUpExpires) > new Date();
+    const hasVoiceAccess = user.isPro || hasVoiceTopUp || (user.dailyPremiumUsage || 0) < dailyLimit;
 
     if (!hasVoiceAccess) {
         provider = 'GROQ';
@@ -458,7 +415,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         .replace('{{mood}}', subconscious.mood || "neutral");
 
     // Explicit Voice Intent? Inject Conversational Rules
-    // [FIX] Consolidate declaration - this variable is used here for Prompt Injection AND later for Audio Gen
     const explicitVoiceRequest = hasListenIntent || (message && message.toLowerCase().includes('voice note'));
     const isVoiceActive = hasVoiceAccess && (isVoiceMode || explicitVoiceRequest);
 
@@ -488,24 +444,52 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         } 
     })}\n\n`);
 
-    const stream = provider === 'GEMINI'
-        ? streamGemini(brainHistory, voiceSystemPrompt, user.isPro)
-        : streamGroq(brainHistory, voiceSystemPrompt);
+    let stream;
+    try {
+        stream = provider === 'GEMINI'
+            ? streamGemini(brainHistory, voiceSystemPrompt, user.isPro)
+            : streamGroq(brainHistory, voiceSystemPrompt);
+    } catch (e) {
+        console.error("Stream Init Failed, falling back to GROQ:", e);
+        stream = streamGroq(brainHistory, voiceSystemPrompt);
+        provider = 'GROQ'; // Force provider update
+    }
 
     let fullTextResponse = "";
 
-    for await (const chunk of stream) {
-        if (!chunk) continue;
-        fullTextResponse += chunk;
-        (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+    try {
+        for await (const chunk of stream) {
+            if (!chunk) continue;
+            fullTextResponse += chunk;
+            (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+        }
+    } catch (error: any) {
+        console.error("Stream Error (likely 429):", error);
+        // Fallback to GROQ if Gemini fails mid-stream or at start
+        if (provider === 'GEMINI') {
+             console.log("⚠️ Gemini Quota Exceeded. Switching to Llama 3.3...");
+             // Send a meta update to frontend? Optional.
+             
+             try {
+                const fallbackStream = streamGroq(brainHistory, voiceSystemPrompt);
+                for await (const chunk of fallbackStream) {
+                    if (!chunk) continue;
+                    fullTextResponse += chunk; // Continue appending to whatever we had (or start fresh)
+                    (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+                }
+             } catch (fallbackError) {
+                 console.error("Fallback Failed:", fallbackError);
+                 throw fallbackError; // If both fail, we are done.
+             }
+        } else {
+            throw error;
+        }
     }
 
     // =================================================================================
     // STEP 4: AUDIO GENERATION (Kokoro)
     // =================================================================================
     const isSad = subconscious.mood === 'sad' || subconscious.mood === 'concerned';
-
-    // [FIX] Removed duplicate 'explicitVoiceRequest' declaration (now declared above)
 
     // Generate audio if:
     // 1. User has access AND (Sad OR VoiceMode OR Explicit Request)
