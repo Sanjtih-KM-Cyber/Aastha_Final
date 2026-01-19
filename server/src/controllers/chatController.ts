@@ -512,31 +512,36 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         // [UPDATED] Use cleanTextForTTS to strip emojis and asterisks
         const cleanText = cleanTextForTTS(fullTextResponse);
         
-        try {
-            const targetPersona = (currentPersona === 'aarav' || currentPersona === 'aastik') ? 'aastik' : 'aastha';
+        // [FIXED] Prevent calling Brain with empty text (e.g. if everything was [Actions])
+        if (cleanText.length > 0) {
+            try {
+                const targetPersona = (currentPersona === 'aarav' || currentPersona === 'aastik') ? 'aastik' : 'aastha';
 
-            const audioBuffer = await brainService.generateSpeech(
-                cleanText.substring(0, 2000),
-                undefined,
-                targetPersona 
-            );
+                const audioBuffer = await brainService.generateSpeech(
+                    cleanText.substring(0, 2000),
+                    undefined,
+                    targetPersona 
+                );
 
-            if (audioBuffer) {
-                const audioId = `vn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                storeAudio(audioId, audioBuffer);
+                if (audioBuffer) {
+                    const audioId = `vn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                    storeAudio(audioId, audioBuffer);
 
-                // Construct URL - ensure it's relative as per MessageBubble expectations
-                const audioUrl = `/api/ai/stream/${audioId}`;
-                savedAudioUrl = audioUrl;
+                    // Construct URL - ensure it's relative as per MessageBubble expectations
+                    const audioUrl = `/api/ai/stream/${audioId}`;
+                    savedAudioUrl = audioUrl;
 
-                // Send SSE Event
-                const eventPayload: any = { voice_audio: audioUrl, voice_note: audioUrl };
-                (res as any).write(`data: ${JSON.stringify(eventPayload)}\n\n`);
-            } else {
-                console.warn("Brain Service returned null audio buffer.");
+                    // Send SSE Event
+                    const eventPayload: any = { voice_audio: audioUrl, voice_note: audioUrl };
+                    (res as any).write(`data: ${JSON.stringify(eventPayload)}\n\n`);
+                } else {
+                    console.warn("Brain Service returned null audio buffer.");
+                }
+            } catch (e) {
+                console.error("Audio Gen Failed:", e);
             }
-        } catch (e) {
-            console.error("Audio Gen Failed:", e);
+        } else {
+             console.warn("Skipping TTS: Cleaned text is empty.");
         }
     }
 
