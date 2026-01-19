@@ -26,7 +26,7 @@ const is_red_flag = (message: string): boolean => {
 };
 
 // ============================================================================
-// HELPERS: TIME & TONE
+// HELPERS: TIME, TONE & TEXT CLEANING
 // ============================================================================
 const getTimeContext = (): string => {
     const hour = new Date().getHours();
@@ -46,11 +46,33 @@ const getToneFlavor = (): string => {
     return flavors[Math.floor(Math.random() * flavors.length)];
 };
 
+/**
+ * CLEANS TEXT FOR TTS ENGINE
+ * Removes emojis, markdown, and text between asterisks (*sighs*)
+ */
+const cleanTextForTTS = (text: string): string => {
+    return text
+        .replace(/\*.*?\*/g, '')      // Remove actions like *sighs* or *laughs*
+        .replace(/<[^>]*>/g, '')      // Remove HTML tags
+        .replace(/\[.*?\]/g, '')      // Remove brackets [system messages]
+        .replace(/[\#\_\*\~\`]/g, '') // Remove Markdown symbols
+        // Remove common emojis (Ranges for various emoji sets)
+        .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '')
+        .replace(/\s+/g, ' ')         // Collapse multiple spaces
+        .trim();
+};
+
 // ============================================================================
 // 1. AASTHA PROMPT (The Companion)
 // ============================================================================
 const AASTHA_PROMPT = `
 You are 'Aastha', a warm, mature, and affectionate wellness companion for {{userName}}.
+
+**[IMPORTANT: VOICE CAPABILITY AWARENESS]**
+* **You HAVE a voice.** When you reply, the user **HEARS** you speak.
+* **NEVER** say "I cannot speak", "I am text-based", or "I have no vocal cords".
+* Speak naturally, as if you are on a phone call.
+* If the user asks to hear you, say "I'm speaking right now, my love."
 
 **[1. THE SOUL - PERSONALITY & MOOD DYNAMICS]**
 * **Current Mood State:** {{mood}}
@@ -123,6 +145,11 @@ Memory: {{userFacts}}
 // ============================================================================
 const AASTIK_PROMPT = `
 You are 'Aastik', a grounded, calm, and reliable "big brother" figure for {{userName}}.
+
+**[IMPORTANT: VOICE CAPABILITY AWARENESS]**
+* **You HAVE a voice.** When you reply, the user **HEARS** you speak.
+* **NEVER** say "I cannot speak", "I am text-based", or "I have no vocal cords".
+* Speak naturally, as if you are on a phone call.
 
 **[1. THE SOUL - PERSONALITY & MOOD DYNAMICS]**
 * **Current Mood State:** {{mood}}
@@ -239,20 +266,19 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     // =================================================================================
-    // BRANCH: CLONE MODE (CHAT IMITATION)
+    // BRANCH: CLONE MODE
     // =================================================================================
     if (message === 'ACTIVATE_CLONE_MODE' && images && images.length > 0) {
-        // CHECK LIMIT (Included in daily 10 credits)
         if (!user.isPro && (user.dailyPremiumUsage || 0) >= 10) {
              (res as any).write(`data: ${JSON.stringify({
                  meta: { limitReached: true },
-                 content: "🔒 **Daily Limit Reached.**\n\nClone Mode uses your daily credits. [Upgrade to Premium] for unlimited use."
+                 content: "🔒 **Daily Limit Reached.**\n\nTo unlock Clone Mode and unlimited chats, [Upgrade to Premium]."
              })}\n\n`);
              (res as any).write('data: [DONE]\n\n');
              (res as any).end();
              return;
         }
-
+        
         try {
             const personaPrompt = await analyzeScreenshot(images[0]);
             user.cloneMode = { isActive: true, targetPersona: personaPrompt, usageCount: 0, lastActive: new Date() };
@@ -273,33 +299,28 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         }
     }
     
-    // IF CLONE MODE IS ACTIVE
     if (user.cloneMode && user.cloneMode.isActive) {
-        // STRICT LIMIT CHECK
-        if (!user.isPro && (user.dailyPremiumUsage || 0) >= 10) {
+        if (!user.isPro && ((user.dailyPremiumUsage || 0) >= 10)) {
              (res as any).write(`data: ${JSON.stringify({
                  meta: { limitReached: true },
-                 content: "🔒 **Daily Limit Reached.**\n\n[Upgrade to Premium] to continue chatting in this vibe."
+                 content: "🔒 **Daily Limit Reached.**\n\n[Upgrade to Premium] to keep chatting in this vibe."
              })}\n\n`);
              (res as any).write('data: [DONE]\n\n');
              (res as any).end();
-             
-             // Auto-disable to prevent getting stuck
              user.cloneMode.isActive = false;
              await user.save();
              return;
         }
-
+        
         const cloneResponse = await generateCloneResponse(
             [...historyWindow, { role: 'user', content: newUserMsgContent }],
             user.cloneMode.targetPersona
         );
-
-        // INCREMENT USAGE
+        
         user.dailyPremiumUsage = (user.dailyPremiumUsage || 0) + 1;
         user.cloneMode.usageCount += 1;
         await user.save();
-
+        
         chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
         chatSession.messages.push({ role: 'assistant', content: encrypt(cloneResponse), timestamp: new Date() });
         await chatSession.save();
@@ -332,36 +353,31 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     await user.save();
 
     // =================================================================================
-    // STEP 3: THE VOICE (Usage & Generation)
+    // STEP 3: THE VOICE (Generation)
     // =================================================================================
     let provider = 'GEMINI';
     const dailyLimit = 10;
 
-    // Check Voice/Premium Quota
     const hasVoiceTopUp = user.voiceTopUpExpires && new Date(user.voiceTopUpExpires) > new Date();
-    // If not pro, and no topup, and usage >= 10 -> NO VOICE ACCESS
     const hasVoiceAccess = user.isPro || hasVoiceTopUp || (user.dailyPremiumUsage || 0) < dailyLimit;
 
     if (!hasVoiceAccess) {
-        provider = 'GROQ'; // Fallback to cheaper model if quota exceeded
+        provider = 'GROQ';
     }
 
-    // Increment Usage for Free Users
     if (!user.isPro && !hasVoiceTopUp) {
         user.dailyPremiumUsage = (user.dailyPremiumUsage || 0) + 1;
         user.lastUsageDate = new Date();
         await user.save();
     }
 
-    // --- VOICE MODE OVERRIDE (Call Mode) ---
     let useFallbackTTS = false;
-    // If user wants voice mode but has no credits -> Force Browser TTS
     if (isVoiceMode && !hasVoiceAccess) {
         useFallbackTTS = true;
     }
 
     // Prepare System Prompt
-    const currentPersona = user.persona as string; // 'aastha' or 'aarav'/'aastik'
+    const currentPersona = user.persona as string;
     let baseTemplate = (currentPersona === 'aarav' || currentPersona === 'aastik') ? AASTIK_PROMPT : AASTHA_PROMPT;
     
     let voiceSystemPrompt = baseTemplate
@@ -412,23 +428,22 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     const shouldGenerateAudio = (isSad || (isVoiceMode && !useFallbackTTS)) && fullTextResponse.trim().length > 0;
 
     if (shouldGenerateAudio) {
-        const cleanText = fullTextResponse.replace(/<[^>]*>/g, '').replace(/\[.*?\]/g, '');
+        // [UPDATED] Use cleanTextForTTS to strip emojis and asterisks
+        const cleanText = cleanTextForTTS(fullTextResponse);
+        
         try {
-            // [CRITICAL FIX] Pass the correct PERSONA to brainService
-            // If user's persona is 'aarav' or 'aastik', we send 'aastik' (Male). Else 'aastha' (Female).
             const targetPersona = (currentPersona === 'aarav' || currentPersona === 'aastik') ? 'aastik' : 'aastha';
 
             const audioBuffer = await brainService.generateSpeech(
                 cleanText.substring(0, 800), 
-                undefined, // No cloning sample for standard chat
-                targetPersona // <--- THIS TELLS PYTHON WHICH VOICE TO USE
+                undefined,
+                targetPersona 
             );
 
             if (audioBuffer) {
                 const audioId = `vn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
                 storeAudio(audioId, audioBuffer);
                 const audioUrl = `/api/ai/stream/${audioId}`;
-
                 const eventPayload: any = { voice_audio: audioUrl, voice_note: audioUrl };
                 (res as any).write(`data: ${JSON.stringify(eventPayload)}\n\n`);
             }
