@@ -75,15 +75,15 @@ export const PersonaSettings: React.FC = () => {
 
     return (
         <div className="space-y-6 relative">
-             <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/40 rounded-2xl">
-                 <div className="bg-black/80 border border-white/10 px-6 py-3 rounded-full shadow-2xl">
+             <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-md bg-black/50 rounded-2xl">
+                 <div className="bg-black/90 border border-white/10 px-6 py-3 rounded-full shadow-2xl z-50">
                      <span className="text-teal-400 font-bold tracking-wider text-sm">🚧 UNDER DEVELOPMENT</span>
                  </div>
              </div>
 
             <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Clone Mode Configuration</h3>
 
-            <div className="p-6 bg-white/5 rounded-2xl border border-white/5 space-y-6 opacity-50 pointer-events-none filter blur-[2px] select-none">
+            <div className="p-6 bg-white/5 rounded-2xl border border-white/5 space-y-6 opacity-50 pointer-events-none filter blur-sm select-none">
                 <div>
                     <h4 className="text-white font-medium mb-1">Voice Clone Sample</h4>
                     <p className="text-xs text-white/50 mb-3">Upload a 30s-60s clear audio recording of the person you want Aastha to mimic.</p>

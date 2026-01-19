@@ -301,7 +301,15 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         
         try {
             const personaPrompt = await analyzeScreenshot(images[0]);
-            user.cloneMode = { isActive: true, targetPersona: personaPrompt, usageCount: 0, lastActive: new Date() };
+            user.cloneMode = {
+                isActive: true,
+                targetPersona: personaPrompt,
+                usageCount: 0,
+                lastActive: new Date(),
+                isPersonaActive: true,
+                isVoiceActive: false,
+                voiceSample: ""
+            };
             await user.save();
             const successMsg = "Clone Mode Activated. I am now channeling this person. Say hi.";
             (res as any).write(`data: ${JSON.stringify({ content: successMsg })}\n\n`);
