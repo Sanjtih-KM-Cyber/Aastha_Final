@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Copy, Reply, Sparkles, Wand2, ShieldAlert, Play, Pause } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
@@ -78,9 +78,74 @@ const getAvatarUrl = (mood: string = 'neutral') => {
 
 // VOICE NOTE COMPONENT
 const VoiceNotePlayer: React.FC<{ src: string }> = ({ src }) => {
-    const audioRef = React.useRef<HTMLAudioElement>(null);
+    const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [progress, setProgress] = useState(0);
+    const [waveform, setWaveform] = useState<number[]>([]);
+
+    useEffect(() => {
+        // Generate waveform data from audio src
+        if (!src) return;
+
+        let audioContext: AudioContext | null = null;
+        let isMounted = true;
+
+        const generateWaveform = async () => {
+            try {
+                // Safely create AudioContext inside the effect
+                audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+                const response = await fetch(src);
+                const arrayBuffer = await response.arrayBuffer();
+
+                if (!isMounted) return; // Prevent state updates if unmounted
+
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                const rawData = audioBuffer.getChannelData(0); // Get first channel
+                const samples = 40; // Number of bars to render
+                const blockSize = Math.floor(rawData.length / samples);
+                const filteredData = [];
+
+                for (let i = 0; i < samples; i++) {
+                    const blockStart = blockSize * i;
+                    let sum = 0;
+                    for (let j = 0; j < blockSize; j++) {
+                        sum += Math.abs(rawData[blockStart + j]);
+                    }
+                    filteredData.push(sum / blockSize);
+                }
+
+                // Normalize to 0-1 range
+                const maxVal = Math.max(...filteredData) || 1; // Prevent div by zero
+                const normalizedData = filteredData.map(n => n / maxVal);
+
+                if (isMounted) {
+                    setWaveform(normalizedData);
+                }
+            } catch (e) {
+                console.error("Error generating waveform:", e);
+                if (isMounted) {
+                    setWaveform(Array(40).fill(0).map(() => Math.random() * 0.5 + 0.2)); // Fallback bars
+                }
+            } finally {
+                // CLEANUP: Close the AudioContext immediately after analysis to free resources
+                if (audioContext && audioContext.state !== 'closed') {
+                    audioContext.close().catch(console.error);
+                }
+            }
+        };
+
+        generateWaveform();
+
+        return () => {
+            isMounted = false;
+            // Redundant check, but good for safety
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close().catch(console.error);
+            }
+        };
+    }, [src]);
 
     const togglePlay = () => {
         if (!audioRef.current) return;
@@ -106,13 +171,34 @@ const VoiceNotePlayer: React.FC<{ src: string }> = ({ src }) => {
     };
 
     return (
-        <div className="mt-2 mb-2 p-2 rounded-xl bg-black/20 border border-white/10 flex items-center gap-3">
-            <button onClick={togglePlay} className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center shrink-0 hover:scale-105 transition-transform">
-                {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+        <div className="mt-1 mb-1 p-2 rounded-xl bg-black/20 border border-white/10 flex items-center gap-3 w-64">
+             {/* Play Button */}
+            <button
+                onClick={togglePlay}
+                className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shrink-0 hover:scale-105 transition-transform"
+            >
+                {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-1" />}
             </button>
-            <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-white/80 transition-all duration-100" style={{ width: `${progress}%` }} />
+
+            {/* Waveform Visualization */}
+            <div className="flex-1 h-8 flex items-center gap-[2px]">
+                {waveform.map((barHeight, index) => {
+                    // Calculate if this bar is "played" based on progress
+                    const barPosition = (index / waveform.length) * 100;
+                    const isPlayed = barPosition < progress;
+
+                    return (
+                        <div
+                            key={index}
+                            className={`w-1 rounded-full transition-colors duration-100 ${isPlayed ? 'bg-white' : 'bg-white/30'}`}
+                            style={{
+                                height: `${Math.max(20, barHeight * 100)}%` // Min height 20%
+                            }}
+                        />
+                    );
+                })}
             </div>
+
             <audio ref={audioRef} src={src} onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} className="hidden" />
         </div>
     );
@@ -308,16 +394,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           ) : (
             <div className="space-y-1">
               {/* VOICE NOTE PLAYER */}
-              {voice_note && <VoiceNotePlayer src={voice_note} />}
-
-              {visibleContent.split('\n').map((line, i) => (
-                <p
-                  key={i}
-                  className="whitespace-pre-wrap text-white/95 font-light"
-                >
-                  {renderContent(line)}
-                </p>
-              ))}
+              {voice_note ? (
+                 <VoiceNotePlayer src={voice_note} />
+              ) : (
+                /* TEXT CONTENT (Only shown if NO voice note) */
+                visibleContent.split('\n').map((line, i) => (
+                    <p
+                    key={i}
+                    className="whitespace-pre-wrap text-white/95 font-light"
+                    >
+                    {renderContent(line)}
+                    </p>
+                ))
+              )}
             </div>
           )}
 
