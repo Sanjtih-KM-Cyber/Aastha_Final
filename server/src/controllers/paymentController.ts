@@ -53,12 +53,48 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Create Voice Only Order (POST /api/users/create-voice-order)
+export const createVoiceOrder = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+
+    const shortReceiptId = `v_rcpt_${Date.now()}`;
+
+    // PRICING: ₹25.00
+    const options = {
+      amount: 2500, // paise (25 INR)
+      currency: "INR",
+      receipt: shortReceiptId,
+      notes: {
+        userId: req.user._id.toString(),
+        plan: "voice_topup"
+      }
+    };
+
+    const order = await razorpay.orders.create(options);
+
+    if (!order) return (res as any).status(500).json({ message: "Failed to create order" });
+
+    (res as any).json({
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      keyId: process.env.RAZORPAY_KEY_ID
+    });
+
+  } catch (error: any) {
+    console.error("Razorpay Voice Order Error:", error);
+    const errorMessage = error.error?.description || "Payment initialization failed";
+    (res as any).status(500).json({ message: errorMessage });
+  }
+};
+
 // Verify Payment (POST /api/users/verify-payment)
 export const verifyPayment = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
 
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = (req as any).body;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, planType } = (req as any).body;
 
     // Verify Signature
     const body = razorpay_order_id + "|" + razorpay_payment_id;
@@ -70,21 +106,40 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
     const isAuthentic = expectedSignature === razorpay_signature;
 
     if (isAuthentic) {
-      // Update User to PRO
       const user = await User.findById(req.user._id);
       if (user) {
-        user.isPro = true;
-        user.subscriptionDate = new Date();
-        user.paymentHistory.push({
-          orderId: razorpay_order_id,
-          paymentId: razorpay_payment_id,
-          amount: 4900,
-          status: 'success',
-          date: new Date()
-        });
-        await user.save();
         
-        (res as any).json({ success: true, message: "Pro Access Activated" });
+        if (planType === 'voice') {
+            // Voice Top-up Logic (3 Days)
+            const now = new Date();
+            // If already active, add to expiry, else start now
+            const currentExpiry = user.voiceTopUpExpires && user.voiceTopUpExpires > now ? new Date(user.voiceTopUpExpires) : now;
+            const newExpiry = new Date(currentExpiry.getTime() + (3 * 24 * 60 * 60 * 1000)); // +3 Days
+
+            user.voiceTopUpExpires = newExpiry;
+
+            user.paymentHistory.push({
+                orderId: razorpay_order_id,
+                paymentId: razorpay_payment_id,
+                amount: 2500,
+                status: 'success_voice',
+                date: new Date()
+            });
+        } else {
+            // Pro Plan Logic
+            user.isPro = true;
+            user.subscriptionDate = new Date();
+            user.paymentHistory.push({
+              orderId: razorpay_order_id,
+              paymentId: razorpay_payment_id,
+              amount: 4900,
+              status: 'success',
+              date: new Date()
+            });
+        }
+
+        await user.save();
+        (res as any).json({ success: true, message: planType === 'voice' ? "Voice Pass Activated" : "Pro Access Activated" });
       } else {
         (res as any).status(404).json({ success: false, message: "User not found" });
       }

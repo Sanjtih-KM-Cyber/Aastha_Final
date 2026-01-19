@@ -325,8 +325,6 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           lastUsage.getMonth() !== now.getMonth() ||
           lastUsage.getFullYear() !== now.getFullYear()) {
           user.dailyPremiumUsage = 0;
-          user.voiceHugs = { count: 0, lastReset: now };
-          if (user.cloneMode) user.cloneMode.usageCount = 0;
           user.lastUsageDate = now;
           needsSave = true;
       }
@@ -417,8 +415,6 @@ export const getMe = async (req: AuthRequest, res: Response) => {
         lastUsage.getMonth() !== now.getMonth() || 
         lastUsage.getFullYear() !== now.getFullYear()) {
         user.dailyPremiumUsage = 0;
-        user.voiceHugs = { count: 0, lastReset: now };
-        if (user.cloneMode) user.cloneMode.usageCount = 0;
         user.lastUsageDate = now;
     }
     
@@ -804,4 +800,34 @@ export const completeOnboarding = async (req: AuthRequest, res: Response) => {
     } catch (e) {
         (res as any).status(500).json({ message: 'Update failed' });
     }
+};
+
+// --- NEW PERSONA UPLOADS ---
+export const uploadPersonaVoice = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+        const { audio } = (req as any).body; // Base64
+        if (!audio) return (res as any).status(400).json({ message: 'No audio data' });
+
+        // TODO: Store this properly. For now we acknowledge.
+        // In real system: Upload to S3, save URL to user.cloneMode.voiceSampleUrl
+
+        // Mock save
+        // await User.findByIdAndUpdate(req.user._id, { 'cloneMode.voiceSample': audio });
+
+        (res as any).json({ success: true, message: 'Voice sample uploaded.' });
+    } catch(e) { (res as any).status(500).json({ message: 'Upload failed' }); }
+};
+
+export const uploadPersonaScreenshot = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+        const { image } = (req as any).body; // Base64
+        if (!image) return (res as any).status(400).json({ message: 'No image data' });
+
+        // TODO: Analyze screenshot immediately or store
+        // Mock save
+
+        (res as any).json({ success: true, message: 'Screenshot uploaded.' });
+    } catch(e) { (res as any).status(500).json({ message: 'Upload failed' }); }
 };

@@ -3,6 +3,42 @@ import { useAuth } from '../../hooks/useAuth';
 import { Upload, X, Check, Loader2, Mic } from 'lucide-react';
 import api from '../../services/api';
 
+const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.src = e.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 1200;
+                const scaleSize = MAX_WIDTH / img.width;
+                canvas.width = MAX_WIDTH;
+                canvas.height = img.height * scaleSize;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.8));
+                } else {
+                    reject(new Error("Canvas context is null"));
+                }
+            };
+            img.onerror = (err) => reject(err);
+        };
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(file);
+    });
+};
+
+const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = error => reject(error);
+    });
+};
+
 export const PersonaSettings: React.FC = () => {
     const { user, updateUser } = useAuth();
     const [isUploading, setIsUploading] = useState(false);
@@ -15,27 +51,23 @@ export const PersonaSettings: React.FC = () => {
         setSuccessMsg('');
 
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('type', type);
+            let base64Data = '';
 
-            // In a real implementation, this would upload to S3/Cloudinary/Server
-            // For now, we simulate a successful upload and update the user model if needed
-            // OR call an endpoint if one exists.
-            // The requirement says "Move Upload Voice/Screenshot... into Settings".
-            // Assuming endpoints: /api/users/upload-voice and /api/users/upload-clone-base
-
-            // Simulating API call for now as specific endpoints might need creation or verification
-            // Let's assume we handle it via a generic upload endpoint or simulate it.
-
-            await new Promise(resolve => setTimeout(resolve, 1500)); // Fake upload delay
+            if (type === 'screenshot') {
+                base64Data = await compressImage(file);
+                await api.post('/users/persona-screenshot', { image: base64Data });
+            } else {
+                base64Data = await fileToBase64(file);
+                // Note: Voice samples might be large, ensure server body limit is high (10mb set in app.ts)
+                await api.post('/users/persona-voice', { audio: base64Data });
+            }
 
             setSuccessMsg(`${type === 'voice' ? 'Voice sample' : 'Clone screenshot'} uploaded successfully!`);
             setTimeout(() => setSuccessMsg(''), 3000);
 
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            alert("Upload failed.");
+            alert("Upload failed: " + (e.response?.data?.message || e.message));
         } finally {
             setIsUploading(false);
         }
