@@ -70,14 +70,20 @@ export const generateSubconscious = async (
        - If they say "I'm sad" (short) -> 'reply'.
        - If they request a tool -> 'reply'.
 
-    **2. SMART CHIPS (suggested_replies) - MANDATORY:**
-    - You MUST provide exactly 3 suggested replies for the user.
-    - **PERSPECTIVE:** These are buttons the USER will click. They must be First Person ("I...").
+    **2. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
+    - You MUST provide exactly 3 suggested replies for the user to click.
+    - **CRITICAL:** These must be written from the **USER'S Perspective** (First Person).
     - **TONE:** Match the user's likely reaction.
-    - **RULES:**
-       - NO Questions from AI perspective (e.g. "Do you want help?" is WRONG).
-       - YES Statements from User perspective (e.g. "Help me", "I'm tired", "Tell me a joke").
-       - **LENGTH:** Natural and conversational (e.g. "That sounds interesting", "Tell me more about it", "I'm actually feeling great"). Do NOT force them to be 1 word.
+
+    **EXAMPLES:**
+    - ❌ BAD (AI Perspective): "Do you want to vent?", "I can help with that", "How are you?"
+    - ✅ GOOD (User Perspective): "I need to vent", "That sounds helpful", "I'm doing okay"
+    - ✅ GOOD (User Question): "What do you think?", "Can you explain that?", "Tell me a joke"
+
+    **RULES:**
+       - **NO** questions asking the user what they want.
+       - **YES** statements or questions the USER would ask YOU.
+       - **LENGTH:** Natural and conversational. Avoid 1-word replies.
 
     **3. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs.
@@ -164,12 +170,8 @@ export const generateSubconscious = async (
 
         // FORCE CORRECT CHIP PERSPECTIVE (FAILSAFE)
         // If chips look like questions, try to sanitize them simply
-        if (parsed.suggested_replies) {
-             parsed.suggested_replies = parsed.suggested_replies.map(chip => {
-                 if (chip.endsWith('?')) return chip.replace('?', '.');
-                 return chip;
-             });
-        }
+        // REMOVED: Stripping '?' broke valid user questions like "What do you think?"
+        // Relying on stronger prompt instructions instead.
 
         return parsed;
 
