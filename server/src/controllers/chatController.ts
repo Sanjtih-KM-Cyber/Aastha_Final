@@ -7,6 +7,7 @@ import { brainService } from '../services/brainService';
 import User from '../models/User';
 import Chat from '../models/Chat';
 import { encrypt, decrypt } from '../utils/serverEncryption';
+import { storeAudio } from './audioController'; // NEW
 
 // --- CRITICAL SAFETY SYSTEM ---
 const RED_FLAG_KEYWORDS = [
@@ -413,8 +414,13 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             // Limit text length to prevent timeouts (approx 1 min speech)
             const audioBuffer = await brainService.generateSpeech(cleanText.substring(0, 800));
             if (audioBuffer) {
-                const audioBase64 = audioBuffer.toString('base64');
-                const audioUrl = `data:audio/wav;base64,${audioBase64}`;
+                // FIXED: Store Audio in memory and send streaming URL instead of massive Base64
+                // This prevents truncation in SSE and allows raw byte serving (as requested by user)
+                const audioId = `vn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                storeAudio(audioId, audioBuffer);
+
+                // Construct relative URL for the proxy endpoint
+                const audioUrl = `/api/ai/stream/${audioId}`;
 
                 // Send specific event type
                 const eventPayload: any = { voice_audio: audioUrl };
