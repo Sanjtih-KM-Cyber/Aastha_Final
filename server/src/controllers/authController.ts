@@ -802,18 +802,18 @@ export const completeOnboarding = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// --- NEW PERSONA UPLOADS & SETTINGS ---
+// --- NEW PERSONA UPLOADS ---
 export const uploadPersonaVoice = async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
         const { audio } = (req as any).body; // Base64
         if (!audio) return (res as any).status(400).json({ message: 'No audio data' });
 
-        // Save to User Model (Note: Mongo doc size limit is 16MB. 60s audio is < 1MB typically)
-        await User.findByIdAndUpdate(req.user._id, {
-            'cloneMode.voiceSample': audio,
-            'cloneMode.isVoiceActive': true // Auto-enable on upload
-        });
+        // TODO: Store this properly. For now we acknowledge.
+        // In real system: Upload to S3, save URL to user.cloneMode.voiceSampleUrl
+
+        // Mock save
+        // await User.findByIdAndUpdate(req.user._id, { 'cloneMode.voiceSample': audio });
 
         (res as any).json({ success: true, message: 'Voice sample uploaded.' });
     } catch(e) { (res as any).status(500).json({ message: 'Upload failed' }); }
@@ -825,24 +825,9 @@ export const uploadPersonaScreenshot = async (req: AuthRequest, res: Response) =
         const { image } = (req as any).body; // Base64
         if (!image) return (res as any).status(400).json({ message: 'No image data' });
 
-        // Just acknowledge. Actual analysis happens in /chat logic or specialized endpoint if needed.
-        // For now, we assume the frontend sends ACTIVATE_CLONE_MODE to /chat with the image.
+        // TODO: Analyze screenshot immediately or store
+        // Mock save
 
-        (res as any).json({ success: true, message: 'Screenshot received.' });
+        (res as any).json({ success: true, message: 'Screenshot uploaded.' });
     } catch(e) { (res as any).status(500).json({ message: 'Upload failed' }); }
-};
-
-export const updateCloneSettings = async (req: AuthRequest, res: Response) => {
-    try {
-        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-        const { isActive, isPersonaActive, isVoiceActive } = (req as any).body;
-
-        const updates: any = {};
-        if (isActive !== undefined) updates['cloneMode.isActive'] = isActive;
-        if (isPersonaActive !== undefined) updates['cloneMode.isPersonaActive'] = isPersonaActive;
-        if (isVoiceActive !== undefined) updates['cloneMode.isVoiceActive'] = isVoiceActive;
-
-        await User.findByIdAndUpdate(req.user._id, updates);
-        (res as any).json({ success: true, message: 'Settings updated.' });
-    } catch(e) { (res as any).status(500).json({ message: 'Update failed' }); }
 };

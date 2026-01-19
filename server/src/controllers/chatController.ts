@@ -301,10 +301,10 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         
         try {
             const personaPrompt = await analyzeScreenshot(images[0]);
-            user.cloneMode = { 
-                isActive: true, 
-                targetPersona: personaPrompt, 
-                usageCount: 0, 
+            user.cloneMode = {
+                isActive: true,
+                targetPersona: personaPrompt,
+                usageCount: 0,
                 lastActive: new Date(),
                 isPersonaActive: true,
                 isVoiceActive: false,
@@ -477,7 +477,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         if (provider === 'GEMINI') {
              console.log("⚠️ Gemini Quota Exceeded. Switching to Llama 3.3...");
              // Send a meta update to frontend? Optional.
-             
+
              try {
                 const fallbackStream = streamGroq(brainHistory, voiceSystemPrompt);
                 for await (const chunk of fallbackStream) {
