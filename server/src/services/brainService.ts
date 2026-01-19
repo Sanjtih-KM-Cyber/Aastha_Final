@@ -10,12 +10,16 @@ export const brainService = {
      * Generate Speech (TTS)
      * @param text The text to speak
      * @param voiceBuffer Optional: A buffer of a voice sample for Cloning (F5-TTS)
+     * @param persona Optional: 'aastha' (Female) or 'aastik' (Male) - Defaults to 'aastha'
      * @returns Buffer of the generated audio (WAV)
      */
-    generateSpeech: async (text: string, voiceBuffer?: Buffer): Promise<Buffer | null> => {
+    generateSpeech: async (text: string, voiceBuffer?: Buffer, persona: string = 'aastha'): Promise<Buffer | null> => {
         try {
             const form = new FormData();
             form.append('text', text);
+            
+            // [UPDATED] Send the persona so the Python server knows which voice to pick
+            form.append('voice_preset', persona);
 
             if (voiceBuffer) {
                 form.append('voice_sample', voiceBuffer, { filename: 'sample.wav' });
@@ -24,7 +28,7 @@ export const brainService = {
             const response = await axios.post(`${BRAIN_URL}/speak`, form, {
                 headers: { ...form.getHeaders() },
                 responseType: 'arraybuffer', // Critical for receiving binary audio
-                validateStatus: (status) => status < 500 // Allow 400s to be caught manually if needed, but mostly we want 200
+                validateStatus: (status) => status < 500 // Allow 400s to be caught manually if needed
             });
 
             // 1. Check Content-Type to avoid playing JSON errors as static
