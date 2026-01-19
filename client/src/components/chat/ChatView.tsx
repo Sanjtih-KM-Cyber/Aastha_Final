@@ -716,13 +716,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         // D. HANDLE STREAMING AUDIO (AUTO-PLAY FOR CALL MODE)
                         if (data.voice_audio) {
                             serverAudioPlayed = true;
-                            const audio = new Audio(data.voice_audio);
-                            audio.play().catch(e => console.error("Audio Play Error:", e));
-                            audio.onended = () => {
-                                if (isVoiceMode) {
-                                    setTimeout(() => startListening(), 500); // Resume listening
-                                }
-                            };
+                            // UPDATED: Use speakMessage to handle URL playback as requested
+                            speakMessage(data.voice_audio);
                         }
 
                         // E. HANDLE CONTENT (THE VOICE)
@@ -811,10 +806,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     return cleanText;
   };
 
-  const speakMessage = (text: string) => {
+  const speakMessage = (textOrUrl: string) => {
+    // 1. Detect if it's a URL (server audio)
+    if (textOrUrl.startsWith('http') || textOrUrl.startsWith('/api/') || textOrUrl.startsWith('data:')) {
+        const audio = new Audio(textOrUrl);
+        audio.play().catch(e => console.error("Audio Play Error:", e));
+        audio.onended = () => {
+             if (isVoiceMode) setTimeout(() => startListening(), 500);
+        };
+        return;
+    }
+
+    // 2. Fallback: Browser TTS
     if ('speechSynthesis' in window) {
        window.speechSynthesis.cancel();
-       const cleanText = text.replace(/[*#]/g, '').replace(/[\u{1F600}-\u{1F64F}]/gu, '');
+       const cleanText = textOrUrl.replace(/[*#]/g, '').replace(/[\u{1F600}-\u{1F64F}]/gu, '');
        const utterance = new SpeechSynthesisUtterance(cleanText);
        const voices = window.speechSynthesis.getVoices();
        let chosenVoice = voices.find(v => v.voiceURI === selectedVoiceURI) || voices.find(v => v.name.includes('Google US English'));
