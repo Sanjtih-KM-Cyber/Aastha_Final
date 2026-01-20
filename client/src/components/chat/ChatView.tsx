@@ -1290,3 +1290,4 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       </div>
     </div>
   );
+};
