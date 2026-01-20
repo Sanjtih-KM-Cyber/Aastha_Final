@@ -892,7 +892,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         <span className="bg-black/30 backdrop-blur-md border border-white/5 text-white/50 text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm">{dateLabel}</span>
                     </div>
                 )}
-                <div id={domId} className="flex flex-col w-full shrink-0 overflow-visible px-4 pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))]">
+                <div 
+                    id={domId} 
+                    className="flex flex-col w-full shrink-0 overflow-visible pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] sm:pl-6 sm:pr-6 md:pl-8 md:pr-8"
+                >
                     <MessageBubble 
                         role={msg.role} 
                         content={msg.content} 
