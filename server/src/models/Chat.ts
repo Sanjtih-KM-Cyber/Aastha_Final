@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IMessage {
+  _id?: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
