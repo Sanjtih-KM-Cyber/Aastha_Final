@@ -195,7 +195,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           relative
           w-fit
           min-w-[120px]
-          max-w-[90%]
+          max-w-[85%]
           sm:max-w-[80%]
           md:max-w-[70%]
           lg:max-w-[60%]
