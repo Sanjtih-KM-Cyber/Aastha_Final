@@ -7,6 +7,8 @@ import Diary from '../models/Diary';
 import Chat from '../models/Chat';
 import Mood from '../models/Mood';
 import { Person } from '../models/Person';
+import TrainingLog from '../models/TrainingLog';
+import { sanitizeForTraining } from './chatController';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { encrypt, decrypt } from '../utils/serverEncryption';
 import { sendOTPEmail } from '../services/emailService';
@@ -381,6 +383,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         moodStatus: user.moodStatus,
         masterKey: decryptedMasterKeyHex, // Zero-Knowledge Return
         isOnboardingComplete: user.isOnboardingComplete,
+        isDataDonationOn: user.isDataDonationOn,
         createdAt: user.createdAt,
         encryptionSalt: user.encryptionSalt,
         securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
@@ -470,6 +473,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
         wallpaper: user.wallpaper,
         persona: user.persona || 'aastha',
         isOnboardingComplete: user.isOnboardingComplete,
+        isDataDonationOn: user.isDataDonationOn,
         createdAt: user.createdAt,
         encryptionSalt: user.encryptionSalt,
         securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
@@ -519,6 +523,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
             wallpaper: user.wallpaper,
             persona: user.persona || 'aastha',
             isOnboardingComplete: user.isOnboardingComplete,
+            isDataDonationOn: user.isDataDonationOn,
             createdAt: user.createdAt,
             encryptionSalt: user.encryptionSalt,
             securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
@@ -726,6 +731,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
             avatar: user.avatar,
             wallpaper: user.wallpaper,
             isOnboardingComplete: user.isOnboardingComplete,
+            isDataDonationOn: user.isDataDonationOn,
             createdAt: user.createdAt,
             encryptionSalt: user.encryptionSalt,
             securityQuestions: user.securityQuestions?.map((q: any) => ({ question: q.question }))
@@ -875,7 +881,75 @@ export const toggleDataDonation = async (req: AuthRequest, res: Response) => {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
         const { isDataDonationOn } = (req as any).body;
 
-        await User.findByIdAndUpdate(req.user._id, { isDataDonationOn });
-        (res as any).json({ success: true, message: 'Preference updated.' });
+        const user = await User.findById(req.user._id);
+        if (!user) return (res as any).status(404).json({ message: 'User not found' });
+
+        user.isDataDonationOn = isDataDonationOn;
+        await user.save();
+
+        // RETROACTIVE DONATION
+        if (isDataDonationOn && !user.hasDonatedHistory) {
+            console.log(`[Data Donation] Starting retroactive export for ${user.name}`);
+            // Run in background
+            (async () => {
+                try {
+                    const chat = await Chat.findOne({ user: user._id });
+                    if (chat && chat.messages.length > 0) {
+                        const bulkOps = [];
+                        for (const msg of chat.messages) {
+                            const decrypted = decrypt(msg.content);
+                            // Safe Mode: Skip if decryption failed
+                            if (msg.content.includes(':') && decrypted === msg.content) continue;
+
+                            // Simple sanitization of output is tricky as we don't have prompt context easily,
+                            // but we treat msg.content as the 'text'.
+                            // We need input/output pairs.
+                            // This simple loop exports INDIVIDUAL messages which might break the input/output pair schema of TrainingLog.
+                            // The schema expects: input, output.
+                            // We need to pair them? Or just dump them?
+                            // The requirement says "Fetch all messages... Pair & Save: Create Input->Output pairs".
+                        }
+
+                        // Pairing Logic: Iterate i=0 to len-1
+                        for (let i = 0; i < chat.messages.length - 1; i++) {
+                            const current = chat.messages[i];
+                            const next = chat.messages[i+1];
+
+                            if (current.role === 'user' && next.role === 'assistant') {
+                                const inputDec = decrypt(current.content);
+                                const outputDec = decrypt(next.content);
+
+                                if (current.content.includes(':') && inputDec === current.content) continue;
+                                if (next.content.includes(':') && outputDec === next.content) continue;
+
+                                bulkOps.push({
+                                    insertOne: {
+                                        document: {
+                                            userMood: user.moodStatus || "neutral",
+                                            persona: user.persona || "aastha",
+                                            input: sanitizeForTraining(inputDec, user.name),
+                                            output: sanitizeForTraining(outputDec, user.name),
+                                            createdAt: next.timestamp
+                                        }
+                                    }
+                                });
+                            }
+                        }
+
+                        if (bulkOps.length > 0) {
+                            await TrainingLog.bulkWrite(bulkOps);
+                            console.log(`[Data Donation] Exported ${bulkOps.length} pairs for ${user._id}`);
+                        }
+                    }
+
+                    user.hasDonatedHistory = true;
+                    await user.save();
+                } catch (e) {
+                    console.error("[Data Donation] Retroactive export failed:", e);
+                }
+            })();
+        }
+
+        (res as any).json({ success: true, message: 'Preference updated.', isDataDonationOn: user.isDataDonationOn });
     } catch(e) { (res as any).status(500).json({ message: 'Update failed' }); }
 };

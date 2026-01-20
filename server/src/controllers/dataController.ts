@@ -22,20 +22,32 @@ export const getDiaryEntry = async (req: AuthRequest, res: Response) => {
 
         const originalTitle = entry.title;
         const decryptedTitle = decrypt(originalTitle);
-        const reEncryptedTitle = encrypt(decryptedTitle);
 
-        if (originalTitle !== reEncryptedTitle) {
-            entry.title = reEncryptedTitle;
-            needsSave = true;
+        // Safe Mode for Title
+        if (originalTitle.includes(':') && decryptedTitle === originalTitle) {
+             console.warn(`[Safe Mode] Title decryption failed for diary ${entry._id}`);
+             // Don't save, just return placeholder logic if needed or keep original in DB but display error
+             // We'll keep DB as is to avoid corruption
+        } else {
+            const reEncryptedTitle = encrypt(decryptedTitle);
+            if (originalTitle !== reEncryptedTitle) {
+                entry.title = reEncryptedTitle;
+                needsSave = true;
+            }
         }
 
         const originalContent = entry.content;
         const decryptedContent = decrypt(originalContent);
-        const reEncryptedContent = encrypt(decryptedContent);
 
-        if (originalContent !== reEncryptedContent) {
-            entry.content = reEncryptedContent;
-            needsSave = true;
+        // Safe Mode for Content
+        if (originalContent.includes(':') && decryptedContent === originalContent) {
+             console.warn(`[Safe Mode] Content decryption failed for diary ${entry._id}`);
+        } else {
+            const reEncryptedContent = encrypt(decryptedContent);
+            if (originalContent !== reEncryptedContent) {
+                entry.content = reEncryptedContent;
+                needsSave = true;
+            }
         }
 
         if (needsSave) {
@@ -44,8 +56,8 @@ export const getDiaryEntry = async (req: AuthRequest, res: Response) => {
 
         return {
             ...entry.toObject(),
-            title: decryptedTitle,
-            content: decryptedContent,
+            title: (originalTitle.includes(':') && decryptedTitle === originalTitle) ? "[Locked]" : decryptedTitle,
+            content: (originalContent.includes(':') && decryptedContent === originalContent) ? "[Locked]" : decryptedContent,
             // Fallback for legacy entries without entryDate (though default should handle it)
             entryDate: entry.entryDate || entry.createdAt
         };

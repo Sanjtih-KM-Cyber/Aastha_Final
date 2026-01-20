@@ -612,6 +612,18 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
         const history = chatSession.messages.map(m => {
             const originalContent = m.content;
             const decrypted = decrypt(originalContent);
+
+            // Safe Mode: Check if decryption failed on seemingly encrypted data
+            if (originalContent.includes(':') && decrypted === originalContent) {
+                console.warn(`[Safe Mode] Decryption failed for msg ${m._id}. Skipping re-encryption.`);
+                return {
+                    role: m.role,
+                    content: "[Locked]",
+                    timestamp: m.timestamp,
+                    voice_note: m.voice_note
+                };
+            }
+
             const reEncrypted = encrypt(decrypted);
 
             // Lazy Migration: If ciphertext changed (meaning it was using old key), update it
