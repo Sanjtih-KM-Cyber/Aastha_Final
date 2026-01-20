@@ -154,6 +154,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [uiAction, setUiAction] = useState<'none' | 'listen' | 'block_widget'>('none');
   const [currentMood, setCurrentMood] = useState('neutral');
   const [suggestedChips, setSuggestedChips] = useState<string[]>([]);
+  
+  // Media Menu State
+  const [showMediaMenu, setShowMediaMenu] = useState(false);
 
   // Thought Cloud
   const [showThoughtCloud, setShowThoughtCloud] = useState(false);
@@ -161,11 +164,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // Patience / Listening Mode State
   const [isWaitingForPermission, setIsWaitingForPermission] = useState(false);
-  const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Media Menu State
-  const [showMediaMenu, setShowMediaMenu] = useState(false);
-
+  
   // Scroll State
   const [showScrollDown, setShowScrollDown] = useState(false);
 
@@ -203,14 +202,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedTagsRef = useRef<Set<string>>(new Set());
 
   // --- 1. SYNC & WEBSOCKET & HEARTBEAT ---
   useEffect(() => {
     // Heartbeat: Refresh user data (streak, etc.) on focus
-    const handleFocus = () => {
-        api.get('/users/me').catch(console.error); // Silent refresh
-    };
+    const handleFocus = () => { api.get('/users/me').catch(console.error); };
     window.addEventListener('focus', handleFocus);
 
     const unsubscribe = subscribe('message', (data: any) => {
@@ -414,13 +412,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       if (path.startsWith('http') || path.startsWith('data:')) return path;
       if (path.startsWith('/')) {
           // Construct absolute URL based on API base
-          // Example: getApiUrl('') -> https://.../api
-          // path -> /api/ai/stream/...
-          // We need https://.../api/ai/stream/...
-          // If we append path to domain, we might double /api if path has it
-
-          const apiBase = getApiUrl(''); // e.g. https://domain.com/api
-          const domain = apiBase.replace(/\/api\/?$/, ''); // https://domain.com
+          const apiBase = getApiUrl(''); 
+          const domain = apiBase.replace(/\/api\/?$/, ''); 
           return `${domain}${path}`;
       }
       return path;
@@ -432,11 +425,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const toggleVoiceMode = () => {
     // @ts-ignore
     if (!window.SpeechRecognition && !window.webkitSpeechRecognition) { setError("Browser not supported."); return; }
-    // Remove Standard Mode check for Voice Mode to allow trial usage if implemented,
-    // but backend handles enforcement. Keeping frontend check is UX friendly though.
-    // However, since we now support "10 free messages with Voice", we should ALLOW it.
-    // if (isStandardMode) { alert("Voice Mode requires Premium."); return; } <--- REMOVED
-
+    
     if (isVoiceMode) {
         stopListening();
         setIsVoiceMode(false);
@@ -509,13 +498,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const handleCloneUpload = async (img: string) => {
-     // TODO: Implement Clone Mode Activation
-     setCloneUploadVisible(false);
-     setIsCloneMode(true);
-     setMessages(prev => [...prev, { role: 'system', content: 'SYSTEM: Clone Mode Activated. Upload a screenshot to mimic.', timestamp: Date.now() }]);
-     // Just for now, we simulate activation. Ideally send to /chat to activate.
-     // We will treat this as a "message" with intent to clone.
-     handleSend(undefined, 'ACTIVATE_CLONE_MODE', img);
+      setCloneUploadVisible(false);
+      setIsCloneMode(true);
+      setMessages(prev => [...prev, { role: 'system', content: 'SYSTEM: Clone Mode Activated. Upload a screenshot to mimic.', timestamp: Date.now() }]);
+      handleSend(undefined, 'ACTIVATE_CLONE_MODE', img);
   };
 
   const copyToClipboard = (text: string) => {
@@ -530,16 +516,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           if (items[i].type.indexOf('image') !== -1) {
               e.preventDefault();
               if (isStandardMode) { setError("Vision Analysis requires Premium."); return; }
-
               const blob = items[i].getAsFile();
               if (blob) {
                   try {
-                      // Compress/Format image using existing util
                       const compressed = await compressImage(blob);
                       setAttachedImage(compressed);
-                  } catch (err) {
-                      setError("Failed to process pasted image.");
-                  }
+                  } catch (err) { setError("Failed to process pasted image."); }
               }
               return; // Stop after first image
           }
@@ -618,7 +600,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             images: overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []),
             audio: audioBase64,
             forceReply: isPermissionGrant,
-            isVoiceMode: isVoiceMode // <--- Pass Voice Mode Flag
+            isVoiceMode: isVoiceMode 
         }),
       });
 
@@ -675,36 +657,36 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                              newList[targetIdx] = { ...newList[targetIdx], reaction: brain.reaction };
                                          }
                                          return newList;
-                                      });
+                                     });
                                 }
 
                                 // GOD MODE TOOLS (THE HANDS) -> TRANSFORM TO PROPOSALS
                                 if (brain.tool_calls && brain.tool_calls.length > 0) {
                                     brain.tool_calls.forEach((tool: any) => {
-                                        let toolName = '';
-                                        let params = {};
-                                        let reason = "I can help with that";
+                                         let toolName = '';
+                                         let params = {};
+                                         let reason = "I can help with that";
 
-                                        if (tool.name === 'control_widget') {
-                                            toolName = tool.params.widget;
-                                            params = tool.params.params || tool.params;
-                                        } else if (tool.name === 'write_diary') {
-                                            toolName = 'diary';
-                                            params = tool.params;
-                                            reason = "Write in Diary";
-                                        }
+                                         if (tool.name === 'control_widget') {
+                                             toolName = tool.params.widget;
+                                             params = tool.params.params || tool.params;
+                                         } else if (tool.name === 'write_diary') {
+                                             toolName = 'diary';
+                                             params = tool.params;
+                                             reason = "Write in Diary";
+                                         }
 
-                                        // Special Widget: Voice Hug
-                                        if (toolName === 'voice_hug') {
-                                            // Append audio placeholder
-                                            const hugTag = `\n\n[Voice Hug Playing 🎵]`;
-                                            aiContentRaw += hugTag;
-                                        }
+                                         // Special Widget: Voice Hug
+                                         if (toolName === 'voice_hug') {
+                                             // Append audio placeholder
+                                             const hugTag = `\n\n[Voice Hug Playing 🎵]`;
+                                             aiContentRaw += hugTag;
+                                         }
 
-                                        if (toolName) {
-                                            const proposalTag = `\n<proposal tool="${toolName}" params='${JSON.stringify(params)}' reason="${reason}" />`;
-                                            aiContentRaw += proposalTag;
-                                        }
+                                         if (toolName) {
+                                             const proposalTag = `\n<proposal tool="${toolName}" params='${JSON.stringify(params)}' reason="${reason}" />`;
+                                             aiContentRaw += proposalTag;
+                                         }
                                     });
                                 }
 
@@ -892,10 +874,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         <span className="bg-black/30 backdrop-blur-md border border-white/5 text-white/50 text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm">{dateLabel}</span>
                     </div>
                 )}
-                <div 
-                    id={domId} 
-                    className="flex flex-col w-full shrink-0 overflow-visible pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] sm:pl-6 sm:pr-6 md:pl-8 md:pr-8"
-                >
+                <div id={domId} className="flex flex-col w-full shrink-0 overflow-visible">
                     <MessageBubble 
                         role={msg.role} 
                         content={msg.content} 
@@ -991,13 +970,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
               <h3 className="text-3xl font-serif text-white mb-6">{isListening ? "Listening..." : "Thinking..."}</h3>
               <p className="text-white/50 text-lg max-w-lg text-center px-4 min-h-[3rem]">{transcript || "..."}</p>
               <button onClick={isListening ? stopListening : startListening} className="mt-12 p-6 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
-                 {isListening ? <Mic size={32} /> : <MicOff size={32} className="text-red-400" />}
+                  {isListening ? <Mic size={32} /> : <MicOff size={32} className="text-red-400" />}
               </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* SETTINGS PANEL (Keep component, but remove trigger button from header) */}
+      {/* SETTINGS PANEL */}
       <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
       {/* THOUGHT CLOUD MODAL */}
@@ -1103,11 +1082,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                 <button onMouseDown={e => e.preventDefault()} onClick={() => setIsSearchOpen(false)} className="shrink-0 text-white/40 hover:text-white"><X size={14}/></button>
                             )}
                          </>
-                     ) : (
-                         <button onClick={() => setIsSearchOpen(true)} className="text-white/60 hover:text-white w-full h-full flex items-center justify-center">
-                            <Search size={18} />
-                         </button>
-                     )}
+                      ) : (
+                          <button onClick={() => setIsSearchOpen(true)} className="text-white/60 hover:text-white w-full h-full flex items-center justify-center">
+                             <Search size={18} />
+                          </button>
+                      )}
                  </motion.div>
 
                  {/* SETTINGS BUTTON REMOVED AS REQUESTED */}
@@ -1121,8 +1100,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       <div 
         ref={messagesContainerRef}
         onScroll={handleScroll}
-        // FIX: Removed horizontal padding here to prevent layout thrashing on insert
-        className="flex-1 w-full mx-auto overflow-y-auto scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
+        // FIX: Added horizontal padding back to Container, removed from bubbles.
+        className="flex-1 w-full mx-auto overflow-y-auto px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
         style={{ overscrollBehaviorY: 'contain' }}
       >
           <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40 relative">
@@ -1220,14 +1199,44 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     <>
                     <div className="flex items-center gap-1 relative">
                         {/* UNIFIED MEDIA BUTTON */}
-                        <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isStandardMode}
-                            className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
-                        >
-                            <ImageIcon size={20} />
-                        </button>
+                        {isMobile ? (
+                             <div className="relative">
+                                 <button
+                                     type="button"
+                                     onClick={() => setShowMediaMenu(!showMediaMenu)}
+                                     disabled={isStandardMode}
+                                     className={`p-2.5 rounded-full transition-all ${showMediaMenu || attachedImage ? 'bg-white/10 text-white rotate-45' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                                 >
+                                     <Plus size={22} />
+                                 </button>
+                                 <AnimatePresence>
+                                     {showMediaMenu && (
+                                         <motion.div
+                                            initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                            exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                                            className="fixed bottom-24 left-6 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden min-w-[160px] z-[100] flex flex-col p-1.5"
+                                         >
+                                             <button onClick={() => { cameraInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
+                                                 <div className="w-8 h-8 rounded-full bg-teal-500/20 flex items-center justify-center"><Camera size={16} className="text-teal-400" /></div> Camera
+                                             </button>
+                                             <button onClick={() => { fileInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
+                                                 <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center"><ImageIcon size={16} className="text-violet-400" /></div> Gallery
+                                             </button>
+                                         </motion.div>
+                                     )}
+                                 </AnimatePresence>
+                             </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isStandardMode}
+                                className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                            >
+                                <ImageIcon size={20} />
+                            </button>
+                        )}
 
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
                         <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
