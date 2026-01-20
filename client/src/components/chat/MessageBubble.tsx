@@ -185,7 +185,7 @@ const VoiceNotePlayer: React.FC<{ src: string }> = ({ src }) => {
     };
 
     return (
-        <div className="mt-1 mb-1 p-2 rounded-xl bg-black/20 border border-white/10 flex items-center gap-3 w-64">
+        <div className="mt-1 mb-1 p-2 rounded-xl bg-black/20 border border-white/10 flex items-center gap-3 w-full max-w-[250px]">
              {/* Play Button */}
             <button
                 onClick={togglePlay}
