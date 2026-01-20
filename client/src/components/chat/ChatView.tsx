@@ -1126,22 +1126,20 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
     {/* --- SECTION 2: CHAT AREA --- */}
-      {/*  */}
-      
       <div 
           ref={messagesContainerRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-6 py-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
+          // ADDED: min-h-0 (CRITICAL FIX) and w-full
+          className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden px-4 md:px-6 py-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
           style={{ 
-              maxWidth: '100vw',
-              overflowX: 'hidden',
-              width: '100%'
+              // Removed maxWidth: 100vw (min-h-0 handles the layout lock better)
+              width: '100%',
+              overflowAnchor: 'none' // Prevents browser scroll anchoring glitches
           }}
       >
           {renderMessages()}
           <div ref={messagesEndRef} />
       </div>
-
       {/* Jump to Bottom Button (Overlay) */}
       <AnimatePresence>
         {showScrollDown && (
