@@ -1,7 +1,19 @@
 {
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@types/express": "^5.0.6",
+    "@types/mongoose": "^5.11.96",
+    "@types/node": "^25.0.9",
     "@types/ws": "^8.18.1",
+    "axios": "^1.13.2",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "form-data": "^4.0.5",
+    "groq-sdk": "^0.37.0",
+    "mongoose": "^9.1.4",
     "node-cron": "^4.2.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
     "ws": "^8.18.3"
   },
   "devDependencies": {

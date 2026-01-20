@@ -6,6 +6,7 @@ import { generateCloneResponse, analyzeScreenshot } from '../services/cloneServi
 import { brainService } from '../services/brainService';
 import User from '../models/User';
 import Chat from '../models/Chat';
+import TrainingLog from '../models/TrainingLog';
 import { encrypt, decrypt } from '../utils/serverEncryption';
 import { storeAudio } from './audioController';
 
@@ -73,6 +74,16 @@ const cleanTextForTTS = (text: string): string => {
         .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '')
         .replace(/\s+/g, ' ')         // Collapse multiple spaces
         .trim();
+};
+
+const escapeRegex = (string: string) => {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+export const sanitizeForTraining = (text: string, userName: string): string => {
+    if (!text || !userName) return text;
+    // Scrub user name case-insensitively
+    return text.replace(new RegExp(escapeRegex(userName), 'gi'), "<USER>");
 };
 
 // ============================================================================
@@ -559,6 +570,19 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                 await User.findByIdAndUpdate(userId, { memorySummary: analysis.summary });
             } catch (e) { console.error("Memory Error:", e); }
         })();
+    }
+
+    // --- DATA DONATION ---
+    if (user.isDataDonationOn) {
+        try {
+            const rawUserMsg = typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]';
+            await TrainingLog.create({
+                userMood: user.moodStatus,
+                persona: user.persona,
+                input: sanitizeForTraining(rawUserMsg, user.name),
+                output: sanitizeForTraining(fullTextResponse, user.name)
+            });
+        } catch (e) { console.error("Data Donation Error:", e); }
     }
 
     (res as any).write('data: [DONE]\n\n');

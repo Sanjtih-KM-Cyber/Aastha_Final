@@ -6,27 +6,39 @@ dotenv.config();
 
 const ALGORITHM = 'aes-256-gcm';
 
-// Ensure the key is exactly 32 bytes
-const getKey = (): Buffer => {
-    const secret = process.env.SERVER_ENCRYPTION_KEY;
-    if (!secret) {
-        throw new Error("FATAL: SERVER_ENCRYPTION_KEY is missing from environment variables.");
+// Load keys: Primary (New) and Fallback (Old)
+const getKeys = (): Buffer[] => {
+    const keys: Buffer[] = [];
+
+    // 1. Primary Key (New)
+    if (process.env.NEW_SERVER_ENCRYPTION_KEY) {
+        keys.push(crypto.createHash('sha256').update(process.env.NEW_SERVER_ENCRYPTION_KEY).digest());
     }
-    return crypto.createHash('sha256').update(secret).digest();
+
+    // 2. Fallback Key (Old) - PREVENTS GARBLED DATA
+    if (process.env.SERVER_ENCRYPTION_KEY) {
+        keys.push(crypto.createHash('sha256').update(process.env.SERVER_ENCRYPTION_KEY).digest());
+    }
+
+    if (keys.length === 0) {
+        throw new Error("FATAL: No Encryption Keys found (NEW_SERVER_ENCRYPTION_KEY or SERVER_ENCRYPTION_KEY).");
+    }
+    return keys;
 };
 
 export const encrypt = (text: string): string => {
     if (!text) return text;
     try {
+        // ALWAYS encrypt with the PRIMARY (First) key
+        const key = getKeys()[0];
         const iv = crypto.randomBytes(16);
-        const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv);
+        const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
         
         let encrypted = cipher.update(text, 'utf8', 'hex');
         encrypted += cipher.final('hex');
         
         const authTag = cipher.getAuthTag();
         
-        // Format: IV:AuthTag:Ciphertext
         return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
     } catch (error) {
         console.error("Encryption failed:", error);
@@ -36,24 +48,31 @@ export const encrypt = (text: string): string => {
 
 export const decrypt = (text: string): string => {
     if (!text) return text;
-    try {
-        const parts = text.split(':');
-        // If not in IV:AuthTag:Ciphertext format, assume it's legacy plain text
-        if (parts.length !== 3) return text;
-        
-        const iv = Buffer.from(parts[0], 'hex');
-        const authTag = Buffer.from(parts[1], 'hex');
-        const encryptedText = parts[2];
-        
-        const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv);
-        decipher.setAuthTag(authTag);
-        
-        let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-        decrypted += decipher.final('utf8');
-        
-        return decrypted;
-    } catch (error) {
-        // Fail safe: return original text if decryption fails (might be plain text)
-        return text;
+    const parts = text.split(':');
+    if (parts.length !== 3) return text; // Legacy/Plain text
+
+    const iv = Buffer.from(parts[0], 'hex');
+    const authTag = Buffer.from(parts[1], 'hex');
+    const encryptedText = parts[2];
+
+    // Try all available keys
+    const keys = getKeys();
+
+    for (const key of keys) {
+        try {
+            const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+            decipher.setAuthTag(authTag);
+
+            let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+            decrypted += decipher.final('utf8');
+
+            // If we reached here, decryption was successful!
+            return decrypted;
+        } catch (error) {
+            continue; // Wrong key, try the next one...
+        }
     }
+
+    console.error("Decryption failed with all provided keys.");
+    return text;
 };

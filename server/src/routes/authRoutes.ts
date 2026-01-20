@@ -18,7 +18,8 @@ import {
   completeOnboarding,
   uploadPersonaVoice,
   uploadPersonaScreenshot,
-  updateCloneSettings
+  updateCloneSettings,
+  toggleDataDonation
 } from '../controllers/authController';
 import { createOrder, verifyPayment, createVoiceOrder } from '../controllers/paymentController';
 import { protect } from '../middleware/authMiddleware';
@@ -46,6 +47,7 @@ router.post('/upgrade', protect, upgradeToPro);
 router.post('/persona-voice', protect, uploadPersonaVoice);
 router.post('/persona-screenshot', protect, uploadPersonaScreenshot);
 router.put('/clone-settings', protect, updateCloneSettings);
+router.post('/toggle-data-donation', protect, toggleDataDonation);
 
 // Account management
 router.post('/delete-account', protect, softDeleteUser);

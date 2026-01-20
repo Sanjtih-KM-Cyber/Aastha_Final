@@ -118,6 +118,9 @@ export interface IUser extends Document {
   // Onboarding
   isOnboardingComplete?: boolean;
 
+  // --- DATA DONATION ---
+  isDataDonationOn?: boolean;
+
   // --- NEW FIELDS FOR "MONEY MACHINE" ---
   socialBattery: number; // 0-100
   cloneMode: ICloneMode;
@@ -238,6 +241,9 @@ const userSchema = new Schema<IUser>({
 
   // Onboarding (Default false = New users see it)
   isOnboardingComplete: { type: Boolean, default: false },
+
+  // --- DATA DONATION ---
+  isDataDonationOn: { type: Boolean, default: false },
 
   // --- NEW FIELDS ---
   socialBattery: { type: Number, default: 100, min: 0, max: 100 },
