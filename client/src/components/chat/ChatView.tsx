@@ -1088,8 +1088,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                           </button>
                       )}
                  </motion.div>
-
-                 {/* SETTINGS BUTTON REMOVED AS REQUESTED */}
              </div>
         </div>
       </div>
@@ -1100,7 +1098,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       <div 
         ref={messagesContainerRef}
         onScroll={handleScroll}
-        // FIX: Added horizontal padding back to Container, removed from bubbles.
         className="flex-1 w-full mx-auto overflow-y-auto overflow-x-hidden px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
         style={{ overscrollBehaviorY: 'contain' }}
       >
@@ -1126,7 +1123,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           </div>
       </div>
 
-      {/* --- SECTION 3: INPUT AREA --- */}
+      {/* --- SECTION 3: INPUT AREA (REDESIGNED) --- */}
       <div className={`shrink-0 w-full pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-[env(safe-area-inset-bottom)] pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6 bg-none'}`}>
           <div className="flex flex-col gap-2">
              <AnimatePresence>
@@ -1182,107 +1179,76 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              ) : null}
              </AnimatePresence>
 
-             {/* INPUT AREA */}
-             <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border ${uiAction === 'listen' ? 'border-teal-500/50 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'border-white/5'} p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
-                 {uiAction === 'listen' && (
-                     <div className="absolute -top-8 left-0 right-0 flex justify-center pointer-events-none">
-                         <motion.div
-                             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                             className="bg-teal-500/20 text-teal-200 text-xs px-3 py-1 rounded-full backdrop-blur-md border border-teal-500/30 flex items-center gap-2"
-                         >
-                             <Headphones size={12} /> Listening Mode Active
-                         </motion.div>
-                     </div>
-                 )}
+             {/* INPUT AREA (REDESIGNED) */}
+             <div id="chat-input-area" className={`relative flex items-center gap-2 p-1`}>
 
-                 {/* RECORDING OVERLAY REMOVED IN FAVOR OF DICTATION */}
-                    <>
-                    <div className="flex items-center gap-1 relative">
-                        {/* UNIFIED MEDIA BUTTON */}
-                        {isMobile ? (
-                             <div className="relative">
-                                 <button
-                                     type="button"
-                                     onClick={() => setShowMediaMenu(!showMediaMenu)}
-                                     disabled={isStandardMode}
-                                     className={`p-2.5 rounded-full transition-all ${showMediaMenu || attachedImage ? 'bg-white/10 text-white rotate-45' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
-                                 >
-                                     <Plus size={22} />
-                                 </button>
-                                 <AnimatePresence>
-                                     {showMediaMenu && (
-                                         <motion.div
-                                            initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                                            exit={{ opacity: 0, scale: 0.8, y: 10 }}
-                                            className="fixed bottom-24 left-6 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden min-w-[160px] z-[100] flex flex-col p-1.5"
-                                         >
-                                             <button onClick={() => { cameraInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
-                                                 <div className="w-8 h-8 rounded-full bg-teal-500/20 flex items-center justify-center"><Camera size={16} className="text-teal-400" /></div> Camera
-                                             </button>
-                                             <button onClick={() => { fileInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
-                                                 <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center"><ImageIcon size={16} className="text-violet-400" /></div> Gallery
-                                             </button>
-                                         </motion.div>
-                                     )}
-                                 </AnimatePresence>
-                             </div>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isStandardMode}
-                                className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
-                            >
-                                <ImageIcon size={20} />
-                            </button>
-                        )}
+                {/* 1. LEFT ICONS (Gallery, Mic) */}
+                <div className="flex items-center gap-1 shrink-0">
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isStandardMode}
+                        className={`p-2.5 rounded-full transition-all text-white/40 hover:bg-white/5 hover:text-white ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    >
+                        <ImageIcon size={22} />
+                    </button>
+                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
+                    <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
 
-                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
-                        <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
+                    <button
+                        onClick={toggleDictation}
+                        className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
+                    >
+                        {isDictating ? <MicOff size={22} /> : <Mic size={22} />}
+                    </button>
+                </div>
 
-                        {/* DICTATION MIC (UPDATED) */}
-                        <button onClick={toggleDictation} className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>
-                            {isDictating ? <MicOff size={20} /> : <Mic size={20} />}
+                {/* 2. INPUT FIELD (Rounded with Emoji inside) */}
+                <form onSubmit={handleSend} className="flex-1 relative flex items-center bg-[#1F2937] rounded-[24px] border border-white/5 focus-within:border-white/20 transition-all">
+                    <textarea
+                        ref={textareaRef}
+                        value={input}
+                        onChange={handleInput}
+                        onKeyDown={handleKeyPress}
+                        onPaste={handlePaste}
+                        placeholder={isDictating ? "Listening..." : "Type a message..."}
+                        className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base py-3 pl-4 pr-10 resize-none max-h-32 scrollbar-hide rounded-[24px]"
+                        rows={1}
+                    />
+
+                    {/* Emoji Button Inside Input */}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                        <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
+                            <Smile size={20} />
                         </button>
                     </div>
 
-                    <form onSubmit={handleSend} className="flex-1 flex items-center relative h-full">
-                        <textarea
-                            ref={textareaRef}
-                            value={input}
-                            onChange={handleInput}
-                            onKeyDown={handleKeyPress}
-                            onPaste={handlePaste}
-                            placeholder={isDictating ? "Listening..." : (uiAction === 'listen' ? "I'm listening..." : "Type a message...")}
-                            className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base font-light py-3 px-2 resize-none max-h-32 scrollbar-hide"
-                            rows={1}
-                        />
-                        <div className="relative">
-                            <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
-                                <Smile size={20} />
-                            </button>
-                            {showEmojiPicker && (
-                                <div className="absolute bottom-14 right-0 shadow-2xl z-50">
-                                    <EmojiPicker
-                                        theme={Theme.DARK}
-                                        emojiStyle={EmojiStyle.APPLE}
-                                        onEmojiClick={(e) => { setInput(prev => prev + e.emoji); }}
-                                        lazyLoadEmojis={true}
-                                        width={300}
-                                        height={400}
-                                        searchDisabled={false}
-                                        skinTonesDisabled={false}
-                                    />
-                                </div>
-                            )}
+                    {showEmojiPicker && (
+                        <div className="absolute bottom-14 right-0 shadow-2xl z-50">
+                            <EmojiPicker
+                                theme={Theme.DARK}
+                                emojiStyle={EmojiStyle.APPLE}
+                                onEmojiClick={(e) => { setInput(prev => prev + e.emoji); }}
+                                lazyLoadEmojis={true}
+                                width={300}
+                                height={400}
+                                searchDisabled={false}
+                                skinTonesDisabled={false}
+                            />
                         </div>
-                    </form>
+                    )}
+                </form>
 
-                    <button onClick={(e) => handleSend(e)} disabled={!input.trim() && !attachedImage} className="p-3.5 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-1" style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #4f46e5)` }}>
-                        <Send size={18} className="ml-0.5" fill="currentColor" />
-                    </button>
-                    </>
+                {/* 3. SEND BUTTON (Purple Circle) */}
+                <button
+                    onClick={(e) => handleSend(e)}
+                    disabled={!input.trim() && !attachedImage}
+                    className="shrink-0 p-3 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ background: currentTheme.primaryColor || '#a855f7' }}
+                >
+                    <Send size={20} fill="currentColor" className="ml-0.5" />
+                </button>
+
              </div>
           </div>
       </div>

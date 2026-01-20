@@ -315,7 +315,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       transition={{ duration: 0.25, ease: 'easeOut' }}
       className={`group flex w-full relative ${
         isUser ? 'justify-end' : 'justify-start'
-      } ${isMobile ? 'mb-10' : 'mb-6'}`}
+      } ${isMobile ? 'mb-4' : 'mb-6'}`}
       onMouseEnter={() => !isMobile && setIsHovered(true)}
       onMouseLeave={() => !isMobile && setIsHovered(false)}
       onClick={() => isMobile && setIsHovered(!isHovered)}
@@ -353,7 +353,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       {/* Bubble wrapper */}
       <div
         className="
-          relative w-fit min-w-[120px] max-w-[85vw] sm:max-w-[80%] md:max-w-[70%] lg:max-w-[60%] xl:max-w-[55%]
+          relative w-fit min-w-[100px] max-w-[85vw] sm:max-w-[80%] md:max-w-[70%] lg:max-w-[60%] xl:max-w-[55%]
         "
       >
         {/* Sticky Reaction (Attached to Bubble) */}
@@ -374,10 +374,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             relative overflow-hidden px-4 py-3 md:px-5 md:py-3.5 text-[15px] md:text-base leading-relaxed shadow-lg break-words
             ${
               isUser
-                ? 'rounded-[22px] rounded-br-none border border-white/10'
-                : 'rounded-[22px] rounded-bl-none border border-white/10'
+                ? 'rounded-[20px] rounded-br-none bg-[#1F2937] text-white border border-white/5'
+                : 'rounded-[20px] rounded-bl-none border border-white/10'
             }
-            ${!isMobile ? 'backdrop-blur-xl' : 'backdrop-blur-none'}
           `}
           style={{
              ...( !isUser
@@ -388,9 +387,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   borderLeft: `3px solid ${moodColor}`,
                 }
               : {
-                  background: isMobile
-                    ? '#1f2937'
-                    : `linear-gradient(135deg, #1f293780, #11182780)`,
+                  // Ensure user bubble is solid dark grey/black
+                  backgroundColor: '#1F2937'
                 }),
                 wordBreak: 'break-word',
                 overflowWrap: 'anywhere'
@@ -473,22 +471,22 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   isMobile
                     ? `top-full mt-2 ${isUser ? 'right-0' : 'left-0'}`
                     : `top-1/2 -translate-y-1/2 ${
-                        isUser ? 'right-full mr-3' : 'left-full ml-3'
+                        isUser ? 'right-full mr-2' : 'left-full ml-2'
                       }`
                 }
               `}
             >
               <button
                 onClick={() => onReply?.(content)}
-                className="p-2 rounded-full bg-zinc-800 border border-white/10 text-white/70 hover:text-white shadow-lg"
+                className="p-1.5 rounded-full bg-zinc-800 border border-white/10 text-white/70 hover:text-white shadow-lg"
               >
-                <Reply size={14} />
+                <Reply size={12} />
               </button>
               <button
                 onClick={() => onCopy?.(content)}
-                className="p-2 rounded-full bg-zinc-800 border border-white/10 text-white/70 hover:text-white shadow-lg"
+                className="p-1.5 rounded-full bg-zinc-800 border border-white/10 text-white/70 hover:text-white shadow-lg"
               >
-                <Copy size={14} />
+                <Copy size={12} />
               </button>
             </motion.div>
           )}
