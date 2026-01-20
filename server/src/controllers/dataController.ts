@@ -15,13 +15,47 @@ export const getDiaryEntry = async (req: AuthRequest, res: Response) => {
     // Sort by entryDate (logical date) instead of creation date
     const entries = await Diary.find({ user: req.user._id }).sort({ entryDate: -1 });
     
-    const decryptedEntries = entries.map(entry => ({
-        ...entry.toObject(),
-        title: decrypt(entry.title),
-        content: decrypt(entry.content),
-        // Fallback for legacy entries without entryDate (though default should handle it)
-        entryDate: entry.entryDate || entry.createdAt
-    }));
+    let migrationPromises: Promise<any>[] = [];
+
+    const decryptedEntries = entries.map(entry => {
+        let needsSave = false;
+
+        const originalTitle = entry.title;
+        const decryptedTitle = decrypt(originalTitle);
+        const reEncryptedTitle = encrypt(decryptedTitle);
+
+        if (originalTitle !== reEncryptedTitle) {
+            entry.title = reEncryptedTitle;
+            needsSave = true;
+        }
+
+        const originalContent = entry.content;
+        const decryptedContent = decrypt(originalContent);
+        const reEncryptedContent = encrypt(decryptedContent);
+
+        if (originalContent !== reEncryptedContent) {
+            entry.content = reEncryptedContent;
+            needsSave = true;
+        }
+
+        if (needsSave) {
+            migrationPromises.push(entry.save());
+        }
+
+        return {
+            ...entry.toObject(),
+            title: decryptedTitle,
+            content: decryptedContent,
+            // Fallback for legacy entries without entryDate (though default should handle it)
+            entryDate: entry.entryDate || entry.createdAt
+        };
+    });
+
+    if (migrationPromises.length > 0) {
+        console.log(`[Key Rotation] Migrating ${migrationPromises.length} diary entries for user ${req.user._id}`);
+        // Background save
+        Promise.all(migrationPromises).catch(e => console.error("Background Diary Migration Error:", e));
+    }
 
     (res as any).status(200).json(decryptedEntries);
   } catch (error) {

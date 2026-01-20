@@ -606,12 +606,34 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
         const chatSession = await Chat.findOne({ user: req.user._id });
         if (!chatSession) return (res as any).json([]);
-        const history = chatSession.messages.map(m => ({
-            role: m.role,
-            content: decrypt(m.content),
-            timestamp: m.timestamp,
-            voice_note: m.voice_note
-        }));
+
+        let needsSave = false;
+
+        const history = chatSession.messages.map(m => {
+            const originalContent = m.content;
+            const decrypted = decrypt(originalContent);
+            const reEncrypted = encrypt(decrypted);
+
+            // Lazy Migration: If ciphertext changed (meaning it was using old key), update it
+            if (originalContent !== reEncrypted) {
+                m.content = reEncrypted;
+                needsSave = true;
+            }
+
+            return {
+                role: m.role,
+                content: decrypted,
+                timestamp: m.timestamp,
+                voice_note: m.voice_note
+            };
+        });
+
+        if (needsSave) {
+            console.log(`[Key Rotation] Migrating chat history for user ${req.user._id}`);
+            // Save in background to not block response
+            chatSession.save().catch(e => console.error("Background Migration Save Error:", e));
+        }
+
         (res as any).json(history);
     } catch (error) {
         console.error("History Error:", error);
