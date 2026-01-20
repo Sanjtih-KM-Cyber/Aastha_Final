@@ -18,6 +18,27 @@ interface MessageBubbleProps {
   isMobile?: boolean;
 }
 
+// --- NEW: Emoji Mapper ---
+// This translates the backend "text" reaction into an actual Emoji
+const reactionMap: Record<string, string> = {
+  'thumbsup': '👍',
+  'like': '👍',
+  'heart': '❤️',
+  'love': '❤️',
+  'laugh': '😂',
+  'haha': '😂',
+  'surprised': '😲',
+  'wow': '😲',
+  'sad': '😢',
+  'angry': '😠',
+  'fire': '🔥',
+  'clap': '👏',
+  'check': '✅',
+  'x': '❌',
+  'hehe': '🤭',
+  'party': '🎉'
+};
+
 // Helper to parse hidden <proposal> tags AND STRIP LEAKED JSON
 const extractProposals = (text: string) => {
     // 1. Remove leaked Subconscious JSON block if it appears in text
@@ -71,6 +92,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   }, [content, isUser]);
 
   const isThinking = isStreaming && (!visibleContent || visibleContent.length === 0);
+
+  // --- FIX: Resolve Reaction ---
+  // If reaction is "thumbsup", look it up. If not found, use original text.
+  const displayReaction = reaction ? (reactionMap[reaction.toLowerCase()] || reaction) : null;
 
   const renderContent = (text: string) => {
     if (!searchQuery || !text) return text;
@@ -286,20 +311,20 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         </div>
 
-        {/* --- FIXED: Sticky Reaction --- */}
-        {/* Increased Z-index to 50 and made background solid dark for visibility */}
+        {/* --- FIXED: Sticky Reaction with Mapping --- */}
         <AnimatePresence>
-          {isUser && reaction && (
+          {isUser && displayReaction && (
               <motion.div
                   initial={{ scale: 0, opacity: 0, rotate: -20 }}
                   animate={{ scale: 1, opacity: 1, rotate: 0 }}
                   exit={{ scale: 0, opacity: 0 }}
-                  className="absolute -left-3 -bottom-3 z-50 text-xl bg-[#2a2a2a] text-white rounded-full p-1.5 border border-white/20 shadow-xl"
+                  className="absolute -left-3 -bottom-3 z-50 text-xl bg-[#2a2a2a] text-white rounded-full p-1.5 border border-white/20 shadow-xl flex items-center justify-center min-w-[32px] min-h-[32px]"
               >
-                  {reaction}
+                  {displayReaction}
               </motion.div>
           )}
         </AnimatePresence>
+
         {/* Hover Actions (Reply/Copy) */}
         <AnimatePresence>
           {(isHovered || (isMobile && isHovered)) && !isThinking && (
