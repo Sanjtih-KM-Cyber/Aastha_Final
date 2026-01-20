@@ -353,7 +353,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       {/* Bubble wrapper */}
       <div
         className="
-          relative w-fit min-w-[120px] max-w-[90%] sm:max-w-[80%] md:max-w-[70%] lg:max-w-[60%] xl:max-w-[55%]
+          relative w-fit min-w-[120px] max-w-[85vw] sm:max-w-[80%] md:max-w-[70%] lg:max-w-[60%] xl:max-w-[55%]
         "
       >
         {/* Sticky Reaction (Attached to Bubble) */}
