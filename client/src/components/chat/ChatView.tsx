@@ -1116,11 +1116,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       {/* --- SECTION 2: CHAT AREA --- */}
       <div 
-          ref={messagesContainerRef}
-          onScroll={handleScroll}
-          className="flex-1 w-full mx-auto overflow-y-auto px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
-          style={{ overscrollBehaviorY: 'contain' }}
-      >
+    ref={messagesContainerRef}
+    onScroll={handleScroll}
+    // CHANGED: Added dynamic pl/pr and explicit pb-safe logic
+    className="flex-1 w-full mx-auto overflow-y-auto pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
+    style={{ overscrollBehaviorY: 'contain' }}
+>
           <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40 relative">
               <div className="h-4" /> 
               {renderMessages()}
@@ -1144,7 +1145,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       </div>
 
       {/* --- SECTION 3: INPUT AREA --- */}
-      <div className={`shrink-0 w-full px-4 pb-safe pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6 bg-none'}`}>
+      <div className={`shrink-0 w-full pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-[env(safe-area-inset-bottom)] pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6 bg-none'}`}>
           <div className="flex flex-col gap-2">
              <AnimatePresence>
                  {replyingTo && (
