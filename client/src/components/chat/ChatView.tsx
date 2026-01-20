@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Menu, Headphones, AlertCircle, Smile, 
-  Mic, MicOff, X, Search, Image as ImageIcon,
-  ShieldAlert, Loader2, ChevronDown, Reply, Check, ArrowDown,
-  Zap, Leaf
+  Mic, MicOff, X, Search, Image as ImageIcon, Plus, Camera,
+  ShieldAlert, Loader2, ChevronDown, Reply
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
@@ -12,52 +11,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { useSync } from '../../context/SyncContext';
-import api from '../../services/api';
-import { SettingsPanel } from '../settings/SettingsPanel';
-
-// --- NEW COMPONENT: THOUGHT CLOUD MODAL ---
-const ThoughtCloudModal: React.FC<{ isOpen: boolean; onClose: () => void; content: any }> = ({ isOpen, onClose, content }) => {
-    if (!isOpen || !content) return null;
-
-    return (
-        <AnimatePresence>
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-md" />
-                <motion.div
-                    initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                    animate={{ scale: 1, opacity: 1, y: 0 }}
-                    exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                    className="relative w-full max-w-md bg-white/10 border border-white/20 backdrop-blur-xl rounded-3xl p-6 shadow-2xl overflow-hidden"
-                >
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-400 via-violet-400 to-amber-400" />
-                    <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white"><X size={20} /></button>
-
-                    <h3 className="text-xl font-serif text-white mb-4 flex items-center gap-2">
-                        <span className="text-2xl">☁️</span> Inner Thoughts
-                    </h3>
-
-                    <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                        <div className="p-4 bg-black/20 rounded-xl border border-white/5">
-                            <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Monologue</h4>
-                            <p className="text-sm text-white/90 italic leading-relaxed">"{content.internal_monologue || 'No thoughts yet...'}"</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="p-3 bg-black/20 rounded-xl border border-white/5">
-                                <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Mood</h4>
-                                <p className="text-sm text-white font-medium capitalize">{content.mood || 'Neutral'}</p>
-                            </div>
-                            <div className="p-3 bg-black/20 rounded-xl border border-white/5">
-                                <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Strategy</h4>
-                                <p className="text-sm text-white font-medium capitalize">{content.strategy || 'Reply'}</p>
-                            </div>
-                        </div>
-                    </div>
-                </motion.div>
-            </div>
-        </AnimatePresence>
-    );
-};
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -65,8 +18,7 @@ interface ChatMessage {
   timestamp?: number;
   warning?: string;
   id?: string;
-  reaction?: string;
-  voice_note?: string;
+  reaction?: string; // New field for sticky reaction
 }
 
 interface ChatViewProps {
@@ -151,17 +103,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [statusDisplay, setStatusDisplay] = useState(currentActivity || 'Online');
   const [uiAction, setUiAction] = useState<'none' | 'listen' | 'block_widget'>('none');
   const [currentMood, setCurrentMood] = useState('neutral');
-  const [suggestedChips, setSuggestedChips] = useState<string[]>([]);
-
-  // Thought Cloud
-  const [showThoughtCloud, setShowThoughtCloud] = useState(false);
-  const [lastSubconscious, setLastSubconscious] = useState<any>(null); // Store last brain data
+  const [suggestedChips, setSuggestedChips] = useState<string[]>([]); // New State for Chips
 
   // Patience / Listening Mode State
   const [isWaitingForPermission, setIsWaitingForPermission] = useState(false);
+  const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Scroll State
-  const [showScrollDown, setShowScrollDown] = useState(false);
+  // Media Menu State
+  const [showMediaMenu, setShowMediaMenu] = useState(false);
 
   // --- SEARCH STATE ---
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -177,16 +126,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem('user_tts_enabled') === 'true');
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(() => localStorage.getItem('user_voice_uri'));
   
-  // AUDIO REF for Single Source of Truth
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  // --- CLONE MODE & VOICE INPUT ---
-  const [isCloneMode, setIsCloneMode] = useState(false);
-  const [cloneUploadVisible, setCloneUploadVisible] = useState(false);
-
-  // --- SETTINGS STATE ---
-  const [showSettings, setShowSettings] = useState(false);
-
   // --- CREDITS ---
   const [localCredits, setLocalCredits] = useState(user?.credits || 0);
   const [modelMode, setModelMode] = useState<'pro' | 'eco'>(user?.credits && user.credits > 0 ? 'pro' : 'eco');
@@ -197,38 +136,32 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedTagsRef = useRef<Set<string>>(new Set());
 
-  // --- 1. SYNC & WEBSOCKET & HEARTBEAT ---
+  // --- 1. SYNC & WEBSOCKET ---
   useEffect(() => {
-    // Heartbeat: Refresh user data (streak, etc.) on focus
-    const handleFocus = () => { api.get('/users/me').catch(console.error); };
-    window.addEventListener('focus', handleFocus);
-
     const unsubscribe = subscribe('message', (data: any) => {
         if (data && data.content) {
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.role === 'assistant' && (lastMsg.id?.startsWith('temp') || lastMsg.id === 'temp-ai')) {
-                      return [...prev.slice(0, -1), { ...lastMsg, content: data.content, id: data._id || Date.now().toString() }];
+                     return [...prev.slice(0, -1), { ...lastMsg, content: data.content, id: data._id || Date.now().toString() }];
                 }
                 return [...prev, { role: 'assistant', content: data.content, timestamp: Date.now() }];
             });
             setIsTyping(false);
         }
     });
-    return () => {
-        window.removeEventListener('focus', handleFocus);
-        unsubscribe();
-    };
+    return unsubscribe;
   }, [subscribe]);
 
   // Silence Timer Logic (Listening Mode)
   useEffect(() => {
     if (uiAction === 'listen') {
+        // Reset timer on any input or message
         if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
         setIsWaitingForPermission(false);
+
         silenceTimeoutRef.current = setTimeout(() => {
             setIsWaitingForPermission(true);
         }, 15000); // 15 seconds silence
@@ -239,7 +172,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     return () => {
         if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
     };
-  }, [uiAction, messages, input]);
+  }, [uiAction, messages, input]); // Reset on new messages or typing
 
   useEffect(() => {
       if (user) {
@@ -248,7 +181,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           setIsStandardMode(!isPremium);
           setLocalCredits(user.isPro ? 9999 : credits);
           setModelMode(isPremium ? 'pro' : 'eco');
-          if (user.cloneMode?.isActive) setIsCloneMode(true);
       }
   }, [user]);
 
@@ -263,16 +195,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
          setIsInitializing(true);
          setConnectionStatus(`Connecting to ${botName}...`);
          try {
+             const { default: api } = await import('../../services/api');
              const res = await api.get('/chat/history');
              if (isMounted) {
                  if (Array.isArray(res.data) && res.data.length > 0) {
-                     // Performance: Slice to last 50 messages initially
-                     // [FIX] Map through history to resolve any relative audio URLs
-                     const history = res.data.map((msg: any) => ({
-                         ...msg,
-                         voice_note: msg.voice_note ? resolveAudioUrl(msg.voice_note) : undefined
-                     }));
-                     setMessages(history.slice(-50));
+                     setMessages(res.data);
                  } else {
                      setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. How can I support you right now?`, timestamp: Date.now() }]);
                  }
@@ -365,14 +292,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
            currentText += event.results[i][0].transcript;
         }
         if (isDictating) {
-            // Dictation Mode (Frontend STT)
             const isFinal = event.results[event.results.length - 1].isFinal;
             if (isFinal) {
                 setInput(prev => prev + (prev.length > 0 ? ' ' : '') + currentText);
                 autoResizeTextarea();
             }
         } else {
-            // Voice Mode (Conversational)
             setTranscript(currentText);
             if (currentText.trim().length > 0) {
                 if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -386,10 +311,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   const autoResizeTextarea = () => {
     if (textareaRef.current) {
-        // Reset height to calculate correct scrollHeight
         textareaRef.current.style.height = 'auto';
-        const newHeight = Math.min(textareaRef.current.scrollHeight, 120);
-        textareaRef.current.style.height = `${newHeight}px`;
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
   };
 
@@ -401,42 +324,36 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     return `https://aastha-final.onrender.com/api${endpoint}`;
   };
 
-  // Helper to ensure we have a full URL for audio playback
-  const resolveAudioUrl = (path: string) => {
-      if (!path) return '';
-      if (path.startsWith('http') || path.startsWith('data:')) return path;
-      if (path.startsWith('/')) {
-          // Construct absolute URL based on API base
-          const apiBase = getApiUrl('');
-          const domain = apiBase.replace(/\/api\/?$/, '');
-          return `${domain}${path}`;
-      }
-      return path;
-  };
-
   const startListening = () => { if (recognitionRef.current && !isListening) { try { setTranscript(''); recognitionRef.current.start(); } catch (e) { console.error("Speech start", e); } } };
   const stopListening = () => { if (recognitionRef.current && isListening) recognitionRef.current.stop(); };
   
   const toggleVoiceMode = () => {
     // @ts-ignore
     if (!window.SpeechRecognition && !window.webkitSpeechRecognition) { setError("Browser not supported."); return; }
+    if (isStandardMode) { alert("Voice Mode requires Premium."); return; }
 
     if (isVoiceMode) {
+        // EXITING VOICE MODE
         stopListening();
         setIsVoiceMode(false);
-        setTtsEnabled(false);
+        setTtsEnabled(false); // Auto-disable TTS
         localStorage.setItem('user_tts_enabled', 'false');
     } else {
+        // ENTERING VOICE MODE
         if (isDictating) { setIsDictating(false); }
+
         setIsVoiceMode(true);
-        setTtsEnabled(true);
+        setTtsEnabled(true); // Auto-enable TTS
         localStorage.setItem('user_tts_enabled', 'true');
+
+        // Select Indian Voice if available
         const voices = window.speechSynthesis.getVoices();
         const indianVoice = voices.find(v => v.lang.includes('IN') || v.name.includes('India'));
         if (indianVoice) {
             setSelectedVoiceURI(indianVoice.voiceURI);
             localStorage.setItem('user_voice_uri', indianVoice.voiceURI);
         }
+
         startListening();
     }
   };
@@ -444,15 +361,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const toggleDictation = () => {
       // @ts-ignore
       if (!window.SpeechRecognition && !window.webkitSpeechRecognition) { setError("Dictation not supported."); return; }
-      if (isDictating) {
-          recognitionRef.current?.stop();
-          setIsDictating(false);
-      } else {
-          if (isVoiceMode) { setIsVoiceMode(false); }
-          try {
-              recognitionRef.current?.start();
-              setIsDictating(true);
-          } catch(e) {}
+      if (isDictating) { recognitionRef.current?.stop(); setIsDictating(false); } else {
+          if (isVoiceMode) { setIsVoiceMode(false); setIsDictating(true); return; }
+          try { recognitionRef.current?.start(); setIsDictating(true); } catch(e) {}
       }
   };
 
@@ -460,22 +371,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   const scrollToBottom = () => {
       if (messagesContainerRef.current) {
-          // Use 'auto' (instant) scrolling during streaming to prevent layout jitter/thrashing
-          const behavior = isTyping ? 'auto' : 'smooth';
           messagesContainerRef.current.scrollTo({ 
               top: messagesContainerRef.current.scrollHeight, 
-              behavior
+              behavior: 'smooth' 
           });
       }
   };
   useEffect(() => scrollToBottom(), [messages, isTyping]);
-
-  const handleScroll = () => {
-      if (!messagesContainerRef.current) return;
-      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-      const isBottom = scrollHeight - scrollTop - clientHeight < 100;
-      setShowScrollDown(!isBottom);
-  };
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (isStandardMode) { setError("Vision Analysis requires Premium."); return; }
@@ -483,22 +385,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       if (files && files.length > 0) {
           try {
               const compressed = await compressImage(files[0]);
-              if (cloneUploadVisible) {
-                 // Clone Mode Logic
-                 handleCloneUpload(compressed);
-              } else {
-                 setAttachedImage(compressed);
-              }
+              setAttachedImage(compressed);
           } catch (err) { setError("Failed to process image."); }
       }
       if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const handleCloneUpload = async (img: string) => {
-      setCloneUploadVisible(false);
-      setIsCloneMode(true);
-      setMessages(prev => [...prev, { role: 'system', content: 'SYSTEM: Clone Mode Activated. Upload a screenshot to mimic.', timestamp: Date.now() }]);
-      handleSend(undefined, 'ACTIVATE_CLONE_MODE', img);
   };
 
   const copyToClipboard = (text: string) => {
@@ -507,29 +397,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   
   const handleReply = (content: string) => { setReplyingTo(content); textareaRef.current?.focus(); };
 
-  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      const items = e.clipboardData.items;
-      for (let i = 0; i < items.length; i++) {
-          if (items[i].type.indexOf('image') !== -1) {
-              e.preventDefault();
-              if (isStandardMode) { setError("Vision Analysis requires Premium."); return; }
-              const blob = items[i].getAsFile();
-              if (blob) {
-                  try {
-                      const compressed = await compressImage(blob);
-                      setAttachedImage(compressed);
-                  } catch (err) { setError("Failed to process pasted image."); }
-              }
-              return; // Stop after first image
-          }
-      }
-  };
-
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     autoResizeTextarea();
   };
 
+  // ✅ MOBILE KEYPRESS FIX
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!isMobile && e.key === 'Enter' && !e.shiftKey) { 
         e.preventDefault(); 
@@ -537,44 +410,33 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     }
   };
 
-  // --- 5. SEND LOGIC (INTEGRATED WITH SERVER BRAIN) ---
-  const handleSend = async (e?: React.FormEvent, overrideInput?: string, overrideImage?: string, audioBlob?: Blob) => {
+  // --- 5. SEND LOGIC ---
+  const handleSend = async (e?: React.FormEvent, overrideInput?: string) => {
     if (e) e.preventDefault();
     
-    // Audio Handling
-    let audioBase64 = null;
-    if (audioBlob) {
-        audioBase64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(audioBlob);
-        });
-    }
-
     const textToSend = overrideInput || input;
-    if (!textToSend.trim() && !attachedImage && !overrideImage && !audioBlob) return;
+    if (!textToSend.trim() && !attachedImage) return;
 
     let finalContent = textToSend;
     if (replyingTo) { finalContent = `> Replying to: "${replyingTo}"\n\n${textToSend}`; setReplyingTo(null); }
-    if (attachedImage || overrideImage) { finalContent = `[Image Attached] ${finalContent}`; }
-    if (audioBlob) { finalContent = `[Voice Note]`; }
+    if (attachedImage) { finalContent = `[Image Attached] ${finalContent}`; }
 
     const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
     const tempBotId = `temp-${Date.now()}`;
     
-    // 1. UPDATE UI IMMEDIATELY
-    const updatedMessages = [...messages, userMsg];
-    const SLICE_LIMIT = 50;
-    const nextState = [...updatedMessages, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
-    setMessages(nextState.length > SLICE_LIMIT ? nextState.slice(nextState.length - SLICE_LIMIT) : nextState);
+    // Save the user's message immediately
+    setMessages(prev => [
+        ...prev, 
+        userMsg,
+        { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId } 
+    ]);
     
-    setInput(''); setAttachedImage(null); setShowEmojiPicker(false);
+    setInput(''); setAttachedImage(null); setShowEmojiPicker(false); 
     setIsTyping(true); 
     setError(null);
-    setStatusDisplay('Thinking...');
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    setStatusDisplay('Thinking...'); // Reset status
+    autoResizeTextarea();
 
-    // 2. CALL BACKEND
     try {
       let token = '';
       try {
@@ -582,6 +444,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         if (storedInfo) token = JSON.parse(storedInfo).token;
       } catch(e) {}
 
+      // ADDED: Permission Grant Flag
       const isPermissionGrant = finalContent === 'PERMISSION_GRANT_REPLY';
       const actualContent = isPermissionGrant ? "Please reply now." : finalContent;
 
@@ -594,10 +457,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         credentials: 'include', 
         body: JSON.stringify({
             message: actualContent,
-            images: overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []),
-            audio: audioBase64,
-            forceReply: isPermissionGrant,
-            isVoiceMode: isVoiceMode
+            images: attachedImage ? [attachedImage] : [],
+            forceReply: isPermissionGrant // Tell backend to override listening mode
         }),
       });
 
@@ -617,7 +478,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       
       let aiContentRaw = '';
       let buffer = '';
-      let serverAudioPlayed = false; // Flag to prevent double speaking
 
       if (reader) {
         while (true) {
@@ -634,100 +494,49 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     if (dataStr.trim() === '[DONE]') break;
                     try {
                         const data = JSON.parse(dataStr);
-
-                        // A. HANDLE THOUGHT (THE BRAIN)
-                        if (data.type === 'thought') {
-                            const brain = data.content;
-                            if (brain) {
-                                setLastSubconscious(brain); // Save for Thought Cloud
-                                if (brain.mood) setCurrentMood(brain.mood);
-                                if (brain.status_display) setStatusDisplay(brain.status_display);
-                                if (brain.suggested_replies) setSuggestedChips(brain.suggested_replies);
-                                if (brain.ui_action) setUiAction(brain.ui_action as any);
-
-                                // Sticky Reaction
-                                if (brain.reaction) {
-                                     setMessages(prev => {
-                                         const newList = [...prev];
-                                         const targetIdx = newList.findIndex(m => m.id === userMsg.id);
-                                         if (targetIdx !== -1) {
-                                             newList[targetIdx] = { ...newList[targetIdx], reaction: brain.reaction };
-                                         }
-                                         return newList;
-                                     });
-                                }
-
-                                // GOD MODE TOOLS (THE HANDS) -> TRANSFORM TO PROPOSALS
-                                if (brain.tool_calls && brain.tool_calls.length > 0) {
-                                    brain.tool_calls.forEach((tool: any) => {
-                                         let toolName = '';
-                                         let params = {};
-                                         let reason = "I can help with that";
-
-                                         if (tool.name === 'control_widget') {
-                                             toolName = tool.params.widget;
-                                             params = tool.params.params || tool.params;
-                                         } else if (tool.name === 'write_diary') {
-                                             toolName = 'diary';
-                                             params = tool.params;
-                                             reason = "Write in Diary";
-                                         }
-
-                                         // Special Widget: Voice Hug
-                                         if (toolName === 'voice_hug') {
-                                             // Append audio placeholder
-                                             const hugTag = `\n\n[Voice Hug Playing 🎵]`;
-                                             aiContentRaw += hugTag;
-                                         }
-
-                                         if (toolName) {
-                                             const proposalTag = `\n<proposal tool="${toolName}" params='${JSON.stringify(params)}' reason="${reason}" />`;
-                                             aiContentRaw += proposalTag;
-                                         }
-                                    });
-                                }
-
-                                // Stop typing indicator if listening
-                                if (brain.strategy === 'listen') {
-                                    setIsTyping(false);
-                                    if (!aiContentRaw) {
-                                        setMessages(prev => prev.filter(m => m.id !== tempBotId));
-                                    }
-                                }
-                            }
-                        }
-
-                        // B. HANDLE META
                         if (data.meta) { 
                             setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits)); 
                             setModelMode(data.meta.mode); 
-                            setIsStandardMode(data.meta.mode === 'standard');
-                            if (data.meta.limitReached) {
-                                setIsCloneMode(false);
+                            setIsStandardMode(data.meta.mode === 'standard'); 
+                        }
+
+                        // Handle Hidden Thought
+                        if (data.type === 'thought' && data.content) {
+                            const thought = data.content;
+                            console.log("Subconscious:", thought);
+                            if (thought.status_display) setStatusDisplay(thought.status_display);
+                            if (thought.ui_action) {
+                                setUiAction(thought.ui_action);
+                                // If listening, remove the optimistic bot bubble so it doesn't look like an empty message
+                                if (thought.ui_action === 'listen') {
+                                    setMessages(prev => prev.filter(m => m.id !== tempBotId));
+                                }
+                            }
+                            if (thought.mood) setCurrentMood(thought.mood);
+
+                            // Handle Dynamic Suggested Chips
+                            if (thought.suggested_replies && Array.isArray(thought.suggested_replies)) {
+                                setSuggestedChips(thought.suggested_replies);
+                            }
+
+                            if (thought.reaction) {
+                                // Add sticky reaction to USER'S last message (or the one we replied to)
+                                // If we are granting permission, we might want to react to the *previous* user msg.
+                                // For now, simplest is react to the most recent user msg in the local state.
+                                setMessages(prev => {
+                                    // Find last user message
+                                    const reversed = [...prev].reverse();
+                                    const lastUserMsg = reversed.find(m => m.role === 'user');
+                                    if (lastUserMsg) {
+                                        return prev.map(m => m.id === lastUserMsg.id ? { ...m, reaction: thought.reaction } : m);
+                                    }
+                                    return prev;
+                                });
                             }
                         }
 
-                        // C. HANDLE VOICE NOTE (AUDIO URL - PERSISTENT)
-                        if (data.voice_note) {
-                            setMessages(prev => prev.map(msg => {
-                                if (msg.id === tempBotId) {
-                                    // RESOLVE URL before saving to state
-                                    return { ...msg, voice_note: resolveAudioUrl(data.voice_note) };
-                                }
-                                return msg;
-                            }));
-                        }
-
-                        // D. HANDLE STREAMING AUDIO (AUTO-PLAY FOR CALL MODE)
-                        if (data.voice_audio) {
-                            serverAudioPlayed = true;
-                            // RESOLVE URL before playing
-                            const resolvedUrl = resolveAudioUrl(data.voice_audio);
-                            speakMessage(resolvedUrl);
-                        }
-
-                        // E. HANDLE CONTENT (THE VOICE)
-                        if (data.content && !data.type) {
+                        // Handle Content Stream
+                        if (data.content && !data.type) { // Standard content has no type usually, or text
                             aiContentRaw += data.content;
                             const cleanContent = processMagicTags(aiContentRaw);
                             setMessages(prev => prev.map(msg => {
@@ -744,10 +553,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
       
       const cleanFinal = processMagicTags(aiContentRaw);
-      // Play Browser TTS only if server audio wasn't played AND (Voice Mode active OR TTS enabled)
-      if ((isVoiceMode || ttsEnabled) && aiContentRaw && !serverAudioPlayed) {
-          speakMessage(cleanFinal);
-      }
+
+      // If listen mode, clear any partial text if it was empty/minimal?
+      // Actually, standard content stream will be empty if AI obeyed instructions, so cleanFinal will be empty.
+      // If AI disobeyed and sent text despite 'listen', we show it (better safe).
+
+      if ((isVoiceMode || ttsEnabled) && aiContentRaw) speakMessage(cleanFinal);
 
     } catch (error: any) {
       console.error(error);
@@ -757,7 +568,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const processMagicTags = (text: string) => {
-    // Legacy Tag Processing (Retained for backward compat)
+    // Legacy Tag Processing (Retained for backward compat, but Proposal tags are handled in MessageBubble)
     const tagRegex = /<[^>]+>/g;
     const matches = text.match(tagRegex);
     if (matches) {
@@ -791,7 +602,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                   processedTagsRef.current.add('<color>');
                   processedTagsRef.current.add('</color>');
             }
+            // Only handle LEGACY simple tags here. Complex proposals are handled by MessageBubble click.
             if (onOpenWidget) {
+                // If it's a Proposal tag, IGNORE it here (don't strip it yet, let UI render it)
                 if (lowerTag.startsWith('<proposal')) {
                     // Do nothing, MessageBubble handles parsing
                 } else {
@@ -808,36 +621,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         });
     }
     let cleanText = text.replace(/<color>[\s\S]*?<\/color>/gi, '');
+    // Don't strip proposal tags here, MessageBubble needs them
     cleanText = cleanText.replace(/<(?!proposal)[^>]+>/g, '');
     return cleanText;
   };
 
-  const speakMessage = (textOrUrl: string) => {
-    // STOP any currently playing audio before starting new one
-    if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current = null;
-    }
-    window.speechSynthesis.cancel(); // Stop browser TTS too
-
-    // 1. Detect if it's a URL (server audio)
-    if (textOrUrl.startsWith('http') || textOrUrl.startsWith('/api/') || textOrUrl.startsWith('data:')) {
-        // Double-check if relative path needs resolving (though handleSend usually does it)
-        const finalUrl = resolveAudioUrl(textOrUrl);
-        const audio = new Audio(finalUrl);
-        currentAudioRef.current = audio; // Track it
-
-        audio.play().catch(e => console.error("Audio Play Error:", e));
-        audio.onended = () => {
-             currentAudioRef.current = null;
-             if (isVoiceMode) setTimeout(() => startListening(), 500);
-        };
-        return;
-    }
-
-    // 2. Fallback: Browser TTS
+  const speakMessage = (text: string) => {
     if ('speechSynthesis' in window) {
-       const cleanText = textOrUrl.replace(/[*#]/g, '').replace(/[\u{1F600}-\u{1F64F}]/gu, '');
+       window.speechSynthesis.cancel();
+       const cleanText = text.replace(/[*#]/g, '').replace(/[\u{1F600}-\u{1F64F}]/gu, '');
        const utterance = new SpeechSynthesisUtterance(cleanText);
        const voices = window.speechSynthesis.getVoices();
        let chosenVoice = voices.find(v => v.voiceURI === selectedVoiceURI) || voices.find(v => v.name.includes('Google US English'));
@@ -871,14 +663,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         <span className="bg-black/30 backdrop-blur-md border border-white/5 text-white/50 text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm">{dateLabel}</span>
                     </div>
                 )}
+                {/* 🛡️ FIX 2: Added overflow-visible to message wrapper */}
                 <div id={domId} className="flex flex-col w-full shrink-0 overflow-visible">
                     <MessageBubble 
                         role={msg.role} 
                         content={msg.content} 
                         timestamp={msg.timestamp}
-                        reaction={msg.reaction}
-                        voice_note={msg.voice_note} // Pass Voice Note
-                        mood={currentMood}
+                        reaction={msg.reaction} // Pass Reaction
+                        mood={currentMood} // Pass Mood for Avatar
                         onReply={() => handleReply(msg.content)} 
                         onCopy={copyToClipboard}
                         onOpenWidget={onOpenWidget}
@@ -916,7 +708,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       );
   }
 
-  // --- RETURN JSX ---
+  // ==================================================================================
+  // MAIN LAYOUT (RESPONSIVE FIXES APPLIED)
+  // ==================================================================================
   return (
     <div className="relative w-full h-[100dvh] flex flex-col md:block items-center overflow-hidden bg-transparent">
       
@@ -945,15 +739,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
               <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.2 }} transition={{ duration: 0.8, ease: "easeInOut" }} className="fixed inset-0 z-[100] pointer-events-none" style={{ backgroundColor: targetFlashColor }} />
           )}
       </AnimatePresence>
-
-      {/* CLONE MODE HEADER OVERLAY */}
-      {isCloneMode && (
-         <div className="absolute top-0 left-0 right-0 h-14 z-20 bg-purple-500/20 backdrop-blur-md flex items-center justify-center pointer-events-none">
-             <span className="text-purple-200 font-bold tracking-wider text-xs uppercase animate-pulse">Clone Mode Active</span>
-         </div>
-      )}
-
-      {/* FULL SCREEN VOICE MODE OVERLAY */}
       <AnimatePresence>
         {isVoiceMode && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/90 backdrop-blur-3xl flex flex-col items-center justify-center">
@@ -973,15 +758,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         )}
       </AnimatePresence>
 
-      {/* SETTINGS PANEL */}
-      <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
-
-      {/* THOUGHT CLOUD MODAL */}
-      <ThoughtCloudModal isOpen={showThoughtCloud} onClose={() => setShowThoughtCloud(false)} content={lastSubconscious} />
-
       {/* --- SECTION 1: HEADER (SMART HEADER) --- */}
-      <div className={`shrink-0 w-full z-30 pt-[env(safe-area-inset-top)] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-2 pointer-events-auto ${isMobile ? 'bg-gradient-to-b from-black/80 to-transparent' : 'md:absolute md:top-0 md:pt-6 bg-none'}`}>
-        <div className="flex items-center gap-3 h-14 justify-between relative">
+      {/* Responsive Height & Gradient */}
+      <div className={`shrink-0 w-full z-30 pt-safe px-4 pb-2 pointer-events-auto ${isMobile ? 'bg-gradient-to-b from-black/80 to-transparent' : 'md:absolute md:top-0 md:pt-6 bg-none'}`}>
+          <div className="flex items-center gap-3 h-14 justify-between relative">
              <div className="shrink-0 flex items-center z-20">
                  <button id="mobile-menu-btn" onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 bg-black/20 ${!isMobile ? 'md:hidden' : ''}`}>
                     <Menu size={20} />
@@ -1009,6 +789,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                     <button
                                         onClick={() => {
                                             setIsWaitingForPermission(false);
+                                            // Reset timer to wait another 15s
                                             if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
                                             silenceTimeoutRef.current = setTimeout(() => setIsWaitingForPermission(true), 15000);
                                         }}
@@ -1020,12 +801,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                              </motion.div>
                         ) : (
                             <motion.div
-                                key="status-pill"
-                                onClick={() => setShowThoughtCloud(true)} // <-- ADDED ONCLICK
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
-                                className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/5 shadow-lg cursor-pointer hover:bg-black/30 transition-colors"
+                                className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/5 shadow-lg"
                             >
                                 <div className={`w-2 h-2 rounded-full ${currentActivity === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-400 animate-pulse'}`} />
                                 <span className="text-xs font-medium text-white/80 tracking-wide uppercase">{statusDisplay}</span>
@@ -1036,31 +815,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              </div>
 
              <div className="shrink-0 flex items-center gap-3 justify-end z-20">
-                 {/* CREDITS INDICATOR (HIDDEN ON MOBILE) */}
-                 <div className={`hidden md:flex px-3 py-1.5 rounded-full backdrop-blur-xl border items-center gap-2 shadow-lg transition-colors ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
-                    {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-gray-400" fill="currentColor" />}
-                    <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-gray-400'}`}>
-                        {!isStandardMode && localCredits > 100 ? '∞' : `${localCredits} Premium`}
-                    </span>
-                 </div>
-
-                 {/* HEADPHONE ICON (CALL MODE) - RESTORED */}
-                 <button onClick={() => toggleVoiceMode()} className={`shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center transition-all shadow-lg ${isVoiceMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-black/20 text-white/70 hover:bg-white/10 hover:text-white'}`}>
-                    <Headphones size={18} />
-                 </button>
-
-                 <motion.div
-                    initial={false}
-                    animate={{ width: isSearchOpen ? (isMobile ? 200 : 300) : 40 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    className={`flex items-center h-10 rounded-full border ${isSearchOpen ? 'bg-black/60 border-white/10 px-3' : 'bg-black/20 border-transparent justify-center'}`}
-                 >
+                 <div className={`flex items-center transition-all duration-300 ease-spring ${isSearchOpen ? 'w-[200px] md:w-[300px] bg-black/40 border-white/10 px-3' : 'w-10 bg-black/20 border-transparent justify-center'} h-10 rounded-full backdrop-blur-xl border`}>
                      {isSearchOpen ? (
                          <>
-                            <motion.input
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ delay: 0.1 }}
+                            <input
                                 autoFocus
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -1079,49 +837,42 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                 <button onMouseDown={e => e.preventDefault()} onClick={() => setIsSearchOpen(false)} className="shrink-0 text-white/40 hover:text-white"><X size={14}/></button>
                             )}
                          </>
-                      ) : (
-                          <button onClick={() => setIsSearchOpen(true)} className="text-white/60 hover:text-white w-full h-full flex items-center justify-center">
-                             <Search size={18} />
-                          </button>
-                      )}
-                 </motion.div>
+                     ) : (
+                         <button onClick={() => setIsSearchOpen(true)} className="text-white/60 hover:text-white w-full h-full flex items-center justify-center">
+                            <Search size={18} />
+                         </button>
+                     )}
+                 </div>
+
+                 <button id="voice-mode-btn" onClick={toggleVoiceMode} className={`shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center text-white/70 hover:text-white transition-all shadow-lg ${isVoiceMode ? 'bg-white/20 text-white' : 'bg-black/20 hover:bg-white/10'}`}>
+                    <Headphones size={18} />
+                 </button>
              </div>
-        </div>
+          </div>
       </div>
       
       <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
-      {/* --- SECTION 2: CHAT AREA --- */}
+      {/* --- SECTION 2: CHAT AREA (THE FIX) --- */}
+      {/* 🛡️ FIX 1: Removed max-w-4xl to stop desktop clipping
+          🛡️ FIX 2: Added overflow-visible to children loops (in renderMessages)
+          🛡️ FIX 3: Removed overflow-x-hidden (S23 Fix: Stops sideways clipping)
+      */}
       <div 
-        ref={messagesContainerRef}
-        onScroll={handleScroll}
-        className="flex-1 w-full max-w-full mx-auto overflow-y-auto overflow-x-hidden px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
-        style={{ overscrollBehaviorY: 'contain' }}
+          ref={messagesContainerRef}
+          className="flex-1 w-full max-w-full mx-auto overflow-y-auto overflow-x-hidden px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
+          style={{ overscrollBehaviorY: 'contain' }}
       >
-          <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40 relative max-w-full">
+          <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40">
               <div className="h-4" /> 
               {renderMessages()}
               <div ref={messagesEndRef} />
-
-              {/* Jump to Bottom Button */}
-              <AnimatePresence>
-                {showScrollDown && (
-                    <motion.button
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        onClick={scrollToBottom}
-                        className="fixed bottom-32 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-20 hover:bg-white/10 hover:text-white transition-colors"
-                    >
-                        <ArrowDown size={20} />
-                    </motion.button>
-                )}
-              </AnimatePresence>
           </div>
       </div>
 
-      {/* --- SECTION 3: INPUT AREA (REDESIGNED FOR SINGLE UNIT) --- */}
-      <div className={`shrink-0 w-full pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-[env(safe-area-inset-bottom)] pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6 bg-none'}`}>
+      {/* --- SECTION 3: INPUT AREA --- */}
+      {/* Responsive bottom padding (pb-safe) handles Home Indicator */}
+      <div className={`shrink-0 w-full px-4 pb-safe pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6 bg-none'}`}>
           <div className="flex flex-col gap-2">
              <AnimatePresence>
                  {replyingTo && (
@@ -1148,9 +899,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     className="overflow-x-auto scrollbar-hide flex gap-2 mb-2 px-1 relative pr-8"
                 >
                     {(() => {
+                        const hour = new Date().getHours();
+                        const isLateNight = hour >= 23 || hour < 5;
                         const isNewUser = messages.length <= 2;
+
+                        // Use AI suggestions if available, else fall back to heuristics
                         let chips = suggestedChips.length > 0 ? suggestedChips : (
                              isNewUser ? ["Who are you?", "What can you do?", "I'm stressed"] :
+                             isLateNight ? ["I can't sleep", "Tell me a story", "Play night sounds"] :
                              ["Roast me", "Inspire me", "Let's jam"]
                         );
 
@@ -1176,76 +932,102 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              ) : null}
              </AnimatePresence>
 
-             {/* INPUT AREA (REDESIGNED: SINGLE UNIT) */}
-             <div id="chat-input-area" className={`relative flex items-center gap-2 p-1 bg-[#1F2937] border border-white/5 rounded-[2rem]`}>
+            {/* INPUT AREA (MODIFIED FOR LISTEN MODE) */}
+             <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border ${uiAction === 'listen' ? 'border-teal-500/50 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'border-white/5'} p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
+                 {uiAction === 'listen' && (
+                     <div className="absolute -top-8 left-0 right-0 flex justify-center pointer-events-none">
+                         <motion.div
+                             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                             className="bg-teal-500/20 text-teal-200 text-xs px-3 py-1 rounded-full backdrop-blur-md border border-teal-500/30 flex items-center gap-2"
+                         >
+                             <Headphones size={12} /> Listening Mode Active
+                         </motion.div>
+                     </div>
+                 )}
 
-                {/* 1. LEFT ICONS (Gallery, Mic) */}
-                <div className="flex items-center gap-1 shrink-0 ml-1">
-                    <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isStandardMode}
-                        className={`p-2 rounded-full transition-all text-white/40 hover:bg-white/5 hover:text-white ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
-                    >
-                        <ImageIcon size={20} />
-                    </button>
-                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
-                    <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
+                 <div className="flex items-center gap-1 relative">
+                     {/* UNIFIED MEDIA BUTTON */}
+                     {isMobile ? (
+                         <div className="relative">
+                             <button
+                                type="button"
+                                onClick={() => setShowMediaMenu(!showMediaMenu)}
+                                disabled={isStandardMode}
+                                className={`p-2.5 rounded-full transition-all ${showMediaMenu || attachedImage ? 'bg-white/10 text-white rotate-45' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                             >
+                                 <Plus size={22} />
+                             </button>
+                             <AnimatePresence>
+                                 {showMediaMenu && (
+                                     <motion.div
+                                        initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                                        className="fixed bottom-24 left-6 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden min-w-[160px] z-[100] flex flex-col p-1.5"
+                                     >
+                                         <button onClick={() => { cameraInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
+                                             <div className="w-8 h-8 rounded-full bg-teal-500/20 flex items-center justify-center"><Camera size={16} className="text-teal-400" /></div> Camera
+                                         </button>
+                                         <button onClick={() => { fileInputRef.current?.click(); setShowMediaMenu(false); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-base text-white/90 active:bg-white/10 transition-colors">
+                                             <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center"><ImageIcon size={16} className="text-violet-400" /></div> Gallery
+                                         </button>
+                                     </motion.div>
+                                 )}
+                             </AnimatePresence>
+                         </div>
+                     ) : (
+                         <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isStandardMode}
+                            className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                         >
+                             <ImageIcon size={20} />
+                         </button>
+                     )}
 
-                    <button
-                        onClick={toggleDictation}
-                        className={`p-2 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
-                    >
-                        {isDictating ? <MicOff size={20} /> : <Mic size={20} />}
-                    </button>
-                </div>
+                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
+                     <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
+                     
+                     <button onClick={toggleDictation} className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>
+                         {isDictating ? <MicOff size={20} /> : <Mic size={20} />}
+                     </button>
+                 </div>
 
-                {/* 2. INPUT FIELD (Transparent, Integrated) */}
-                <form onSubmit={handleSend} className="flex-1 relative flex items-center">
-                    <textarea
-                        ref={textareaRef}
-                        value={input}
-                        onChange={handleInput}
-                        onKeyDown={handleKeyPress}
-                        onPaste={handlePaste}
-                        placeholder={isDictating ? "Listening..." : "Type a message..."}
-                        className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base py-3 px-2 resize-none max-h-32 scrollbar-hide"
-                        rows={1}
-                    />
+                 <form onSubmit={handleSend} className="flex-1 flex items-center relative h-full">
+                     <textarea 
+                         ref={textareaRef}
+                         value={input} 
+                         onChange={handleInput}
+                         onKeyDown={handleKeyPress}
+                         placeholder={isDictating ? "Listening..." : (uiAction === 'listen' ? "I'm listening..." : "Type a message...")}
+                         className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base font-light py-3 px-2 resize-none max-h-32 scrollbar-hide"
+                         rows={1}
+                     />
+                     <div className="relative">
+                         <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
+                             <Smile size={20} />
+                         </button>
+                         {showEmojiPicker && (
+                             <div className="absolute bottom-14 right-0 shadow-2xl z-50">
+                                 <EmojiPicker
+                                     theme={Theme.DARK}
+                                     emojiStyle={EmojiStyle.APPLE}
+                                     onEmojiClick={(e) => { setInput(prev => prev + e.emoji); }}
+                                     lazyLoadEmojis={true}
+                                     width={300}
+                                     height={400}
+                                     searchDisabled={false}
+                                     skinTonesDisabled={false}
+                                 />
+                             </div>
+                         )}
+                     </div>
+                 </form>
 
-                    {/* Emoji Button Inside Input */}
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2">
-                        <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
-                            <Smile size={20} />
-                        </button>
-                    </div>
-
-                    {showEmojiPicker && (
-                        <div className="absolute bottom-14 right-0 shadow-2xl z-50">
-                            <EmojiPicker
-                                theme={Theme.DARK}
-                                emojiStyle={EmojiStyle.APPLE}
-                                onEmojiClick={(e) => { setInput(prev => prev + e.emoji); }}
-                                lazyLoadEmojis={true}
-                                width={300}
-                                height={400}
-                                searchDisabled={false}
-                                skinTonesDisabled={false}
-                            />
-                        </div>
-                    )}
-                </form>
-
-                {/* 3. SEND BUTTON (Integrated Right) */}
-                <button
-                    onClick={(e) => handleSend(e)}
-                    disabled={!input.trim() && !attachedImage}
-                    className="shrink-0 p-3 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed mr-1"
-                    style={{ background: currentTheme.primaryColor || '#a855f7' }}
-                >
-                    <Send size={18} fill="currentColor" className="ml-0.5" />
-                </button>
-
+                 <button onClick={(e) => handleSend(e)} disabled={!input.trim() && !attachedImage} className="p-3.5 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-1" style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #4f46e5)` }}>
+                     <Send size={18} className="ml-0.5" fill="currentColor" />
+                 </button>
              </div>
           </div>
       </div>
