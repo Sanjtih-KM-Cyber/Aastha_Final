@@ -669,13 +669,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                 // Sticky Reaction
                                 if (brain.reaction) {
                                      setMessages(prev => {
-                                        const newList = [...prev];
-                                        const targetIdx = newList.findIndex(m => m.id === userMsg.id);
-                                        if (targetIdx !== -1) {
-                                            newList[targetIdx] = { ...newList[targetIdx], reaction: brain.reaction };
-                                        }
-                                        return newList;
-                                     });
+                                         const newList = [...prev];
+                                         const targetIdx = newList.findIndex(m => m.id === userMsg.id);
+                                         if (targetIdx !== -1) {
+                                             newList[targetIdx] = { ...newList[targetIdx], reaction: brain.reaction };
+                                         }
+                                         return newList;
+                                      });
                                 }
 
                                 // GOD MODE TOOLS (THE HANDS) -> TRANSFORM TO PROPOSALS
@@ -892,7 +892,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         <span className="bg-black/30 backdrop-blur-md border border-white/5 text-white/50 text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm">{dateLabel}</span>
                     </div>
                 )}
-                <div id={domId} className="flex flex-col w-full shrink-0 overflow-visible">
+                <div id={domId} className="flex flex-col w-full shrink-0 overflow-visible px-4 pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))]">
                     <MessageBubble 
                         role={msg.role} 
                         content={msg.content} 
@@ -1002,7 +1002,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       {/* --- SECTION 1: HEADER (SMART HEADER) --- */}
       <div className={`shrink-0 w-full z-30 pt-[env(safe-area-inset-top)] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-2 pointer-events-auto ${isMobile ? 'bg-gradient-to-b from-black/80 to-transparent' : 'md:absolute md:top-0 md:pt-6 bg-none'}`}>
-    <div className="flex items-center gap-3 h-14 justify-between relative">
+        <div className="flex items-center gap-3 h-14 justify-between relative">
              <div className="shrink-0 flex items-center z-20">
                  <button id="mobile-menu-btn" onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 bg-black/20 ${!isMobile ? 'md:hidden' : ''}`}>
                     <Menu size={20} />
@@ -1109,19 +1109,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
                  {/* SETTINGS BUTTON REMOVED AS REQUESTED */}
              </div>
-          </div>
+        </div>
       </div>
       
       <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
       {/* --- SECTION 2: CHAT AREA --- */}
       <div 
-    ref={messagesContainerRef}
-    onScroll={handleScroll}
-    // CHANGED: Added dynamic pl/pr and explicit pb-safe logic
-    className="flex-1 w-full mx-auto overflow-y-auto pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
-    style={{ overscrollBehaviorY: 'contain' }}
->
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        // FIX: Removed horizontal padding here to prevent layout thrashing on insert
+        className="flex-1 w-full mx-auto overflow-y-auto scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
+        style={{ overscrollBehaviorY: 'contain' }}
+      >
           <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40 relative">
               <div className="h-4" /> 
               {renderMessages()}
