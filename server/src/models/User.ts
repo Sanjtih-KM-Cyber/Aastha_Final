@@ -245,6 +245,7 @@ const userSchema = new Schema<IUser>({
 
   // --- DATA DONATION ---
   isDataDonationOn: { type: Boolean, default: false },
+  hasDonatedHistory: { type: Boolean, default: false },
 
   // --- NEW FIELDS ---
   socialBattery: { type: Number, default: 100, min: 0, max: 100 },

@@ -80,7 +80,8 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     const encryptionSalt = crypto.randomUUID();
     // Optimization: Reduced salt rounds to 8 for faster performance on Render
     // UPDATE: The Fortress requires 12 rounds for stronger security.
-    const salt = await bcrypt.genSalt(12);
+    // REVERT: Back to 10 for performance.
+    const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
     let hashedDiaryPassword = undefined;
     if (diaryPassword) hashedDiaryPassword = await bcrypt.hash(diaryPassword, salt);
@@ -335,7 +336,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       // Lazy Migration: Upgrade Hash Strength
       if (user.passwordHash.startsWith('$2a$08$')) {
           console.log(`[The Fortress] Upgrading hash for user ${user._id}`);
-          const newSalt = await bcrypt.genSalt(12);
+          const newSalt = await bcrypt.genSalt(10);
           user.passwordHash = await bcrypt.hash(password, newSalt);
           needsSave = true;
       }
