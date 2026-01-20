@@ -300,6 +300,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
      return () => { isMounted = false; };
   }, [user, navigate, botName]);
 
+  // --- FIX: SYNC HEIGHT WITH MOBILE KEYBOARD ---
+  useEffect(() => {
+    if (!window.visualViewport) return;
+
+    const handleResize = () => {
+      const appContainer = document.getElementById('chat-view-container');
+      if (appContainer) {
+        // Forces the container to match the actual visible screen height
+        appContainer.style.height = `${window.visualViewport.height}px`;
+        // Scroll to bottom to keep input visible
+        scrollToBottom(); 
+      }
+    };
+
+    window.visualViewport.addEventListener('resize', handleResize);
+    return () => window.visualViewport.removeEventListener('resize', handleResize);
+  }, []);
+
   // --- 3. SEARCH LOGIC ---
   useEffect(() => {
       if (searchQuery.trim()) {
@@ -597,6 +615,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     setError(null);
     setStatusDisplay('Thinking...'); 
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
+
+    // If on mobile, close the keyboard immediately after sending
+    if (isMobile) textareaRef.current?.blur(); 
 
     // 2. CALL BACKEND
     try {
@@ -945,8 +966,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // --- RETURN JSX ---
   return (
-    // FIXED: md:pl-80 pushes the entire chat layout to the right on PC so it sits next to the sidebar.
-    <div className="fixed inset-0 w-full h-[100dvh] flex flex-col items-center overflow-hidden bg-transparent md:pl-80 overscroll-none touch-none">
+    // 1. ADDED id="chat-view-container" so the script can find it
+    // 2. KEEP fixed inset-0 and md:pl-80
+    // 3. ADDED overscroll-none touch-none to prevent rubber-banding
+    <div 
+        id="chat-view-container"
+        className="fixed inset-0 w-full flex flex-col items-center overflow-hidden bg-transparent md:pl-80 overscroll-none touch-none"
+        // removed h-[100dvh] here because useEffect manages height
+    >
       
       {/* 1. GLOBAL BACKGROUNDS & WALLPAPER */}
       <div className="fixed inset-0 z-[-1] pointer-events-none">
@@ -1120,20 +1147,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
       {/* --- SECTION 2: CHAT AREA --- */}
-      {/* ADDED 'scrollbar-hide' logic directly via arbitrary classes for immediate effect.
-         [&::-webkit-scrollbar]:hidden -> Hides Chrome/Safari scrollbar
-         [-ms-overflow-style:'none'] -> Hides IE/Edge scrollbar
-         [scrollbar-width:'none'] -> Hides Firefox scrollbar
-      */}
       <div 
           ref={messagesContainerRef}
           onScroll={handleScroll}
-          // ADDED: touch-auto (To re-enable scrolling here)
+          // ADDED: touch-auto to allow scrolling messages
           className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden px-4 md:px-6 py-4 pb-32 touch-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
-          style={{ 
-              width: '100%',
-              overflowAnchor: 'none'
-          }}
+          style={{ width: '100%', overflowAnchor: 'none' }}
       >
           {renderMessages()}
           <div ref={messagesEndRef} />
@@ -1143,10 +1162,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       <AnimatePresence>
         {showScrollDown && (
             <motion.button
-                // ... props ...
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
                 onClick={scrollToBottom}
-                // CHANGE className: "z-20" -> "z-50"
-                className="fixed bottom-28 md:bottom-32 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-50 hover:bg-white/10 hover:text-white transition-colors"
+                // FIXED: z-50 forces it on top. bottom-40 moves it up so it's not hidden behind the input bar.
+                className="fixed bottom-40 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-50 hover:bg-white/10 hover:text-white transition-colors"
             >
                 <ArrowDown size={20} />
             </motion.button>
@@ -1224,6 +1245,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
                     <>
                     <div className="flex items-center gap-1 relative">
+                        {/* UNIFIED MEDIA BUTTON */}
                         <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
@@ -1236,6 +1258,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
                         <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
 
+                        {/* DICTATION MIC */}
                         <button onClick={toggleDictation} className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>
                             {isDictating ? <MicOff size={20} /> : <Mic size={20} />}
                         </button>
