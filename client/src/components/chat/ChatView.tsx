@@ -946,7 +946,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   // --- RETURN JSX ---
   return (
     // FIXED: md:pl-80 pushes the entire chat layout to the right on PC so it sits next to the sidebar.
-    <div className="fixed inset-0 w-full h-[100dvh] flex flex-col items-center overflow-hidden bg-transparent md:pl-80">
+    <div className="fixed inset-0 w-full h-[100dvh] flex flex-col items-center overflow-hidden bg-transparent md:pl-80 overscroll-none touch-none">
       
       {/* 1. GLOBAL BACKGROUNDS & WALLPAPER */}
       <div className="fixed inset-0 z-[-1] pointer-events-none">
@@ -1128,7 +1128,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       <div 
           ref={messagesContainerRef}
           onScroll={handleScroll}
-          className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden px-4 md:px-6 py-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
+          // ADDED: touch-auto (To re-enable scrolling here)
+          className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden px-4 md:px-6 py-4 pb-32 touch-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
           style={{ 
               width: '100%',
               overflowAnchor: 'none'
