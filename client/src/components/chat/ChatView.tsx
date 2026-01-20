@@ -274,11 +274,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              if (isMounted) {
                  if (Array.isArray(res.data) && res.data.length > 0) {
                      // Performance: Slice to last 50 messages initially
-                     // [FIX] Map through history to resolve any relative audio URLs
-                     const history = res.data.map((msg: any) => ({
-                         ...msg,
-                         voice_note: msg.voice_note ? resolveAudioUrl(msg.voice_note) : undefined
-                     }));
+                     // [FIX] Map through history to resolve any relative audio URLs AND CLEAN GARBAGE TAGS
+                     const history = res.data.map((msg: any) => {
+                        // Local cleaner to strip legacy tags while preserving proposals
+                        let clean = msg.content || "";
+                        clean = clean.replace(/<color>[\s\S]*?<\/color>/gi, '');
+                        clean = clean.replace(/<(?!proposal)[^>]+>/g, '');
+
+                        return {
+                            ...msg,
+                            content: clean,
+                            voice_note: msg.voice_note ? resolveAudioUrl(msg.voice_note) : undefined
+                        };
+                     });
                      setMessages(history.slice(-50));
                  } else {
                      setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. How can I support you right now?`, timestamp: Date.now() }]);
@@ -894,7 +902,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 )}
                 <div 
                     id={domId} 
-                    className="flex flex-col w-full shrink-0 overflow-visible pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] sm:pl-6 sm:pr-6 md:pl-8 md:pr-8"
+                    className="flex flex-col w-full px-4 md:px-8"
                 >
                     <MessageBubble 
                         role={msg.role} 
@@ -1122,7 +1130,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         ref={messagesContainerRef}
         onScroll={handleScroll}
         // FIX: Removed horizontal padding here to prevent layout thrashing on insert
-        className="flex-1 w-full mx-auto overflow-y-auto scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
+        className="flex-1 w-full mx-auto overflow-y-auto overflow-x-hidden scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
         style={{ overscrollBehaviorY: 'contain' }}
       >
           <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40 relative">

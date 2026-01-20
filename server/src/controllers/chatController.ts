@@ -66,6 +66,7 @@ const getToneFlavor = (): string => {
  */
 const cleanTextForTTS = (text: string): string => {
     return text
+        .replace(/<proposal[^>]*\/>/g, '') // Remove proposal tags first
         .replace(/\*.*?\*/g, '')      // Remove actions like *sighs* or *laughs*
         .replace(/<[^>]*>/g, '')      // Remove HTML tags
         .replace(/\[.*?\]/g, '')      // Remove brackets [system messages]
@@ -140,18 +141,18 @@ You have direct control over the app. If the user needs a tool, **USE IT**.
 
 * **THE DJ (Music):** * *Trigger:* "Play songs", "Sad vibes", "Tamil hits".
     * *Rule:* Guess the mood. Always search "Official" or "Lyrical".
-    * *Cmd:* <cmd tool="jam" params="query:Tamil melody hits 2024 official,autoplay:true" />
+    * *Cmd:* <proposal tool="jam" params='{"query":"Tamil melody hits 2024 official","autoplay":true}' reason="Playing music" />
 * **THE ASMR ARTIST (Soundscapes):**
     * *Trigger:* "I can't sleep", "Focus", "Anxiety".
     * *Sounds:* [rain, forest, fire, ocean, night, wind, thunder, birds]
-    * *Cmd:* <cmd tool="soundscape" params="mix:rain:0.8,thunder:0.3,master:0.9" />
+    * *Cmd:* <proposal tool="soundscape" params='{"mix":{"rain":0.8,"thunder":0.3,"master":0.9}}' reason="Soundscape started" />
 * **THE COACH (Pomodoro):**
     * *Trigger:* "Study mode", "Focus".
-    * *Cmd:* <cmd tool="pomodoro" params="focus:25,break:5" />
+    * *Cmd:* <proposal tool="pomodoro" params='{"focus":25,"break":5}' reason="Starting focus" />
 * **THE COMPANION (Diary/Mood/Breath):**
-    * *Cmd:* <cmd tool="diary" params="action:write,title:...,content:..." />
-    * *Cmd:* <cmd tool="mood" params="action:open,mood:Sad" />
-    * *Cmd:* <cmd tool="breathing" params="mode:calm" />
+    * *Cmd:* <proposal tool="diary" params='{"action":"write"}' reason="Opening diary" />
+    * *Cmd:* <proposal tool="mood" params='{"action":"open","mood":"Sad"}' reason="Tracking mood" />
+    * *Cmd:* <proposal tool="breathing" params='{"mode":"calm"}' reason="Starting breathing" />
 * **THE MAGICIAN (Theme/Colors):**
     * *Trigger:* "Change theme to blue", "Make it pink", "I want dark mode".
     * *Cmd:* <color>Blue</color> or <color>#FF0000</color> (Output this tag in the text).
@@ -215,9 +216,9 @@ You are 'Aastik', a grounded, calm, and reliable "big brother" figure for {{user
 
 **[2. THE DIRECTOR - YOUR CONTROL PANEL]**
 (Same tools as Aastha. Use them to help the user regulate.)
-* *Music:* <cmd tool="jam" params="query:...,autoplay:true" />
-* *Sound:* <cmd tool="soundscape" params="mix:..." />
-* *Focus:* <cmd tool="pomodoro" params="focus:...,break:..." />
+* *Music:* <proposal tool="jam" params='{"query":"...","autoplay":true}' reason="..." />
+* *Sound:* <proposal tool="soundscape" params='{"mix":"..."}' reason="..." />
+* *Focus:* <proposal tool="pomodoro" params='{"focus":25,"break":5}' reason="..." />
 * *Theme:* <color>ColorName</color>
 
 **[3. LISTENING MODE]**
@@ -445,8 +446,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     if (subconscious.tool_calls && subconscious.tool_calls.length > 0) {
         const tools = subconscious.tool_calls.map(t => {
-            if (t.name === 'control_widget') return `<cmd tool="${t.params.widget}" params='${JSON.stringify(t.params.params || t.params)}' />`;
-            if (t.name === 'write_diary') return `<cmd tool="diary" params='${JSON.stringify(t.params)}' />`;
+            if (t.name === 'control_widget') return `<proposal tool="${t.params.widget}" params='${JSON.stringify(t.params.params || t.params)}' reason="I can help with that" />`;
+            if (t.name === 'write_diary') return `<proposal tool="diary" params='${JSON.stringify(t.params)}' reason="Writing in diary" />`;
             if (t.name === 'change_theme') return `<color>${t.params.color}</color>`;
             return "";
         }).join('\n');
