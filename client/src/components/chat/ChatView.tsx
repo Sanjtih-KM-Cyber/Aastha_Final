@@ -1123,7 +1123,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           </div>
       </div>
 
-      {/* --- SECTION 3: INPUT AREA (REDESIGNED) --- */}
+      {/* --- SECTION 3: INPUT AREA (REDESIGNED FOR SINGLE UNIT) --- */}
       <div className={`shrink-0 w-full pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-[env(safe-area-inset-bottom)] pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6 bg-none'}`}>
           <div className="flex flex-col gap-2">
              <AnimatePresence>
@@ -1179,32 +1179,32 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              ) : null}
              </AnimatePresence>
 
-             {/* INPUT AREA (REDESIGNED) */}
-             <div id="chat-input-area" className={`relative flex items-center gap-2 p-1`}>
+             {/* INPUT AREA (REDESIGNED: SINGLE UNIT) */}
+             <div id="chat-input-area" className={`relative flex items-center gap-2 p-1 bg-[#1F2937] border border-white/5 rounded-[2rem]`}>
 
                 {/* 1. LEFT ICONS (Gallery, Mic) */}
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1 shrink-0 ml-1">
                     <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isStandardMode}
-                        className={`p-2.5 rounded-full transition-all text-white/40 hover:bg-white/5 hover:text-white ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                        className={`p-2 rounded-full transition-all text-white/40 hover:bg-white/5 hover:text-white ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
                     >
-                        <ImageIcon size={22} />
+                        <ImageIcon size={20} />
                     </button>
                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
                     <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
 
                     <button
                         onClick={toggleDictation}
-                        className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
+                        className={`p-2 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
                     >
-                        {isDictating ? <MicOff size={22} /> : <Mic size={22} />}
+                        {isDictating ? <MicOff size={20} /> : <Mic size={20} />}
                     </button>
                 </div>
 
-                {/* 2. INPUT FIELD (Rounded with Emoji inside) */}
-                <form onSubmit={handleSend} className="flex-1 relative flex items-center bg-[#1F2937] rounded-[24px] border border-white/5 focus-within:border-white/20 transition-all">
+                {/* 2. INPUT FIELD (Transparent, Integrated) */}
+                <form onSubmit={handleSend} className="flex-1 relative flex items-center">
                     <textarea
                         ref={textareaRef}
                         value={input}
@@ -1212,12 +1212,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         onKeyDown={handleKeyPress}
                         onPaste={handlePaste}
                         placeholder={isDictating ? "Listening..." : "Type a message..."}
-                        className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base py-3 pl-4 pr-10 resize-none max-h-32 scrollbar-hide rounded-[24px]"
+                        className="w-full bg-transparent text-white placeholder-white/30 focus:outline-none text-base py-3 px-2 resize-none max-h-32 scrollbar-hide"
                         rows={1}
                     />
 
                     {/* Emoji Button Inside Input */}
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2">
                         <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
                             <Smile size={20} />
                         </button>
@@ -1239,14 +1239,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     )}
                 </form>
 
-                {/* 3. SEND BUTTON (Purple Circle) */}
+                {/* 3. SEND BUTTON (Integrated Right) */}
                 <button
                     onClick={(e) => handleSend(e)}
                     disabled={!input.trim() && !attachedImage}
-                    className="shrink-0 p-3 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="shrink-0 p-3 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed mr-1"
                     style={{ background: currentTheme.primaryColor || '#a855f7' }}
                 >
-                    <Send size={20} fill="currentColor" className="ml-0.5" />
+                    <Send size={18} fill="currentColor" className="ml-0.5" />
                 </button>
 
              </div>

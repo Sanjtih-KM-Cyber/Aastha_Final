@@ -353,7 +353,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       {/* Bubble wrapper */}
       <div
         className="
-          relative w-fit min-w-[100px] max-w-[85vw] sm:max-w-[80%] md:max-w-[70%] lg:max-w-[60%] xl:max-w-[55%]
+          relative w-fit min-w-[100px]
+          max-w-[75%] md:max-w-[70%] lg:max-w-[60%] xl:max-w-[55%]
         "
       >
         {/* Sticky Reaction (Attached to Bubble) */}
@@ -374,7 +375,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             relative overflow-hidden px-4 py-3 md:px-5 md:py-3.5 text-[15px] md:text-base leading-relaxed shadow-lg break-words
             ${
               isUser
-                ? 'rounded-[20px] rounded-br-none bg-[#1F2937] text-white border border-white/5'
+                ? 'rounded-[20px] rounded-br-none bg-[#1F2937] text-white border border-white/5 mr-1'
                 : 'rounded-[20px] rounded-bl-none border border-white/10'
             }
           `}
