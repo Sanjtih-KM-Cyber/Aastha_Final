@@ -460,9 +460,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   const scrollToBottom = () => {
       if (messagesContainerRef.current) {
+          // Use 'auto' (instant) scrolling during streaming to prevent layout jitter/thrashing
+          const behavior = isTyping ? 'auto' : 'smooth';
           messagesContainerRef.current.scrollTo({ 
               top: messagesContainerRef.current.scrollHeight, 
-              behavior: 'smooth' 
+              behavior
           });
       }
   };
@@ -1093,10 +1095,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       <div 
         ref={messagesContainerRef}
         onScroll={handleScroll}
-        className="flex-1 w-full mx-auto overflow-y-auto overflow-x-hidden px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
+        className="flex-1 w-full max-w-full mx-auto overflow-y-auto px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
         style={{ overscrollBehaviorY: 'contain' }}
       >
-          <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40 relative">
+          <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40 relative max-w-full">
               <div className="h-4" /> 
               {renderMessages()}
               <div ref={messagesEndRef} />
