@@ -286,20 +286,20 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         </div>
 
-        {/* --- FIXED: Sticky Reaction (INSIDE the Wrapper) --- */}
+        {/* --- FIXED: Sticky Reaction --- */}
+        {/* Increased Z-index to 50 and made background solid dark for visibility */}
         <AnimatePresence>
           {isUser && reaction && (
               <motion.div
                   initial={{ scale: 0, opacity: 0, rotate: -20 }}
                   animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                  // Positioned relative to the bubble bottom-left corner
-                  className="absolute -left-2 -bottom-2 z-20 text-xl bg-white/10 rounded-full p-1 border border-white/20 backdrop-blur-md shadow-lg"
+                  exit={{ scale: 0, opacity: 0 }}
+                  className="absolute -left-3 -bottom-3 z-50 text-xl bg-[#2a2a2a] text-white rounded-full p-1.5 border border-white/20 shadow-xl"
               >
                   {reaction}
               </motion.div>
           )}
         </AnimatePresence>
-
         {/* Hover Actions (Reply/Copy) */}
         <AnimatePresence>
           {(isHovered || (isMobile && isHovered)) && !isThinking && (
