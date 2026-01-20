@@ -120,6 +120,7 @@ export interface IUser extends Document {
 
   // --- DATA DONATION ---
   isDataDonationOn?: boolean;
+  hasDonatedHistory?: boolean;
 
   // --- NEW FIELDS FOR "MONEY MACHINE" ---
   socialBattery: number; // 0-100
