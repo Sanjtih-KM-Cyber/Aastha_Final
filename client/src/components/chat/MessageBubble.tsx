@@ -21,7 +21,6 @@ interface MessageBubbleProps {
 // Helper to parse hidden <proposal> tags AND STRIP LEAKED JSON
 const extractProposals = (text: string) => {
     // 1. Remove leaked Subconscious JSON block if it appears in text
-    // Matches { "internal_monologue": ... } including newlines, non-greedy
     let cleanText = text.replace(/\{[\s\S]*?"internal_monologue"[\s\S]*?\}/g, '').trim();
 
     // Also remove markdown json blocks if they leaked
@@ -108,7 +107,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       })
     : '';
 
-  // AVATAR MAPPING (Emoji/Icon Proxy for Phase 1)
+  // AVATAR MAPPING
   const getMoodEmoji = () => {
       switch (mood) {
           case 'happy': return '🌟';
@@ -123,12 +122,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const moodColor = useMemo(() => {
       switch (mood) {
-          case 'happy': return '#F59E0B'; // Amber
-          case 'sad': return '#3B82F6'; // Blue
-          case 'concerned': return '#8B5CF6'; // Violet
-          case 'sassy': return '#EF4444'; // Red
-          case 'excited': return '#10B981'; // Emerald
-          case 'calm': return '#06B6D4'; // Cyan
+          case 'happy': return '#F59E0B'; 
+          case 'sad': return '#3B82F6'; 
+          case 'concerned': return '#8B5CF6'; 
+          case 'sassy': return '#EF4444'; 
+          case 'excited': return '#10B981'; 
+          case 'calm': return '#06B6D4'; 
           default: return currentTheme.primaryColor;
       }
   }, [mood, currentTheme]);
@@ -145,20 +144,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       onMouseLeave={() => !isMobile && setIsHovered(false)}
       onClick={() => isMobile && setIsHovered(!isHovered)}
     >
-      {/* Sticky Reaction (User Side) */}
-      <AnimatePresence>
-          {isUser && reaction && (
-              <motion.div
-                  initial={{ scale: 0, opacity: 0, rotate: -20 }}
-                  animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                  className="absolute -left-2 -bottom-2 z-20 text-xl bg-white/10 rounded-full p-1 border border-white/20 backdrop-blur-md shadow-lg"
-              >
-                  {reaction}
-              </motion.div>
-          )}
-      </AnimatePresence>
-
-      {/* Assistant avatar (Dynamic) */}
+      {/* Assistant avatar (Left Side) */}
       {!isUser && (
         <div className="hidden md:flex flex-shrink-0 mr-3 self-end relative">
           <div
@@ -169,11 +155,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               background: '#000'
             }}
           >
-             {/*
-                Phase 2 Placeholder:
-                Ideally <img src={`/avatars/${mood}.png`} />
-                For now, we use a generic icon + badge
-             */}
              <Sparkles size={18} style={{ color: moodColor }} />
           </div>
 
@@ -189,24 +170,26 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         </div>
       )}
 
-      {/* Bubble wrapper */}
+      {/* Bubble wrapper (Relative parent for bubble + reactions) */}
       <div
-        className="
+        className={`
           relative
           w-fit
-          min-w-[120px]
+          break-words
+          min-w-[100px]
           max-w-[85%]
           sm:max-w-[80%]
           md:max-w-[70%]
           lg:max-w-[60%]
           xl:max-w-[55%]
-        "
+        `}
         style={{
           maxWidth: isMobile ? '85vw' : undefined,
           wordBreak: 'break-word',
           overflowWrap: 'anywhere'
         }}
       >
+        {/* Actual Message Bubble */}
         <div
           className={`
             relative
@@ -271,7 +254,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
           )}
 
-          {/* SMART ACTION CHIPS (The Manager) */}
+          {/* SMART ACTION CHIPS */}
           {proposals.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                   {proposals.map((p, idx) => (
@@ -303,7 +286,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         </div>
 
-        {/* Actions */}
+        {/* --- FIXED: Sticky Reaction (INSIDE the Wrapper) --- */}
+        <AnimatePresence>
+          {isUser && reaction && (
+              <motion.div
+                  initial={{ scale: 0, opacity: 0, rotate: -20 }}
+                  animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                  // Positioned relative to the bubble bottom-left corner
+                  className="absolute -left-2 -bottom-2 z-20 text-xl bg-white/10 rounded-full p-1 border border-white/20 backdrop-blur-md shadow-lg"
+              >
+                  {reaction}
+              </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Hover Actions (Reply/Copy) */}
         <AnimatePresence>
           {(isHovered || (isMobile && isHovered)) && !isThinking && (
             <motion.div
