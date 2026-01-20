@@ -280,7 +280,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         let clean = msg.content || "";
                         clean = clean.replace(/<color>[\s\S]*?<\/color>/gi, '');
                         clean = clean.replace(/<(?!proposal)[^>]+>/g, '');
-
+                        
                         return {
                             ...msg,
                             content: clean,
