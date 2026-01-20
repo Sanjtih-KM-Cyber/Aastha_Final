@@ -1125,7 +1125,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       
       <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
-      {/* --- SECTION 2: CHAT AREA --- */}
+    {/* --- SECTION 2: CHAT AREA --- */}
+      {/*  */}
+      
       <div 
           ref={messagesContainerRef}
           onScroll={handleScroll}
@@ -1136,26 +1138,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
               width: '100%'
           }}
       >
-  {renderMessages()}
-  <div ref={messagesEndRef} />
-</div>
-
-              {/* Jump to Bottom Button */}
-              <AnimatePresence>
-                {showScrollDown && (
-                    <motion.button
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        onClick={scrollToBottom}
-                        className="fixed bottom-32 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-20 hover:bg-white/10 hover:text-white transition-colors"
-                    >
-                        <ArrowDown size={20} />
-                    </motion.button>
-                )}
-              </AnimatePresence>
-          </div>
+          {renderMessages()}
+          <div ref={messagesEndRef} />
       </div>
+
+      {/* Jump to Bottom Button (Overlay) */}
+      <AnimatePresence>
+        {showScrollDown && (
+            <motion.button
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                onClick={scrollToBottom}
+                className="fixed bottom-32 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-20 hover:bg-white/10 hover:text-white transition-colors"
+            >
+                <ArrowDown size={20} />
+            </motion.button>
+        )}
+      </AnimatePresence>
 
       {/* --- SECTION 3: INPUT AREA --- */}
       <div className={`shrink-0 w-full pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-[env(safe-area-inset-bottom)] pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:absolute md:bottom-0 md:left-1/2 md:-translate-x-1/2 md:pb-6 bg-none'}`}>
