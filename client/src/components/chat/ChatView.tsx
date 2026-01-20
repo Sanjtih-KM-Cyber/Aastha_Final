@@ -1101,7 +1101,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         ref={messagesContainerRef}
         onScroll={handleScroll}
         // FIX: Added horizontal padding back to Container, removed from bubbles.
-        className="flex-1 w-full mx-auto overflow-y-auto px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
+        className="flex-1 w-full mx-auto overflow-y-auto overflow-x-hidden px-4 sm:px-6 md:px-8 scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
         style={{ overscrollBehaviorY: 'contain' }}
       >
           <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40 relative">
