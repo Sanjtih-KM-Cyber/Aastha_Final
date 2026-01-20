@@ -6,6 +6,7 @@ import { generateCloneResponse, analyzeScreenshot } from '../services/cloneServi
 import { brainService } from '../services/brainService';
 import User from '../models/User';
 import Chat from '../models/Chat';
+import TrainingLog from '../models/TrainingLog';
 import { encrypt, decrypt } from '../utils/serverEncryption';
 import { storeAudio } from './audioController';
 
@@ -73,6 +74,16 @@ const cleanTextForTTS = (text: string): string => {
         .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '')
         .replace(/\s+/g, ' ')         // Collapse multiple spaces
         .trim();
+};
+
+const escapeRegex = (string: string) => {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+export const sanitizeForTraining = (text: string, userName: string): string => {
+    if (!text || !userName) return text;
+    // Scrub user name case-insensitively
+    return text.replace(new RegExp(escapeRegex(userName), 'gi'), "<USER>");
 };
 
 // ============================================================================
@@ -561,6 +572,19 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         })();
     }
 
+    // --- DATA DONATION ---
+    if (user.isDataDonationOn) {
+        try {
+            const rawUserMsg = typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]';
+            await TrainingLog.create({
+                userMood: user.moodStatus,
+                persona: user.persona,
+                input: sanitizeForTraining(rawUserMsg, user.name),
+                output: sanitizeForTraining(fullTextResponse, user.name)
+            });
+        } catch (e) { console.error("Data Donation Error:", e); }
+    }
+
     (res as any).write('data: [DONE]\n\n');
     (res as any).end();
 
@@ -582,12 +606,34 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
         const chatSession = await Chat.findOne({ user: req.user._id });
         if (!chatSession) return (res as any).json([]);
-        const history = chatSession.messages.map(m => ({
-            role: m.role,
-            content: decrypt(m.content),
-            timestamp: m.timestamp,
-            voice_note: m.voice_note
-        }));
+
+        let needsSave = false;
+
+        const history = chatSession.messages.map(m => {
+            const originalContent = m.content;
+            const decrypted = decrypt(originalContent);
+            const reEncrypted = encrypt(decrypted);
+
+            // Lazy Migration: If ciphertext changed (meaning it was using old key), update it
+            if (originalContent !== reEncrypted) {
+                m.content = reEncrypted;
+                needsSave = true;
+            }
+
+            return {
+                role: m.role,
+                content: decrypted,
+                timestamp: m.timestamp,
+                voice_note: m.voice_note
+            };
+        });
+
+        if (needsSave) {
+            console.log(`[Key Rotation] Migrating chat history for user ${req.user._id}`);
+            // Save in background to not block response
+            chatSession.save().catch(e => console.error("Background Migration Save Error:", e));
+        }
+
         (res as any).json(history);
     } catch (error) {
         console.error("History Error:", error);

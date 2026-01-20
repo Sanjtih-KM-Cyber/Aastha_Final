@@ -239,6 +239,28 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
 
       // --- PROCEED TO LOGIN (Verified Users Only) ---
       let needsSave = false;
+
+      // --- LAZY MIGRATION: RE-ENCRYPT DATA ---
+      if (user.emailEncrypted) {
+          const currentEmail = decrypt(user.emailEncrypted); // Decrypts using whichever key works
+          const newEmailEncrypted = encrypt(currentEmail);   // Encrypts using ONLY the new key
+
+          if (user.emailEncrypted !== newEmailEncrypted) {
+              console.log(`[Key Rotation] Migrating data for user ${user._id} to new key.`);
+              user.emailEncrypted = newEmailEncrypted;
+              needsSave = true;
+          }
+      }
+
+      if (user.usernameEncrypted) {
+          const currentUsername = decrypt(user.usernameEncrypted);
+          const newUsernameEncrypted = encrypt(currentUsername);
+          if (user.usernameEncrypted !== newUsernameEncrypted) {
+              user.usernameEncrypted = newUsernameEncrypted;
+              needsSave = true;
+          }
+      }
+
       let decryptedMasterKeyHex = null;
 
       // THE FORTRESS: Silent Migration or Decryption
@@ -632,7 +654,7 @@ export const verifySecurityAnswer = async (req: AuthRequest, res: Response) => {
         if (!user || !user.securityQuestions || user.securityQuestions.length === 0) return (res as any).status(400).json({ message: 'Security questions not set.' });
         const isValid = await bcrypt.compare(answer.toLowerCase().trim(), user.securityQuestions[0].answerHash);
         if (isValid) (res as any).json({ success: true });
-        else (res as any).status(401).json({ message: 'Incorrect answer' });
+        else (res as any).status(403).json({ message: 'Incorrect answer' });
     } catch(e) { (res as any).status(500).json({ message: 'Error' }); }
 };
 
@@ -844,5 +866,16 @@ export const updateCloneSettings = async (req: AuthRequest, res: Response) => {
 
         await User.findByIdAndUpdate(req.user._id, updates);
         (res as any).json({ success: true, message: 'Settings updated.' });
+    } catch(e) { (res as any).status(500).json({ message: 'Update failed' }); }
+};
+
+// --- DATA DONATION ---
+export const toggleDataDonation = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+        const { isDataDonationOn } = (req as any).body;
+
+        await User.findByIdAndUpdate(req.user._id, { isDataDonationOn });
+        (res as any).json({ success: true, message: 'Preference updated.' });
     } catch(e) { (res as any).status(500).json({ message: 'Update failed' }); }
 };

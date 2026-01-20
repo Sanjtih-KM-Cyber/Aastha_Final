@@ -56,6 +56,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   const [deleteReason, setDeleteReason] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Data Donation
+  const [isDataDonationOn, setIsDataDonationOn] = useState(() => user?.isDataDonationOn || false);
+
   // Profile Edit
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editName, setEditName] = useState('');
@@ -232,6 +235,22 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
           await logout();
           window.location.href = '/login';
       } catch (e) { setIsDeleting(false); }
+  };
+
+  const toggleDataDonation = async () => {
+      const newValue = !isDataDonationOn;
+      setIsDataDonationOn(newValue);
+      try {
+          await api.post('/users/toggle-data-donation', { isDataDonationOn: newValue });
+          // Optimistic update of local user object if needed, though state is local here
+          if (user) {
+             // Shallow update user context if method available, or just rely on next fetch
+             // For now, local state is sufficient for UI feedback
+          }
+      } catch (e) {
+          setIsDataDonationOn(!newValue); // Revert on failure
+          alert("Failed to update preference.");
+      }
   };
 
   // Generic Subscribe Function
@@ -551,6 +570,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
 
           {activeTab === 'data' && (
             <>
+                <section className="mb-8">
+                    <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Data Donation</h3>
+                    <div className="p-5 rounded-2xl bg-white/5 border border-white/5 flex flex-col gap-4">
+                        <div className="flex justify-between items-start">
+                            <div className="flex-1 pr-4">
+                                <h4 className="text-white font-medium mb-1">Help Aastha Grow Up</h4>
+                                <p className="text-sm text-white/60 leading-relaxed">
+                                    Aastha learns from the collective wisdom of humanity. By sharing anonymized snippets of your conversations, you help her understand nuance, slang, and true empathy. We strip away your name and identity—only the vibe remains.
+                                </p>
+                            </div>
+                            <button onClick={toggleDataDonation} className="text-teal-400 shrink-0">
+                                {isDataDonationOn ? <ToggleRight size={32} /> : <ToggleLeft size={32} className="text-white/20" />}
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
                 <section>
                     <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Danger Zone</h3>
                     {showDeleteModal ? (
