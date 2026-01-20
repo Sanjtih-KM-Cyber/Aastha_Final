@@ -1127,16 +1127,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       {/* --- SECTION 2: CHAT AREA --- */}
       <div 
-        ref={messagesContainerRef}
-        onScroll={handleScroll}
-        // FIX: Removed horizontal padding here to prevent layout thrashing on insert
-        className="flex-1 w-full mx-auto overflow-y-auto overflow-x-hidden scrollbar-hide min-h-0 md:h-full md:pt-28 md:pb-0 z-10"
-        style={{ overscrollBehaviorY: 'contain' }}
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-6 py-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
+          style={{ 
+              maxWidth: '100vw',
+              overflowX: 'hidden',
+              width: '100%'
+          }}
       >
-          <div className="flex flex-col min-h-full justify-end pb-[18vh] md:pb-40 relative">
-              <div className="h-4" /> 
-              {renderMessages()}
-              <div ref={messagesEndRef} />
+  {renderMessages()}
+  <div ref={messagesEndRef} />
+</div>
 
               {/* Jump to Bottom Button */}
               <AnimatePresence>
