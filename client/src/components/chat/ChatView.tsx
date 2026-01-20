@@ -118,8 +118,6 @@ const mapColorToTheme = (colorName: string): string => {
     return 'aurora';
 };
 
-const EMOJIS = ['😊', '🌿', '☁️', '✨', '💜', '🌧️', '🎵', '🧘‍♀️', '🌸', '☕', '🌙', '💪', '🤔', '🔥', '👀', '🫂'];
-
 export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false, currentActivity = 'Online' }) => {
   const { user } = useAuth();
   const { setTheme, currentTheme } = useTheme();
@@ -162,9 +160,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   // Patience / Listening Mode State
   const [isWaitingForPermission, setIsWaitingForPermission] = useState(false);
   const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Media Menu State
-  const [showMediaMenu, setShowMediaMenu] = useState(false);
 
   // Scroll State
   const [showScrollDown, setShowScrollDown] = useState(false);
@@ -950,8 +945,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // --- RETURN JSX ---
   return (
-    // FIXED: Removed 'md:block'. It is now ALWAYS 'flex-col' to ensure strict layout boundaries.
-    <div className="relative w-full h-[100dvh] flex flex-col items-center overflow-hidden bg-transparent">
+    // FIXED: Layout locked to viewport. 
+    // 'fixed inset-0' creates a strict box. 'flex-col' enforces vertical structure.
+    <div className="fixed inset-0 w-full h-[100dvh] flex flex-col items-center overflow-hidden bg-transparent">
       
       {/* 1. GLOBAL BACKGROUNDS & WALLPAPER */}
       <div className="fixed inset-0 z-[-1] pointer-events-none">
@@ -1012,7 +1008,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       {/* THOUGHT CLOUD MODAL */}
       <ThoughtCloudModal isOpen={showThoughtCloud} onClose={() => setShowThoughtCloud(false)} content={lastSubconscious} />
 
-      {/* --- SECTION 1: HEADER (FIXED HEIGHT) --- */}
+      {/* --- SECTION 1: HEADER --- */}
       <div className={`shrink-0 w-full z-30 pt-[env(safe-area-inset-top)] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-2 pointer-events-auto ${isMobile ? 'bg-gradient-to-b from-black/80 to-transparent' : 'md:top-0 md:pt-6 bg-none'}`}>
         <div className="flex items-center gap-3 h-14 justify-between relative">
              <div className="shrink-0 flex items-center z-20">
@@ -1069,7 +1065,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              </div>
 
              <div className="shrink-0 flex items-center gap-3 justify-end z-20">
-                 {/* CREDITS INDICATOR (HIDDEN ON MOBILE) */}
+                 {/* CREDITS INDICATOR */}
                  <div className={`hidden md:flex px-3 py-1.5 rounded-full backdrop-blur-xl border items-center gap-2 shadow-lg transition-colors ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
                     {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-gray-400" fill="currentColor" />}
                     <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-gray-400'}`}>
@@ -1124,16 +1120,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       
       <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
 
-      {/* --- SECTION 2: CHAT AREA (FLEXIBLE SCROLL) --- */}
-      {/* CRITICAL FIXES HERE:
-         1. flex-1: Tells this div to occupy all remaining vertical space.
-         2. min-h-0: Prevents the div from expanding beyond the parent height. Forces scroll.
-         3. w-full: Ensures width constraints.
+      {/* --- SECTION 2: CHAT AREA --- */}
+      {/* ADDED 'scrollbar-hide' logic directly via arbitrary classes for immediate effect.
+         [&::-webkit-scrollbar]:hidden -> Hides Chrome/Safari scrollbar
+         [-ms-overflow-style:'none'] -> Hides IE/Edge scrollbar
+         [scrollbar-width:'none'] -> Hides Firefox scrollbar
       */}
       <div 
           ref={messagesContainerRef}
           onScroll={handleScroll}
-          className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden px-4 md:px-6 py-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
+          className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden px-4 md:px-6 py-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
           style={{ 
               width: '100%',
               overflowAnchor: 'none'
@@ -1143,7 +1139,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           <div ref={messagesEndRef} />
       </div>
 
-      {/* Jump to Bottom Button - MOVED OUTSIDE THE SCROLL DIV so it floats above */}
+      {/* Jump to Bottom Button */}
       <AnimatePresence>
         {showScrollDown && (
             <motion.button
@@ -1151,7 +1147,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
                 onClick={scrollToBottom}
-                // Adjusted positioning to be safe above the input area
                 className="fixed bottom-28 md:bottom-32 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-20 hover:bg-white/10 hover:text-white transition-colors"
             >
                 <ArrowDown size={20} />
@@ -1159,7 +1154,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         )}
       </AnimatePresence>
 
-      {/* --- SECTION 3: INPUT AREA (FIXED HEIGHT) --- */}
+      {/* --- SECTION 3: INPUT AREA --- */}
       <div className={`shrink-0 w-full pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-[env(safe-area-inset-bottom)] pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:pb-6 bg-none'}`}>
           <div className="flex flex-col gap-2">
              <AnimatePresence>
@@ -1230,7 +1225,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
                     <>
                     <div className="flex items-center gap-1 relative">
-                        {/* UNIFIED MEDIA BUTTON */}
                         <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
@@ -1243,7 +1237,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
                         <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
 
-                        {/* DICTATION MIC */}
                         <button onClick={toggleDictation} className={`p-2.5 rounded-full transition-all ${isDictating ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>
                             {isDictating ? <MicOff size={20} /> : <Mic size={20} />}
                         </button>
