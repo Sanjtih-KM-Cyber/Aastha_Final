@@ -201,6 +201,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           lg:max-w-[60%]
           xl:max-w-[55%]
         "
+        style={{
+          maxWidth: isMobile ? '85vw' : undefined,
+          wordBreak: 'break-word',
+          overflowWrap: 'anywhere'
+        }}
       >
         <div
           className={`
@@ -211,7 +216,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             text-[15px] md:text-base
             leading-relaxed
             shadow-lg
-            break-words
             ${
               isUser
                 ? 'rounded-[22px] rounded-br-none border border-white/10'
@@ -232,9 +236,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     ? '#1f2937'
                     : `linear-gradient(135deg, #1f293780, #11182780)`,
                 }),
-                // 🛡️ FIX 1: Strict Mobile Wrapping
                 wordBreak: 'break-word',
-                overflowWrap: 'anywhere'
+                overflowWrap: 'anywhere',
+                maxWidth: '100%'
           }}
         >
           {isThinking ? (
@@ -249,11 +253,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               </div>
             </div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-1" style={{ maxWidth: '100%', overflowWrap: 'anywhere' }}>
               {visibleContent.split('\n').map((line, i) => (
                 <p
                   key={i}
-                  className="whitespace-pre-wrap text-white/95 font-light"
+                  className="text-white/95 font-light"
+                  style={{
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'anywhere',
+                    maxWidth: '100%'
+                  }}
                 >
                   {renderContent(line)}
                 </p>
