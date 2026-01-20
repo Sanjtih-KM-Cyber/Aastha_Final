@@ -1142,11 +1142,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       <AnimatePresence>
         {showScrollDown && (
             <motion.button
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
+                // ... props ...
                 onClick={scrollToBottom}
-                className="fixed bottom-28 md:bottom-32 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-20 hover:bg-white/10 hover:text-white transition-colors"
+                // CHANGE className: "z-20" -> "z-50"
+                className="fixed bottom-28 md:bottom-32 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-50 hover:bg-white/10 hover:text-white transition-colors"
             >
                 <ArrowDown size={20} />
             </motion.button>
