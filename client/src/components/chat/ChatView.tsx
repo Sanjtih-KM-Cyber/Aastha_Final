@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Menu, Headphones, AlertCircle, Smile, 
-  Mic, MicOff, X, Search, Image as ImageIcon, Plus, Camera,
+  Mic, MicOff, X, Search, Image as ImageIcon,
   ShieldAlert, Loader2, ChevronDown, Reply, Check, ArrowDown,
-  UserPlus, Play, Pause, Lock, Zap, Leaf
+  Zap, Leaf
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
@@ -118,8 +118,6 @@ const mapColorToTheme = (colorName: string): string => {
     return 'aurora';
 };
 
-const EMOJIS = ['😊', '🌿', '☁️', '✨', '💜', '🌧️', '🎵', '🧘‍♀️', '🌸', '☕', '🌙', '💪', '🤔', '🔥', '👀', '🫂'];
-
 export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false, currentActivity = 'Online' }) => {
   const { user } = useAuth();
   const { setTheme, currentTheme } = useTheme();
@@ -155,9 +153,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [currentMood, setCurrentMood] = useState('neutral');
   const [suggestedChips, setSuggestedChips] = useState<string[]>([]);
   
-  // Media Menu State
-  const [showMediaMenu, setShowMediaMenu] = useState(false);
-
   // Thought Cloud
   const [showThoughtCloud, setShowThoughtCloud] = useState(false);
   const [lastSubconscious, setLastSubconscious] = useState<any>(null); // Store last brain data
