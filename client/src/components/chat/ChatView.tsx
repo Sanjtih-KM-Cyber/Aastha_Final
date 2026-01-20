@@ -945,9 +945,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // --- RETURN JSX ---
   return (
-    // FIXED: Layout locked to viewport. 
-    // 'fixed inset-0' creates a strict box. 'flex-col' enforces vertical structure.
-    <div className="fixed inset-0 w-full h-[100dvh] flex flex-col items-center overflow-hidden bg-transparent">
+    // FIXED: md:pl-80 pushes the entire chat layout to the right on PC so it sits next to the sidebar.
+    <div className="fixed inset-0 w-full h-[100dvh] flex flex-col items-center overflow-hidden bg-transparent md:pl-80">
       
       {/* 1. GLOBAL BACKGROUNDS & WALLPAPER */}
       <div className="fixed inset-0 z-[-1] pointer-events-none">
