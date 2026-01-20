@@ -300,22 +300,29 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
      return () => { isMounted = false; };
   }, [user, navigate, botName]);
 
-  // --- FIX: SYNC HEIGHT WITH MOBILE KEYBOARD ---
+  // --- FIX: SYNC HEIGHT WITH MOBILE KEYBOARD & VIEWPORT ---
+  // This is the "God Mode" fix for mobile browsers (Safari/Chrome)
   useEffect(() => {
+    // Only run if visualViewport API is supported
     if (!window.visualViewport) return;
 
     const handleResize = () => {
       const appContainer = document.getElementById('chat-view-container');
       if (appContainer) {
-        // Forces the container to match the actual visible screen height
+        // Forces the container to match the actual visible screen height (minus keyboard)
         appContainer.style.height = `${window.visualViewport.height}px`;
-        // Scroll to bottom to keep input visible
+        // Scroll to bottom so input doesn't get covered
         scrollToBottom(); 
       }
     };
 
     window.visualViewport.addEventListener('resize', handleResize);
-    return () => window.visualViewport.removeEventListener('resize', handleResize);
+    window.visualViewport.addEventListener('scroll', handleResize); // Handle scroll events too
+
+    return () => {
+        window.visualViewport.removeEventListener('resize', handleResize);
+        window.visualViewport.removeEventListener('scroll', handleResize);
+    };
   }, []);
 
   // --- 3. SEARCH LOGIC ---
@@ -435,11 +442,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       if (path.startsWith('http') || path.startsWith('data:')) return path;
       if (path.startsWith('/')) {
           // Construct absolute URL based on API base
-          // Example: getApiUrl('') -> https://.../api
-          // path -> /api/ai/stream/...
-          // We need https://.../api/ai/stream/...
-          // If we append path to domain, we might double /api if path has it
-
           const apiBase = getApiUrl(''); // e.g. https://domain.com/api
           const domain = apiBase.replace(/\/api\/?$/, ''); // https://domain.com
           return `${domain}${path}`;
@@ -616,8 +618,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     setStatusDisplay('Thinking...'); 
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    // If on mobile, close the keyboard immediately after sending
-    if (isMobile) textareaRef.current?.blur(); 
+    // FIX: Close keyboard on mobile to reset view when sending
+    if (isMobile) textareaRef.current?.blur();
 
     // 2. CALL BACKEND
     try {
@@ -967,12 +969,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   // --- RETURN JSX ---
   return (
     // 1. ADDED id="chat-view-container" so the script can find it
-    // 2. KEEP fixed inset-0 and md:pl-80
-    // 3. ADDED overscroll-none touch-none to prevent rubber-banding
+    // 2. FIXED: 'fixed inset-0' pins it to screen. 'overscroll-none touch-none' stops swipe bounce.
+    // 3. FIXED: 'md:pl-80' keeps it right of the sidebar on PC.
     <div 
         id="chat-view-container"
         className="fixed inset-0 w-full flex flex-col items-center overflow-hidden bg-transparent md:pl-80 overscroll-none touch-none"
-        // removed h-[100dvh] here because useEffect manages height
     >
       
       {/* 1. GLOBAL BACKGROUNDS & WALLPAPER */}
@@ -1166,8 +1167,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
                 onClick={scrollToBottom}
-                // FIXED: z-50 forces it on top. bottom-40 moves it up so it's not hidden behind the input bar.
-                className="fixed bottom-40 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-50 hover:bg-white/10 hover:text-white transition-colors"
+                // FIXED: bottom-48 lifts it up so it's not hidden by the input bar. z-50 keeps it on top.
+                className="fixed bottom-48 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-50 hover:bg-white/10 hover:text-white transition-colors"
             >
                 <ArrowDown size={20} />
             </motion.button>
@@ -1175,7 +1176,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       </AnimatePresence>
 
       {/* --- SECTION 3: INPUT AREA --- */}
-      <div className={`shrink-0 w-full pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-[env(safe-area-inset-bottom)] pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:pb-6 bg-none'}`}>
+      {/* FIXED: pb-6 adds padding so the input text isn't covered by Android gesture bar */}
+      <div className={`shrink-0 w-full pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-6 pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:pb-6 bg-none'}`}>
           <div className="flex flex-col gap-2">
              <AnimatePresence>
                  {replyingTo && (
