@@ -207,10 +207,13 @@ if (process.env.REDIS_URL) {
     console.log("Using Redis for Rate Limiting");
     const redisClient = new Redis(process.env.REDIS_URL, {
         maxRetriesPerRequest: 1, // Fail fast if Redis is down initially
+        enableOfflineQueue: false, // ✅ FAIL FAST: Do not hang request if Redis is down
+        commandTimeout: 2000,      // ✅ TIMEOUT: Kill command after 2s
+        connectTimeout: 10000,     // ✅ TIMEOUT: Kill connection attempt after 10s
         retryStrategy: (times) => {
             if (times > 3) {
                 console.error("[Redis] Connection failed. Fallback to memory store.");
-                return null; // Stop retrying, let logic fallback if possible (though ioredis keeps trying usually)
+                return null; // Stop retrying
             }
             return Math.min(times * 50, 2000);
         }
@@ -218,10 +221,6 @@ if (process.env.REDIS_URL) {
 
     redisClient.on('error', (err) => {
         console.error('[Redis] Error:', err.message);
-        // Note: express-rate-limit with redis-store might handle this by bypassing or failing.
-        // We set up the store, but if redis is down, it might throw.
-        // Ideally, we'd swap the store dynamically, but that's complex.
-        // For now, we trust the robust nature or restart if Redis dies.
     });
 
     limiterStore = new RedisStore({
