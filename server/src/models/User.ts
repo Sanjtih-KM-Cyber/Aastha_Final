@@ -87,8 +87,13 @@ export interface IUser extends Document {
   dailyPremiumUsage: number;
   lastUsageDate: Date;
   
+  // Usage Limits (Token Budget)
+  dailyMessageCount: number;
+  lastMessageDate: Date;
+
   // Subscription
   subscriptionDate?: Date;
+  subscriptionExpiresAt?: Date; // <--- NEW: Pro Plan Stacking
   voiceTopUpExpires?: Date; // <--- NEW: Voice Only Top-up Expiry
   paymentHistory: IPaymentRecord[];
 
@@ -195,8 +200,13 @@ const userSchema = new Schema<IUser>({
   dailyPremiumUsage: { type: Number, default: 0 },
   lastUsageDate: { type: Date, default: Date.now },
   
+  // Usage Limits (Token Budget)
+  dailyMessageCount: { type: Number, default: 0 },
+  lastMessageDate: { type: Date, default: Date.now },
+
   // Subscription
   subscriptionDate: { type: Date },
+  subscriptionExpiresAt: { type: Date },
   voiceTopUpExpires: { type: Date }, // <--- NEW
   paymentHistory: { type: [paymentRecordSchema], default: [] },
 

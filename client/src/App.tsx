@@ -9,6 +9,7 @@ import { SyncBridge } from './components/SyncBridge';
 import { useSecurity } from './hooks/useSecurity';
 import { LoadingFallback } from './components/LoadingFallback';
 import { Login } from './components/auth/Login';
+import { Toaster } from 'react-hot-toast';
 
 // Lazy Load Pages
 // Note: We use the default export from the new Landing.tsx
@@ -88,6 +89,7 @@ const App: React.FC = () => {
              <Router>
               <AppContainer>
                 <AppRoutes />
+                <Toaster position="top-center" reverseOrder={false} />
               </AppContainer>
             </Router>
           </ThemeProvider>
