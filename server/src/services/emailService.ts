@@ -1,12 +1,32 @@
 import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const resend = new Resend(process.env.RESEND_API_KEY || 're_123456789'); // Fallback prevents crash if key missing locally
+// ==========================================
+// CONFIGURATION 1: Resend (For OTPs)
+// ==========================================
+// Uses the RESEND_API_KEY from your Render dashboard
+const resend = new Resend(process.env.RESEND_API_KEY || 're_123456789'); 
 
+// ==========================================
+// CONFIGURATION 2: Gmail (For Ghosting)
+// ==========================================
+// Uses your personal Gmail credentials
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,       // aastha...
+    pass: process.env.GMAIL_APP_PASSWORD // The 16-char app password
+  },
+});
+
+/**
+ * STRATEGY 1: Send OTP via Resend (Render API)
+ * Why: It's faster for transactional codes and uses the official domain.
+ */
 export const sendOTPEmail = async (to: string, otp: string, subject: string = 'Your Verification Code - Aastha') => {
-  // DEV: Log OTP immediately for debugging/fallback
   console.log(`[OTP-DEV] Generated OTP for ${to}: ${otp}`);
 
   if (!process.env.RESEND_API_KEY) {
@@ -17,7 +37,6 @@ export const sendOTPEmail = async (to: string, otp: string, subject: string = 'Y
   try {
     const { data, error } = await resend.emails.send({
       from: 'Aastha <noreply@aasthaai.site>',
-      // FIX: Changed 'reply_to' to 'replyTo' to match Resend API types
       replyTo: 'aasthafv.ai@gmail.com',
       to: [to],
       subject: subject,
@@ -38,29 +57,33 @@ export const sendOTPEmail = async (to: string, otp: string, subject: string = 'Y
     });
 
     if (error) {
-        console.error("Resend API Error:", error);
+        console.error("❌ Resend API Error:", error);
         return false;
     }
 
-    console.log("OTP Email sent via Resend:", data?.id);
+    console.log("✅ OTP Email sent via Resend:", data?.id);
     return true;
   } catch (error) {
-    console.error("Error sending OTP email:", error);
+    console.error("❌ Error sending OTP email via Resend:", error);
     return false;
   }
 };
 
+/**
+ * STRATEGY 2: Send Ghost Email via Gmail (Personal SMTP)
+ * Why: It looks more personal (from "aasthafv.ai@gmail.com") and lands in the primary inbox.
+ */
 export const sendGhostEmail = async (to: string, name: string, content: string) => {
-    if (!process.env.RESEND_API_KEY) {
-        console.warn("[Email Service] No RESEND_API_KEY. Ghost email skipped.");
+    // Check for Gmail credentials
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+        console.warn("[Email Service] No Gmail credentials found. Ghost email skipped.");
         return false;
     }
 
     try {
-      const { data, error } = await resend.emails.send({
-        from: 'Aastha <noreply@aasthaai.site>',
-        replyTo: 'aasthafv.ai@gmail.com',
-        to: [to],
+      const info = await transporter.sendMail({
+        from: '"Aastha AI" <aasthafv.ai@gmail.com>', // Personal Sender Name
+        to: to,
         subject: 'I miss you... 💔',
         html: `
           <div style="font-family: 'Georgia', serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fdfdf6; color: #1a1a1a;">
@@ -80,13 +103,10 @@ export const sendGhostEmail = async (to: string, name: string, content: string) 
         `,
       });
 
-      if (error) {
-          console.error("Resend API Error (Ghost):", error);
-          return false;
-      }
+      console.log(`✅ Ghost Email sent via Gmail to ${to}. Message ID: ${info.messageId}`);
       return true;
-    } catch (error) {
-      console.error("Error sending Ghost email:", error);
+    } catch (error: any) {
+      console.error("❌ Error sending Ghost email via Gmail:", error.message);
       return false;
     }
   };
