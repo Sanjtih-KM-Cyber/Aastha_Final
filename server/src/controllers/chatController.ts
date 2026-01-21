@@ -553,9 +553,15 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                     (res as any).write(`data: ${JSON.stringify(eventPayload)}\n\n`);
                 } else {
                     console.warn("Brain Service returned null audio buffer.");
+                    // FAIL FAST: Notify frontend to fallback
+                    const failPayload: any = { meta: { voice_status: "failed", error: "BRAIN_SLEEPING" } };
+                    (res as any).write(`data: ${JSON.stringify(failPayload)}\n\n`);
                 }
             } catch (e) {
                 console.error("Audio Gen Failed:", e);
+                // FAIL FAST: Notify frontend to fallback
+                const failPayload: any = { meta: { voice_status: "failed", error: "BRAIN_SLEEPING" } };
+                (res as any).write(`data: ${JSON.stringify(failPayload)}\n\n`);
             }
         } else {
              console.warn("Skipping TTS: Cleaned text is empty.");

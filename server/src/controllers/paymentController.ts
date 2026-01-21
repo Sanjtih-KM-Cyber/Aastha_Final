@@ -126,9 +126,16 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
                 date: new Date()
             });
         } else {
-            // Pro Plan Logic
+            // Pro Plan Logic (Stacking Support)
             user.isPro = true;
             user.subscriptionDate = new Date();
+
+            const now = new Date();
+            const currentExpiry = user.subscriptionExpiresAt && user.subscriptionExpiresAt > now ? new Date(user.subscriptionExpiresAt) : now;
+            const newExpiry = new Date(currentExpiry.getTime() + (30 * 24 * 60 * 60 * 1000)); // +30 Days
+
+            user.subscriptionExpiresAt = newExpiry;
+
             user.paymentHistory.push({
               orderId: razorpay_order_id,
               paymentId: razorpay_payment_id,

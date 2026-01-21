@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
+import { toast } from 'react-hot-toast'; // Import Toast
 import { MessageBubble } from './MessageBubble';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
@@ -746,13 +747,38 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             }
                         }
 
-                        // B. HANDLE META
+                        // B. HANDLE META & FAIL-FAST FALLBACK
                         if (data.meta) { 
                             setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits)); 
                             setModelMode(data.meta.mode); 
                             setIsStandardMode(data.meta.mode === 'standard');
                             if (data.meta.limitReached) {
                                 setIsCloneMode(false);
+                            }
+
+                            // HANDLE INTELLIGENT FALLBACK
+                            if (data.meta.voice_status === 'failed') {
+                                // Explicitly check user Pro status (or credits) for the "Pro Perk"
+                                const hasProAccess = user?.isPro || (user?.credits || 0) > 0 || data.meta.use_fallback_tts;
+
+                                if (hasProAccess) {
+                                    // PRO USER or already expecting fallback: Use Browser TTS
+                                    // Wait for text stream to finish or use what we have
+                                    // Logic handled in final block
+                                } else {
+                                    // FREE USER: Show Friendly Toast
+                                    toast("My voice engine is taking a nap. Waking up... try again in 1 minute.", {
+                                        icon: '😴',
+                                        style: {
+                                            borderRadius: '10px',
+                                            background: '#333',
+                                            color: '#fff',
+                                        },
+                                        duration: 4000
+                                    });
+                                    // Don't play audio
+                                    serverAudioPlayed = true; // Fake it so browser TTS doesn't trigger
+                                }
                             }
                         }
 
@@ -884,13 +910,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         return;
     }
 
-    // 2. Fallback: Browser TTS
+    // 2. Fallback: Browser TTS (Pro Perk: Reliable Fallback)
     if ('speechSynthesis' in window) {
        const cleanText = textOrUrl.replace(/[*#]/g, '').replace(/[\u{1F600}-\u{1F64F}]/gu, '');
        const utterance = new SpeechSynthesisUtterance(cleanText);
        const voices = window.speechSynthesis.getVoices();
-       let chosenVoice = voices.find(v => v.voiceURI === selectedVoiceURI) || voices.find(v => v.name.includes('Google US English'));
+
+       // Priority: Indian -> Female -> Default
+       let chosenVoice =
+           voices.find(v => v.voiceURI === selectedVoiceURI) ||
+           voices.find(v => (v.name.includes('India') || v.lang.includes('IN')) && v.name.includes('Female')) ||
+           voices.find(v => v.name.includes('Google US English')) ||
+           voices.find(v => v.name.includes('Female')) ||
+           voices[0];
+
        if (chosenVoice) utterance.voice = chosenVoice;
+
+       // Slightly slower rate for clarity
+       utterance.rate = 0.9;
+
        utterance.onend = () => { if (isVoiceMode) setTimeout(() => startListening(), 300); };
        window.speechSynthesis.speak(utterance);
     }

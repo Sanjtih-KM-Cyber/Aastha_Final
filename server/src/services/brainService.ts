@@ -27,8 +27,9 @@ export const brainService = {
 
             const response = await axios.post(`${BRAIN_URL}/speak`, form, {
                 headers: { ...form.getHeaders() },
-                responseType: 'arraybuffer', // Critical for receiving binary audio
-                validateStatus: (status) => status < 500 // Allow 400s to be caught manually if needed
+                responseType: 'arraybuffer',
+                validateStatus: (status) => status < 500,
+                timeout: 10000 // 10 seconds strict timeout (Fail Fast)
             });
 
             // 1. Check Content-Type to avoid playing JSON errors as static
@@ -65,7 +66,8 @@ export const brainService = {
             form.append('image', imageBuffer, { filename: 'image.jpg' });
 
             const response = await axios.post(`${BRAIN_URL}/see`, form, {
-                headers: { ...form.getHeaders() }
+                headers: { ...form.getHeaders() },
+                timeout: 15000 // 15 seconds timeout for Vision
             });
 
             return response.data.caption || "I see something, but I'm not sure what.";
