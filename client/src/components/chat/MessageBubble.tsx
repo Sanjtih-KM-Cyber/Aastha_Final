@@ -124,11 +124,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   // Long Press Logic for Mobile
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const isLongPressRef = useRef(false);
 
   const handleTouchStart = () => {
       if (!isMobile) return;
+      isLongPressRef.current = false;
       longPressTimer.current = setTimeout(() => {
-          setIsHovered(prev => !prev);
+          isLongPressRef.current = true;
+          setIsHovered(true); // Show options on long press
+          if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback
       }, 500); // 500ms Long Press
   };
 
@@ -137,6 +141,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           clearTimeout(longPressTimer.current);
           longPressTimer.current = null;
       }
+  };
+
+  const handleClick = () => {
+      if (!isMobile) return;
+      if (isLongPressRef.current) {
+          // If a long press just happened, don't immediately hide
+          isLongPressRef.current = false;
+          return;
+      }
+      // If short tap, hide interactions
+      setIsHovered(false);
   };
 
   // Parse Content for Proposals
@@ -223,7 +238,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       onMouseLeave={() => !isMobile && setIsHovered(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      // Removed simple onClick toggle for mobile to prioritize long press
+      onClick={handleClick}
     >
       {/* Assistant avatar (Left Side) */}
       {!isUser && (
@@ -400,13 +415,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               `}
             >
               <button
-                onClick={() => onReply?.(content)}
+                onClick={(e) => { e.stopPropagation(); onReply?.(content); }}
                 className="p-2 rounded-full bg-zinc-800 border border-white/10 text-white/70 hover:text-white shadow-lg"
               >
                 <Reply size={14} />
               </button>
               <button
-                onClick={() => onCopy?.(content)}
+                onClick={(e) => { e.stopPropagation(); onCopy?.(content); }}
                 className="p-2 rounded-full bg-zinc-800 border border-white/10 text-white/70 hover:text-white shadow-lg"
               >
                 <Copy size={14} />
