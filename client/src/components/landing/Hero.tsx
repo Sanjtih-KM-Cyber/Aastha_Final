@@ -32,7 +32,7 @@ export const Hero: React.FC<HeroProps> = ({ onLogin }) => {
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight text-slate-900 dark:text-white mb-8 leading-[1.15] md:leading-[1.1]">
             From Campus to Corporate <br className="hidden md:block" />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 via-purple-500 to-teal-400 dark:from-violet-400 dark:via-purple-300 dark:to-teal-300">
-              Your Mental Space Matters.
+              Your AI Wellness Companion.
             </span>
           </h1>
         </FadeIn>
