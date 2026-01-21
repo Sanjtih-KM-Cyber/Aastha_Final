@@ -30,7 +30,7 @@ if (missingVars.length > 0) {
 
 connectDB();
 
-// Init Ghost Service
+// Init Ghost Service (This line caused the error before because ghostService.ts was outdated)
 ghostService.init();
 
 const app = express();
