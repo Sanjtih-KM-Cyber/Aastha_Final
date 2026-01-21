@@ -133,7 +133,7 @@ export const generateSubconscious = async (
       "status_display": "UI Status (e.g. 'Listening...', 'Vibing', 'Thinking')",
       "ui_action": "listen" | "none",
       "strategy": "reply" | "listen",
-      "reaction": "nod" | "heart" | "sad" | "shock" | "fire" | "thumbsup" | null,
+      "reaction": "string" | null, // Emojis: thumbsup, heart, laugh, sad, shock, fire, clap, nod, smile, cry, angry, think, cool, party, etc.
       "suggested_replies": ["User phrase 1", "User phrase 2", "User phrase 3"],
       "tool_calls": []
     }

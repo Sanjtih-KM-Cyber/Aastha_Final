@@ -21,22 +21,59 @@ interface MessageBubbleProps {
 // --- NEW: Emoji Mapper ---
 // This translates the backend "text" reaction into an actual Emoji
 const reactionMap: Record<string, string> = {
-  'thumbsup': '👍',
-  'like': '👍',
-  'heart': '❤️',
-  'love': '❤️',
-  'laugh': '😂',
-  'haha': '😂',
-  'surprised': '😲',
-  'wow': '😲',
-  'sad': '😢',
-  'angry': '😠',
-  'fire': '🔥',
-  'clap': '👏',
-  'check': '✅',
-  'x': '❌',
-  'hehe': '🤭',
-  'party': '🎉'
+  // Positive / Happy
+  'thumbsup': '👍', 'like': '👍', 'yes': '👍',
+  'heart': '❤️', 'love': '❤️',
+  'laugh': '😂', 'haha': '😂', 'lol': '😂', 'rofl': '🤣',
+  'smile': '😊', 'happy': '😊', 'grin': '😁',
+  'joy': '🥹', 'blush': '😊',
+  'wink': '😉',
+  'cool': '😎', 'chill': '😎', 'shades': '😎',
+
+  // Agreement / Acknowledgment
+  'nod': '👌', 'ok': '👌', 'okay': '👌', 'check': '✅',
+  'clap': '👏', 'applause': '👏',
+  'deal': '🤝', 'handshake': '🤝',
+  'salute': '🫡',
+
+  // Celebration / Hype
+  'fire': '🔥', 'lit': '🔥',
+  'party': '🎉', 'celebrate': '🎉', 'tada': '🎉',
+  'star': '🌟', 'sparkle': '✨', 'magic': '✨',
+  'rocket': '🚀', 'hype': '🚀',
+  'trophy': '🏆', 'win': '🏆',
+  'crown': '👑',
+
+  // Surprise / Shock
+  'surprised': '😲', 'shock': '😲', 'wow': '😲', 'gasp': '😮',
+  'mindblown': '🤯', 'exploding': '🤯',
+
+  // Negative / Sad / Angry
+  'sad': '😢', 'cry': '😢', 'tear': '😢',
+  'sob': '😭', 'heartbreak': '💔', 'broken': '💔',
+  'angry': '😠', 'mad': '😠', 'rage': '😡',
+  'dead': '💀', 'skull': '💀',
+  'ghost': '👻',
+  'sick': '🤢', 'vomit': '🤮',
+  'poop': '💩',
+  'facepalm': '🤦',
+
+  // Confusion / Thinking
+  'think': '🤔', 'hmm': '🤔', 'confused': '😕',
+  'search': '🔍',
+  'shrug': '🤷',
+
+  // Calm / Sleep
+  'sleep': '😴', 'zzz': '😴', 'tired': '🥱',
+  'zen': '🧘', 'meditate': '🧘',
+
+  // Misc
+  'eyes': '👀', 'look': '👀',
+  'pray': '🙏', 'please': '🙏',
+  'muscle': '💪', 'strong': '💪',
+  'money': '💸', 'cash': '💸',
+  'x': '❌', 'no': '❌', 'stop': '🛑',
+  'warning': '⚠️'
 };
 
 // Helper to parse hidden <proposal> tags AND STRIP LEAKED JSON
