@@ -27,6 +27,16 @@ const generateToken = (id: string) => {
   });
 };
 
+const generateResetToken = (id: string) => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('Server misconfiguration: Missing JWT_SECRET');
+  }
+  // Short expiry for reset token (15 mins)
+  return jwt.sign({ id, purpose: 'reset' }, process.env.JWT_SECRET, {
+    expiresIn: '15m',
+  });
+};
+
 const generateOTP = () => {
     // Generates a cryptographically secure 6-digit number
     return crypto.randomInt(100000, 1000000).toString();
@@ -588,24 +598,93 @@ export const initiateReset = async (req: Request, res: Response) => {
 
     const user = await User.findOne({ $or: [{ emailHash: emailHash }, { email: cleanEmail }] });
     
-    if (!user || !user.securityQuestions || user.securityQuestions.length === 0) {
-      return (res as any).status(404).json({ message: 'Account not found or no security questions set.' }); 
+    // UPDATED: Do not return security questions yet. Send OTP instead.
+    if (!user) {
+         // Generic response to prevent enumeration
+         (res as any).status(200).json({ message: 'If an account exists, a code has been sent.' });
+         return;
     }
-    
-    (res as any).status(200).json({ question: user.securityQuestions[0].question });
+
+    const otp = generateOTP();
+    user.otpCode = await bcrypt.hash(otp, 8); // Optimized
+    user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+    await user.save();
+
+    sendOTPEmail(cleanEmail, otp, "Password Reset Code").catch(e => console.error("[Auth] Reset Email Error:", e));
+
+    (res as any).status(200).json({ message: 'If an account exists, a code has been sent.' });
+
   } catch (error) { (res as any).status(500).json({ message: 'Server Error' }); }
+};
+
+export const verifyResetOTP = async (req: Request, res: Response) => {
+    try {
+        const { email, otp } = (req as any).body;
+        const cleanEmail = email.toLowerCase().trim();
+        const emailHash = hashEmail(cleanEmail);
+
+        const user = await User.findOne({ $or: [{ emailHash: emailHash }, { email: cleanEmail }] });
+
+        if (!user || !user.otpCode || !user.otpExpires) {
+             return (res as any).status(400).json({ message: 'Invalid request.' });
+        }
+
+        if (new Date() > user.otpExpires) {
+             return (res as any).status(400).json({ message: 'Code expired.' });
+        }
+
+        const isValid = await bcrypt.compare(String(otp), user.otpCode);
+        if (!isValid) return (res as any).status(400).json({ message: 'Invalid code.' });
+
+        // Clear OTP
+        user.otpCode = undefined;
+        user.otpExpires = undefined;
+        await user.save();
+
+        // Generate Short-lived Reset Token
+        const resetToken = generateResetToken((user._id as any).toString());
+
+        // Return Token + Security Question
+        const question = (user.securityQuestions && user.securityQuestions.length > 0)
+            ? user.securityQuestions[0].question
+            : null;
+
+        if (!question) {
+             // Edge case: No security question set. Cannot proceed with Safe Reset.
+             return (res as any).status(400).json({ message: 'Account requires security update. Contact support.' });
+        }
+
+        (res as any).status(200).json({
+            resetToken,
+            question
+        });
+
+    } catch (e) {
+        (res as any).status(500).json({ message: 'Server Error' });
+    }
 };
 
 export const completeReset = async (req: Request, res: Response) => {
   try {
-    const { email, answer, newPassword } = (req as any).body;
-    const cleanEmail = email.toLowerCase().trim();
-    const cleanAnswer = answer.toLowerCase().trim();
-    const emailHash = hashEmail(cleanEmail);
+    const { resetToken, answer, newPassword } = (req as any).body;
 
-    const user = await User.findOne({ $or: [{ emailHash: emailHash }, { email: cleanEmail }] }).select('+masterKeyBlob2');
+    if (!resetToken || !answer || !newPassword) {
+        return (res as any).status(400).json({ message: 'Missing fields.' });
+    }
+
+    // Verify Token
+    let decoded: any;
+    try {
+         decoded = jwt.verify(resetToken, process.env.JWT_SECRET as string);
+         if (decoded.purpose !== 'reset') throw new Error('Invalid token purpose');
+    } catch (e) {
+         return (res as any).status(401).json({ message: 'Session expired. Please start over.' });
+    }
+
+    const user = await User.findById(decoded.id).select('+masterKeyBlob2');
     if (!user || !user.securityQuestions || user.securityQuestions.length === 0) return (res as any).status(400).json({ message: 'Invalid request.' });
 
+    const cleanAnswer = answer.toLowerCase().trim();
     const isValid = await bcrypt.compare(cleanAnswer, user.securityQuestions[0].answerHash);
     if (!isValid) return (res as any).status(401).json({ message: 'Incorrect security answer.' });
 
@@ -625,12 +704,10 @@ export const completeReset = async (req: Request, res: Response) => {
     }
 
     if (!recoverySuccess) {
-        // Fallback: If recovery failed or legacy user, we MUST generate a NEW key.
-        // Data is lost, but account access is restored.
-        console.log(`[The Fortress] Reset: Generating NEW Master Key for ${cleanEmail}`);
-        const newKey = generateMasterKey();
-        user.masterKeyBlob1 = await encryptMasterKey(newKey, newPassword);
-        user.masterKeyBlob2 = await encryptMasterKey(newKey, cleanAnswer);
+        // ABORT: Data Recovery Failed.
+        return (res as any).status(500).json({
+            message: "Critical: Unable to recover data keys. Resetting password now will wipe your diary. Contact support or confirm data wipe."
+        });
     }
 
     const salt = await bcrypt.genSalt(10);

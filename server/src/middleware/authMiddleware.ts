@@ -9,10 +9,17 @@ export interface AuthRequest extends Request {
 export const protect = async (req: AuthRequest, res: Response, next: NextFunction) => {
   let token;
 
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    try {
+  // PRIORITY 1: Check Cookies (Secure Web Flow)
+  if (req.cookies && req.cookies.jwt) {
+      token = req.cookies.jwt;
+  }
+  // PRIORITY 2: Check Header (Mobile/API Flow)
+  else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
+  }
 
+  if (token) {
+    try {
       if (!process.env.JWT_SECRET) {
         throw new Error('Server misconfiguration: Missing JWT_SECRET');
       }

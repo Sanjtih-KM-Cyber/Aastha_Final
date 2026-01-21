@@ -5,7 +5,7 @@ dotenv.config();
 
 const resend = new Resend(process.env.RESEND_API_KEY || 're_123456789'); // Fallback prevents crash if key missing locally
 
-export const sendOTPEmail = async (to: string, otp: string) => {
+export const sendOTPEmail = async (to: string, otp: string, subject: string = 'Your Verification Code - Aastha') => {
   // DEV: Log OTP immediately for debugging/fallback
   console.log(`[OTP-DEV] Generated OTP for ${to}: ${otp}`);
 
@@ -20,7 +20,7 @@ export const sendOTPEmail = async (to: string, otp: string) => {
       // FIX: Changed 'reply_to' to 'replyTo' to match Resend API types
       replyTo: 'aasthafv.ai@gmail.com',
       to: [to],
-      subject: 'Your Verification Code - Aastha',
+      subject: subject,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f6f8;">
           <div style="background-color: white; padding: 30px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
