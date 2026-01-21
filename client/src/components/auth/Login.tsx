@@ -252,7 +252,8 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
       // If we are in verify mode, go back to register or login depending on flow?
       // Actually standard back behavior:
       if (mode === 'register' || mode === 'forgot-init') setMode('login');
-      else if (mode === 'forgot-complete') setMode('forgot-init');
+      else if (mode === 'forgot-verify') setMode('forgot-init');
+      else if (mode === 'forgot-complete') setMode('forgot-init'); // Or verify
       else if (mode === 'verify-otp') setMode('login');
       else if (onBack) onBack();
       else navigate('/');
@@ -300,6 +301,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                 {mode === 'register' && 'Create Account'}
                 {mode === 'verify-otp' && 'Check your Email'}
                 {mode === 'forgot-init' && 'Find Account'}
+                {mode === 'forgot-verify' && 'Verify Identity'}
                 {mode === 'forgot-complete' && 'Reset Password'}
               </h2>
               <p className="text-slate-400">
@@ -307,6 +309,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                 {mode === 'register' && 'Join thousands finding peace today.'}
                 {mode === 'verify-otp' && `We sent a code to ${regEmail || 'your email'}.`}
                 {mode === 'forgot-init' && 'Enter email to recover password.'}
+                {mode === 'forgot-verify' && 'Check your email for the reset code.'}
                 {mode === 'forgot-complete' && 'Answer your security question.'}
               </p>
             </div>
