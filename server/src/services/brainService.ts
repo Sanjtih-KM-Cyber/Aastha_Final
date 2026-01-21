@@ -29,7 +29,7 @@ export const brainService = {
                 headers: { ...form.getHeaders() },
                 responseType: 'arraybuffer',
                 validateStatus: (status) => status < 500,
-                timeout: 10000 // 10 seconds strict timeout (Fail Fast)
+                timeout: 60000 // 10 seconds strict timeout (Fail Fast)
             });
 
             // 1. Check Content-Type to avoid playing JSON errors as static
