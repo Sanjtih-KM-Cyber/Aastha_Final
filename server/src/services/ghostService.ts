@@ -14,8 +14,8 @@ const getGeminiClient = () => {
 export const init = () => {
     console.log('[GhostService] Initialized. Watching for inactive souls...');
 
-    // Run every hour
-    cron.schedule('0 * * * *', async () => {
+    // Run every 10 minutes
+    cron.schedule('*/10 * * * *', async () => {
         try {
             console.log('[GhostService] Running hourly check...');
 
