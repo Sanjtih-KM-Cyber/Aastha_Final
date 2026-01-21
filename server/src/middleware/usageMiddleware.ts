@@ -14,14 +14,19 @@ export const checkUsage = async (req: AuthRequest, res: Response, next: NextFunc
             return (res as any).status(404).json({ message: 'User not found' });
         }
 
-        // 2. Check Time Logic (UTC Midnight)
+        // 2. Check Time Logic (IST Midnight, UTC+5:30)
+        // We shift both dates by 5.5 hours to align "Same Day" with IST
+        const IST_OFFSET = 5.5 * 60 * 60 * 1000;
         const now = new Date();
         const lastDate = user.lastMessageDate || new Date(0); // Default to epoch if missing
 
+        const nowIST = new Date(now.getTime() + IST_OFFSET);
+        const lastDateIST = new Date(lastDate.getTime() + IST_OFFSET);
+
         const isSameDay =
-            now.getUTCFullYear() === lastDate.getUTCFullYear() &&
-            now.getUTCMonth() === lastDate.getUTCMonth() &&
-            now.getUTCDate() === lastDate.getUTCDate();
+            nowIST.getUTCFullYear() === lastDateIST.getUTCFullYear() &&
+            nowIST.getUTCMonth() === lastDateIST.getUTCMonth() &&
+            nowIST.getUTCDate() === lastDateIST.getUTCDate();
 
         if (!isSameDay) {
             // Reset for new day - Split Quotas

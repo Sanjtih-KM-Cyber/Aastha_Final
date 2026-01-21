@@ -646,7 +646,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             audio: audioBase64,
             forceReply: isPermissionGrant,
             isVoiceMode: isVoiceMode, // <--- Pass Voice Mode Flag
-            userLocalTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            userLocalTime: new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true }),
             userLocalHour: new Date().getHours()
         }),
       });
@@ -749,7 +749,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
                         // B. HANDLE META & FAIL-FAST FALLBACK
                         if (data.meta) { 
-                            setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits)); 
+                            const creditVal = Number(data.meta.credits);
+                            setLocalCredits(data.meta.credits === '∞' ? 9999 : (isNaN(creditVal) ? 0 : creditVal));
                             setModelMode(data.meta.mode); 
                             setIsStandardMode(data.meta.mode === 'standard');
                             if (data.meta.limitReached) {
@@ -1136,7 +1137,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  <div className={`hidden md:flex px-3 py-1.5 rounded-full backdrop-blur-xl border items-center gap-2 shadow-lg transition-colors ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
                     {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-gray-400" fill="currentColor" />}
                     <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-gray-400'}`}>
-                        {!isStandardMode && localCredits > 100 ? '∞' : `${localCredits} Premium`}
+                        {!isStandardMode && localCredits > 100 ? '∞' : `${isNaN(localCredits) ? 0 : localCredits} Premium`}
                     </span>
                  </div>
 

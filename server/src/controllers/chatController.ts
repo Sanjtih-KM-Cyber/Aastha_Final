@@ -47,7 +47,7 @@ const getTimeContext = (userTime?: string, userHour?: number): string => {
     const hour = userHour !== undefined ? userHour : new Date().getHours();
     const timeStr = userTime || "Unknown Time";
 
-    let context = `[SYSTEM: THE USER'S LOCAL TIME IS STRICTLY ${timeStr}. DO NOT HALLUCINATE A DIFFERENT TIME.] `;
+    let context = `[SYSTEM: CURRENT USER DATE & TIME IS ${timeStr}. IGNORE PREVIOUS CONVERSATION TIMES.] `;
     if (hour >= 5 && hour < 12) context += "It is Morning. Be high energy, motivating, use sun/coffee emojis.";
     else if (hour >= 12 && hour < 18) context += "It is Afternoon. Be productive, casual, keep it moving.";
     else if (hour >= 18 && hour < 22) context += "It is Evening. Be relaxing, wind down.";
