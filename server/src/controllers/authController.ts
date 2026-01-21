@@ -598,9 +598,8 @@ export const initiateReset = async (req: Request, res: Response) => {
 
     const user = await User.findOne({ $or: [{ emailHash: emailHash }, { email: cleanEmail }] });
     
-    // UPDATED: Do not return security questions yet. Send OTP instead.
+    // UPDATED: Reverted to silent failure to prevent enumeration (User Request)
     if (!user) {
-         // Generic response to prevent enumeration
          (res as any).status(200).json({ message: 'If an account exists, a code has been sent.' });
          return;
     }

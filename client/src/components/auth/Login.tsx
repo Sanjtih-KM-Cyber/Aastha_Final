@@ -29,7 +29,7 @@ interface LoginProps {
   onLoginSuccess?: () => void;
 }
 
-type AuthMode = 'login' | 'register' | 'forgot-init' | 'forgot-complete' | 'verify-otp';
+type AuthMode = 'login' | 'register' | 'forgot-init' | 'forgot-verify' | 'forgot-complete' | 'verify-otp';
 
 export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   const [mode, setMode] = useState<AuthMode>('login');
@@ -63,6 +63,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
 
   // Reset State
   const [resetEmail, setResetEmail] = useState('');
+  const [resetToken, setResetToken] = useState('');
   const [resetQuestion, setResetQuestion] = useState('');
   const [resetAnswer, setResetAnswer] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -185,11 +186,32 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   const handleForgotInit = async (e: React.FormEvent) => {
       e.preventDefault(); setIsLoading(true); setError(null);
       try {
-          const res = await api.post('/users/reset-init', { email: resetEmail });
+          await api.post('/users/reset-init', { email: resetEmail });
+          // Clear OTP state for reuse
+          setOtp(['', '', '', '', '', '']);
+          setMode('forgot-verify');
+      } catch (err: any) {
+          setError(err.response?.data?.message || 'Account not found');
+      } finally {
+          setIsLoading(false);
+      }
+  };
+
+  const handleForgotVerifyOtp = async (e: React.FormEvent) => {
+      e.preventDefault(); setIsLoading(true); setError(null);
+      const code = otp.join('');
+      if (code.length !== 6) {
+          setError('Please enter a 6-digit code');
+          setIsLoading(false);
+          return;
+      }
+      try {
+          const res = await api.post('/users/reset-verify-otp', { email: resetEmail, otp: code });
+          setResetToken(res.data.resetToken);
           setResetQuestion(res.data.question);
           setMode('forgot-complete');
       } catch (err: any) {
-          setError(err.response?.data?.message || 'Account not found');
+          setError(err.response?.data?.message || 'Invalid code');
       } finally {
           setIsLoading(false);
       }
@@ -198,11 +220,11 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   const handleForgotComplete = async (e: React.FormEvent) => {
       e.preventDefault(); setIsLoading(true); setError(null);
       try {
-          await api.post('/users/reset-complete', { email: resetEmail, answer: resetAnswer, newPassword });
+          await api.post('/users/reset-complete', { resetToken, answer: resetAnswer, newPassword });
           alert('Password reset successful. Please login.');
           setMode('login');
       } catch (err: any) {
-          setError(err.response?.data?.message || 'Incorrect answer');
+          setError(err.response?.data?.message || 'Incorrect answer or expired session');
       } finally {
           setIsLoading(false);
       }
@@ -450,6 +472,41 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                          {isLoading ? <Loader2 className="animate-spin" /> : 'Find Account'}
                     </button>
                     <button type="button" onClick={() => setMode('login')} className="w-full text-slate-500 text-sm hover:text-white">Back to Login</button>
+                </form>
+            )}
+
+            {/* FORGOT PASSWORD VERIFY */}
+            {mode === 'forgot-verify' && (
+                <form className="space-y-8" onSubmit={handleForgotVerifyOtp}>
+                    <div className="flex justify-between gap-2">
+                        {otp.map((digit, idx) => (
+                            <input
+                                key={idx}
+                                ref={el => { otpRefs.current[idx] = el; }}
+                                type="text"
+                                maxLength={1}
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                pattern="\d{1}"
+                                value={digit}
+                                onChange={(e) => handleOtpChange(idx, e.target.value)}
+                                onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                                className="w-12 h-14 rounded-xl bg-white/5 border border-white/10 text-center text-2xl font-bold text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all focus:bg-white/10"
+                            />
+                        ))}
+                    </div>
+
+                    <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-4 flex gap-3 items-start">
+                        <KeyRound className="text-violet-400 shrink-0 mt-0.5" size={18} />
+                        <div>
+                            <p className="text-sm text-violet-200 font-medium">Identity Check</p>
+                            <p className="text-xs text-violet-300/60 mt-1">Enter the reset code sent to {resetEmail}.</p>
+                        </div>
+                    </div>
+
+                    <button disabled={isLoading} className="w-full bg-violet-600 text-white py-4 rounded-xl font-bold hover:bg-violet-700 transition-all flex items-center justify-center gap-2">
+                         {isLoading ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={20}/> Verify Code</>}
+                    </button>
                 </form>
             )}
 
