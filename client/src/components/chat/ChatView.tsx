@@ -644,7 +644,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             images: overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []),
             audio: audioBase64,
             forceReply: isPermissionGrant,
-            isVoiceMode: isVoiceMode // <--- Pass Voice Mode Flag
+            isVoiceMode: isVoiceMode, // <--- Pass Voice Mode Flag
+            localTime: new Date().toString() // <--- Pass User's Local Time
         }),
       });
 
