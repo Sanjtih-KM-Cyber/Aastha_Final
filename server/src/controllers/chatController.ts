@@ -500,6 +500,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             limitReached: !hasVoiceAccess,
             use_fallback_tts: useFallbackTTS,
             model_used: provider.toLowerCase(),
+            mode: provider === 'GEMINI' ? 'pro' : 'standard',
             downgrade_reason: downgradeReason
         } 
     })}\n\n`);

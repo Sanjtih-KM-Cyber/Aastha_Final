@@ -752,7 +752,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             const creditVal = Number(data.meta.credits);
                             setLocalCredits(data.meta.credits === '∞' ? 9999 : (isNaN(creditVal) ? 0 : creditVal));
                             setModelMode(data.meta.mode); 
-                            setIsStandardMode(data.meta.mode === 'standard');
+
+                            // FORCE ECO MODE IF BACKEND SAYS SO
+                            const isEco = data.meta.mode === 'standard';
+                            setIsStandardMode(isEco);
+
                             if (data.meta.limitReached) {
                                 setIsCloneMode(false);
                             }
@@ -1135,14 +1139,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              <div className="shrink-0 flex items-center gap-3 justify-end z-20">
                  {/* CREDITS INDICATOR */}
                  <div className={`hidden md:flex px-3 py-1.5 rounded-full backdrop-blur-xl border items-center gap-2 shadow-lg transition-colors ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
-                    {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-gray-400" fill="currentColor" />}
-                    <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-gray-400'}`}>
-                        {!isStandardMode && localCredits > 100 ? '∞' : `${isNaN(localCredits) ? 0 : localCredits} Premium`}
+                    {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-emerald-400" fill="currentColor" />}
+                    <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-white/40'}`}>
+                        {!isStandardMode ? (localCredits > 100 ? '∞' : `${isNaN(localCredits) ? 0 : localCredits} Premium`) : 'Eco Mode'}
                     </span>
                  </div>
 
                  {/* HEADPHONE ICON */}
-                 <button onClick={() => toggleVoiceMode()} className={`shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center transition-all shadow-lg ${isVoiceMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-black/20 text-white/70 hover:bg-white/10 hover:text-white'}`}>
+                 <button
+                    onClick={() => toggleVoiceMode()}
+                    disabled={isStandardMode && !user?.isPro}
+                    className={`shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center transition-all shadow-lg ${isVoiceMode ? 'bg-red-500 text-white hover:bg-red-600' : (isStandardMode && !user?.isPro ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-black/20 text-white/70 hover:bg-white/10 hover:text-white')}`}
+                 >
                     <Headphones size={18} />
                  </button>
 
@@ -1292,8 +1300,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            disabled={isStandardMode}
-                            className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${isStandardMode ? 'opacity-30 cursor-not-allowed' : ''}`}
+                            disabled={isStandardMode && !user?.isPro}
+                            className={`p-2.5 rounded-full transition-all relative ${attachedImage ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'} ${(isStandardMode && !user?.isPro) ? 'opacity-30 cursor-not-allowed' : ''}`}
                         >
                             <ImageIcon size={20} />
                         </button>

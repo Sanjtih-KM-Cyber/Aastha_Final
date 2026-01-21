@@ -75,14 +75,21 @@ export const generateSubconscious = async (
     - **CRITICAL:** These must be written from the **USER'S Perspective** (First Person).
     - **TONE:** Match the user's likely reaction.
 
+    **NEGATIVE CONSTRAINTS (STRICT):**
+    - ⛔ **Do NOT** ask the user questions from your perspective (e.g., "Do you want to...?", "Shall I...?").
+    - ⛔ **Do NOT** use 'You' to refer to the user in these chips.
+    - ⛔ **Do NOT** offer help (e.g., "I can help with that"). The chip is what the USER says.
+
     **EXAMPLES:**
-    - ❌ BAD (AI Perspective): "Do you want to vent?", "I can help with that", "How are you?"
-    - ✅ GOOD (User Perspective): "I need to vent", "That sounds helpful", "I'm doing okay"
-    - ✅ GOOD (User Question): "What do you think?", "Can you explain that?", "Tell me a joke"
+    - ❌ BAD: "Do you want to vent?" (AI asking User)
+    - ❌ BAD: "Shall I play some music?" (AI offering)
+    - ✅ GOOD: "I really need to vent" (User Statement)
+    - ✅ GOOD: "Play some sad music" (User Command)
+    - ✅ GOOD: "What do you think about this?" (User Question to AI)
 
     **RULES:**
-       - **NO** questions asking the user what they want.
-       - **YES** statements or questions the USER would ask YOU.
+       - **YES:** Statements or questions the USER would ask YOU.
+       - **YES:** First-person ("I", "Me", "My").
        - **LENGTH:** Natural and conversational. Avoid 1-word replies.
 
     **3. GOD MODE TOOLS (The Hands):**
