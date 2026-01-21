@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Copy, Reply, Sparkles, Wand2 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
@@ -122,6 +122,23 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const { currentTheme } = useTheme();
   const [isHovered, setIsHovered] = useState(false);
 
+  // Long Press Logic for Mobile
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const handleTouchStart = () => {
+      if (!isMobile) return;
+      longPressTimer.current = setTimeout(() => {
+          setIsHovered(prev => !prev);
+      }, 500); // 500ms Long Press
+  };
+
+  const handleTouchEnd = () => {
+      if (longPressTimer.current) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+      }
+  };
+
   // Parse Content for Proposals
   const { cleanText: visibleContent, proposals } = useMemo(() => {
       if (isUser) return { cleanText: content, proposals: [] };
@@ -204,7 +221,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       } ${isMobile ? 'mb-10' : 'mb-6'}`}
       onMouseEnter={() => !isMobile && setIsHovered(true)}
       onMouseLeave={() => !isMobile && setIsHovered(false)}
-      onClick={() => isMobile && setIsHovered(!isHovered)}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      // Removed simple onClick toggle for mobile to prioritize long press
     >
       {/* Assistant avatar (Left Side) */}
       {!isUser && (

@@ -35,6 +35,7 @@ const VOICE_MODE_INSTRUCTIONS = `
 * Use short, punchy, and conversational sentences.
 * **Do NOT** use markdown (no bold, no italics, no bullet points).
 * **Do NOT** describe actions (no *sigh*, *laughs*, *pauses*).
+* **Do NOT** use parenthetical tone indicators like (warmly) or (whispering). Just speak.
 * Keep your response under 3 sentences unless deep advice is needed.
 * Speak directly to the user, not about yourself.
 `;
@@ -46,7 +47,7 @@ const getTimeContext = (userTime?: string, userHour?: number): string => {
     const hour = userHour !== undefined ? userHour : new Date().getHours();
     const timeStr = userTime || "Unknown Time";
 
-    let context = `Current User Time: ${timeStr}. `;
+    let context = `[SYSTEM: THE USER'S LOCAL TIME IS STRICTLY ${timeStr}. DO NOT HALLUCINATE A DIFFERENT TIME.] `;
     if (hour >= 5 && hour < 12) context += "It is Morning. Be high energy, motivating, use sun/coffee emojis.";
     else if (hour >= 12 && hour < 18) context += "It is Afternoon. Be productive, casual, keep it moving.";
     else if (hour >= 18 && hour < 22) context += "It is Evening. Be relaxing, wind down.";
@@ -73,6 +74,7 @@ const cleanTextForTTS = (text: string): string => {
     return text
         .replace(/<proposal[^>]*\/>/g, '') // Remove proposal tags first
         .replace(/\*.*?\*/g, '')      // Remove actions like *sighs* or *laughs*
+        .replace(/\(.*?\)/g, '')      // Remove parenthetical directions like (warmly) or (laughs)
         .replace(/<[^>]*>/g, '')      // Remove HTML tags
         .replace(/\[.*?\]/g, '')      // Remove brackets [system messages]
         .replace(/[\#\_\*\~\`]/g, '') // Remove Markdown symbols
