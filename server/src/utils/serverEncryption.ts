@@ -41,8 +41,9 @@ export const encrypt = (text: string): string => {
         
         return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
     } catch (error) {
-        console.error("Encryption failed:", error);
-        return text;
+        // FIX: Fail Closed. Do NOT return plaintext.
+        console.error("CRITICAL: Encryption Service Failed:", error);
+        throw new Error("Security Violation: Encryption failed.");
     }
 };
 
