@@ -43,7 +43,12 @@ export const Footer: React.FC = () => {
                 <a href="#" className="w-10 h-10 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-violet-100 dark:hover:bg-white/10 hover:text-violet-600 dark:hover:text-white transition-all">
                   <Twitter size={18} />
                 </a>
-                <a href="#" className="w-10 h-10 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-violet-100 dark:hover:bg-white/10 hover:text-violet-600 dark:hover:text-white transition-all">
+                <a
+                  href="https://www.instagram.com/soul_linkai?igsh=MWxxaTI2ZTd0ZWd2aw=="
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-violet-100 dark:hover:bg-white/10 hover:text-violet-600 dark:hover:text-white transition-all"
+                >
                   <Instagram size={18} />
                 </a>
                 <a href="#" className="w-10 h-10 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-violet-100 dark:hover:bg-white/10 hover:text-violet-600 dark:hover:text-white transition-all">

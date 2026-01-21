@@ -21,17 +21,17 @@ const features = [
   {
     icon: Timer,
     title: "Mindful Focus Tools",
-    desc: "Integrated Pomodoro timer with ambient soundscapes helps you enter deep work states and maintain productivity."
+    desc: "Manage exam stress and work deadlines. Integrated Pomodoro timer with ambient soundscapes helps you enter deep work states."
   },
   {
     icon: MessageCircle,
     title: "Always Available",
-    desc: "24/7 support whenever you need it. No appointments, no waiting. Your companion is always there."
+    desc: "Combat loneliness and anxiety 24/7. Whether it's 3 AM study burnout or post-work decompression, Aastha is here."
   },
   {
     icon: Sparkles,
     title: "Personalized Insights",
-    desc: "Receive proactive guidance tailored to your emotional state and personal growth goals."
+    desc: "Receive proactive guidance tailored to academic pressure, professional growth, and emotional balance."
   }
 ];
 

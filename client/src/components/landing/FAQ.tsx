@@ -4,20 +4,24 @@ import { FadeIn } from './FadeIn';
 
 const faqs = [
   {
-    question: "Is my data really private?",
-    answer: "Absolutely. We use end-to-end encryption for all your journals and conversations. Your private key is stored only on your device, meaning even our engineering team cannot access your personal thoughts."
+    question: "Is this just for students?",
+    answer: "No. Aastha is trained for all life stages. Whether you are debugging code at 2 AM, preparing for competitive exams, or managing a team deadline, Aastha understands the pressure and provides relevant emotional support."
   },
   {
     question: "Is Aastha a replacement for a therapist?",
-    answer: "No, Aastha is a wellness companion designed to support your mental health journey, but it is not a replacement for professional clinical therapy. We recommend using Aastha alongside professional care if needed."
+    answer: "No. Aastha is a wellness tool and emotional companion, not a medical device. It is designed to help with daily stress, anxiety, and self-reflection, but it does not replace professional clinical therapy or psychiatric care."
   },
   {
-    question: "How does voice mode work?",
-    answer: "Simply tap the microphone icon and speak naturally. Aastha listens, understands context, and responds with a warm, empathetic voice. It's like having a conversation with a caring friend."
+    question: "Is my data really private?",
+    answer: "Absolutely. We use Zero-Knowledge Encryption. Your chats and journals are encrypted on your device before they ever reach our servers. We have no way to read your conversations—your sanctuary is truly private."
   },
   {
-    question: "What makes Aastha different?",
-    answer: "Unlike passive journaling apps, Aastha actively engages with you, provides insights, tracks your mood patterns, and adapts to your emotional state in real-time. It's a complete wellness ecosystem."
+    question: "How can Aastha help with professional burnout?",
+    answer: "Aastha offers a safe, judgment-free space to decompress after work. You can vent about office stress, practice difficult conversations, or use the focus tools to regain mental clarity without the fear of being judged."
+  },
+  {
+    question: "What makes Aastha different from other AI?",
+    answer: "Aastha is specifically fine-tuned for Emotional Intelligence (EQ). Unlike generic assistants, it remembers your emotional history, tracks your mood trends, and responds with deep empathy rather than just facts."
   }
 ];
 
