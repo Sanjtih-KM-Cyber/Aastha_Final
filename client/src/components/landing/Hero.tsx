@@ -30,17 +30,17 @@ export const Hero: React.FC<HeroProps> = ({ onLogin }) => {
 
         <FadeIn delay={200} direction="up">
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight text-slate-900 dark:text-white mb-8 leading-[1.15] md:leading-[1.1]">
-            Healing Through <br className="hidden md:block" />
+            From Campus to Corporate <br className="hidden md:block" />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 via-purple-500 to-teal-400 dark:from-violet-400 dark:via-purple-300 dark:to-teal-300">
-              Connection.
+              Your Mental Space Matters.
             </span>
           </h1>
         </FadeIn>
 
         <FadeIn delay={300} direction="up">
           <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed font-light px-4">
-            Experience the most empathetic AI companion designed to listen, understand, and help you grow.
-            A safe space that's always available, right in your pocket.
+            Your personal emotional intelligence companion for every stage of life.
+            Whether you're facing academic pressure or professional burnout, find a safe space to grow.
           </p>
         </FadeIn>
 
