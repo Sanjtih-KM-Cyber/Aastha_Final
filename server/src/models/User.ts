@@ -87,8 +87,9 @@ export interface IUser extends Document {
   dailyPremiumUsage: number;
   lastUsageDate: Date;
   
-  // Usage Limits (Token Budget)
-  dailyMessageCount: number;
+  // Usage Limits (Split Token Budget)
+  dailyGeminiCount: number;
+  dailyGroqCount: number;
   lastMessageDate: Date;
 
   // Subscription
@@ -200,8 +201,9 @@ const userSchema = new Schema<IUser>({
   dailyPremiumUsage: { type: Number, default: 0 },
   lastUsageDate: { type: Date, default: Date.now },
   
-  // Usage Limits (Token Budget)
-  dailyMessageCount: { type: Number, default: 0 },
+  // Usage Limits (Split Token Budget)
+  dailyGeminiCount: { type: Number, default: 0 },
+  dailyGroqCount: { type: Number, default: 0 },
   lastMessageDate: { type: Date, default: Date.now },
 
   // Subscription

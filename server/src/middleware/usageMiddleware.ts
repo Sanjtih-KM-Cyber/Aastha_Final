@@ -24,57 +24,24 @@ export const checkUsage = async (req: AuthRequest, res: Response, next: NextFunc
             now.getUTCDate() === lastDate.getUTCDate();
 
         if (!isSameDay) {
-            // Reset for new day
-            user.dailyMessageCount = 0;
+            // Reset for new day - Split Quotas
+            user.dailyGeminiCount = 0;
+            user.dailyGroqCount = 0;
             user.lastMessageDate = now;
-            // Note: We don't save yet, we save after incrementing below
+            await user.save();
         }
 
-        // 3. Define Limits
-        const FREE_LIMIT = 10;
-        const PRO_LIMIT = 100;
+        // NOTE: We do NOT enforce limits here anymore.
+        // The "Quota Waterfall" logic happens in the chatController to decide ROUTING.
+        // This middleware strictly handles the Daily Reset trigger.
 
-        // Check Pro Status (including active subscription or top-up)
-        // Note: voiceTopUp doesn't grant unlimited text messages, only Voice Mode.
-        // But the requirement says "Pro Users" get 100.
-        // If user.isPro is true, they get 100.
-        // If user has valid subscriptionExpiresAt, check that too.
-        let isPro = user.isPro;
-        if (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > now) {
-            isPro = true;
-        }
-
-        const limit = isPro ? PRO_LIMIT : FREE_LIMIT;
-
-        // 4. Enforce Limit
-        if (user.dailyMessageCount >= limit) {
-            const isFreeUser = !isPro;
-            const message = isFreeUser
-                ? "Daily energy depleted. Upgrade for more or come back tomorrow."
-                : "Daily energy depleted. Even AI needs to sleep. Come back tomorrow.";
-
-            return (res as any).status(429).json({
-                message: message,
-                meta: { limitReached: true }
-            });
-        }
-
-        // 5. Increment and Save
-        user.dailyMessageCount += 1;
-        user.lastMessageDate = now;
-        await user.save();
-
-        // 6. Update req.user so controllers have latest data
+        // 3. Update req.user so controllers have latest data
         req.user = user;
 
         next();
 
     } catch (error) {
         console.error("Usage Middleware Error:", error);
-        // Fail open? Or fail closed?
-        // Safety: Fail closed (500) to prevent abuse if DB is down,
-        // but for user experience, maybe just log and proceed?
-        // Requirement says "Strict", so fail closed.
         return (res as any).status(500).json({ message: "Server usage check failed." });
     }
 };

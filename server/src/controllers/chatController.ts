@@ -256,6 +256,39 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email);
     if (user.username && !user.usernameEncrypted) user.usernameEncrypted = encrypt(user.username);
 
+    // =================================================================================
+    // QUOTA WATERFALL SYSTEM (Split Limits)
+    // =================================================================================
+    let isPro = user.isPro;
+    if (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > new Date()) {
+        isPro = true;
+    }
+
+    const LIMITS = isPro
+        ? { GEMINI: 30, GROQ: 100 }
+        : { GEMINI: 10, GROQ: 70 };
+
+    // Default: Try Gemini (Premium)
+    let provider = 'GEMINI';
+    let downgradeReason = null;
+
+    // 1. Check Gemini Quota
+    if ((user.dailyGeminiCount || 0) >= LIMITS.GEMINI) {
+        provider = 'GROQ';
+        downgradeReason = 'quota_exceeded';
+    }
+
+    // 2. Check Groq Quota (If falling back or default)
+    if (provider === 'GROQ') {
+        if ((user.dailyGroqCount || 0) >= LIMITS.GROQ) {
+            // HARD STOP
+            return (res as any).status(429).json({
+                error: "DAILY_LIMIT_REACHED",
+                message: "Daily energy fully depleted. Come back tomorrow!"
+            });
+        }
+    }
+
     // 0. WHISPER: Transcribe Audio if present
     if (audio) {
         try {
@@ -400,21 +433,19 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
     // STEP 3: THE VOICE (Generation)
     // =================================================================================
-    let provider = 'GEMINI';
-    const dailyLimit = 10;
+    // (Provider selection moved to top for waterfall)
+
+    // Increment the chosen counter
+    if (provider === 'GEMINI') {
+        user.dailyGeminiCount = (user.dailyGeminiCount || 0) + 1;
+    } else {
+        user.dailyGroqCount = (user.dailyGroqCount || 0) + 1;
+    }
+    user.lastUsageDate = new Date();
+    await user.save();
 
     const hasVoiceTopUp = user.voiceTopUpExpires && new Date(user.voiceTopUpExpires) > new Date();
-    const hasVoiceAccess = user.isPro || hasVoiceTopUp || (user.dailyPremiumUsage || 0) < dailyLimit;
-
-    if (!hasVoiceAccess) {
-        provider = 'GROQ';
-    }
-
-    if (!user.isPro && !hasVoiceTopUp) {
-        user.dailyPremiumUsage = (user.dailyPremiumUsage || 0) + 1;
-        user.lastUsageDate = new Date();
-        await user.save();
-    }
+    const hasVoiceAccess = user.isPro || hasVoiceTopUp || (user.dailyPremiumUsage || 0) < 10; // Keeping legacy tracking for now just in case
 
     let useFallbackTTS = false;
     if (isVoiceMode && !hasVoiceAccess) {
@@ -461,11 +492,13 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     (res as any).write(`data: ${JSON.stringify({ 
         meta: { 
-            credits: user.isPro ? '∞' : (10 - (user.dailyPremiumUsage || 0)), 
+            credits: user.isPro ? '∞' : (LIMITS.GEMINI - (user.dailyGeminiCount || 0)),
             model: provider === 'GEMINI' ? 'Gemini 2.5 Flash' : 'Llama 3.3',
             battery: user.socialBattery,
             limitReached: !hasVoiceAccess,
-            use_fallback_tts: useFallbackTTS 
+            use_fallback_tts: useFallbackTTS,
+            model_used: provider.toLowerCase(),
+            downgrade_reason: downgradeReason
         } 
     })}\n\n`);
 
@@ -476,8 +509,9 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             : streamGroq(brainHistory, voiceSystemPrompt);
     } catch (e) {
         console.error("Stream Init Failed, falling back to GROQ:", e);
+        // Fallback Logic also applied here
         stream = streamGroq(brainHistory, voiceSystemPrompt);
-        provider = 'GROQ'; // Force provider update
+        provider = 'GROQ';
     }
 
     let fullTextResponse = "";
@@ -496,11 +530,21 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
              // Send a meta update to frontend? Optional.
              
              try {
-                const fallbackStream = streamGroq(brainHistory, voiceSystemPrompt);
-                for await (const chunk of fallbackStream) {
-                    if (!chunk) continue;
-                    fullTextResponse += chunk; // Continue appending to whatever we had (or start fresh)
-                    (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+                // Check if Groq quota permits fallback
+                if ((user.dailyGroqCount || 0) < LIMITS.GROQ) {
+                    const fallbackStream = streamGroq(brainHistory, voiceSystemPrompt);
+                    for await (const chunk of fallbackStream) {
+                        if (!chunk) continue;
+                        fullTextResponse += chunk; // Continue appending to whatever we had (or start fresh)
+                        (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+                    }
+
+                    // Correct counter: Decrease Gemini, Increase Groq since Gemini failed
+                    user.dailyGeminiCount = Math.max(0, (user.dailyGeminiCount || 0) - 1);
+                    user.dailyGroqCount = (user.dailyGroqCount || 0) + 1;
+                    await user.save();
+                } else {
+                     throw new Error("Both Gemini and Groq quotas exhausted.");
                 }
              } catch (fallbackError) {
                  console.error("Fallback Failed:", fallbackError);
