@@ -42,12 +42,11 @@ const VOICE_MODE_INSTRUCTIONS = `
 // ============================================================================
 // HELPERS: TIME, TONE & TEXT CLEANING
 // ============================================================================
-const getTimeContext = (dateString?: string): string => {
-    const date = dateString ? new Date(dateString) : new Date();
-    const hour = date.getHours();
-    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const getTimeContext = (userTime?: string, userHour?: number): string => {
+    const hour = userHour !== undefined ? userHour : new Date().getHours();
+    const timeStr = userTime || "Unknown Time";
 
-    let context = `Current Time: ${timeStr}. `;
+    let context = `Current User Time: ${timeStr}. `;
     if (hour >= 5 && hour < 12) context += "It is Morning. Be high energy, motivating, use sun/coffee emojis.";
     else if (hour >= 12 && hour < 18) context += "It is Afternoon. Be productive, casual, keep it moving.";
     else if (hour >= 18 && hour < 22) context += "It is Evening. Be relaxing, wind down.";
@@ -238,7 +237,7 @@ Memory: {{userFacts}}
 export const chatWithAI = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
 
-  let { message, images, image, forceReply, audio, isVoiceMode, localTime } = (req as any).body;
+  let { message, images, image, forceReply, audio, isVoiceMode, userLocalTime, userLocalHour } = (req as any).body;
   if (!images && image) images = [image];
 
   const userName = req.user.name;
@@ -379,7 +378,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
     // STEP 1: THE BRAIN (Standard Chat)
     // =================================================================================
-    const userContextString = `User: ${userName}, Mood: ${user.moodStatus}, Time: ${localTime || new Date().toString()}, Facts: ${user.facts.join(', ')}`;
+    const userContextString = `User: ${userName}, Mood: ${user.moodStatus}, Time: ${userLocalTime || "Unknown"}, Facts: ${user.facts.join(', ')}`;
     const brainHistory: ChatMessage[] = [...historyWindow, { role: 'user', content: newUserMsgContent }];
     const subconscious = await generateSubconscious(brainHistory, userContextString, forceReply);
 
@@ -435,7 +434,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         .replace('{{userName}}', userName || 'Friend')
         .replace('{{subconsciousContext}}', JSON.stringify(subconscious.internal_monologue))
         .replace('{{userFacts}}', user.facts.join(', ') || "No facts yet.")
-        .replace('{{timeContext}}', getTimeContext(localTime))
+        .replace('{{timeContext}}', getTimeContext(userLocalTime, userLocalHour))
         .replace('{{toneFlavor}}', getToneFlavor())
         .replace('{{voiceStatus}}', voiceStatus)
         .replace('{{mood}}', subconscious.mood || "neutral");

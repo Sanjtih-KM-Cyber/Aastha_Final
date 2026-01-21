@@ -645,7 +645,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             audio: audioBase64,
             forceReply: isPermissionGrant,
             isVoiceMode: isVoiceMode, // <--- Pass Voice Mode Flag
-            localTime: new Date().toString() // <--- Pass User's Local Time
+            userLocalTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            userLocalHour: new Date().getHours()
         }),
       });
 
