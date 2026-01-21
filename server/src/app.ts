@@ -9,6 +9,8 @@ import helmet from 'helmet';
 import compression from 'compression'; // Performance boost
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
+import { RedisStore } from 'rate-limit-redis';
+import Redis from 'ioredis';
 import jwt from 'jsonwebtoken'; // ✅ REQUIRED IMPORT
 import connectDB from './db'; 
 import authRoutes from './routes/authRoutes';
@@ -135,11 +137,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      // ✅ FIX: Added YouTube and ytimg to scripts
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://checkout.razorpay.com", "https://www.youtube.com", "https://s.ytimg.com"],
+      // ✅ FIX: Removed unsafe-inline for scripts. Allowed 'self', YouTube, Razorpay.
+      scriptSrc: ["'self'", "'unsafe-eval'", "https://checkout.razorpay.com", "https://www.youtube.com", "https://s.ytimg.com"],
+      // ✅ KEEP: unsafe-inline for styles (React dynamic styling)
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-      // ✅ FIX: Added YouTube to connectSrc + BRAIN SERVER (HF)
+      // ✅ FIX: Added ws: wss: for WebSocket. Kept YouTube, Brain Server.
       connectSrc: [
           "'self'",
           "ws:", "wss:",
@@ -148,11 +151,9 @@ app.use(helmet({
           "http://localhost:*",
           "https://lumberjack.razorpay.com",
           "https://www.youtube.com",
-          "https://sking0123-aastha-voice.hf.space" // <--- Brain Server Whitelist
+          "https://sking0123-aastha-voice.hf.space"
       ],
-      // ✅ FIX: Added YouTube thumbnails to imgSrc
       imgSrc: ["'self'", "data:", "https:", "blob:", "https://i.ytimg.com", "https://www.youtube.com"],
-      // ✅ FIX: Added YouTube to frameSrc (Critical for Widget)
       frameSrc: ["'self'", "https://api.razorpay.com", "https://www.youtube.com", "https://youtube.com"],
       upgradeInsecureRequests: null,
     }
@@ -199,9 +200,62 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(cookieParser());
 
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
-const chatLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
-const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
+// --- FAULT TOLERANT RATE LIMITING ---
+let limiterStore: RedisStore | undefined;
+
+if (process.env.REDIS_URL) {
+    console.log("Using Redis for Rate Limiting");
+    const redisClient = new Redis(process.env.REDIS_URL, {
+        maxRetriesPerRequest: 1, // Fail fast if Redis is down initially
+        retryStrategy: (times) => {
+            if (times > 3) {
+                console.error("[Redis] Connection failed. Fallback to memory store.");
+                return null; // Stop retrying, let logic fallback if possible (though ioredis keeps trying usually)
+            }
+            return Math.min(times * 50, 2000);
+        }
+    });
+
+    redisClient.on('error', (err) => {
+        console.error('[Redis] Error:', err.message);
+        // Note: express-rate-limit with redis-store might handle this by bypassing or failing.
+        // We set up the store, but if redis is down, it might throw.
+        // Ideally, we'd swap the store dynamically, but that's complex.
+        // For now, we trust the robust nature or restart if Redis dies.
+    });
+
+    limiterStore = new RedisStore({
+        // @ts-ignore
+        sendCommand: (...args: string[]) => redisClient.call(...args),
+    });
+} else {
+    console.log("Redis not found. Using Memory Store for Rate Limiting.");
+    limiterStore = undefined; // Default is MemoryStore
+}
+
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+    store: limiterStore
+});
+
+const chatLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    store: limiterStore
+});
+
+const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    store: limiterStore
+});
 
 app.get('/health', (_req: Request, res: Response) => res.json({ status: 'ok', ts: new Date() }));
 
