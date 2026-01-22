@@ -280,7 +280,8 @@ export const getVibePlaylist = async (
     userMoods: string[],
     duration?: number,
     year?: string,
-    genres?: string[]
+    genres?: string[],
+    specificSongs?: string[]
 ): Promise<string[]> => {
     const client = getGeminiClient(true);
     const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
@@ -294,6 +295,8 @@ export const getVibePlaylist = async (
         Genres: ${genres?.join(', ') || "Any"}
         Target Year/Era: ${year || "Any"}
         Duration: ${duration || 30} mins (approx 8-10 songs).
+
+        ${specificSongs && specificSongs.length > 0 ? `**MANDATORY: You MUST include these songs first: ${specificSongs.join(', ')}**` : ''}
 
         Output JSON Array ONLY: ["Song - Artist", "Song - Artist"]`;
 

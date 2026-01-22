@@ -3,7 +3,7 @@ import { DraggableWindow } from '../layout/DraggableWindow';
 import { 
   Play, Pause, SkipForward, SkipBack, Repeat, Search, 
   Disc, Sparkles, Plus, ListMusic, Lock, X, Music2, Globe, Check, Settings,
-  ArrowUp, ArrowDown, Trash2, Minus, Music, GripVertical, Mic
+  ArrowUp, ArrowDown, Trash2, Minus, Music, GripVertical, Mic, Volume2, Volume1, VolumeX
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
@@ -234,13 +234,14 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           }
 
           // 2. VIBE GENERATION (If no query)
-          if (initialParams.mood || initialParams.genre || initialParams.genres || initialParams.language || initialParams.languages || initialParams.year) {
+          if (initialParams.mood || initialParams.genre || initialParams.genres || initialParams.language || initialParams.languages || initialParams.year || initialParams.specific_songs) {
              // Reset UI selections to match manager request
              // Handle Arrays or Strings
              const m = initialParams.mood ? [initialParams.mood] : (initialParams.moods || []);
              const g = initialParams.genre ? [initialParams.genre] : (initialParams.genres || []);
              const l = initialParams.language ? [initialParams.language] : (initialParams.languages || []);
              const y = initialParams.year; // Pass year
+             const s = initialParams.specific_songs || [];
 
              if (m.length > 0) setSelectedMoods(m);
              if (g.length > 0) setSelectedGenres(g);
@@ -248,7 +249,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
              // Trigger generation immediately with EXTRA params
              // Updated generateVibePlaylist signature below to handle this better
-             generateVibePlaylist(m, g, l, y);
+             generateVibePlaylist(m, g, l, y, s);
           }
       }
   }, [initialParams, isOpen]);
@@ -282,6 +283,24 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const [loopMode, setLoopMode] = useState<LoopMode>('off');
   const [loopTarget, setLoopTarget] = useState(2);
   const [currentLoopCount, setCurrentLoopCount] = useState(1);
+
+  // Volume State
+  const [volume, setVolume] = useState(100);
+  const [showVolume, setShowVolume] = useState(false);
+
+  // Load Volume
+  useEffect(() => {
+      const savedVol = localStorage.getItem('jam_volume');
+      if (savedVol) setVolume(parseInt(savedVol));
+  }, []);
+
+  // Save & Apply Volume
+  useEffect(() => {
+      localStorage.setItem('jam_volume', volume.toString());
+      if (playerRef.current && playerRef.current.setVolume) {
+          playerRef.current.setVolume(volume);
+      }
+  }, [volume]);
   
   // Ref to track latest state for YouTube Event Listener (Closure Fix)
   const stateRef = useRef({ loopMode, loopTarget, currentLoopCount, currentIndex, queue });
@@ -347,6 +366,9 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   };
 
   const onPlayerReady = (event: any) => {
+      // Set initial volume
+      event.target.setVolume(volume);
+
       // RESUME PLAYBACK LOGIC
       const savedTime = localStorage.getItem('jam_time');
       if (savedTime) {
@@ -599,7 +621,8 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       overrideMood?: string | string[],
       overrideGenre?: string | string[],
       overrideLang?: string | string[],
-      overrideYear?: string
+      overrideYear?: string,
+      specificSongs?: string[]
   ) => {
       setShowConfigModal(false);
       setIsSearching(true);
@@ -622,6 +645,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               moods: moodsToSend,
               genres: genresToSend,
               year: overrideYear, // Pass year if present
+              specific_songs: specificSongs,
               duration: targetDuration
           });
           
@@ -1064,8 +1088,38 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                     )}
                 </div>
 
-                {/* Playback Controls */}
-                <div className="flex items-center gap-4">
+                {/* Playback Controls & Volume */}
+                <div className="flex items-center gap-4 relative">
+                    {/* Volume Control */}
+                    <div
+                        className="relative flex items-center"
+                        onMouseEnter={() => setShowVolume(true)}
+                        onMouseLeave={() => setShowVolume(false)}
+                    >
+                        <button className="text-white/40 hover:text-white transition-colors p-2">
+                            {volume === 0 ? <VolumeX size={18} /> : volume < 50 ? <Volume1 size={18} /> : <Volume2 size={18} />}
+                        </button>
+
+                        <AnimatePresence>
+                            {showVolume && (
+                                <motion.div
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -10 }}
+                                    className="absolute left-full ml-2 bg-[#1F2937] rounded-full p-2 h-8 flex items-center border border-white/10 z-20 w-24"
+                                >
+                                    <input
+                                        type="range"
+                                        min="0" max="100"
+                                        value={volume}
+                                        onChange={(e) => setVolume(parseInt(e.target.value))}
+                                        className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+                                    />
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
                     <button onClick={playPrev} className="text-white/40 hover:text-white transition-colors">
                         <SkipBack size={24} />
                     </button>
