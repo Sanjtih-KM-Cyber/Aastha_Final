@@ -512,10 +512,15 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                   uuid: generateUUID() // ASSIGN UUID
               };
 
-              // REPLACE QUEUE Logic as requested
-              setQueue([newTrack]);
-              setCurrentIndex(0);
-              setTimeout(() => loadAndPlay(newTrack), 100);
+              // APPEND if queue exists, else Play immediately
+              if (queue.length > 0) {
+                  setQueue(prev => [...prev, newTrack]);
+                  // Don't interrupt playback, just add to end
+              } else {
+                  setQueue([newTrack]);
+                  setCurrentIndex(0);
+                  setTimeout(() => loadAndPlay(newTrack), 100);
+              }
               
           } else {
               console.warn("No results found for query:", q);
