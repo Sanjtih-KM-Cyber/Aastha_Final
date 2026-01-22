@@ -25,9 +25,13 @@ export const init = () => {
             const threshold = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
 
             // Find users who haven't visited in 24h AND haven't been ghosted yet
+            // UPDATED: Catch legacy users who don't have the 'ghostNotificationSent' field at all
             const inactiveUsers = await User.find({
                 lastVisit: { $lt: threshold },
-                ghostNotificationSent: false,
+                $or: [
+                    { ghostNotificationSent: false },
+                    { ghostNotificationSent: { $exists: false } }
+                ],
                 isVerified: true
             }).limit(50); // Process in batches to avoid rate limits
 

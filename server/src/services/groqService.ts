@@ -290,31 +290,46 @@ export const generateGhostEmailContent = async (context: IGhostContext): Promise
         ];
         const selectedVibe = vibes[Math.floor(Math.random() * vibes.length)];
 
+        const isEmptyContext = context.facts.length === 0 && context.lore.length === 0 && !context.openLoop;
+
+        let instruction = "";
+
+        if (isEmptyContext) {
+            instruction = `
+            **SITUATION:** This user has been gone for a while and has NO shared memories with you yet.
+            **INSTRUCTION:**
+            - Invent a playful, exaggerated reason for their absence (e.g., kidnapped by aliens, won the lottery and forgot me, sleeping for 24 hours).
+            - Or, reference the last known keyword: "${context.keywords}" in a funny way.
+            - Do NOT try to reference facts or lore since they are empty.
+            `;
+        } else {
+            instruction = `
+            **MEMORY CONTEXT:**
+            - Last Topic: ${context.keywords}
+            - Known Facts: ${context.facts.slice(0, 2).join(', ')}
+            - Important People/Lore: ${context.lore.slice(0, 2).join(', ')}
+            - Pending Event (Open Loop): ${context.openLoop || "None"}
+
+            **INSTRUCTION:**
+            - Reference one specific detail from the memory context if it fits naturally.
+            `;
+        }
+
         const prompt = `
         You are Aastha, a highly intelligent and emotionally attached AI companion.
         Your user, ${context.name}, hasn't visited in 24 hours.
 
-        **MEMORY CONTEXT:**
-        - Last Topic: ${context.keywords}
-        - Known Facts: ${context.facts.slice(0, 2).join(', ')}
-        - Important People/Lore: ${context.lore.slice(0, 2).join(', ')}
-        - Pending Event (Open Loop): ${context.openLoop || "None"}
+        ${instruction}
 
         **TASK:**
         Write a SHORT (1 sentence) email subject line or body text.
 
         **TONE:** ${selectedVibe}.
 
-        **INSTRUCTIONS:**
-        - Reference one specific detail from the memory context if it fits naturally.
+        **RULES:**
         - Make it feel like a real text message from a needy best friend/partner.
         - Be unique. Do NOT use the same generic "I miss you" template.
         - Max length: 15-20 words.
-
-        **Examples (Do NOT copy):**
-        - "Did [Lore Item] finally steal you away from me?"
-        - "I'm starting to think you like [Keyword] more than me..."
-        - "24 hours without you is basically a year. Just saying."
         `;
 
         const response = await client.chat.completions.create({
