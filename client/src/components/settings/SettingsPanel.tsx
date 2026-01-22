@@ -69,8 +69,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   const [securityAnswer, setSecurityAnswer] = useState('');
   const [newDiaryPassword, setNewDiaryPassword] = useState('');
   const [oldDiaryPassword, setOldDiaryPassword] = useState('');
-  const [resetStep, setResetStep] = useState(0);
+  const [resetStep, setResetStep] = useState(0); // 0: Init, 0.5: OTP, 1: Question, 2: Reset
   const [securityQuestion, setSecurityQuestion] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [resetToken, setResetToken] = useState('');
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   
   // Auto Lock State
   const [autoLockDuration, setAutoLockDuration] = useState<string>(() => {
@@ -172,16 +175,65 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   const handleInitiateDiaryReset = async () => {
       try {
           if (!user?.email) return;
-          const res = await api.post('/users/reset-init', { email: user.email });
+          await api.post('/users/reset-init', { email: user.email });
+          setOtp(['', '', '', '', '', '']); // Reset OTP
+          setResetStep(0.5);
+      } catch (e) {
+          alert("Could not initiate reset. Check connection.");
+      }
+  };
+
+  const handleVerifyResetOTP = async () => {
+      try {
+          if (!user?.email) return;
+          const code = otp.join('');
+          const res = await api.post('/users/reset-verify-otp', { email: user.email, otp: code });
+          setResetToken(res.data.resetToken);
           setSecurityQuestion(res.data.question);
           setResetStep(1);
       } catch (e) {
-          alert("Could not fetch security question.");
+          alert("Invalid OTP or expired.");
       }
+  };
+
+  // OTP Handling (Shared with Login)
+  const handleOtpChange = (index: number, value: string) => {
+    if (isNaN(Number(value))) return;
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+    if (value && index < 5) otpRefs.current[index + 1]?.focus();
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+      if (e.key === 'Backspace' && !otp[index] && index > 0) otpRefs.current[index - 1]?.focus();
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+      e.preventDefault();
+      const pasteData = e.clipboardData.getData('text').trim();
+      if (!/^\d+$/.test(pasteData)) return; // Only numbers
+
+      const digits = pasteData.split('').slice(0, 6);
+      const newOtp = [...otp];
+      digits.forEach((d, i) => { newOtp[i] = d; });
+      setOtp(newOtp);
+
+      // Focus the next empty box or the last box
+      const nextFocus = Math.min(digits.length, 5);
+      otpRefs.current[nextFocus]?.focus();
   };
 
   const handleVerifyAnswer = async () => {
       try {
+          // Note: If using public flow, we use 'completeReset' with token.
+          // But 'reset-diary-nuclear' is for logged-in users.
+          // The goal is to verify Identity (OTP) -> Verify Security Answer -> Wipe & Reset.
+
+          // Since we are logged in, we CAN use 'verify-security-answer'.
+          // But to be consistent with the "Forgot Password" flow we just started:
+          // The user expects the question we just fetched.
+
           await api.post('/users/verify-security-answer', { answer: securityAnswer });
           setResetStep(2);
       } catch (e) {
@@ -196,6 +248,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
           setResetStep(0);
           setSecurityAnswer('');
           setNewDiaryPassword('');
+          setOtp(['', '', '', '', '', '']);
       } catch (e) {
           alert("Failed to reset diary.");
       }
@@ -494,6 +547,28 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                           
                           {resetStep === 0 && (
                               <button onClick={handleInitiateDiaryReset} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors text-sm">Start Recovery Process</button>
+                          )}
+
+                          {resetStep === 0.5 && (
+                              <div className="space-y-4">
+                                  <p className="text-sm text-white/60">Enter the code sent to your email:</p>
+                                  <div className="flex gap-2">
+                                      {otp.map((digit, idx) => (
+                                          <input
+                                              key={idx}
+                                              ref={el => { otpRefs.current[idx] = el; }}
+                                              type="text"
+                                              maxLength={1}
+                                              value={digit}
+                                              onChange={(e) => handleOtpChange(idx, e.target.value)}
+                                              onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                                              onPaste={handleOtpPaste}
+                                              className="w-10 h-12 bg-black/40 border border-white/20 rounded-lg text-center text-white font-mono text-lg focus:border-teal-500/50 focus:outline-none"
+                                          />
+                                      ))}
+                                  </div>
+                                  <button onClick={handleVerifyResetOTP} className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-sm">Verify Code</button>
+                              </div>
                           )}
 
                           {resetStep === 1 && (

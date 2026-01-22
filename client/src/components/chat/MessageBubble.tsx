@@ -78,7 +78,7 @@ const reactionMap: Record<string, string> = {
   // 100+ Common Emoji Expansion
   'thinking': '🤔', 'think': '🤔', 'hmm': '🤔', 'hmmm': '🤔', 'idea': '💡',
   'lightbulb': '💡', 'question': '❓', 'what': '❓',
-  'cool': '😎', 'awesome': '🤩', 'amazing': '🤩', 'star': '⭐',
+  'awesome': '🤩', 'amazing': '🤩',
   'ok': '👌', 'k': '👌', 'okay': '👌', 'correct': '✅', 'wrong': '❌',
   'hi': '👋', 'hello': '👋', 'bye': '👋', 'wave': '👋',
   'welcome': '🤝', 'thanks': '🙏', 'ty': '🙏', 'grateful': '🙏',

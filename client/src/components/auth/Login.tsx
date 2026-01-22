@@ -185,22 +185,67 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   const handleForgotInit = async (e: React.FormEvent) => {
       e.preventDefault(); setIsLoading(true); setError(null);
       try {
-          const res = await api.post('/users/reset-init', { email: resetEmail });
-          setResetQuestion(res.data.question);
-          setMode('forgot-complete');
+          await api.post('/users/reset-init', { email: resetEmail });
+          // Note: Backend always returns success for security. We now go to OTP step.
+          setOtp(['', '', '', '', '', '']); // Reset OTP
+          setMode('forgot-otp');
       } catch (err: any) {
-          setError(err.response?.data?.message || 'Account not found');
+          // This block might not be hit often due to security features, but just in case
+          setError(err.response?.data?.message || 'Something went wrong');
       } finally {
           setIsLoading(false);
       }
   };
 
+  const handleForgotVerifyOtp = async (e: React.FormEvent) => {
+      e.preventDefault(); setIsLoading(true); setError(null);
+      const code = otp.join('');
+      if (code.length !== 6) {
+          setError('Please enter a 6-digit code');
+          setIsLoading(false);
+          return;
+      }
+
+      try {
+          const res = await api.post('/users/reset-verify-otp', { email: resetEmail, otp: code });
+          setResetToken(res.data.resetToken);
+          setResetQuestion(res.data.question);
+          setMode('forgot-complete');
+      } catch (err: any) {
+          setError(err.response?.data?.message || 'Invalid code');
+      } finally {
+          setIsLoading(false);
+      }
+  };
+
+  const handleForgotResendOtp = async () => {
+    if (otpResendCooldown > 0) return;
+    try {
+        // We re-use reset-init to trigger a new email
+        await api.post('/users/reset-init', { email: resetEmail });
+        setOtpResendCooldown(60);
+        setError(null);
+        alert('Code resent! Check your spam folder.');
+    } catch (err: any) {
+        setError(err.response?.data?.message || 'Failed to resend code');
+    }
+  };
+
   const handleForgotComplete = async (e: React.FormEvent) => {
       e.preventDefault(); setIsLoading(true); setError(null);
       try {
-          await api.post('/users/reset-complete', { email: resetEmail, answer: resetAnswer, newPassword });
-          alert('Password reset successful. Please login.');
-          setMode('login');
+          const res = await api.post('/users/reset-complete', { resetToken, answer: resetAnswer, newPassword });
+
+          // Auto-login if token is present
+          if (res.data && (res.data.token || res.data._id)) {
+             localStorage.setItem('userInfo', JSON.stringify(res.data));
+             localStorage.setItem('auth_last_active', Date.now().toString());
+             if (onLoginSuccess) onLoginSuccess();
+             window.location.href = '/sanctuary';
+          } else {
+             alert('Password reset successful. Please login.');
+             setMode('login');
+          }
       } catch (err: any) {
           setError(err.response?.data?.message || 'Incorrect answer');
       } finally {
@@ -224,6 +269,20 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
       if (e.key === 'Backspace' && !otp[index] && index > 0) {
           otpRefs.current[index - 1]?.focus();
       }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+      e.preventDefault();
+      const pasteData = e.clipboardData.getData('text').trim();
+      if (!/^\d+$/.test(pasteData)) return;
+
+      const digits = pasteData.split('').slice(0, 6);
+      const newOtp = [...otp];
+      digits.forEach((d, i) => { newOtp[i] = d; });
+      setOtp(newOtp);
+
+      const nextFocus = Math.min(digits.length, 5);
+      otpRefs.current[nextFocus]?.focus();
   };
 
   const handleBack = () => {
@@ -410,6 +469,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                                 value={digit}
                                 onChange={(e) => handleOtpChange(idx, e.target.value)}
                                 onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                                onPaste={handleOtpPaste}
                                 className="w-12 h-14 rounded-xl bg-white/5 border border-white/10 text-center text-2xl font-bold text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all focus:bg-white/10"
                             />
                         ))}
