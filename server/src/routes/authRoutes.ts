@@ -19,8 +19,7 @@ import {
   uploadPersonaVoice,
   uploadPersonaScreenshot,
   updateCloneSettings,
-  toggleDataDonation,
-  verifyResetOTP // ✅ Added import
+  toggleDataDonation
 } from '../controllers/authController';
 import { createOrder, verifyPayment, createVoiceOrder } from '../controllers/paymentController';
 import { protect } from '../middleware/authMiddleware';
@@ -53,7 +52,6 @@ router.post('/toggle-data-donation', protect, toggleDataDonation);
 // Account management
 router.post('/delete-account', protect, softDeleteUser);
 router.post('/reset-init', initiateReset);
-router.post('/reset-verify-otp', verifyResetOTP); // ✅ Added route
 router.post('/reset-complete', completeReset);
 
 // Diary reset
