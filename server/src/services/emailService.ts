@@ -14,11 +14,15 @@ const resend = new Resend(process.env.RESEND_API_KEY || 're_123456789');
 // CONFIGURATION 2: Gmail (For Ghosting)
 // ==========================================
 // Uses your personal Gmail credentials
+// UPDATED: Supports both GMAIL_ prefix (legacy) and EMAIL_ prefix (Render)
+const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
+const emailPass = process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD;
+
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.GMAIL_USER,       // aastha...
-    pass: process.env.GMAIL_APP_PASSWORD // The 16-char app password
+    user: emailUser,
+    pass: emailPass
   },
 });
 
@@ -74,9 +78,9 @@ export const sendOTPEmail = async (to: string, otp: string, subject: string = 'Y
  * Why: It looks more personal (from "aasthafv.ai@gmail.com") and lands in the primary inbox.
  */
 export const sendGhostEmail = async (to: string, name: string, content: string) => {
-    // Check for Gmail credentials
-    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-        console.warn("[Email Service] No Gmail credentials found. Ghost email skipped.");
+    // Check for Gmail credentials (using the resolved variables)
+    if (!emailUser || !emailPass) {
+        console.warn("[Email Service] No Gmail credentials found (EMAIL_USER/EMAIL_PASS). Ghost email skipped.");
         return false;
     }
 
