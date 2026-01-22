@@ -729,7 +729,7 @@ export const completeReset = async (req: Request, res: Response) => {
     }
 
     // Force OTP on next login
-    user.isVerified = false;
+    user.isVerified = true;
 
     const salt = await bcrypt.genSalt(10);
     user.passwordHash = await bcrypt.hash(newPassword, salt);
