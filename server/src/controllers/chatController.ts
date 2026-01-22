@@ -498,9 +498,19 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         voiceSystemPrompt += `\n[SYSTEM: OUTPUT THESE COMMANDS AT THE END]\n${tools}`;
     }
 
+    // Calculate display credits based on active model
+    let displayCredits;
+    if (user.isPro) {
+        displayCredits = '∞';
+    } else if (provider === 'GEMINI') {
+        displayCredits = Math.max(0, LIMITS.GEMINI - (user.dailyGeminiCount || 0));
+    } else {
+        displayCredits = Math.max(0, LIMITS.GROQ - (user.dailyGroqCount || 0));
+    }
+
     (res as any).write(`data: ${JSON.stringify({ 
         meta: { 
-            credits: user.isPro ? '∞' : (LIMITS.GEMINI - (user.dailyGeminiCount || 0)),
+            credits: displayCredits,
             model: provider === 'GEMINI' ? 'Gemini 2.5 Flash' : 'Llama 3.3',
             battery: user.socialBattery,
             limitReached: !hasVoiceAccess,
