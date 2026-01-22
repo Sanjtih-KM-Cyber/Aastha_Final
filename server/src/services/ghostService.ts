@@ -15,7 +15,6 @@ export const init = () => {
     cron.schedule('*/10 * * * *', async () => {
         // Optimization: Fail fast if we can't send emails anyway
         if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-             // Only log once per cron run, not per user, to reduce noise if env is missing
              console.warn("[GhostService] Skipping check: No Gmail credentials found in environment.");
              return;
         }
@@ -40,15 +39,29 @@ export const init = () => {
                     const latestEntry = await Diary.findOne({ user: user._id }).sort({ createdAt: -1 });
                     const keywords = latestEntry && latestEntry.moodKeywords ? latestEntry.moodKeywords : "life";
 
-                    // 2. Generate Guilt Trip Email Content via Groq
-                    // Replaces Gemini to avoid rate limits and use the more robust Llama model
-                    const emailBody = await generateGhostEmailContent(keywords);
+                    // 2. Prepare Rich Context from User Memory
+                    const context = {
+                        name: user.name.split(' ')[0], // First name only
+                        keywords: keywords,
+                        facts: user.facts || [],
+                        lore: (user.lore || [])
+                            .filter(l => l.isUnlocked) // Only use unlocked lore
+                            .sort((a, b) => b.mentionCount - a.mentionCount) // Prioritize most mentioned
+                            .slice(0, 3)
+                            .map(l => l.topic),
+                        openLoop: user.openLoops && user.openLoops.length > 0
+                            ? user.openLoops.filter(l => l.status === 'pending')[0]?.event
+                            : undefined
+                    };
 
-                    // 3. Send Email
+                    // 3. Generate Unique Content via Groq
+                    const emailBody = await generateGhostEmailContent(context);
+
+                    // 4. Send Email
                     const sent = await sendGhostEmail(user.email!, user.name, emailBody);
 
                     if (sent) {
-                        // 4. Update User State
+                        // 5. Update User State
                         user.ghostNotificationSent = true;
                         user.moodStatus = 'mad';
                         await user.save();
