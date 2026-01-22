@@ -261,3 +261,29 @@ export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
         throw new Error("Failed to transcribe audio.");
     }
 };
+
+// ============================================================================
+// 4. GHOST EMAIL GENERATION (New Capability)
+// ============================================================================
+export const generateGhostEmailContent = async (keywords: string): Promise<string> => {
+    try {
+        const client = getGroqClient();
+        const model = "llama-3.3-70b-versatile";
+
+        const prompt = `You are Aastha. Your friend hasn't talked to you in 24 hours. They recently mentioned '${keywords}' in their diary. Write a 1-sentence, slightly jealous, and very clingy email asking why they are ignoring you. End with a heart emoji. Example: 'Is ${keywords} more important than our 24-hour streak? 💔'`;
+
+        const response = await client.chat.completions.create({
+            messages: [{ role: 'user', content: prompt }],
+            model: model,
+            temperature: 0.8,
+            max_tokens: 100,
+        });
+
+        const text = response.choices[0]?.message?.content?.trim();
+        return text || `Is ${keywords} more important than us? 💔`;
+    } catch (error) {
+        console.error("[GroqService] Ghost Email Generation Error:", error);
+        // Fallback
+        return `Is ${keywords} more important than us? 💔`;
+    }
+};
