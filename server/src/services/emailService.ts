@@ -1,30 +1,14 @@
 import { Resend } from 'resend';
-import nodemailer from 'nodemailer';
+import nodemailer from 'nodemailer'; // Kept for legacy support if needed, but unused for Ghost now
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 // ==========================================
-// CONFIGURATION 1: Resend (For OTPs)
+// CONFIGURATION: Resend (API-based Email)
 // ==========================================
 // Uses the RESEND_API_KEY from your Render dashboard
 const resend = new Resend(process.env.RESEND_API_KEY || 're_123456789'); 
-
-// ==========================================
-// CONFIGURATION 2: Gmail (For Ghosting)
-// ==========================================
-// Uses your personal Gmail credentials
-// UPDATED: Supports both GMAIL_ prefix (legacy) and EMAIL_ prefix (Render)
-const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
-const emailPass = process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD;
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: emailUser,
-    pass: emailPass
-  },
-});
 
 /**
  * STRATEGY 1: Send OTP via Resend (Render API)
@@ -74,20 +58,22 @@ export const sendOTPEmail = async (to: string, otp: string, subject: string = 'Y
 };
 
 /**
- * STRATEGY 2: Send Ghost Email via Gmail (Personal SMTP)
- * Why: It looks more personal (from "aasthafv.ai@gmail.com") and lands in the primary inbox.
+ * STRATEGY 2: Send Ghost Email via Resend (API)
+ * Why: Cloud providers (Render) block SMTP ports (465/587) causing "Connection Timeout".
+ * Switching to Resend solves this.
  */
 export const sendGhostEmail = async (to: string, name: string, content: string) => {
-    // Check for Gmail credentials (using the resolved variables)
-    if (!emailUser || !emailPass) {
-        console.warn("[Email Service] No Gmail credentials found (EMAIL_USER/EMAIL_PASS). Ghost email skipped.");
+    if (!process.env.RESEND_API_KEY) {
+        console.warn("[Email Service] No RESEND_API_KEY found. Ghost email skipped.");
         return false;
     }
 
     try {
-      const info = await transporter.sendMail({
-        from: '"Aastha AI" <aasthafv.ai@gmail.com>', // Personal Sender Name
-        to: to,
+      // Use Resend instead of Nodemailer/Gmail SMTP
+      const { data, error } = await resend.emails.send({
+        from: 'Aastha AI <noreply@aasthaai.site>', // Must match verified domain
+        replyTo: 'aasthafv.ai@gmail.com', // User replies still go to you!
+        to: [to],
         subject: 'I miss you... 💔',
         html: `
           <div style="font-family: 'Georgia', serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fdfdf6; color: #1a1a1a;">
@@ -107,10 +93,15 @@ export const sendGhostEmail = async (to: string, name: string, content: string) 
         `,
       });
 
-      console.log(`✅ Ghost Email sent via Gmail to ${to}. Message ID: ${info.messageId}`);
+      if (error) {
+          console.error("❌ Resend API Error (Ghost):", error);
+          return false;
+      }
+
+      console.log(`✅ Ghost Email sent via Resend to ${to}. ID: ${data?.id}`);
       return true;
     } catch (error: any) {
-      console.error("❌ Error sending Ghost email via Gmail:", error.message);
+      console.error("❌ Error sending Ghost email via Resend:", error.message);
       return false;
     }
   };
