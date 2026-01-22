@@ -107,13 +107,15 @@ export const generateSubconscious = async (
     **Structure:** { "name": "control_widget", "params": { "widget": "...", "params": { ... } } }
 
     - **Music (Jam):**
-      - Trigger: "Play music", "Play some songs", "I need a vibe", "50 mins of south indian romantic music", "Play Tamil songs from 2020".
+      - Trigger: "Play music", "Play some songs", "I need a vibe", "50 mins of south indian romantic music", "Play Tamil songs from 2020", "Latest Bollywood songs".
       - **VIBE MODE (PREFERRED):** If user specifies ANY of: Duration, Language, Genre, Year, or Mood -> Use this.
         - **IMPORTANT:** Even if user provides partial info (e.g. only "Tamil" or "2010s"), send what you have. The system will default Duration to 30 mins and infer Mood.
         - Map "South Indian" -> ["Tamil", "Telugu", "Malayalam", "Kannada"].
+        - Map "Latest" or "New" -> Set `year` to "2024" (or current year).
         - Params: `languages` (Array), `genres` (Array), `mood` (String), `duration` (Number, minutes), `year` (String/Number).
         - Example (Full): { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil", "Telugu"], "genres": ["Romantic"], "duration": 50, "autoplay": true } } }
         - Example (Partial): { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil"], "year": "2020", "autoplay": true } } }
+        - Example (Latest): { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Hindi"], "year": "2024", "autoplay": true } } }
       - **Simple Search:** Use ONLY for specific song titles (e.g. "Play Tum Hi Ho").
         - Example: { "name": "control_widget", "params": { "widget": "jam", "params": { "query": "Play <Name>", "autoplay": true } } }
 
