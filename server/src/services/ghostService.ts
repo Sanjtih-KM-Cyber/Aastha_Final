@@ -14,8 +14,12 @@ export const init = () => {
     // Run every 10 minutes
     cron.schedule('*/10 * * * *', async () => {
         // Optimization: Fail fast if we can't send emails anyway
-        if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-             console.warn("[GhostService] Skipping check: No Gmail credentials found in environment.");
+        // UPDATED: Check for both new and legacy env vars
+        const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
+        const emailPass = process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD;
+
+        if (!emailUser || !emailPass) {
+             console.warn("[GhostService] Skipping check: No Gmail credentials found in environment (EMAIL_USER/EMAIL_PASS).");
              return;
         }
 
