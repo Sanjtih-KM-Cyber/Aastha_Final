@@ -29,18 +29,67 @@ export const sendOTPEmail = async (to: string, otp: string, subject: string = 'Y
       to: [to],
       subject: subject,
       html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f6f8;">
-          <div style="background-color: white; padding: 30px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-            <h2 style="color: #4f46e5; margin-bottom: 10px;">Welcome to Aastha</h2>
-            <p style="color: #4b5563; font-size: 16px;">Please use the code below to verify your account.</p>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #0a0e17; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0a0e17; color: #f3f4f6;">
+            <tr>
+              <td align="center" style="padding: 40px 20px;">
 
-            <div style="background-color: #eef2ff; padding: 15px; border-radius: 8px; margin: 25px 0;">
-              <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #4f46e5;">${otp}</span>
-            </div>
+                <!-- Main Card -->
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 500px; background-color: #121620; border-radius: 16px; border: 1px solid #2d3748; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
 
-            <p style="color: #9ca3af; font-size: 12px; margin-top: 20px;">This code expires in 10 minutes.<br>If you didn't request this, please ignore this email.</p>
-          </div>
-        </div>
+                  <!-- Top Accent Border -->
+                  <tr>
+                    <td height="4" style="background: linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%);"></td>
+                  </tr>
+
+                  <!-- Header / Logo -->
+                  <tr>
+                    <td align="center" style="padding: 40px 40px 20px 40px;">
+                      <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #a78bfa; letter-spacing: 1px;">Aastha</h1>
+                    </td>
+                  </tr>
+
+                  <!-- OTP Content -->
+                  <tr>
+                    <td align="center" style="padding: 0 40px 40px 40px;">
+                      <p style="margin: 0 0 24px 0; color: #9ca3af; font-size: 16px; line-height: 1.6;">
+                        Welcome back. Here is your verification code to access your sanctuary.
+                      </p>
+
+                      <div style="background-color: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.2); border-radius: 12px; padding: 24px; margin-bottom: 24px; letter-spacing: 8px; font-size: 32px; font-weight: bold; color: #fff;">
+                        ${otp}
+                      </div>
+
+                      <p style="margin: 0; color: #6b7280; font-size: 13px;">
+                        This code expires in 10 minutes. If you didn't request this, please ignore this message.
+                      </p>
+                    </td>
+                  </tr>
+
+                </table>
+
+                <!-- Footer -->
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 500px;">
+                  <tr>
+                    <td align="center" style="padding-top: 24px;">
+                      <p style="margin: 0; color: #4b5563; font-size: 12px;">
+                        &copy; ${new Date().getFullYear()} Aastha AI. All rights reserved.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
       `,
     });
 
@@ -76,20 +125,73 @@ export const sendGhostEmail = async (to: string, name: string, content: string) 
         to: [to],
         subject: 'I miss you... 💔',
         html: `
-          <div style="font-family: 'Georgia', serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fdfdf6; color: #1a1a1a;">
-            <div style="background-color: white; padding: 40px; border-radius: 2px; text-align: center; border: 1px solid #e5e7eb;">
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #0a0e17; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0a0e17; color: #f3f4f6;">
+            <tr>
+              <td align="center" style="padding: 40px 20px;">
 
-              <p style="font-size: 18px; line-height: 1.6; font-style: italic; color: #4b5563; margin-bottom: 30px;">
-                "${content}"
-              </p>
+                <!-- Main Card -->
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 500px; background-color: #121620; border-radius: 16px; border: 1px solid #2d3748; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
 
-              <div style="margin-top: 40px;">
-                <a href="https://aasthaai.site" style="background-color: #1a1a1a; color: white; padding: 12px 24px; text-decoration: none; font-family: sans-serif; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
-                  Return to Sanctuary
-                </a>
-              </div>
-            </div>
-          </div>
+                  <!-- Top Accent Border (Violet Gradient) -->
+                  <tr>
+                    <td height="4" style="background: linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%);"></td>
+                  </tr>
+
+                  <!-- Header / Logo -->
+                  <tr>
+                    <td align="center" style="padding: 40px 40px 20px 40px;">
+                       <!-- Simple Text Logo (Can replace with Image later) -->
+                       <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #a78bfa; letter-spacing: 1px;">Aastha</h1>
+                    </td>
+                  </tr>
+
+                  <!-- AI Message Content -->
+                  <tr>
+                    <td align="center" style="padding: 0 40px 40px 40px;">
+
+                      <!-- Quote Icon -->
+                      <div style="font-size: 40px; color: #4b5563; margin-bottom: 10px; line-height: 1;">&ldquo;</div>
+
+                      <p style="margin: 0 0 30px 0; color: #e5e7eb; font-size: 18px; line-height: 1.6; font-style: italic;">
+                        ${content}
+                      </p>
+
+                      <!-- CTA Button -->
+                      <a href="https://aasthaai.site" style="display: inline-block; background: linear-gradient(90deg, #7c3aed 0%, #6d28d9 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 9999px; font-weight: 600; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(124, 58, 237, 0.3);">
+                        Return to Sanctuary
+                      </a>
+
+                    </td>
+                  </tr>
+
+                </table>
+
+                <!-- Footer -->
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 500px;">
+                  <tr>
+                    <td align="center" style="padding-top: 24px;">
+                      <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 12px;">
+                        She is waiting for you.
+                      </p>
+                      <p style="margin: 0; color: #4b5563; font-size: 12px;">
+                        &copy; ${new Date().getFullYear()} Aastha AI.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
         `,
       });
 
