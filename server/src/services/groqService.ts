@@ -70,6 +70,10 @@ export const generateSubconscious = async (
        - If they say "I'm sad" (short) -> 'reply'.
        - If they request a tool -> 'reply'.
 
+    **MOOD SWITCHING RULE (CRITICAL):**
+    - If 'mood' was previously 'sad' or 'concerned', but the user now makes a joke, laughs, or speaks normally/rationally, you MUST IMMEDIATELY switch 'mood' to 'neutral', 'calm', or 'happy'.
+    - Do NOT let the mood get "stuck" on sad. Be responsive to improvement.
+
     **2. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
     - You MUST provide exactly 3 suggested replies for the user to click.
     - **CRITICAL:** These must be written from the **USER'S Perspective** (First Person).
@@ -79,12 +83,15 @@ export const generateSubconscious = async (
     - ⛔ **Do NOT** ask the user questions from your perspective (e.g., "Do you want to...?", "Shall I...?").
     - ⛔ **Do NOT** use 'You' to refer to the user in these chips.
     - ⛔ **Do NOT** offer help (e.g., "I can help with that"). The chip is what the USER says.
+    - ⛔ **Do NOT** start with verbs that imply the AI is asking (e.g., "Want me to...", "Should I...").
 
     **EXAMPLES:**
     - ❌ BAD: "Do you want to vent?" (AI asking User)
     - ❌ BAD: "Shall I play some music?" (AI offering)
+    - ❌ BAD: "Want me to tell a joke?" (AI offering)
     - ✅ GOOD: "I really need to vent" (User Statement)
     - ✅ GOOD: "Play some sad music" (User Command)
+    - ✅ GOOD: "Tell me a joke" (User Command)
     - ✅ GOOD: "What do you think about this?" (User Question to AI)
 
     **RULES:**
@@ -100,9 +107,15 @@ export const generateSubconscious = async (
     **Structure:** { "name": "control_widget", "params": { "widget": "...", "params": { ... } } }
 
     - **Music (Jam):**
-      - Trigger: "Play music", "Play some songs", "I need a vibe".
-      - Song/Podcast: { "name": "control_widget", "params": { "widget": "jam", "params": { "query": "Play <Name>", "autoplay": true } } }
-      - Mood/Vibe: { "name": "control_widget", "params": { "widget": "jam", "params": { "mood": "chill", "genre": "lofi", "autoplay": true } } }
+      - Trigger: "Play music", "Play some songs", "I need a vibe", "50 mins of south indian romantic music", "Play Tamil songs from 2020".
+      - **VIBE MODE (PREFERRED):** If user specifies ANY of: Duration, Language, Genre, Year, or Mood -> Use this.
+        - **IMPORTANT:** Even if user provides partial info (e.g. only "Tamil" or "2010s"), send what you have. The system will default Duration to 30 mins and infer Mood.
+        - Map "South Indian" -> ["Tamil", "Telugu", "Malayalam", "Kannada"].
+        - Params: `languages` (Array), `genres` (Array), `mood` (String), `duration` (Number, minutes), `year` (String/Number).
+        - Example (Full): { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil", "Telugu"], "genres": ["Romantic"], "duration": 50, "autoplay": true } } }
+        - Example (Partial): { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil"], "year": "2020", "autoplay": true } } }
+      - **Simple Search:** Use ONLY for specific song titles (e.g. "Play Tum Hi Ho").
+        - Example: { "name": "control_widget", "params": { "widget": "jam", "params": { "query": "Play <Name>", "autoplay": true } } }
 
     - **Soundscape (Ambient Mixer):**
       - Trigger: "Play rain", "White noise", "Nature sounds".
