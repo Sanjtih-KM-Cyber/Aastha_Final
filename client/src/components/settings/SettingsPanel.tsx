@@ -175,24 +175,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   const handleInitiateDiaryReset = async () => {
       try {
           if (!user?.email) return;
-          await api.post('/users/reset-init', { email: user.email });
-          setOtp(['', '', '', '', '', '']); // Reset OTP
-          setResetStep(0.5);
-      } catch (e) {
-          alert("Could not initiate reset. Check connection.");
-      }
-  };
-
-  const handleVerifyResetOTP = async () => {
-      try {
-          if (!user?.email) return;
-          const code = otp.join('');
-          const res = await api.post('/users/reset-verify-otp', { email: user.email, otp: code });
-          setResetToken(res.data.resetToken);
+          const res = await api.post('/users/reset-init', { email: user.email });
           setSecurityQuestion(res.data.question);
           setResetStep(1);
       } catch (e) {
-          alert("Invalid OTP or expired.");
+          alert("Could not initiate reset. Check connection.");
       }
   };
 
@@ -547,28 +534,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                           
                           {resetStep === 0 && (
                               <button onClick={handleInitiateDiaryReset} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors text-sm">Start Recovery Process</button>
-                          )}
-
-                          {resetStep === 0.5 && (
-                              <div className="space-y-4">
-                                  <p className="text-sm text-white/60">Enter the code sent to your email:</p>
-                                  <div className="flex gap-2">
-                                      {otp.map((digit, idx) => (
-                                          <input
-                                              key={idx}
-                                              ref={el => { otpRefs.current[idx] = el; }}
-                                              type="text"
-                                              maxLength={1}
-                                              value={digit}
-                                              onChange={(e) => handleOtpChange(idx, e.target.value)}
-                                              onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                                              onPaste={handleOtpPaste}
-                                              className="w-10 h-12 bg-black/40 border border-white/20 rounded-lg text-center text-white font-mono text-lg focus:border-teal-500/50 focus:outline-none"
-                                          />
-                                      ))}
-                                  </div>
-                                  <button onClick={handleVerifyResetOTP} className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-sm">Verify Code</button>
-                              </div>
                           )}
 
                           {resetStep === 1 && (
