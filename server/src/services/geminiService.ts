@@ -274,12 +274,30 @@ export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> =>
     } catch (error) { return "Unable to analyze."; }
 };
 
-export const getVibePlaylist = async (chatHistory: any[], languages: string[], userMoods: string[], duration?: number): Promise<string[]> => {
+export const getVibePlaylist = async (
+    chatHistory: any[],
+    languages: string[],
+    userMoods: string[],
+    duration?: number,
+    year?: string,
+    genres?: string[]
+): Promise<string[]> => {
     const client = getGeminiClient(true);
     const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
     try {
         const textData = chatHistory.slice(-15).map(m => `${m.role}: ${m.content}`).join('\n');
-        const result = await model.generateContent(`Vibe Playlist (JSON Strings). Lang: ${languages}, Mood: ${userMoods}. Context: ${textData}`);
+
+        let prompt = `Create a music playlist as a JSON Array of strings (Song Title - Artist).
+        Context: ${textData}
+        Languages: ${languages?.join(', ') || "Any"}
+        Moods: ${userMoods?.join(', ') || "Infer from context"}
+        Genres: ${genres?.join(', ') || "Any"}
+        Target Year/Era: ${year || "Any"}
+        Duration: ${duration || 30} mins (approx 8-10 songs).
+
+        Output JSON Array ONLY: ["Song - Artist", "Song - Artist"]`;
+
+        const result = await model.generateContent(prompt);
         const text = result.response.text();
         const jsonMatch = text.match(/\[[\s\S]*\]/);
         if(jsonMatch) return JSON.parse(jsonMatch[0]);

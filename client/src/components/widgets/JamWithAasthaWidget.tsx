@@ -234,14 +234,21 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           }
 
           // 2. VIBE GENERATION (If no query)
-          if (mood || genre || language || year) {
+          if (initialParams.mood || initialParams.genre || initialParams.genres || initialParams.language || initialParams.languages || initialParams.year) {
              // Reset UI selections to match manager request
-             if (mood) setSelectedMoods([mood]);
-             if (genre) setSelectedGenres([genre]);
-             if (language) setSelectedLanguages([language]);
+             // Handle Arrays or Strings
+             const m = initialParams.mood ? [initialParams.mood] : (initialParams.moods || []);
+             const g = initialParams.genre ? [initialParams.genre] : (initialParams.genres || []);
+             const l = initialParams.language ? [initialParams.language] : (initialParams.languages || []);
+             const y = initialParams.year; // Pass year
+
+             if (m.length > 0) setSelectedMoods(m);
+             if (g.length > 0) setSelectedGenres(g);
+             if (l.length > 0) setSelectedLanguages(l);
 
              // Trigger generation immediately with EXTRA params
-             generateVibePlaylist(mood, genre, language, year);
+             // Updated generateVibePlaylist signature below to handle this better
+             generateVibePlaylist(m, g, l, y);
           }
       }
   }, [initialParams, isOpen]);
@@ -583,7 +590,12 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   };
 
   // Updated to include Year and Language Override
-  const generateVibePlaylist = async (overrideMood?: string, overrideGenre?: string, overrideLang?: string, overrideYear?: string) => {
+  const generateVibePlaylist = async (
+      overrideMood?: string | string[],
+      overrideGenre?: string | string[],
+      overrideLang?: string | string[],
+      overrideYear?: string
+  ) => {
       setShowConfigModal(false);
       setIsSearching(true);
       
@@ -591,10 +603,13 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       setQueue([]);
 
       let langsToSend = selectedLanguages.length > 0 ? selectedLanguages : ["English"];
-      if (overrideLang) langsToSend = [overrideLang];
+      if (overrideLang) langsToSend = Array.isArray(overrideLang) ? overrideLang : [overrideLang];
 
-      const moodsToSend = overrideMood ? [overrideMood] : selectedMoods;
-      const genresToSend = overrideGenre ? [overrideGenre] : selectedGenres;
+      let moodsToSend = selectedMoods;
+      if (overrideMood) moodsToSend = Array.isArray(overrideMood) ? overrideMood : [overrideMood];
+
+      let genresToSend = selectedGenres;
+      if (overrideGenre) genresToSend = Array.isArray(overrideGenre) ? overrideGenre : [overrideGenre];
 
       try {
           const res = await api.post('/ai/generate-vibe', { 
