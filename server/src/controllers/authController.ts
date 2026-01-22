@@ -27,12 +27,12 @@ const generateToken = (id: string) => {
   });
 };
 
-const generateResetToken = (id: string) => {
+const generateResetVerifiedToken = (id: string) => {
   if (!process.env.JWT_SECRET) {
     throw new Error('Server misconfiguration: Missing JWT_SECRET');
   }
   // Short expiry for reset token (15 mins)
-  return jwt.sign({ id, purpose: 'reset' }, process.env.JWT_SECRET, {
+  return jwt.sign({ id, purpose: 'reset-verified' }, process.env.JWT_SECRET, {
     expiresIn: '15m',
   });
 };
@@ -586,52 +586,104 @@ export const softDeleteUser = async (req: AuthRequest, res: Response) => {
   } catch (error) { (res as any).status(500).json({ message: 'Server Error' }); }
 };
 
+// --- FORGOT PASSWORD FLOW ---
+
 export const initiateReset = async (req: Request, res: Response) => {
   try {
-    // SECURITY: Slow down enumeration attacks
-    const delay = Math.floor(Math.random() * 500) + 300; // 300-800ms
-    await new Promise(r => setTimeout(r, delay));
-
     const { email } = (req as any).body;
     const cleanEmail = email.toLowerCase().trim();
     const emailHash = hashEmail(cleanEmail);
 
     const user = await User.findOne({ $or: [{ emailHash: emailHash }, { email: cleanEmail }] });
-    
-    const securityQuestionsList = [
-      "What song instantly resets your vibe?",
-      "Which place feels like your safe corner?",
-      "Who is your comfort character?",
-      "What color is your calm?",
-      "Your go-to midnight snack?",
-      "Which meme always makes you smile?",
-      "First app you open every morning?",
-      "Your rainy-day movie?",
-      "What phrase gets you back on track?"
-    ];
 
-    // If user exists, return their real question.
-    // If NOT, return a deterministic fake question based on email hash to mask existence.
-    let question = "";
-    if (user && user.securityQuestions && user.securityQuestions.length > 0 && user.securityQuestions[0].question) {
-        question = user.securityQuestions[0].question;
-    } else {
-        // Deterministic Fake (or fallback if user exists but has broken security question data)
-        const hashVal = parseInt(emailHash.substring(0, 8), 16);
-        question = securityQuestionsList[hashVal % securityQuestionsList.length];
+    if (!user) {
+         // SECURITY: Fake delay to prevent enumeration
+         const delay = Math.floor(Math.random() * 500) + 300;
+         await new Promise(r => setTimeout(r, delay));
+         // Return success even if not found
+         return (res as any).status(200).json({ message: 'If account exists, OTP sent.' });
     }
 
-    (res as any).status(200).json({ question });
+    const otp = generateOTP();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+    user.otpCode = await bcrypt.hash(otp, 8);
+    user.otpExpires = otpExpires;
+    await user.save();
+
+    console.log(`[Reset] Sending OTP to ${cleanEmail}`);
+    sendOTPEmail(cleanEmail, otp).catch(e => console.error("[Reset] Email Error:", e));
+
+    (res as any).status(200).json({ message: 'OTP sent.' });
 
   } catch (error) { (res as any).status(500).json({ message: 'Server Error' }); }
 };
 
+export const verifyResetOTP = async (req: Request, res: Response) => {
+    try {
+        const { email, otp } = (req as any).body;
+        if (!email || !otp) return (res as any).status(400).json({ message: 'Email and OTP required' });
+
+        const cleanEmail = email.toLowerCase().trim();
+        const emailHash = hashEmail(cleanEmail);
+
+        const user = await User.findOne({
+            $or: [{ emailHash }, { email: cleanEmail }]
+        });
+
+        if (!user || !user.otpCode || !user.otpExpires) {
+             return (res as any).status(400).json({ message: 'Invalid request.' });
+        }
+
+        if (new Date() > user.otpExpires) {
+             return (res as any).status(400).json({ message: 'OTP expired.' });
+        }
+
+        const isValid = await bcrypt.compare(String(otp), user.otpCode);
+        if (!isValid) return (res as any).status(400).json({ message: 'Invalid code.' });
+
+        // Retrieve Security Question
+        let question = "What is your favorite color?"; // Fallback
+        if (user.securityQuestions && user.securityQuestions.length > 0) {
+            question = user.securityQuestions[0].question;
+        }
+
+        // Generate Verified Token
+        const resetToken = generateResetVerifiedToken((user._id as any).toString());
+
+        // Clear OTP
+        user.otpCode = undefined;
+        user.otpExpires = undefined;
+        await user.save();
+
+        (res as any).status(200).json({
+            message: 'OTP verified.',
+            question: question,
+            resetToken: resetToken
+        });
+
+    } catch (e) {
+        console.error("Verify Reset OTP Error:", e);
+        (res as any).status(500).json({ message: 'Server error' });
+    }
+};
+
 export const completeReset = async (req: Request, res: Response) => {
   try {
-    const { email, answer, newPassword } = (req as any).body;
+    const { email, answer, newPassword, resetToken } = (req as any).body;
 
-    if (!email || !answer || !newPassword) {
+    if (!email || !answer || !newPassword || !resetToken) {
         return (res as any).status(400).json({ message: 'Missing fields.' });
+    }
+
+    // Verify Token
+    if (!process.env.JWT_SECRET) throw new Error("Missing Secret");
+    let decoded: any;
+    try {
+        decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
+        if (decoded.purpose !== 'reset-verified') throw new Error('Invalid token purpose');
+    } catch (e) {
+        return (res as any).status(401).json({ message: 'Session expired. Please verify OTP again.' });
     }
 
     const cleanEmail = email.toLowerCase().trim();
@@ -639,8 +691,12 @@ export const completeReset = async (req: Request, res: Response) => {
 
     const user = await User.findOne({ $or: [{ emailHash: emailHash }, { email: cleanEmail }] }).select('+masterKeyBlob2');
 
+    if (!user || (user._id as any).toString() !== decoded.id) {
+        return (res as any).status(403).json({ message: 'Invalid user context.' });
+    }
+
     // Fake Verification for Non-Existent Users (Timing Attack Protection)
-    if (!user || !user.securityQuestions || user.securityQuestions.length === 0 || !user.securityQuestions[0].answerHash) {
+    if (!user.securityQuestions || user.securityQuestions.length === 0 || !user.securityQuestions[0].answerHash) {
          await bcrypt.compare(answer, "$2a$10$abcdefghijklmnopqrstuvwxyz123456"); // Fake compare
          return (res as any).status(400).json({ message: 'Incorrect answer.' });
     }

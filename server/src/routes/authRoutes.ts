@@ -8,6 +8,7 @@ import {
   softDeleteUser,
   initiateReset,
   completeReset,
+  verifyResetOTP,
   verifySecurityAnswer,
   resetDiaryNuclear,
   changeDiaryPassword,
@@ -52,6 +53,7 @@ router.post('/toggle-data-donation', protect, toggleDataDonation);
 // Account management
 router.post('/delete-account', protect, softDeleteUser);
 router.post('/reset-init', initiateReset);
+router.post('/reset-verify-otp', verifyResetOTP);
 router.post('/reset-complete', completeReset);
 
 // Diary reset

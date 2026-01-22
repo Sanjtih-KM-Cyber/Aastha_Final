@@ -29,7 +29,7 @@ interface LoginProps {
   onLoginSuccess?: () => void;
 }
 
-type AuthMode = 'login' | 'register' | 'forgot-init' | 'forgot-complete' | 'verify-otp';
+type AuthMode = 'login' | 'register' | 'forgot-init' | 'forgot-otp' | 'forgot-complete' | 'verify-otp';
 
 export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   const [mode, setMode] = useState<AuthMode>('login');
@@ -64,6 +64,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   // Reset State
   const [resetEmail, setResetEmail] = useState('');
   const [resetQuestion, setResetQuestion] = useState('');
+  const [resetToken, setResetToken] = useState('');
   const [resetAnswer, setResetAnswer] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [quote, setQuote] = useState(MOTIVATIONAL_QUOTES[0]);
@@ -89,6 +90,11 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
     }
     return () => clearInterval(timer);
   }, [otpResendCooldown]);
+
+  // Reset OTP state when switching modes
+  useEffect(() => {
+    setOtp(['', '', '', '', '', '']);
+  }, [mode]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); setIsLoading(true); setError(null);
@@ -173,7 +179,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   const handleResendOtp = async () => {
     if (otpResendCooldown > 0) return;
     try {
-        await api.post('/users/resend-otp', { email: regEmail });
+        await api.post('/users/resend-otp', { email: mode === 'verify-otp' ? regEmail : resetEmail });
         setOtpResendCooldown(60);
         setError(null); // Clear any errors
         alert('Code resent! Check your spam folder.');
@@ -185,11 +191,33 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   const handleForgotInit = async (e: React.FormEvent) => {
       e.preventDefault(); setIsLoading(true); setError(null);
       try {
-          const res = await api.post('/users/reset-init', { email: resetEmail });
-          setResetQuestion(res.data.question);
-          setMode('forgot-complete');
+          await api.post('/users/reset-init', { email: resetEmail });
+          // No longer getting question immediately. Move to OTP step.
+          setMode('forgot-otp');
       } catch (err: any) {
           setError(err.response?.data?.message || 'Account not found');
+      } finally {
+          setIsLoading(false);
+      }
+  };
+
+  const handleForgotOtpVerify = async (e: React.FormEvent) => {
+      e.preventDefault(); setIsLoading(true); setError(null);
+      const code = otp.join('');
+      if (code.length !== 6) {
+          setError('Please enter a 6-digit code');
+          setIsLoading(false);
+          return;
+      }
+
+      try {
+          const res = await api.post('/users/reset-verify-otp', { email: resetEmail, otp: code });
+          // Success: Receive Token and Question
+          setResetQuestion(res.data.question);
+          setResetToken(res.data.resetToken);
+          setMode('forgot-complete');
+      } catch (err: any) {
+          setError(err.response?.data?.message || 'Invalid OTP');
       } finally {
           setIsLoading(false);
       }
@@ -198,7 +226,12 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   const handleForgotComplete = async (e: React.FormEvent) => {
       e.preventDefault(); setIsLoading(true); setError(null);
       try {
-          await api.post('/users/reset-complete', { email: resetEmail, answer: resetAnswer, newPassword });
+          await api.post('/users/reset-complete', {
+            email: resetEmail,
+            answer: resetAnswer,
+            newPassword,
+            resetToken: resetToken
+          });
           alert('Password reset successful. Please login.');
           setMode('login');
       } catch (err: any) {
@@ -226,11 +259,29 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
       }
   };
 
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+      e.preventDefault();
+      const pasteData = e.clipboardData.getData('text');
+      const cleanData = pasteData.replace(/\D/g, '').slice(0, 6); // Digits only, max 6
+
+      if (!cleanData) return;
+
+      const newOtp = [...otp];
+      for (let i = 0; i < cleanData.length; i++) {
+          newOtp[i] = cleanData[i];
+      }
+      setOtp(newOtp);
+
+      // Focus appropriate input (end of pasted data or last box)
+      const nextIndex = Math.min(cleanData.length, 5);
+      otpRefs.current[nextIndex]?.focus();
+  };
+
   const handleBack = () => {
-      // If we are in verify mode, go back to register or login depending on flow?
-      // Actually standard back behavior:
+      // Standard back behavior:
       if (mode === 'register' || mode === 'forgot-init') setMode('login');
-      else if (mode === 'forgot-complete') setMode('forgot-init');
+      else if (mode === 'forgot-otp') setMode('forgot-init');
+      else if (mode === 'forgot-complete') setMode('forgot-otp');
       else if (mode === 'verify-otp') setMode('login');
       else if (onBack) onBack();
       else navigate('/');
@@ -245,16 +296,18 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
 
         <div className="relative z-10 max-w-lg backdrop-blur-sm p-12 rounded-3xl border border-white/5 bg-white/5">
           <div className="w-16 h-16 bg-gradient-to-br from-violet-50 to-indigo-600 rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-violet-500/20">
-            {mode === 'verify-otp' ? <Shield size={32} className="text-white"/> : <Sparkles size={32} className="text-white" />}
+            {mode === 'verify-otp' || mode === 'forgot-otp' ? <Shield size={32} className="text-white"/> : <Sparkles size={32} className="text-white" />}
           </div>
           <h2 className="text-5xl font-bold mb-6 leading-tight font-serif">
             {mode === 'login' && "Return to\nSanctuary."}
             {mode === 'register' && "Begin Your\nJourney."}
             {mode === 'verify-otp' && "Secure\nVerification."}
-            {mode.startsWith('forgot') && "Recover Your\nPeace."}
+            {mode === 'forgot-otp' && "Verify Your\nIdentity."}
+            {mode === 'forgot-init' && "Recover Your\nPeace."}
+            {mode === 'forgot-complete' && "Secure Your\nAccount."}
           </h2>
           <p className="text-slate-300 text-lg leading-relaxed italic">
-            {mode === 'verify-otp'
+            {mode === 'verify-otp' || mode === 'forgot-otp'
                 ? "We take your privacy seriously. Please verify your identity to ensure your sanctuary remains yours alone."
                 : `"${quote}"`}
           </p>
@@ -277,6 +330,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                 {mode === 'login' && 'Welcome Back'}
                 {mode === 'register' && 'Create Account'}
                 {mode === 'verify-otp' && 'Check your Email'}
+                {mode === 'forgot-otp' && 'Check your Email'}
                 {mode === 'forgot-init' && 'Find Account'}
                 {mode === 'forgot-complete' && 'Reset Password'}
               </h2>
@@ -284,6 +338,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                 {mode === 'login' && 'Please enter your details to sign in.'}
                 {mode === 'register' && 'Join thousands finding peace today.'}
                 {mode === 'verify-otp' && `We sent a code to ${regEmail || 'your email'}.`}
+                {mode === 'forgot-otp' && `We sent a code to ${resetEmail || 'your email'}.`}
                 {mode === 'forgot-init' && 'Enter email to recover password.'}
                 {mode === 'forgot-complete' && 'Answer your security question.'}
               </p>
@@ -394,9 +449,9 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                </form>
             )}
 
-            {/* VERIFY OTP FORM */}
-            {mode === 'verify-otp' && (
-                <form className="space-y-8" onSubmit={handleVerifyOtp}>
+            {/* VERIFY OTP FORM (Combined for Registration and Forgot Password) */}
+            {(mode === 'verify-otp' || mode === 'forgot-otp') && (
+                <form className="space-y-8" onSubmit={mode === 'verify-otp' ? handleVerifyOtp : handleForgotOtpVerify}>
                     <div className="flex justify-between gap-2">
                         {otp.map((digit, idx) => (
                             <input
@@ -410,6 +465,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                                 value={digit}
                                 onChange={(e) => handleOtpChange(idx, e.target.value)}
                                 onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                                onPaste={handleOtpPaste}
                                 className="w-12 h-14 rounded-xl bg-white/5 border border-white/10 text-center text-2xl font-bold text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all focus:bg-white/10"
                             />
                         ))}
@@ -419,7 +475,9 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                         <KeyRound className="text-violet-400 shrink-0 mt-0.5" size={18} />
                         <div>
                             <p className="text-sm text-violet-200 font-medium">Secure Verification</p>
-                            <p className="text-xs text-violet-300/60 mt-1">Please enter the 6-digit code sent to {regEmail}. Check your spam folder.</p>
+                            <p className="text-xs text-violet-300/60 mt-1">
+                                Please enter the 6-digit code sent to {mode === 'verify-otp' ? regEmail : resetEmail}. Check your spam folder.
+                            </p>
                         </div>
                     </div>
 
