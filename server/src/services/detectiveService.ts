@@ -63,7 +63,7 @@ export const detectiveService = {
             const client = getGroqClient();
             const completion = await client.chat.completions.create({
                 messages: [{ role: 'system', content: prompt }],
-                model: 'llama-3.1-70b-versatile', // Stronger model for analysis
+                model: 'llama-3.3-70b-versatile', // Stronger model for analysis
                 temperature: 0.1, // Deterministic
                 response_format: { type: 'json_object' }
             });
