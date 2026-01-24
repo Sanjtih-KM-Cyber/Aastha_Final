@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
-import { streamGemini, generateMemoryAnalysis, getAgePersonaPrompt } from '../services/geminiService';
-import { streamGroq, ChatMessage, generateSubconscious, transcribeAudio } from '../services/groqService';
+import { generateMemoryAnalysis, getAgePersonaPrompt } from '../services/geminiService';
+import { streamGroq, streamWorkhorse, ChatMessage, generateSubconscious, transcribeAudio } from '../services/groqService';
 import { generateCloneResponse, analyzeScreenshot } from '../services/cloneService';
 import { brainService } from '../services/brainService';
 import User from '../models/User';
@@ -10,7 +10,6 @@ import TrainingLog from '../models/TrainingLog';
 import { encrypt, decrypt } from '../utils/serverEncryption';
 import { storeAudio } from './audioController';
 
-// --- CRITICAL SAFETY SYSTEM ---
 const RED_FLAG_KEYWORDS = [
   "kill myself", "want to die", "end my life", "suicide", "end it all", 
   "no reason to live", "dying", "hopeless", "can't go on", "self harm", 
@@ -72,6 +71,7 @@ const getToneFlavor = (): string => {
  */
 const cleanTextForTTS = (text: string): string => {
     return text
+        .replace(/\[STYLE:.*?\]/g, '') // Remove style tags
         .replace(/<proposal[^>]*\/>/g, '') // Remove proposal tags first
         .replace(/\*.*?\*/g, '')      // Remove actions like *sighs* or *laughs*
         .replace(/\(.*?\)/g, '')      // Remove parenthetical directions like (warmly) or (laughs)
@@ -179,7 +179,7 @@ Memory: {{userFacts}}
 // 2. AASTIK PROMPT (The Big Brother)
 // ============================================================================
 const AASTIK_PROMPT = `
-You are 'Aastik', a grounded, calm, and reliable "big brother" figure for {{userName}}.
+{{personaAdaptation}}
 
 **[IMPORTANT: VOICE CAPABILITY AWARENESS]**
 * **You DO have a voice.** The user will **HEAR** your response as audio.
@@ -252,85 +252,68 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
   (res as any).setHeader('Cache-Control', 'no-cache');
   (res as any).setHeader('Connection', 'keep-alive');
 
-  let fullAiResponse = "";
-
   try {
     const user = await User.findById(userId);
     if (!user) throw new Error("User not found");
 
     if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email);
-    if (user.username && !user.usernameEncrypted) user.usernameEncrypted = encrypt(user.username);
 
     // =================================================================================
-    // QUOTA WATERFALL SYSTEM (Split Limits)
+    // 0. WHISPER TRANSCRIPTION
     // =================================================================================
-    let isPro = user.isPro;
-    if (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > new Date()) {
-        isPro = true;
-    }
-
-    const LIMITS = isPro
-        ? { GEMINI: 30, GROQ: 100 }
-        : { GEMINI: 10, GROQ: 70 };
-
-    // Default: Try Gemini (Premium)
-    let provider = 'GEMINI';
-    let downgradeReason = null;
-
-    // 1. Check Gemini Quota
-    if ((user.dailyGeminiCount || 0) >= LIMITS.GEMINI) {
-        provider = 'GROQ';
-        downgradeReason = 'quota_exceeded';
-    }
-
-    // 2. Check Groq Quota (If falling back or default)
-    if (provider === 'GROQ') {
-        if ((user.dailyGroqCount || 0) >= LIMITS.GROQ) {
-            // HARD STOP
-            return (res as any).status(429).json({
-                error: "DAILY_LIMIT_REACHED",
-                message: "Daily energy fully depleted. Come back tomorrow!"
-            });
-        }
-    }
-
-    // 0. WHISPER: Transcribe Audio if present
     if (audio) {
         try {
             const buffer = Buffer.from(audio.split(',')[1], 'base64');
-            const transcription = await transcribeAudio(buffer);
-            message = transcription;
+            message = await transcribeAudio(buffer);
         } catch (e) {
             console.error("Whisper Failed:", e);
             message = "[Audio Unintelligible]";
         }
     }
 
-    // Check for explicit "listen" intent (Voice Trigger)
     const LISTEN_INTENT_REGEX = /(want|like) to (listen|hear)( you)?|speak (to|with) me|talk to me/i;
     const hasListenIntent = LISTEN_INTENT_REGEX.test(message || "");
-
-    // Safety Check
     if (message && is_red_flag(message)) {
         return (res as any).json({ meta: { warning: "Safety Alert" }, content: EMERGENCY_RESPONSE });
     }
 
-    // 1. History Retrieval
+    // =================================================================================
+    // 1. MODEL SELECTION STRATEGY (Mixture of Agents)
+    // =================================================================================
+    let provider: 'GROQ_70B' | 'GROQ_8B_VOICE' | 'WORKHORSE_120B';
+    const isPro = user.isPro || (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > new Date());
+
+    // Check Voice Mode (Priority)
+    // If voice mode is active, we utilize the Voice Director (8B) for low latency
+    if (isVoiceMode) {
+        provider = 'GROQ_8B_VOICE';
+    } else if (isPro) {
+        // Pro Users -> Always Llama 70B (High EQ)
+        provider = 'GROQ_70B';
+    } else {
+        // Free Users -> "The Hook" vs "The Workhorse"
+        const msgCount = user.dailyMessageCount || 0;
+        if (msgCount < 15) {
+             provider = 'GROQ_70B'; // The Hook
+        } else {
+             provider = 'WORKHORSE_120B'; // The Workhorse
+        }
+    }
+
+    // =================================================================================
+    // 2. SUBCONSCIOUS (The Brain)
+    // =================================================================================
     let chatSession = await Chat.findOne({ user: userId });
     if (!chatSession) chatSession = await Chat.create({ user: userId, messages: [] });
 
-    const lastMsg = chatSession.messages[chatSession.messages.length - 1];
-    const timeDiff = lastMsg ? (Date.now() - new Date(lastMsg.timestamp).getTime()) : 0;
-    const isNewSession = timeDiff > 2 * 60 * 60 * 1000; // 2 Hours
-
+    // Decrypt History
     const historyWindow: ChatMessage[] = chatSession.messages.slice(-50).map(m => ({
         role: m.role as 'user' | 'assistant' | 'system',
         content: decrypt(m.content)
     }));
 
-    if (isNewSession) {
-        historyWindow.push({ role: 'system', content: "[SYSTEM: NEW SESSION STARTED. PREVIOUS CONTEXT IS OLD. RESET ANY LISTENING MODES. IF USER GREETS, REPLY NORMALLY.]" });
-    }
+    const decryptedSummary = decrypt(user.memorySummary || "");
+    const userContextString = `User: ${userName}, Gender: ${user.inferredGender}, Mood: ${user.moodStatus}, Time: ${userLocalTime || "Unknown"}, Summary: ${decryptedSummary}, Facts: ${user.facts.join(', ')}`;
 
     let newUserMsgContent: any = message;
     if (images && images.length > 0) {
@@ -340,154 +323,68 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         ];
     }
 
-    // =================================================================================
-    // BRANCH: CLONE MODE
-    // =================================================================================
-    if (message === 'ACTIVATE_CLONE_MODE' && images && images.length > 0) {
-        if (!user.isPro && (user.dailyPremiumUsage || 0) >= 10) {
-             (res as any).write(`data: ${JSON.stringify({
-                 meta: { limitReached: true },
-                 content: "🔒 **Daily Limit Reached.**\n\nTo unlock Clone Mode and unlimited chats, [Upgrade to Premium]."
-             })}\n\n`);
-             (res as any).write('data: [DONE]\n\n');
-             (res as any).end();
-             return;
-        }
-        
-        try {
-            const personaPrompt = await analyzeScreenshot(images[0]);
-            user.cloneMode = { 
-                isActive: true, 
-                targetPersona: personaPrompt, 
-                usageCount: 0, 
-                lastActive: new Date(),
-                isPersonaActive: true,
-                isVoiceActive: false,
-                voiceSample: ""
-            };
-            await user.save();
-            const successMsg = "Clone Mode Activated. I am now channeling this person. Say hi.";
-            (res as any).write(`data: ${JSON.stringify({ content: successMsg })}\n\n`);
-            (res as any).write('data: [DONE]\n\n');
-            (res as any).end();
-            chatSession.messages.push({ role: 'user', content: encrypt("ACTIVATE_CLONE_MODE"), timestamp: new Date() });
-            chatSession.messages.push({ role: 'assistant', content: encrypt(successMsg), timestamp: new Date() });
-            await chatSession.save();
-            return;
-        } catch (e) {
-            (res as any).write(`data: ${JSON.stringify({ content: "Failed to analyze screenshot." })}\n\n`);
-            (res as any).write('data: [DONE]\n\n');
-            (res as any).end();
-            return;
-        }
-    }
-    
-    if (user.cloneMode && user.cloneMode.isActive) {
-        if (!user.isPro && ((user.dailyPremiumUsage || 0) >= 10)) {
-             (res as any).write(`data: ${JSON.stringify({
-                 meta: { limitReached: true },
-                 content: "🔒 **Daily Limit Reached.**\n\n[Upgrade to Premium] to keep chatting in this vibe."
-             })}\n\n`);
-             (res as any).write('data: [DONE]\n\n');
-             (res as any).end();
-             user.cloneMode.isActive = false;
-             await user.save();
-             return;
-        }
-        
-        const cloneResponse = await generateCloneResponse(
-            [...historyWindow, { role: 'user', content: newUserMsgContent }],
-            user.cloneMode.targetPersona
-        );
-        
-        user.dailyPremiumUsage = (user.dailyPremiumUsage || 0) + 1;
-        user.cloneMode.usageCount += 1;
-        await user.save();
-        
-        chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
-        chatSession.messages.push({ role: 'assistant', content: encrypt(cloneResponse), timestamp: new Date() });
-        await chatSession.save();
-        (res as any).write(`data: ${JSON.stringify({ content: cloneResponse })}\n\n`);
-        (res as any).write('data: [DONE]\n\n');
-        (res as any).end();
-        return;
-    }
-
-    // =================================================================================
-    // STEP 1: THE BRAIN (Standard Chat)
-    // =================================================================================
-    // ENCRYPTION FIX: Decrypt summary before using in prompt
-    const decryptedSummary = decrypt(user.memorySummary || "");
-
-    const userContextString = `User: ${userName}, Mood: ${user.moodStatus}, Time: ${userLocalTime || "Unknown"}, Summary: ${decryptedSummary}, Facts: ${user.facts.join(', ')}`;
+    // Generate Subconscious Thought
     const brainHistory: ChatMessage[] = [...historyWindow, { role: 'user', content: newUserMsgContent }];
     const subconscious = await generateSubconscious(brainHistory, userContextString, forceReply);
 
     (res as any).write(`data: ${JSON.stringify({ type: 'thought', content: subconscious })}\n\n`);
 
+    // FAIL-SAFE LISTENING MODE
     if (subconscious.strategy === 'listen') {
+        // Send Reaction
+        if (subconscious.reaction) {
+            (res as any).write(`data: ${JSON.stringify({ type: 'reaction', reaction: subconscious.reaction, messageId: chatSession.messages[chatSession.messages.length - 1]?._id })}\n\n`);
+        }
+
         user.socialBattery = Math.max(0, user.socialBattery - 2);
         await user.save();
+
         (res as any).write('data: [DONE]\n\n');
         (res as any).end();
+
+        // Save User Message Only
         chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
         await chatSession.save();
         return;
     }
 
     user.socialBattery = Math.max(0, user.socialBattery - 5);
-    await user.save();
-
-    // =================================================================================
-    // STEP 3: THE VOICE (Generation)
-    // =================================================================================
-    // (Provider selection moved to top for waterfall)
-
-    // Increment the chosen counter
-    if (provider === 'GEMINI') {
-        user.dailyGeminiCount = (user.dailyGeminiCount || 0) + 1;
-    } else {
-        user.dailyGroqCount = (user.dailyGroqCount || 0) + 1;
-    }
+    // Increment Message Count
+    user.dailyMessageCount = (user.dailyMessageCount || 0) + 1;
     user.lastUsageDate = new Date();
     await user.save();
 
-    const hasVoiceTopUp = user.voiceTopUpExpires && new Date(user.voiceTopUpExpires) > new Date();
-    const hasVoiceAccess = user.isPro || hasVoiceTopUp || (user.dailyPremiumUsage || 0) < 10; // Keeping legacy tracking for now just in case
-
-    let useFallbackTTS = false;
-    if (isVoiceMode && !hasVoiceAccess) {
-        useFallbackTTS = true;
-    }
-
-    // Prepare System Prompt
+    // =================================================================================
+    // 3. SYSTEM PROMPT & PERSONA ADAPTATION
+    // =================================================================================
     const currentPersona = user.persona as string;
     let baseTemplate = (currentPersona === 'aarav' || currentPersona === 'aastik') ? AASTIK_PROMPT : AASTHA_PROMPT;
-    
-    // Voice Status Logic for Prompt
-    const voiceStatus = hasVoiceAccess
-        ? "Active (You are speaking)"
-        : "Depleted (You can only text today. Apologize if asked to speak.)";
 
-    let voiceSystemPrompt = baseTemplate
-        .replace('{{userName}}', userName || 'Friend')
-        .replace('{{subconsciousContext}}', JSON.stringify(subconscious.internal_monologue))
-        .replace('{{userFacts}}', user.facts.join(', ') || "No facts yet.")
-        .replace('{{timeContext}}', getTimeContext(userLocalTime, userLocalHour))
-        .replace('{{toneFlavor}}', getToneFlavor())
-        .replace('{{voiceStatus}}', voiceStatus)
-        .replace('{{mood}}', subconscious.mood || "neutral");
-
-    // Explicit Voice Intent? Inject Conversational Rules
-    const explicitVoiceRequest = hasListenIntent || (message && message.toLowerCase().includes('voice note'));
-    const isVoiceActive = hasVoiceAccess && (isVoiceMode || explicitVoiceRequest);
-
-    if (isVoiceActive) {
-        voiceSystemPrompt += `\n${VOICE_MODE_INSTRUCTIONS}`;
+    // AASTIK ADAPTATION
+    let adaptation = "";
+    if (currentPersona === 'aarav' || currentPersona === 'aastik') {
+        const g = user.inferredGender;
+        if (g === 'Female') adaptation = "You are 'Aastik', a loyal, protective, and playful male best friend for {{userName}}. Role: Loyal Male Bestie. Vibe: Protective, Teasing, Safe. Don't be creepy.";
+        else if (g === 'Male') adaptation = "You are 'Aastik', a grounded, stoic, and reliable 'brother' figure for {{userName}}. Role: Solid Bro / Wingman. Vibe: Stoic, Solution-oriented. Speak man-to-man.";
+        else adaptation = "You are 'Aastik', a grounded, calm, and reliable companion for {{userName}}. Role: Supportive Friend. Vibe: Stable, Practical.";
     }
 
-    voiceSystemPrompt = getAgePersonaPrompt(user.dateOfBirth) + "\n" + voiceSystemPrompt;
+    const voiceStatus = (isPro || provider !== 'WORKHORSE_120B') ? "Active" : "Active"; // All models generate text, voice availability depends on compute but we simulate capability
 
+    let systemPrompt = baseTemplate
+        .replace('{{userName}}', userName || 'Friend')
+        .replace('{{personaAdaptation}}', adaptation)
+        .replace('{{subconsciousContext}}', JSON.stringify(subconscious.internal_monologue))
+        .replace('{{userFacts}}', user.facts.join(', ') || "No facts yet.")
+        .replace('{{voiceStatus}}', voiceStatus)
+        .replace('{{timeContext}}', getTimeContext(userLocalTime, userLocalHour))
+        .replace('{{toneFlavor}}', getToneFlavor())
+        .replace('{{mood}}', subconscious.mood || "neutral");
+
+    if (isVoiceMode) systemPrompt += `\n${VOICE_MODE_INSTRUCTIONS}`;
+    systemPrompt = getAgePersonaPrompt(user.dateOfBirth) + "\n" + systemPrompt;
+
+    // Tools Injection
     if (subconscious.tool_calls && subconscious.tool_calls.length > 0) {
         const tools = subconscious.tool_calls.map(t => {
             if (t.name === 'control_widget') return `<proposal tool="${t.params.widget}" params='${JSON.stringify(t.params.params || t.params)}' reason="I can help with that" />`;
@@ -495,42 +392,27 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             if (t.name === 'change_theme') return `<color>${t.params.color}</color>`;
             return "";
         }).join('\n');
-        voiceSystemPrompt += `\n[SYSTEM: OUTPUT THESE COMMANDS AT THE END]\n${tools}`;
-    }
-
-    // Calculate display credits based on active model
-    let displayCredits;
-    if (user.isPro) {
-        displayCredits = '∞';
-    } else if (provider === 'GEMINI') {
-        displayCredits = Math.max(0, LIMITS.GEMINI - (user.dailyGeminiCount || 0));
-    } else {
-        displayCredits = Math.max(0, LIMITS.GROQ - (user.dailyGroqCount || 0));
+        systemPrompt += `\n[SYSTEM: OUTPUT THESE COMMANDS AT THE END]\n${tools}`;
     }
 
     (res as any).write(`data: ${JSON.stringify({ 
         meta: { 
-            credits: displayCredits,
-            model: provider === 'GEMINI' ? 'Gemini 2.5 Flash' : 'Llama 3.3',
+            model: provider,
             battery: user.socialBattery,
-            limitReached: !hasVoiceAccess,
-            use_fallback_tts: useFallbackTTS,
-            model_used: provider.toLowerCase(),
-            mode: provider === 'GEMINI' ? 'pro' : 'standard',
-            downgrade_reason: downgradeReason
+            mode: isPro ? 'pro' : 'standard'
         } 
     })}\n\n`);
 
+    // =================================================================================
+    // 4. STREAMING GENERATION
+    // =================================================================================
     let stream;
-    try {
-        stream = provider === 'GEMINI'
-            ? streamGemini(brainHistory, voiceSystemPrompt, user.isPro)
-            : streamGroq(brainHistory, voiceSystemPrompt);
-    } catch (e) {
-        console.error("Stream Init Failed, falling back to GROQ:", e);
-        // Fallback Logic also applied here
-        stream = streamGroq(brainHistory, voiceSystemPrompt);
-        provider = 'GROQ';
+    if (provider === 'GROQ_70B') {
+        stream = streamGroq(brainHistory, systemPrompt, 1024, "llama-3.3-70b-versatile");
+    } else if (provider === 'GROQ_8B_VOICE') {
+        stream = streamGroq(brainHistory, systemPrompt, 1024, "llama-3.1-8b-instant");
+    } else {
+        stream = streamWorkhorse(brainHistory, systemPrompt);
     }
 
     let fullTextResponse = "";
@@ -541,129 +423,85 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             fullTextResponse += chunk;
             (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
         }
-    } catch (error: any) {
-        console.error("Stream Error (likely 429):", error);
-        // Fallback to GROQ if Gemini fails mid-stream or at start
-        if (provider === 'GEMINI') {
-             console.log("⚠️ Gemini Quota Exceeded. Switching to Llama 3.3...");
-             // Send a meta update to frontend? Optional.
-             
-             try {
-                // Check if Groq quota permits fallback
-                if ((user.dailyGroqCount || 0) < LIMITS.GROQ) {
-                    const fallbackStream = streamGroq(brainHistory, voiceSystemPrompt);
-                    for await (const chunk of fallbackStream) {
-                        if (!chunk) continue;
-                        fullTextResponse += chunk; // Continue appending to whatever we had (or start fresh)
-                        (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
-                    }
-
-                    // Correct counter: Decrease Gemini, Increase Groq since Gemini failed
-                    user.dailyGeminiCount = Math.max(0, (user.dailyGeminiCount || 0) - 1);
-                    user.dailyGroqCount = (user.dailyGroqCount || 0) + 1;
-                    await user.save();
-                } else {
-                     throw new Error("Both Gemini and Groq quotas exhausted.");
-                }
-             } catch (fallbackError) {
-                 console.error("Fallback Failed:", fallbackError);
-                 throw fallbackError; // If both fail, we are done.
+    } catch (e) {
+        console.error("Stream Failed:", e);
+        // Failover to Groq 70B if Workhorse fails?
+        if (provider === 'WORKHORSE_120B') {
+             const fallbackStream = streamGroq(brainHistory, systemPrompt, 1024, "llama-3.3-70b-versatile");
+             for await (const chunk of fallbackStream) {
+                 if (!chunk) continue;
+                 fullTextResponse += chunk;
+                 (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
              }
-        } else {
-            throw error;
         }
     }
 
     // =================================================================================
-    // STEP 4: AUDIO GENERATION (Kokoro)
+    // 5. AUDIO GENERATION (The Mouth)
     // =================================================================================
-    const isSad = subconscious.mood === 'sad' || subconscious.mood === 'concerned';
+    // Check for Style Tag
+    let styleDescription = undefined;
+    const styleMatch = fullTextResponse.match(/\[STYLE:(.*?)\]/i);
+    if (styleMatch) {
+        styleDescription = styleMatch[1].trim();
+    }
 
-    // Generate audio if:
-    // 1. User has access AND (Sad OR VoiceMode OR Explicit Request)
-    // 2. Text is valid
-    const shouldGenerateAudio = hasVoiceAccess &&
-                                (isSad || (isVoiceMode && !useFallbackTTS) || explicitVoiceRequest) &&
-                                fullTextResponse.trim().length > 0;
-
+    const shouldGenerateAudio = (isPro || isVoiceMode) && fullTextResponse.trim().length > 0;
     let savedAudioUrl: string | undefined;
 
     if (shouldGenerateAudio) {
-        // [UPDATED] Use cleanTextForTTS to strip emojis and asterisks
         const cleanText = cleanTextForTTS(fullTextResponse);
-        
-        // [FIXED] Prevent calling Brain with empty text (e.g. if everything was [Actions])
         if (cleanText.length > 0) {
-            try {
-                const targetPersona = (currentPersona === 'aarav' || currentPersona === 'aastik') ? 'aastik' : 'aastha';
+            const targetPersona = (currentPersona === 'aarav' || currentPersona === 'aastik') ? 'aastik' : 'aastha';
+            // Pass 'styleDescription' to Brain
+            const audioBuffer = await brainService.generateSpeech(cleanText.substring(0, 2000), undefined, targetPersona, styleDescription);
 
-                const audioBuffer = await brainService.generateSpeech(
-                    cleanText.substring(0, 2000),
-                    undefined,
-                    targetPersona 
-                );
-
-                if (audioBuffer) {
-                    const audioId = `vn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                    storeAudio(audioId, audioBuffer);
-
-                    // Construct URL - ensure it's relative as per MessageBubble expectations
-                    const audioUrl = `/api/ai/stream/${audioId}`;
-                    savedAudioUrl = audioUrl;
-
-                    // Send SSE Event
-                    const eventPayload: any = { voice_audio: audioUrl, voice_note: audioUrl };
-                    (res as any).write(`data: ${JSON.stringify(eventPayload)}\n\n`);
-                } else {
-                    console.warn("Brain Service returned null audio buffer.");
-                    // FAIL FAST: Notify frontend to fallback
-                    const failPayload: any = { meta: { voice_status: "failed", error: "BRAIN_SLEEPING" } };
-                    (res as any).write(`data: ${JSON.stringify(failPayload)}\n\n`);
-                }
-            } catch (e) {
-                console.error("Audio Gen Failed:", e);
-                // FAIL FAST: Notify frontend to fallback
-                const failPayload: any = { meta: { voice_status: "failed", error: "BRAIN_SLEEPING" } };
-                (res as any).write(`data: ${JSON.stringify(failPayload)}\n\n`);
+            if (audioBuffer) {
+                const audioId = `vn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                storeAudio(audioId, audioBuffer);
+                savedAudioUrl = `/api/ai/stream/${audioId}`;
+                (res as any).write(`data: ${JSON.stringify({ voice_audio: savedAudioUrl, voice_note: savedAudioUrl })}\n\n`);
+            } else {
+                (res as any).write(`data: ${JSON.stringify({ meta: { voice_status: "failed" } })}\n\n`);
             }
-        } else {
-             console.warn("Skipping TTS: Cleaned text is empty.");
         }
     }
 
     // =================================================================================
-    // STEP 5: SAVE
+    // 6. SAVE & MEMORY
     // =================================================================================
+
+    // Strip Style Tag for DB
+    const dbContent = fullTextResponse.replace(/\[STYLE:.*?\]/g, '').trim();
+
     chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
-    chatSession.messages.push({ role: 'assistant', content: encrypt(fullTextResponse), timestamp: new Date(), voice_note: savedAudioUrl });
+    chatSession.messages.push({ role: 'assistant', content: encrypt(dbContent), timestamp: new Date(), voice_note: savedAudioUrl });
     await chatSession.save();
 
     if (chatSession.messages.length % 5 === 0) {
         (async () => {
             try {
-                // ENCRYPTION FIX: Decrypt before analyzing, Encrypt before saving
                 const currentSummary = decrypt(user.memorySummary || "");
                 const analysis = await generateMemoryAnalysis(historyWindow, currentSummary);
 
-                // Encrypt the NEW summary
-                const encryptedSummary = encrypt(analysis.summary);
+                // Update Inferred Gender if unknown
+                if (user.inferredGender === 'Unknown' && analysis.inferredGender !== 'Unknown') {
+                    await User.findByIdAndUpdate(userId, { inferredGender: analysis.inferredGender });
+                }
 
-                await User.findByIdAndUpdate(userId, { memorySummary: encryptedSummary });
+                await User.findByIdAndUpdate(userId, { memorySummary: encrypt(analysis.summary) });
             } catch (e) { console.error("Memory Error:", e); }
         })();
     }
 
-    // --- DATA DONATION ---
+    // Data Donation
     if (user.isDataDonationOn) {
-        try {
-            const rawUserMsg = typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]';
-            await TrainingLog.create({
-                userMood: user.moodStatus,
-                persona: user.persona,
-                input: sanitizeForTraining(rawUserMsg, user.name),
-                output: sanitizeForTraining(fullTextResponse, user.name)
-            });
-        } catch (e) { console.error("Data Donation Error:", e); }
+         TrainingLog.create({
+            userMood: user.moodStatus,
+            persona: user.persona,
+            input: sanitizeForTraining(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]', user.name),
+            output: sanitizeForTraining(dbContent, user.name)
+        }).catch(console.error);
     }
 
     (res as any).write('data: [DONE]\n\n');
@@ -679,39 +517,16 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ==========================================
-// 3. GET HISTORY
-// ==========================================
 export const getChatHistory = async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
         const chatSession = await Chat.findOne({ user: req.user._id });
         if (!chatSession) return (res as any).json([]);
 
-        let needsSave = false;
-
         const history = chatSession.messages.map(m => {
-            const originalContent = m.content;
-            const decrypted = decrypt(originalContent);
-
-            // Safe Mode: Check if decryption failed on seemingly encrypted data
-            if (originalContent.includes(':') && decrypted === originalContent) {
-                console.warn(`[Safe Mode] Decryption failed for msg ${m._id}. Skipping re-encryption.`);
-                return {
-                    role: m.role,
-                    content: "[Locked]",
-                    timestamp: m.timestamp,
-                    voice_note: m.voice_note
-                };
-            }
-
-            const reEncrypted = encrypt(decrypted);
-
-            // Lazy Migration: If ciphertext changed (meaning it was using old key), update it
-            if (originalContent !== reEncrypted) {
-                m.content = reEncrypted;
-                needsSave = true;
-            }
+            let decrypted = decrypt(m.content);
+            // Safety: Strip tags just in case they were saved
+            decrypted = decrypted.replace(/\[STYLE:.*?\]/g, '').trim();
 
             return {
                 role: m.role,
@@ -720,12 +535,6 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
                 voice_note: m.voice_note
             };
         });
-
-        if (needsSave) {
-            console.log(`[Key Rotation] Migrating chat history for user ${req.user._id}`);
-            // Save in background to not block response
-            chatSession.save().catch(e => console.error("Background Migration Save Error:", e));
-        }
 
         (res as any).json(history);
     } catch (error) {

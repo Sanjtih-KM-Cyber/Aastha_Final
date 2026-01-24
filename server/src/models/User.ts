@@ -133,6 +133,10 @@ export interface IUser extends Document {
   cloneMode: ICloneMode;
   voiceHugs: IVoiceHugs;
   faceTags: Map<string, string>; // faceId -> personId (For "The Eyes")
+
+  // --- ARCHITECTURE V2 ---
+  inferredGender: 'Male' | 'Female' | 'Unknown';
+  dailyMessageCount: number;
 }
 
 const securityQuestionSchema = new Schema({
@@ -263,7 +267,11 @@ const userSchema = new Schema<IUser>({
   socialBattery: { type: Number, default: 100, min: 0, max: 100 },
   cloneMode: { type: cloneModeSchema, default: () => ({ isActive: false, isPersonaActive: true, isVoiceActive: true, targetPersona: '', usageCount: 0 }) as any },
   voiceHugs: { type: voiceHugsSchema, default: () => ({ count: 0, lastReset: Date.now() }) as any },
-  faceTags: { type: Map, of: String, default: {} }
+  faceTags: { type: Map, of: String, default: {} },
+
+  // --- ARCHITECTURE V2 ---
+  inferredGender: { type: String, enum: ['Male', 'Female', 'Unknown'], default: 'Unknown' },
+  dailyMessageCount: { type: Number, default: 0 }
 }, {
   timestamps: true,
 });

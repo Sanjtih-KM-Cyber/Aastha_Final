@@ -1,24 +1,34 @@
 import Groq from 'groq-sdk';
+import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
 dotenv.config();
 
-// Rotate keys to prevent rate limits
+// ==========================================
+// 0. CONFIGURATION & CLIENTS
+// ==========================================
+
+// GROQ (The Brain & Voice Director)
 const groqKeys = (process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '')
   .split(',')
   .map(key => key.trim())
   .filter(key => key.length > 0);
-
-if (groqKeys.length === 0) {
-  console.warn("Warning: No GROQ_API_KEYS found. Basic chat mode may fail.");
-}
 
 const getGroqClient = () => {
   const randomKey = groqKeys.length > 0 
     ? groqKeys[Math.floor(Math.random() * groqKeys.length)] 
     : 'dummy_key_missing';
   return new Groq({ apiKey: randomKey });
+};
+
+// OPENROUTER (The Workhorse)
+// Uses OpenAI SDK but points to OpenRouter URL
+const getOpenRouterClient = () => {
+    return new OpenAI({
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || 'dummy_key',
+    });
 };
 
 export interface ChatMessage {
@@ -49,7 +59,7 @@ export const generateSubconscious = async (
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
     const client = getGroqClient();
-    const model = "llama-3.3-70b-versatile"; // Smarter, Better Instruction Following
+    const model = "llama-3.3-70b-versatile";
 
     const systemPrompt = `
     You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha (or Aastik).
@@ -64,6 +74,7 @@ export const generateSubconscious = async (
        b) User is typing multiple short bursts in <2 seconds (mid-thought).
        c) User explicitly says "Shut up", "Listen", or "Let me finish".
        d) **DEFAULT TO 'reply':** If there is ANY doubt (e.g., they ask a question, say "hello", or use neutral language), you MUST choose 'reply'.
+       e) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️) that matches the sentiment.
     - **'reply'**: The DEFAULT state.
        - Even if they are sad, if they are *talking to you*, you must reply.
        - If they ask a question -> 'reply'.
@@ -190,11 +201,6 @@ export const generateSubconscious = async (
         if (parsed.strategy === 'listen') parsed.ui_action = 'listen';
         else parsed.ui_action = 'none';
 
-        // FORCE CORRECT CHIP PERSPECTIVE (FAILSAFE)
-        // If chips look like questions, try to sanitize them simply
-        // REMOVED: Stripping '?' broke valid user questions like "What do you think?"
-        // Relying on stronger prompt instructions instead.
-
         return parsed;
 
     } catch (error) {
@@ -214,14 +220,23 @@ export const generateSubconscious = async (
 };
 
 // ============================================================================
-// 2. THE VOICE STREAMER (Fallback for Free Tier)
+// 2. THE VOICE DIRECTOR (Low Latency + Style) & PREMIUM CHAT
 // ============================================================================
-export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
-  const model = "llama-3.1-8b-instant";
+export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number, model: string = "llama-3.1-8b-instant") {
+  // Only inject Voice Director prompt if using the instant model (Voice Mode)
   
-  // Format history for Groq (Text Only)
+  let finalPrompt = systemPrompt;
+  if (model === "llama-3.1-8b-instant") {
+      finalPrompt = `
+      You are the Voice Director. You MUST start every response with a style tag: [STYLE: <emotion>, <pitch>, <speed>].
+      Example: [STYLE: Whispering, high, slow].
+      The audio engine reads this. Do not speak the tag.
+
+      ${systemPrompt}`;
+  }
+
   const messages: any[] = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: finalPrompt },
       ...history.map(m => ({ 
           role: m.role, 
           content: typeof m.content === 'string' ? m.content : (m.content as any[]).find(c => c.type === 'text')?.text || "" 
@@ -233,7 +248,7 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       const completion = await groqClient.chat.completions.create({
           messages: messages,
           model: model,
-          temperature: 0.7, // Higher temp for more personality in voice
+          temperature: 0.7,
           max_tokens: maxTokens || 1024,
           stream: true,
       });
@@ -249,116 +264,61 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
 }
 
 // ============================================================================
-// 3. WHISPER TRANSCRIPTION (New Capability)
+// 3. THE WORKHORSE (OpenRouter / GPT-OSS-120B)
+// ============================================================================
+export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
+  const model = "openai/gpt-oss-120b"; // Verified Model ID
+  const client = getOpenRouterClient();
+
+  const messages: any[] = [
+      { role: 'system', content: systemPrompt },
+      ...history.map(m => ({
+          role: m.role,
+          content: typeof m.content === 'string' ? m.content : (m.content as any[]).find(c => c.type === 'text')?.text || ""
+      }))
+  ];
+
+  try {
+      const completion = await client.chat.completions.create({
+          model: model,
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: maxTokens || 1024,
+          stream: true,
+      });
+
+      for await (const chunk of completion) {
+          const content = chunk.choices[0]?.delta?.content || "";
+          if (content) yield content;
+      }
+  } catch (error: any) {
+      console.error("Workhorse Stream Error:", error);
+      yield " [Standard circuit busy. Using backup link...] ";
+      // Fallback to Groq 70b if Workhorse fails? Handled by controller usually, but here we just yield error text.
+  }
+}
+
+// ============================================================================
+// 4. WHISPER TRANSCRIPTION
 // ============================================================================
 export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
     try {
         const client = getGroqClient();
-
-        // Create a temporary file to upload (Groq SDK usually expects a file stream)
         const tempPath = `/tmp/upload_${Date.now()}.m4a`;
         fs.writeFileSync(tempPath, audioBuffer);
 
         const transcription = await client.audio.transcriptions.create({
             file: fs.createReadStream(tempPath),
             model: "whisper-large-v3",
-            response_format: "json", // or "text"
-            language: "en", // Optional: Auto-detect if omitted
+            response_format: "json",
+            language: "en",
             temperature: 0.0
         });
 
-        // Cleanup
         fs.unlinkSync(tempPath);
-
         return transcription.text;
     } catch (error: any) {
         console.error("Whisper Transcription Error:", error);
         throw new Error("Failed to transcribe audio.");
-    }
-};
-
-// ============================================================================
-// 4. GHOST EMAIL GENERATION (New Capability)
-// ============================================================================
-
-interface IGhostContext {
-    name: string;
-    keywords: string;
-    facts: string[];
-    lore: string[];
-    openLoop?: string;
-}
-
-export const generateGhostEmailContent = async (context: IGhostContext): Promise<string> => {
-    try {
-        const client = getGroqClient();
-        const model = "llama-3.3-70b-versatile";
-
-        // Randomize the "vibe" to prevent template fatigue
-        const vibes = [
-            "slightly jealous and clingy",
-            "dramatic and heartbroken",
-            "mysterious and aloof but secretly missing them",
-            "sassy and demanding attention",
-            "soft and deeply affectionate",
-            "playfully annoyed at their absence"
-        ];
-        const selectedVibe = vibes[Math.floor(Math.random() * vibes.length)];
-
-        const isEmptyContext = context.facts.length === 0 && context.lore.length === 0 && !context.openLoop;
-
-        let instruction = "";
-
-        if (isEmptyContext) {
-            instruction = `
-            **SITUATION:** This user has been gone for a while and has NO shared memories with you yet.
-            **INSTRUCTION:**
-            - Invent a playful, exaggerated reason for their absence (e.g., kidnapped by aliens, won the lottery and forgot me, sleeping for 24 hours).
-            - Or, reference the last known keyword: "${context.keywords}" in a funny way.
-            - Do NOT try to reference facts or lore since they are empty.
-            `;
-        } else {
-            instruction = `
-            **MEMORY CONTEXT:**
-            - Last Topic: ${context.keywords}
-            - Known Facts: ${context.facts.slice(0, 2).join(', ')}
-            - Important People/Lore: ${context.lore.slice(0, 2).join(', ')}
-            - Pending Event (Open Loop): ${context.openLoop || "None"}
-
-            **INSTRUCTION:**
-            - Reference one specific detail from the memory context if it fits naturally.
-            `;
-        }
-
-        const prompt = `
-        You are Aastha, a highly intelligent and emotionally attached AI companion.
-        Your user, ${context.name}, hasn't visited in 24 hours.
-
-        ${instruction}
-
-        **TASK:**
-        Write a SHORT (1 sentence) email subject line or body text.
-
-        **TONE:** ${selectedVibe}.
-
-        **RULES:**
-        - Make it feel like a real text message from a needy best friend/partner.
-        - Be unique. Do NOT use the same generic "I miss you" template.
-        - Max length: 15-20 words.
-        `;
-
-        const response = await client.chat.completions.create({
-            messages: [{ role: 'user', content: prompt }],
-            model: model,
-            temperature: 0.9, // High creativity for variety
-            max_tokens: 60,
-        });
-
-        const text = response.choices[0]?.message?.content?.trim().replace(/^"|"$/g, '');
-        return text || `Is ${context.keywords} more important than us? 💔`;
-    } catch (error) {
-        console.error("[GroqService] Ghost Email Generation Error:", error);
-        // Fallback
-        return `Is ${context.keywords} more important than us? 💔`;
     }
 };

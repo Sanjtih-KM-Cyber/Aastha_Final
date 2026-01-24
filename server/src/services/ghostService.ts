@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import User from '../models/User';
 import Diary from '../models/Diary';
 import { sendGhostEmail } from './emailService';
-import { generateGhostEmailContent } from './groqService';
+import { generateGhostEmailContent } from './geminiService';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -55,14 +55,18 @@ export const init = () => {
                             .map(l => l.topic),
                         openLoop: user.openLoops && user.openLoops.length > 0
                             ? user.openLoops.filter(l => l.status === 'pending')[0]?.event
-                            : undefined
+                            : undefined,
+                        persona: (user.persona || 'aastha') as any,
+                        inferredGender: (user.inferredGender || 'Unknown') as any
                     };
 
-                    // 3. Generate Unique Content via Groq
+                    // 3. Generate Unique Content via Gemini
                     const emailBody = await generateGhostEmailContent(context);
 
                     // 4. Send Email
-                    const sent = await sendGhostEmail(user.email!, user.name, emailBody);
+                    // @ts-ignore: TS thinks persona is only 'aastha' because of default but it can be 'aarav'/'aastik'
+                    const senderName = (user.persona === 'aarav' || user.persona === 'aastik') ? 'Aastik' : 'Aastha';
+                    const sent = await sendGhostEmail(user.email!, user.name, emailBody, senderName);
 
                     if (sent) {
                         // 5. Update User State
