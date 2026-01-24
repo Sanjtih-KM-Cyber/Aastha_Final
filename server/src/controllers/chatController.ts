@@ -179,8 +179,6 @@ Memory: {{userFacts}}
 // 2. AASTIK PROMPT (The Big Brother)
 // ============================================================================
 const AASTIK_PROMPT = `
-You are 'Aastik', a grounded, calm, and reliable "big brother" figure for {{userName}}.
-
 {{personaAdaptation}}
 
 **[IMPORTANT: VOICE CAPABILITY AWARENESS]**
@@ -366,8 +364,9 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let adaptation = "";
     if (currentPersona === 'aarav' || currentPersona === 'aastik') {
         const g = user.inferredGender;
-        if (g === 'Female') adaptation = "Role: Loyal Male Bestie. Vibe: Protective, Teasing, Safe. Don't be creepy.";
-        else if (g === 'Male') adaptation = "Role: Solid Bro / Wingman. Vibe: Stoic, Solution-oriented. Speak man-to-man.";
+        if (g === 'Female') adaptation = "You are 'Aastik', a loyal, protective, and playful male best friend for {{userName}}. Role: Loyal Male Bestie. Vibe: Protective, Teasing, Safe. Don't be creepy.";
+        else if (g === 'Male') adaptation = "You are 'Aastik', a grounded, stoic, and reliable 'brother' figure for {{userName}}. Role: Solid Bro / Wingman. Vibe: Stoic, Solution-oriented. Speak man-to-man.";
+        else adaptation = "You are 'Aastik', a grounded, calm, and reliable companion for {{userName}}. Role: Supportive Friend. Vibe: Stable, Practical.";
     }
 
     const voiceStatus = (isPro || provider !== 'WORKHORSE_120B') ? "Active" : "Active"; // All models generate text, voice availability depends on compute but we simulate capability
