@@ -10,7 +10,6 @@ import { useSecurity } from './hooks/useSecurity';
 import { LoadingFallback } from './components/LoadingFallback';
 import { Login } from './components/auth/Login';
 import { Toaster } from 'react-hot-toast';
-import { TestVerification } from './components/TestVerification';
 
 // Lazy Load Pages
 // Note: We use the default export from the new Landing.tsx
@@ -57,8 +56,6 @@ const AppRoutes = () => {
 
         {/* New Login Component Handles Auth, Register, and Verification */}
         <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
-
-        <Route path="/test-verification" element={<TestVerification />} />
 
         {/* Protected Routes */}
         <Route
