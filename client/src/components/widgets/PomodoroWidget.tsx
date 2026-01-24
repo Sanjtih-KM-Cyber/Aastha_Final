@@ -109,8 +109,9 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
               // Only reset if duration changed significantly or user asked for it
               if (Math.abs(timeLeft - duration * 60) > 10) {
                   setTimeLeft(duration * 60);
-                  setIsActive(true); // Auto-start
               }
+              // Always auto-start if commanded by AI
+              setIsActive(true);
           }
       }
   }, [isOpen, initialParams]);
