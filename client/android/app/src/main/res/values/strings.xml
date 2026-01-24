@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Aastha EI</string>
+    <string name="title_activity_main">Aastha EI</string>
+    <string name="package_name">com.soullink.aastha</string>
+    <string name="custom_url_scheme">com.soullink.aastha</string>
+</resources>
