@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Copy, Reply, Sparkles, Wand2 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { VoiceNotePlayer } from './VoiceNotePlayer';
 
 interface MessageBubbleProps {
   role: 'user' | 'assistant' | 'system';
@@ -391,7 +392,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   {proposals.map((p, idx) => (
                       <button
                           key={idx}
-                          onClick={() => onOpenWidget?.(p.tool, p.params)}
+                          onClick={(e) => {
+                              e.stopPropagation(); // FIX: Prevent bubble click on mobile
+                              onOpenWidget?.(p.tool, p.params);
+                          }}
                           className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition-colors text-xs font-medium text-white/90"
                       >
                           <Wand2 size={12} className="text-teal-400" />
@@ -410,8 +414,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
           {/* VOICE NOTE PLAYER */}
           {voice_note && (
-             <div className="mt-3 mb-1 w-full max-w-[240px]">
-                <audio controls src={voice_note} className="w-full h-8 opacity-80" style={{ borderRadius: '16px' }} />
+             <div className="mt-3 mb-1 w-full">
+                <VoiceNotePlayer src={voice_note} />
              </div>
           )}
 
