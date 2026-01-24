@@ -287,7 +287,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               background: '#000'
             }}
           >
-             <img src="/logo.png" alt="Aastha" className="w-full h-full object-cover" />
+             <Sparkles size={18} style={{ color: moodColor }} />
           </div>
 
           {/* Mood Badge Overlay */}
@@ -368,11 +368,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               </div>
             </div>
           ) : (
+            visibleContent && (
             <div className="space-y-1" style={{ maxWidth: '100%', overflowWrap: 'anywhere' }}>
               {visibleContent.split('\n').map((line, i) => (
                 <p
                   key={i}
-                  className="text-white/95 font-light select-text"
+                  className="text-white/95 font-light"
                   style={{
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
@@ -384,6 +385,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </p>
               ))}
             </div>
+            )
           )}
 
           {/* SMART ACTION CHIPS */}

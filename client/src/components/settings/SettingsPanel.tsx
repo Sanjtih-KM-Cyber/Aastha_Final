@@ -9,8 +9,6 @@ import {
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLowPowerMode } from '../../hooks/useLowPowerMode';
-import { useBiometrics } from '../../hooks/useBiometrics';
-import { notificationService } from '../../services/notificationService';
 import api from '../../services/api';
 import { PersonaSettings } from './PersonaSettings'; // <--- Import New Component
 
@@ -81,9 +79,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   const [autoLockDuration, setAutoLockDuration] = useState<string>(() => {
       return localStorage.getItem('settings_autoLock') || '0';
   });
-
-  const { isAvailable: isBiometricAvailable, isEnabled: isBiometricEnabled, toggleBiometrics } = useBiometrics();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   
   // Subscription
   const [isProcessing, setIsProcessing] = useState(false);
@@ -141,17 +136,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       localStorage.setItem('settings_autoLock', val);
       // We also update the timestamp immediately to prevent immediate lock upon switching
       localStorage.setItem('auth_last_active', Date.now().toString());
-  };
-
-  const toggleNotifications = async () => {
-      if (!notificationsEnabled) {
-          const granted = await notificationService.requestPermission();
-          if (granted) setNotificationsEnabled(true);
-          else alert("Permission denied. Enable in device settings.");
-      } else {
-          await notificationService.disable();
-          setNotificationsEnabled(false);
-      }
   };
 
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -505,29 +489,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
           {activeTab === 'security' && (
               <>
                   <section>
-                       {/* --- NOTIFICATIONS SECTION --- */}
-                       <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Daily Reminders</h3>
-                       <div className="flex justify-between items-center p-4 rounded-xl bg-white/5 border border-white/5 mb-8">
-                          <div className="flex items-center gap-3">
-                              <div className="p-2 bg-pink-500/20 rounded-lg text-pink-400">
-                                  <Sparkles size={20} />
-                              </div>
-                              <div>
-                                  <h4 className="text-white font-medium text-sm">Mindful Check-ins</h4>
-                                  <p className="text-xs text-white/50">Morning & Nightly nudges</p>
-                              </div>
-                          </div>
-                          <button
-                              onClick={toggleNotifications}
-                              className={`text-teal-400 transition-colors ${!notificationsEnabled ? 'opacity-50 grayscale' : ''}`}
-                          >
-                              {notificationsEnabled ? <ToggleRight size={32} /> : <ToggleLeft size={32} className="text-white/20" />}
-                          </button>
-                      </div>
-
                       {/* --- NEW AUTO LOCK SECTION --- */}
                       <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">App Security</h3>
-                      <div className="flex justify-between items-center p-4 rounded-xl bg-white/5 border border-white/5 mb-4">
+                      <div className="flex justify-between items-center p-4 rounded-xl bg-white/5 border border-white/5 mb-8">
                           <div className="flex items-center gap-3">
                               <div className="p-2 bg-teal-500/20 rounded-lg text-teal-400">
                                   <Clock size={20} />
@@ -551,26 +515,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                               <option value="600000">10 Minutes</option>
                           </select>
                       </div>
-
-                      {isBiometricAvailable && (
-                          <div className="flex justify-between items-center p-4 rounded-xl bg-white/5 border border-white/5 mb-8">
-                              <div className="flex items-center gap-3">
-                                  <div className="p-2 bg-violet-500/20 rounded-lg text-violet-400">
-                                      <Shield size={20} />
-                                  </div>
-                                  <div>
-                                      <h4 className="text-white font-medium text-sm">Biometric Lock</h4>
-                                      <p className="text-xs text-white/50">FaceID / Fingerprint on Launch</p>
-                                  </div>
-                              </div>
-                              <button
-                                  onClick={() => toggleBiometrics(!isBiometricEnabled)}
-                                  className={`text-teal-400 transition-colors ${!isBiometricEnabled ? 'opacity-50 grayscale' : ''}`}
-                              >
-                                  {isBiometricEnabled ? <ToggleRight size={32} /> : <ToggleLeft size={32} className="text-white/20" />}
-                              </button>
-                          </div>
-                      )}
 
                       <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Diary Security</h3>
 

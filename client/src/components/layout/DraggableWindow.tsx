@@ -141,8 +141,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           animate={{
             opacity: 1, 
             scale: 1, 
-            width: isMobile ? '100%' : size.width,
-            height: currentHeight,
+            width: isMobile ? '100vw' : size.width,
+            height: isMobile && !isMinimized ? '100dvh' : currentHeight,
             top: isMobile ? 0 : effectivePos.y,
             left: isMobile ? 0 : effectivePos.x,
             x: 0,
@@ -169,11 +169,13 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           // --- MOBILE OPTIMIZATION 2: Hardware Acceleration ---
           // FIX: Don't unmount on mobile minimize, just hide visibility to keep background processes (audio) alive
           style={{ 
-            zIndex: isMobile ? 9999 : zIndex,
+            zIndex: isMobile ? 99999 : zIndex, // FORCE TOP ON MOBILE
             position: 'fixed',
             willChange: isMobile ? 'transform, opacity' : undefined,
             visibility: isMobile && isMinimized ? 'hidden' : 'visible',
-            pointerEvents: isMobile && isMinimized ? 'none' : 'auto'
+            pointerEvents: isMobile && isMinimized ? 'none' : 'auto',
+            // Safety for mobile overscroll
+            touchAction: isMobile ? 'none' : 'auto'
           }}
         >
           <div className={`

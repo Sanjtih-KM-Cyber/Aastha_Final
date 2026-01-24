@@ -315,10 +315,10 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
       </div>
 
       {/* Right Panel - Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] bg-[#0B0F17] relative">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 bg-[#0B0F17] relative">
         <button
           onClick={handleBack}
-          className="absolute top-[calc(2rem+env(safe-area-inset-top))] left-8 p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-full transition-all group z-50"
+          className="absolute top-8 left-8 p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-full transition-all group"
         >
           <ArrowLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
         </button>

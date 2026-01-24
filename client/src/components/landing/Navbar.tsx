@@ -82,8 +82,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onLogin }) => {
             onClick={handleRefresh}
             aria-label="Refresh page"
           >
-            <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center text-white transform group-hover:rotate-12 transition-transform duration-300 overflow-hidden">
-              <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
+            <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center text-white transform group-hover:rotate-12 transition-transform duration-300">
+              <Sparkles size={18} fill="currentColor" />
             </div>
             <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-violet-700 to-violet-500">
               Aastha.

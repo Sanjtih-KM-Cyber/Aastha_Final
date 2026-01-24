@@ -401,6 +401,14 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let stream;
     let fullTextResponse = "";
 
+    // NEW LOGIC: Voice Note Only Mode (WhatsApp Style)
+    // Trigger if: Not currently in Voice Call AND (Sad + Rant OR Explicit Intent)
+    const isSadMode = ['sad', 'concerned', 'lonely', 'distressed'].includes(subconscious.mood || '');
+    const isVoiceNoteTarget = !isVoiceMode && (
+        (isSadMode && (message.length > 50 || hasListenIntent)) ||
+        hasListenIntent
+    );
+
     // Helper to start specific stream
     const startStream = (p: string) => {
         if (p === 'GROQ_70B') return streamGroq(brainHistory, systemPrompt, 1024, "llama-3.3-70b-versatile");
@@ -414,7 +422,12 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         for await (const chunk of stream) {
             if (!chunk) continue;
             fullTextResponse += chunk;
-            (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+
+            // If Voice Note Only, BUFFER text (don't show typing yet)
+            // Otherwise stream normally
+            if (!isVoiceNoteTarget) {
+                (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+            }
         }
     } catch (e) {
         console.error("Primary Stream Failed:", e);
@@ -455,7 +468,11 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     const hasVoiceQuota = (user.dailyVoiceCount || 0) < 2;
-    const shouldGenerateAudio = (isPro || hasVoiceQuota) && fullTextResponse.trim().length > 0;
+    // STRICTER TRIGGER: Voice Mode OR Voice Note Target OR Explicit Intent
+    const shouldGenerateAudio = (isPro || hasVoiceQuota) && fullTextResponse.trim().length > 0 && (
+        isVoiceMode || isVoiceNoteTarget || hasListenIntent
+    );
+
     let savedAudioUrl: string | undefined;
 
     if (shouldGenerateAudio) {
@@ -468,13 +485,28 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                 const audioId = `vn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
                 storeAudio(audioId, audioBuffer);
                 savedAudioUrl = `/api/ai/stream/${audioId}`;
-                (res as any).write(`data: ${JSON.stringify({ voice_audio: savedAudioUrl, voice_note: savedAudioUrl })}\n\n`);
+
+                // If Voice Note Only Mode: Send audio and CLEARED CONTENT to frontend
+                if (isVoiceNoteTarget) {
+                     (res as any).write(`data: ${JSON.stringify({ voice_audio: savedAudioUrl, voice_note: savedAudioUrl, content: "" })}\n\n`);
+                } else {
+                     (res as any).write(`data: ${JSON.stringify({ voice_audio: savedAudioUrl, voice_note: savedAudioUrl })}\n\n`);
+                }
 
                 user.dailyVoiceCount = (user.dailyVoiceCount || 0) + 1;
                 await user.save();
             } else {
                 (res as any).write(`data: ${JSON.stringify({ meta: { voice_status: "failed" } })}\n\n`);
+                // Fallback: If voice failed in "Voice Note Only" mode, release the text buffer so user sees something
+                if (isVoiceNoteTarget) {
+                    (res as any).write(`data: ${JSON.stringify({ content: fullTextResponse })}\n\n`);
+                }
             }
+        }
+    } else {
+        // If we buffered (expecting voice) but decided NOT to generate (e.g. empty text), release buffer
+        if (isVoiceNoteTarget && fullTextResponse) {
+             (res as any).write(`data: ${JSON.stringify({ content: fullTextResponse })}\n\n`);
         }
     }
 
