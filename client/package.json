@@ -10,9 +10,15 @@
     "cap-dist": "npm run build && npx cap sync"
   },
   "dependencies": {
+    "@capacitor-community/privacy-screen": "^5.2.1",
     "@capacitor/android": "^6.0.0",
+    "@capacitor/app": "^6.0.3",
     "@capacitor/core": "^6.0.0",
+    "@capacitor/device": "^6.0.3",
     "@capacitor/ios": "^6.0.0",
+    "@capacitor/local-notifications": "^6.1.3",
+    "@capacitor/preferences": "^6.0.4",
+    "@capgo/capacitor-native-biometric": "^6.0.0",
     "@vitejs/plugin-react": "^5.1.1",
     "axios": "^1.13.2",
     "buffer": "^6.0.3",

@@ -285,7 +285,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               background: '#000'
             }}
           >
-             <Sparkles size={18} style={{ color: moodColor }} />
+             <img src="/logo.png" alt="Aastha" className="w-full h-full object-cover" />
           </div>
 
           {/* Mood Badge Overlay */}
@@ -370,7 +370,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               {visibleContent.split('\n').map((line, i) => (
                 <p
                   key={i}
-                  className="text-white/95 font-light"
+                  className="text-white/95 font-light select-text"
                   style={{
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
