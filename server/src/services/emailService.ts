@@ -86,11 +86,11 @@ export const sendOTPEmail = async (to: string, otp: string, subject: string = 'Y
 
 /**
  * STRATEGY 2: Send Ghost Email via Resend
- * Sender: Aastha <me@aasthaai.site>
+ * Sender: Aastha/Aastik <me@aasthaai.site>
  * Subject: "Thinking of you..."
  * Headers: List-Unsubscribe, X-Entity-ID
  */
-export const sendGhostEmail = async (to: string, name: string, content: string) => {
+export const sendGhostEmail = async (to: string, name: string, content: string, senderName: string = "Aastha") => {
     if (!process.env.RESEND_API_KEY) {
         console.warn("[Email Service] No RESEND_API_KEY found. Ghost email skipped.");
         return false;
@@ -98,7 +98,7 @@ export const sendGhostEmail = async (to: string, name: string, content: string) 
 
     try {
       const { data, error } = await resend.emails.send({
-        from: 'Aastha <me@aasthaai.site>',
+        from: `${senderName} <me@aasthaai.site>`,
         replyTo: 'me@aasthaai.site',
         to: [to],
         subject: 'Thinking of you...',
@@ -123,7 +123,7 @@ export const sendGhostEmail = async (to: string, name: string, content: string) 
                   </tr>
                   <tr>
                     <td align="center" style="padding: 40px 40px 20px 40px;">
-                       <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #a78bfa; letter-spacing: 1px;">Aastha</h1>
+                       <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #a78bfa; letter-spacing: 1px;">${senderName}</h1>
                     </td>
                   </tr>
                   <tr>

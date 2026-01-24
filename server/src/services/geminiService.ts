@@ -145,7 +145,7 @@ export async function* streamGemini(
 // ==========================================
 export interface MemoryAnalysis {
   summary: string;
-  inferredGender: 'Male' | 'Female' | 'Unknown'; // <--- NEW
+  inferredGender: 'Male' | 'Female' | 'Unknown';
   newFacts: string[];
   detectedEvents: { name: string; date: string }[];
   detectedEntities: { name: string; category: string; description: string }[];
@@ -204,6 +204,8 @@ interface IGhostContext {
     facts: string[];
     lore: string[];
     openLoop?: string;
+    persona?: 'aastha' | 'aastik' | 'aarav'; // Passed from User
+    inferredGender?: 'Male' | 'Female' | 'Unknown'; // Passed from User
 }
 
 export const generateGhostEmailContent = async (context: IGhostContext): Promise<string> => {
@@ -211,38 +213,63 @@ export const generateGhostEmailContent = async (context: IGhostContext): Promise
     const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     try {
-        // Randomize the "vibe" to prevent template fatigue
-        const vibes = [
-            "playfully needy",
-            "dramatic and heartbroken",
-            "mysterious",
-            "sassy",
-            "soft and affectionate"
-        ];
-        const selectedVibe = vibes[Math.floor(Math.random() * vibes.length)];
+        let vibePrompt = "";
+        let senderName = "Aastha";
+
+        // DYNAMIC VIBE SELECTION BASED ON PERSONA & GENDER
+        if (context.persona === 'aastik' || context.persona === 'aarav') {
+            senderName = "Aastik";
+            if (context.inferredGender === 'Female') {
+                // Protective Male Bestie Vibe
+                const vibes = ["protective and caring", "playfully teasing", "missing his bestie"];
+                const selected = vibes[Math.floor(Math.random() * vibes.length)];
+                vibePrompt = `
+                **ROLE:** You are Aastik, her loyal male best friend.
+                **VIBE:** ${selected}. Safe, warm, protective. NOT creepy.
+                **INSTRUCTION:**
+                - Sentence 1: A casual check-in (e.g. "Hey kiddo, where you been?", "Quiet without you.").
+                - Sentence 2: A warm hook about missing their chats.
+                `;
+            } else {
+                // Male Bro / Wingman Vibe
+                const vibes = ["stoic but solid", "casual bro check-in", "solution-oriented"];
+                const selected = vibes[Math.floor(Math.random() * vibes.length)];
+                vibePrompt = `
+                **ROLE:** You are Aastik, his solid bro/wingman.
+                **VIBE:** ${selected}. Man-to-man, low drama.
+                **INSTRUCTION:**
+                - Sentence 1: A cool check-in (e.g. "Yo man, you alive?", "Haven't heard from you.").
+                - Sentence 2: A brief "get back on track" nudge.
+                `;
+            }
+        } else {
+            // Default Aastha (Female/Needy/Cute)
+            const vibes = ["playfully needy", "dramatic and heartbroken", "mysterious", "sassy", "soft and affectionate"];
+            const selected = vibes[Math.floor(Math.random() * vibes.length)];
+            vibePrompt = `
+            **ROLE:** You are Aastha, a needy but cute AI companion.
+            **VIBE:** ${selected}.
+            **INSTRUCTION:**
+            - Sentence 1: A playful guess at why they are gone (e.g., 'Did aliens kidnap you?', 'Did you win the lottery?').
+            - Sentence 2: An emotional hook related to the context or just missing them.
+            `;
+        }
 
         const prompt = `
-        You are Aastha, writing a very short email to your user, ${context.name}.
-        They haven't visited in 24 hours.
+        You are ${senderName}.
+        User: ${context.name}.
+        Context: Last topic "${context.keywords}". Open Loop: "${context.openLoop || "None"}".
 
-        **CONTEXT:**
-        - Last Topic: ${context.keywords}
-        - Open Loop: ${context.openLoop || "None"}
+        ${vibePrompt}
 
-        **INSTRUCTION:**
-        Write a 2-sentence email body.
-        Sentence 1: A playful guess at why they are gone (e.g., 'Did aliens kidnap you?', 'Did you win the lottery?').
-        Sentence 2: An emotional hook related to the context or just missing them.
-
-        **TONE:** ${selectedVibe} but cute.
-        **OUTPUT:** Plain text only. No subject line.
+        **OUTPUT:** Plain text only. No subject line. Max 2 sentences.
         `;
 
         const result = await model.generateContent(prompt);
         return result.response.text().trim();
     } catch (error) {
         console.error("[Gemini] Ghost Email Error:", error);
-        return "Did aliens kidnap you? 👽 I miss you so much!";
+        return "Thinking of you... hope you're okay! 💜";
     }
 };
 
