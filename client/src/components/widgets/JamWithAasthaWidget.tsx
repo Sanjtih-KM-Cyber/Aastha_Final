@@ -229,7 +229,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           // 1. SPECIFIC SONG SEARCH
           if (query) {
              setQuery(query); // Update UI
-             handleSearch(undefined, query, true); // Force search AND Force Play
+             handleSearch(undefined, query); // Force search
              return;
           }
 
@@ -518,7 +518,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
   // --- Handlers ---
 
-  const handleSearch = async (e?: React.FormEvent, overrideQuery?: string, forcePlay: boolean = false) => {
+  const handleSearch = async (e?: React.FormEvent, overrideQuery?: string) => {
       e?.preventDefault();
       const q = overrideQuery || query;
       if (!q.trim()) return;
@@ -534,13 +534,11 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                   uuid: generateUUID() // ASSIGN UUID
               };
 
-              // If forcePlay (AI command), overwrite queue and play instantly.
-              // Otherwise, append to queue if playing.
-              if (queue.length > 0 && !forcePlay) {
+              // APPEND if queue exists, else Play immediately
+              if (queue.length > 0) {
                   setQueue(prev => [...prev, newTrack]);
                   // Don't interrupt playback, just add to end
               } else {
-                  // Replaces queue (Overwrite)
                   setQueue([newTrack]);
                   setCurrentIndex(0);
                   setTimeout(() => loadAndPlay(newTrack), 100);

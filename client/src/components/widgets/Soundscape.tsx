@@ -117,9 +117,6 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
   useEffect(() => {
       if (isOpen) {
           if (preset) {
-              // Force stop all current audio to ensure instant switch
-              Object.values(audioRefs.current).forEach(a => a.pause());
-
               if (preset === 'random') {
                   // Generate random mix
                   const newActive: Record<string, number> = {};
