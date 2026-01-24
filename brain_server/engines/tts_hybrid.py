@@ -135,23 +135,14 @@ class HybridTTS:
     def _generate_parler(self, text, description, preset):
         print(f"[TTS] Indic Parler (Style: {description}): {text[:30]}...")
 
-        # Select a speaker based on preset if not explicitly in description
-        # Aditi (Female), Rohit (Male) are safe defaults
-        speaker_name = "Aditi" if preset.lower() == "aastha" else "Rohit"
+        # Instead of using speaker_name, use the gender derived from persona
+        gender = "male" if preset.lower() == "aastik" else "female"
 
-        # If the AI description doesn't explicitly name a speaker, we prepend our default
-        # But if the AI got creative, we trust it.
-        # Simple heuristic: If description is short (just emotions), prepend speaker.
-
-        final_desc = description
-        # Ensure description follows the pattern expected: "Speaker speaks..."
-        # We prepend speaker name to ground the voice.
-        if "speaks" not in description.lower() and "'" not in description:
-             final_desc = f"{speaker_name} speaks with a {description} tone."
+        # Construct the caption that Parler understands best
+        if description:
+            final_desc = f"A {gender} speaker delivering a message in a {description} tone. The recording is very high quality."
         else:
-             # Just prepend the name to be safe if it fits the sentence structure
-             # Actually, simpler: "Aditi speaks with a [AI Description] tone..."
-             pass
+            final_desc = f"A {gender} speaker delivering a warm, comforting message in a natural tone. The recording is very high quality."
 
         description_input_ids = self.parler_desc_tokenizer(final_desc, return_tensors="pt").to(self.device)
         prompt_input_ids = self.parler_tokenizer(text, return_tensors="pt").to(self.device)
