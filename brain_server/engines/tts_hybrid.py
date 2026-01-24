@@ -68,24 +68,24 @@ class HybridTTS:
             except Exception as e:
                 print(f"[TTS] F5 Init Failed: {e}")
 
-        # C. PARLER-TTS (Style)
+        # C. INDIC PARLER-TTS (Style/Expressive)
         self.parler_model = None
         self.parler_tokenizer = None
+        self.parler_desc_tokenizer = None
+
         if PARLER_AVAILABLE:
             try:
-                # Indic Parler (or Standard Parler-Mini if Indic unavailable publicly yet, using Mini v1 for stability)
-                # The plan said "Indic Parler-TTS". If there is a specific repo for Indic Parler, I should use it.
-                # Assuming "parler-tts/parler-tts-mini-v1" or similar.
-                # I'll use "parler-tts/parler-tts-mini-v1" as safe bet or "ai4bharat/indic-parler-tts" if it exists?
-                # The Plan didn't specify URL for the model, just "Indic Parler-TTS".
-                # Given I don't have the exact HF ID for "Indic Parler", I will use "parler-tts/parler-tts-mini-v1"
-                # which supports descriptive prompts.
-                model_id = "parler-tts/parler-tts-mini-v1"
+                model_id = "ai4bharat/indic-parler-tts"
+                print(f"[TTS] Loading {model_id}...")
+
                 self.parler_model = ParlerTTSForConditionalGeneration.from_pretrained(model_id).to(self.device)
                 self.parler_tokenizer = AutoTokenizer.from_pretrained(model_id)
-                print("[TTS] Parler-TTS Loaded.")
+                # Load the separate description tokenizer required for Indic Parler
+                self.parler_desc_tokenizer = AutoTokenizer.from_pretrained(self.parler_model.config.text_encoder._name_or_path)
+
+                print("[TTS] Indic Parler-TTS Loaded.")
             except Exception as e:
-                print(f"[TTS] Parler Init Failed: {e}")
+                print(f"[TTS] Indic Parler Init Failed: {e}")
 
     def generate(self, text, voice_sample_bytes=None, voice_preset="aastha", description=None):
         try:
@@ -93,7 +93,7 @@ class HybridTTS:
             if voice_sample_bytes and self.f5:
                 return self._generate_clone(text, voice_sample_bytes)
 
-            # 2. Style/Expressive (Parler) - If description provided
+            # 2. Style/Expressive (Indic Parler) - If description provided
             if description and self.parler_model:
                 return self._generate_parler(text, description, voice_preset)
 
@@ -133,19 +133,35 @@ class HybridTTS:
         return buffer
 
     def _generate_parler(self, text, description, preset):
-        print(f"[TTS] Parler (Style: {description}): {text[:30]}...")
+        print(f"[TTS] Indic Parler (Style: {description}): {text[:30]}...")
 
-        # Map preset to speaker name if Parler model supports multispeaker
-        # Mini v1 is usually single speaker female-ish.
-        # We'll rely on description to modulate.
-        # Construct full description
-        gender = "female" if preset.lower() == "aastha" else "male"
-        full_desc = f"A {gender} speaker with a {description} voice delivers a speech."
+        # Select a speaker based on preset if not explicitly in description
+        # Aditi (Female), Rohit (Male) are safe defaults
+        speaker_name = "Aditi" if preset.lower() == "aastha" else "Rohit"
 
-        input_ids = self.parler_tokenizer(full_desc, return_tensors="pt").input_ids.to(self.device)
-        prompt_input_ids = self.parler_tokenizer(text, return_tensors="pt").input_ids.to(self.device)
+        # If the AI description doesn't explicitly name a speaker, we prepend our default
+        # But if the AI got creative, we trust it.
+        # Simple heuristic: If description is short (just emotions), prepend speaker.
 
-        generation = self.parler_model.generate(input_ids=input_ids, prompt_input_ids=prompt_input_ids)
+        final_desc = description
+        # Ensure description follows the pattern expected: "Speaker speaks..."
+        # We prepend speaker name to ground the voice.
+        if "speaks" not in description.lower() and "'" not in description:
+             final_desc = f"{speaker_name} speaks with a {description} tone."
+        else:
+             # Just prepend the name to be safe if it fits the sentence structure
+             # Actually, simpler: "Aditi speaks with a [AI Description] tone..."
+             pass
+
+        description_input_ids = self.parler_desc_tokenizer(final_desc, return_tensors="pt").to(self.device)
+        prompt_input_ids = self.parler_tokenizer(text, return_tensors="pt").to(self.device)
+
+        generation = self.parler_model.generate(
+            input_ids=description_input_ids.input_ids,
+            attention_mask=description_input_ids.attention_mask,
+            prompt_input_ids=prompt_input_ids.input_ids,
+            prompt_attention_mask=prompt_input_ids.attention_mask
+        )
         audio_arr = generation.cpu().numpy().squeeze()
 
         buffer = io.BytesIO()
