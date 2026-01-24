@@ -139,10 +139,11 @@ class HybridTTS:
         gender = "male" if preset.lower() == "aastik" else "female"
 
         # Construct the caption that Parler understands best
+        # Explicitly mention "Indian" to anchor the accent
         if description:
-            final_desc = f"A {gender} speaker delivering a message in a {description} tone. The recording is very high quality."
+            final_desc = f"An Indian {gender} speaker delivering a message in a {description} tone. The recording is very high quality."
         else:
-            final_desc = f"A {gender} speaker delivering a warm, comforting message in a natural tone. The recording is very high quality."
+            final_desc = f"An Indian {gender} speaker delivering a warm, comforting message in a natural tone. The recording is very high quality."
 
         description_input_ids = self.parler_desc_tokenizer(final_desc, return_tensors="pt").to(self.device)
         prompt_input_ids = self.parler_tokenizer(text, return_tensors="pt").to(self.device)
