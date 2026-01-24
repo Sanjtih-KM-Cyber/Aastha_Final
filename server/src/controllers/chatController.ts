@@ -282,8 +282,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
     let provider: 'GROQ_70B' | 'GROQ_8B_VOICE' | 'WORKHORSE_120B';
     const isPro = user.isPro || (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > new Date());
-    const msgCount = user.dailyMessageCount || 0;
-    const isWithinFreeTier = msgCount < 15;
+    const msgCount = Number(user.dailyMessageCount || 0);
+    const isWithinFreeTier = msgCount <= 15; // Increased buffer to fix "immediate eco mode" perception
 
     // Check Voice Mode (Priority)
     // If voice mode is active, we utilize the Voice Director (8B) for low latency
@@ -397,7 +397,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     // Calculate remaining "Premium" credits for Free users to display in UI
-    const creditsDisplay = isPro ? '∞' : Math.max(0, 15 - msgCount);
+    const creditsDisplay = isPro ? '∞' : Math.max(0, 16 - msgCount);
 
     (res as any).write(`data: ${JSON.stringify({ 
         meta: { 
@@ -488,9 +488,16 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // Strip Style Tag for DB
     const dbContent = fullTextResponse.replace(/\[STYLE:.*?\]/g, '').trim();
 
-    chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
-    chatSession.messages.push({ role: 'assistant', content: encrypt(dbContent), timestamp: new Date(), voice_note: savedAudioUrl });
-    await chatSession.save();
+    // CRITICAL FIX: Do not save empty messages (Validation Error Prevention)
+    // If dbContent is empty, it means all providers failed (Rate Limit + Auth Error)
+    if (!dbContent && !savedAudioUrl) {
+         console.warn("Generation yielded empty content. Skipping DB save to prevent crash.");
+         (res as any).write(`data: ${JSON.stringify({ content: " [System: Brain Exhausted. Please try again in a few minutes.]" })}\n\n`);
+    } else {
+        chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
+        chatSession.messages.push({ role: 'assistant', content: encrypt(dbContent || "[...]"), timestamp: new Date(), voice_note: savedAudioUrl });
+        await chatSession.save();
+    }
 
     if (chatSession.messages.length % 5 === 0) {
         (async () => {

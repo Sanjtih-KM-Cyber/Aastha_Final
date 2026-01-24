@@ -143,6 +143,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   content,
   timestamp,
   reaction,
+  voice_note,
   mood,
   onReply,
   onCopy,
@@ -405,6 +406,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                       </button>
                   ))}
               </div>
+          )}
+
+          {/* VOICE NOTE PLAYER */}
+          {voice_note && (
+             <div className="mt-3 mb-1 w-full max-w-[240px]">
+                <audio controls src={voice_note} className="w-full h-8 opacity-80" style={{ borderRadius: '16px' }} />
+             </div>
           )}
 
           <div
