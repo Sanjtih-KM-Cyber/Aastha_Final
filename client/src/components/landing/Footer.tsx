@@ -8,8 +8,8 @@ export const Footer: React.FC = () => {
         <div className="flex flex-col md:flex-row justify-between items-start gap-12 mb-16">
           <div className="max-w-xs">
             <div className="flex items-center gap-2 mb-6">
-              <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center text-white">
-                <Sparkles size={18} fill="currentColor" />
+              <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center text-white overflow-hidden">
+                <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
               </div>
               <span className="text-xl font-bold text-slate-900 dark:text-white">Aastha.</span>
             </div>
