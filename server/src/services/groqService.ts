@@ -62,7 +62,9 @@ export const generateSubconscious = async (
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
     const client = getGroqClient();
-    const model = "llama-3.3-70b-versatile";
+    
+    // FIX 1: Use 8B model to save tokens (was 70B)
+    const model = "llama-3.1-8b-instant"; 
 
     const systemPrompt = `
     You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha (or Aastik).
@@ -247,6 +249,7 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
 
   let attempt = 0;
   const maxRetries = 3;
+  let lastError: any = null;
 
   while (attempt < maxRetries) {
     try {
@@ -266,10 +269,11 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
         return;
     } catch (error: any) {
         console.error(`Groq Stream Error (Attempt ${attempt + 1}):`, error);
+        lastError = error;
         attempt++;
         if (attempt >= maxRetries) {
-             // If all retries fail, stop stream cleanly
-             break;
+             // FIX 2: THROW ERROR to trigger backup model in controller
+             throw lastError;
         }
         // Exponential backoff
         await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
@@ -311,6 +315,7 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
       if (error?.status === 401 || error?.code === 'invalid_api_key') {
            yield " [System: Backup Provider Auth Failed. Please check server logs.] ";
       }
+      throw error; // Throw so controller can handle if needed
   }
 }
 
