@@ -210,6 +210,20 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     window.addEventListener('focus', handleFocus);
 
     const unsubscribe = subscribe('message', (data: any) => {
+        if (data.type === 'reaction' && data.reaction) {
+             setMessages(prev => {
+                 const newList = [...prev];
+                 // Attach reaction to the last user message
+                 for (let i = newList.length - 1; i >= 0; i--) {
+                     if (newList[i].role === 'user') {
+                         newList[i] = { ...newList[i], reaction: data.reaction };
+                         break;
+                     }
+                 }
+                 return newList;
+             });
+        }
+
         if (data && data.content) {
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
@@ -888,6 +902,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         });
     }
     let cleanText = text.replace(/<color>[\s\S]*?<\/color>/gi, '');
+    cleanText = cleanText.replace(/\[STYLE:.*?\]/g, ''); // Remove Voice Director Tags
     cleanText = cleanText.replace(/<(?!proposal)[^>]+>/g, '');
     return cleanText;
   };

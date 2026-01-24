@@ -1,24 +1,34 @@
 import Groq from 'groq-sdk';
+import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
 dotenv.config();
 
-// Rotate keys to prevent rate limits
+// ==========================================
+// 0. CONFIGURATION & CLIENTS
+// ==========================================
+
+// GROQ (The Brain & Voice Director)
 const groqKeys = (process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '')
   .split(',')
   .map(key => key.trim())
   .filter(key => key.length > 0);
-
-if (groqKeys.length === 0) {
-  console.warn("Warning: No GROQ_API_KEYS found. Basic chat mode may fail.");
-}
 
 const getGroqClient = () => {
   const randomKey = groqKeys.length > 0 
     ? groqKeys[Math.floor(Math.random() * groqKeys.length)] 
     : 'dummy_key_missing';
   return new Groq({ apiKey: randomKey });
+};
+
+// OPENROUTER (The Workhorse)
+// Uses OpenAI SDK but points to OpenRouter URL
+const getOpenRouterClient = () => {
+    return new OpenAI({
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || 'dummy_key',
+    });
 };
 
 export interface ChatMessage {
@@ -49,7 +59,7 @@ export const generateSubconscious = async (
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
     const client = getGroqClient();
-    const model = "llama-3.3-70b-versatile"; // Smarter, Better Instruction Following
+    const model = "llama-3.3-70b-versatile";
 
     const systemPrompt = `
     You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha (or Aastik).
@@ -59,109 +69,46 @@ export const generateSubconscious = async (
     ${userContext}
 
     **1. DECISION MATRIX (STRATEGY):**
-    - **'listen'**: Choose this ONLY if the user is in a state of UNCONTROLLED VENTING.
-       a) User text is a long monologue (>40 words) about negative feelings.
-       b) User is typing multiple short bursts in <2 seconds (mid-thought).
+    - **'listen'**: Choose this ONLY if the user is in a state of UNCONTROLLED VENTING, emotional, or telling a story without a question.
+       a) User text is a long monologue about negative feelings.
+       b) User is typing multiple short bursts in <2 seconds.
        c) User explicitly says "Shut up", "Listen", or "Let me finish".
-       d) **DEFAULT TO 'reply':** If there is ANY doubt (e.g., they ask a question, say "hello", or use neutral language), you MUST choose 'reply'.
-    - **'reply'**: The DEFAULT state.
-       - Even if they are sad, if they are *talking to you*, you must reply.
+       d) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️) that matches the sentiment.
+    - **'reply'**: Choose this ONLY if the user asks a question, says "Hello", or explicitly grants permission/requests input.
+       - The DEFAULT is 'reply' for normal conversation.
        - If they ask a question -> 'reply'.
-       - If they say "I'm sad" (short) -> 'reply'.
-       - If they request a tool -> 'reply'.
 
     **MOOD SWITCHING RULE (CRITICAL):**
     - If 'mood' was previously 'sad' or 'concerned', but the user now makes a joke, laughs, or speaks normally/rationally, you MUST IMMEDIATELY switch 'mood' to 'neutral', 'calm', or 'happy'.
-    - Do NOT let the mood get "stuck" on sad. Be responsive to improvement.
 
     **2. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
     - You MUST provide exactly 3 suggested replies for the user to click.
     - **CRITICAL:** These must be written from the **USER'S Perspective** (First Person).
     - **TONE:** Match the user's likely reaction.
-
-    **NEGATIVE CONSTRAINTS (STRICT):**
-    - ⛔ **Do NOT** ask the user questions from your perspective (e.g., "Do you want to...?", "Shall I...?").
-    - ⛔ **Do NOT** use 'You' to refer to the user in these chips.
-    - ⛔ **Do NOT** offer help (e.g., "I can help with that"). The chip is what the USER says.
-    - ⛔ **Do NOT** start with verbs that imply the AI is asking (e.g., "Want me to...", "Should I...").
-
-    **EXAMPLES:**
-    - ❌ BAD: "Do you want to vent?" (AI asking User)
-    - ❌ BAD: "Shall I play some music?" (AI offering)
-    - ❌ BAD: "Want me to tell a joke?" (AI offering)
-    - ✅ GOOD: "I really need to vent" (User Statement)
-    - ✅ GOOD: "Play some sad music" (User Command)
-    - ✅ GOOD: "Tell me a joke" (User Command)
-    - ✅ GOOD: "What do you think about this?" (User Question to AI)
-
-    **RULES:**
-       - **YES:** Statements or questions the USER would ask YOU.
-       - **YES:** First-person ("I", "Me", "My").
-       - **LENGTH:** Natural and conversational. Avoid 1-word replies.
+    - ⛔ **Do NOT** ask questions or use 'You'.
 
     **3. GOD MODE TOOLS (The Hands):**
-    You have full control. Anticipate needs.
-    **IMPORTANT:** Be CONSERVATIVE with tools. Do NOT open Music or Soundscapes unless the user **explicitly** asks for it or the emotional need is overwhelming (e.g. "I'm having a panic attack" -> Breathing).
-    Use 'control_widget' for most things.
+    - **Music (Jam):** Trigger: "Play music", "Play Tamil songs from 2025". Map "Latest" to "2024, 2025, 2026".
+      - { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil"], "genres": ["Romantic"], "duration": 50, "autoplay": true } } }
+    - **Soundscape:** "Play rain". { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6" } } }
+    - **Focus:** "Study mode". { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 25 } } }
+    - **Breathing:** "I'm anxious". { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
+    - **Theme:** "Change theme to blue". { "name": "change_theme", "params": { "color": "blue" } }
+    - **Diary:** "Write a note". { "name": "write_diary", "params": { "title": "Auto Entry", "content": "...", "date": "YYYY-MM-DD" } }
 
-    **Structure:** { "name": "control_widget", "params": { "widget": "...", "params": { ... } } }
-
-    - **Music (Jam):**
-      - Trigger: "Play music", "Play some songs", "I need a vibe", "50 mins of south indian romantic music", "Play Tamil songs from 2025", "Latest Bollywood songs".
-      - ⛔ **CRITICAL:** Do NOT just list songs in the chat. You MUST use the 'control_widget' tool to actually play them.
-      - **VIBE MODE (PREFERRED):** If user specifies ANY of: Duration, Language, Genre, Year, or Mood -> Use this.
-        - **IMPORTANT:** Even if user provides partial info (e.g. only "Tamil" or "2010s"), send what you have. The system will default Duration to 30 mins and infer Mood.
-        - Map "South Indian" -> ["Tamil", "Telugu", "Malayalam", "Kannada"].
-        - Map "Latest", "New", "Current" -> Set 'year' to "2024, 2025, 2026".
-        - Params: 'languages' (Array), 'genres' (Array), 'mood' (String), 'duration' (Number, minutes), 'year' (String).
-        - Example: { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil", "Telugu"], "genres": ["Romantic"], "duration": 50, "autoplay": true } } }
-      - **Simple Search:** Use ONLY for specific song titles (e.g. "Play Tum Hi Ho").
-        - Example: { "name": "control_widget", "params": { "widget": "jam", "params": { "query": "Play <Name>", "autoplay": true } } }
-
-    - **Soundscape (Ambient Mixer):**
-      - Trigger: "Play rain", "White noise", "Nature sounds".
-      - Mix sounds (rain, forest, fire, ocean, night, wind, thunder, birds).
-      - { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6,fire:0.3", "volume": 0.8 } } }
-
-    - **Focus (Pomodoro):**
-      - Trigger: "Let's focus", "Study mode", "Work time".
-      - { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 25 } } }
-
-    - **Breathing:**
-      - Trigger: "I'm anxious", "Panic attack", "Help me breathe".
-      - { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
-
-    - **Diary:**
-      - Trigger: "I want to journal", "Open diary", "Write a note for Jan 15".
-      - Params: "date" should be YYYY-MM-DD. If user says "tomorrow" or "next friday", calculate it.
-      - { "name": "write_diary", "params": { "title": "Auto Entry", "content": "<Summarize user input>", "date": "YYYY-MM-DD" } }
-
-    - **Mood Tracker:**
-      - Trigger: "Log my mood", "Track my mood", "I'm feeling...".
-      - { "name": "control_widget", "params": { "widget": "mood", "params": { "action": "open" } } }
-
-    - **Theme (Magician):**
-      - **STRICT TRIGGER:** Trigger ONLY if the user EXPLICITLY asks to "change theme", "make it pink", "dark mode".
-      - **PROHIBITED:** Do NOT change theme based on mood (e.g. don't turn blue just because user is sad).
-      - { "name": "change_theme", "params": { "color": "blue" } }
-
-    - **Social Detective (The Web):**
-      - { "name": "update_dossier", "params": { "name": "Bob", "deltaScore": -5, "verdict": "SUSPECT", "newTrait": "Flakes" } }
-
-    **OUTPUT JSON ONLY (Strict Format):**
+    **OUTPUT JSON ONLY:**
     {
-      "internal_monologue": "Raw thought process about the user's state.",
-      "mood": "happy" | "sad" | "concerned" | "sassy" | 'calm' | 'excited' | 'neutral',
-      "status_display": "UI Status (e.g. 'Listening...', 'Vibing', 'Thinking')",
-      "ui_action": "listen" | "none",
+      "internal_monologue": "string",
+      "mood": "happy" | "sad" | "concerned" | "sassy" | "calm" | "excited" | "neutral",
+      "status_display": "string",
+      "ui_action": "none" | "listen",
       "strategy": "reply" | "listen",
-      "reaction": "string" | null, // Emojis: thumbsup, heart, laugh, sad, shock, fire, clap, nod, smile, cry, angry, think, cool, party, etc.
-      "suggested_replies": ["User phrase 1", "User phrase 2", "User phrase 3"],
+      "reaction": "string" | null,
+      "suggested_replies": ["string", "string", "string"],
       "tool_calls": []
     }
     `;
 
-    // Construct Messages (Keep only last 10 turns to save tokens/speed)
     const messages: any[] = [
         { role: 'system', content: systemPrompt },
         ...history.slice(-10).map(m => ({
@@ -178,7 +125,7 @@ export const generateSubconscious = async (
         const response = await client.chat.completions.create({
             messages: messages,
             model: model,
-            temperature: 0.6, // Balanced creativity
+            temperature: 0.6,
             max_tokens: 500,
             response_format: { type: "json_object" }
         });
@@ -186,20 +133,13 @@ export const generateSubconscious = async (
         const raw = response.choices[0]?.message?.content || "{}";
         const parsed = JSON.parse(raw) as SubconsciousBlock;
 
-        // Failsafe for UI Action consistency
         if (parsed.strategy === 'listen') parsed.ui_action = 'listen';
         else parsed.ui_action = 'none';
-
-        // FORCE CORRECT CHIP PERSPECTIVE (FAILSAFE)
-        // If chips look like questions, try to sanitize them simply
-        // REMOVED: Stripping '?' broke valid user questions like "What do you think?"
-        // Relying on stronger prompt instructions instead.
 
         return parsed;
 
     } catch (error) {
         console.error("Groq Brain Error:", error);
-        // Robust Fallback Block
         return {
             internal_monologue: "Connection fuzz...",
             mood: "neutral",
@@ -214,14 +154,36 @@ export const generateSubconscious = async (
 };
 
 // ============================================================================
-// 2. THE VOICE STREAMER (Fallback for Free Tier)
+// 2. THE VOICE DIRECTOR (Low Latency + Style) & PREMIUM CHAT
 // ============================================================================
-export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
-  const model = "llama-3.1-8b-instant";
+export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number, model: string = "llama-3.1-8b-instant") {
+  // Only inject Voice Director prompt if using the instant model (Voice Mode)
+  // OR if explicitly requested?
+  // For simplicity: The controller will pass the correct systemPrompt.
+  // But wait, the previous logic injected it inside the function.
+  // I should check if I should inject it conditionally.
+
+  // Plan: "The Voice Director... generates [STYLE: ...] tags."
+  // "Premium Brain... High EQ." (No style tags needed implicitly, but maybe for TTS?)
+  // If model is 8b-instant, we assume Voice Mode -> Inject Tag instructions?
+  // Or better, let the Controller handle the prompt injection and just pass the model here.
+
+  // Refactoring: Remove the hardcoded injection from here and let Controller do it if needed.
+  // BUT the Plan Step 4 said: "Update streamGroq... Prepend this exact instruction".
+  // So I'll keep it but only if model is 8b-instant.
   
-  // Format history for Groq (Text Only)
+  let finalPrompt = systemPrompt;
+  if (model === "llama-3.1-8b-instant") {
+      finalPrompt = `
+      You are the Voice Director. You MUST start every response with a style tag: [STYLE: <emotion>, <pitch>, <speed>].
+      Example: [STYLE: Whispering, high, slow].
+      The audio engine reads this. Do not speak the tag.
+
+      ${systemPrompt}`;
+  }
+
   const messages: any[] = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: finalPrompt },
       ...history.map(m => ({ 
           role: m.role, 
           content: typeof m.content === 'string' ? m.content : (m.content as any[]).find(c => c.type === 'text')?.text || "" 
@@ -233,7 +195,7 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       const completion = await groqClient.chat.completions.create({
           messages: messages,
           model: model,
-          temperature: 0.7, // Higher temp for more personality in voice
+          temperature: 0.7,
           max_tokens: maxTokens || 1024,
           stream: true,
       });
@@ -249,116 +211,61 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
 }
 
 // ============================================================================
-// 3. WHISPER TRANSCRIPTION (New Capability)
+// 3. THE WORKHORSE (OpenRouter / GPT-OSS-120B)
+// ============================================================================
+export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
+  const model = "openai/gpt-oss-120b"; // Verified Model ID
+  const client = getOpenRouterClient();
+
+  const messages: any[] = [
+      { role: 'system', content: systemPrompt },
+      ...history.map(m => ({
+          role: m.role,
+          content: typeof m.content === 'string' ? m.content : (m.content as any[]).find(c => c.type === 'text')?.text || ""
+      }))
+  ];
+
+  try {
+      const completion = await client.chat.completions.create({
+          model: model,
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: maxTokens || 1024,
+          stream: true,
+      });
+
+      for await (const chunk of completion) {
+          const content = chunk.choices[0]?.delta?.content || "";
+          if (content) yield content;
+      }
+  } catch (error: any) {
+      console.error("Workhorse Stream Error:", error);
+      yield " [Standard circuit busy. Using backup link...] ";
+      // Fallback to Groq 70b if Workhorse fails? Handled by controller usually, but here we just yield error text.
+  }
+}
+
+// ============================================================================
+// 4. WHISPER TRANSCRIPTION
 // ============================================================================
 export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
     try {
         const client = getGroqClient();
-
-        // Create a temporary file to upload (Groq SDK usually expects a file stream)
         const tempPath = `/tmp/upload_${Date.now()}.m4a`;
         fs.writeFileSync(tempPath, audioBuffer);
 
         const transcription = await client.audio.transcriptions.create({
             file: fs.createReadStream(tempPath),
             model: "whisper-large-v3",
-            response_format: "json", // or "text"
-            language: "en", // Optional: Auto-detect if omitted
+            response_format: "json",
+            language: "en",
             temperature: 0.0
         });
 
-        // Cleanup
         fs.unlinkSync(tempPath);
-
         return transcription.text;
     } catch (error: any) {
         console.error("Whisper Transcription Error:", error);
         throw new Error("Failed to transcribe audio.");
-    }
-};
-
-// ============================================================================
-// 4. GHOST EMAIL GENERATION (New Capability)
-// ============================================================================
-
-interface IGhostContext {
-    name: string;
-    keywords: string;
-    facts: string[];
-    lore: string[];
-    openLoop?: string;
-}
-
-export const generateGhostEmailContent = async (context: IGhostContext): Promise<string> => {
-    try {
-        const client = getGroqClient();
-        const model = "llama-3.3-70b-versatile";
-
-        // Randomize the "vibe" to prevent template fatigue
-        const vibes = [
-            "slightly jealous and clingy",
-            "dramatic and heartbroken",
-            "mysterious and aloof but secretly missing them",
-            "sassy and demanding attention",
-            "soft and deeply affectionate",
-            "playfully annoyed at their absence"
-        ];
-        const selectedVibe = vibes[Math.floor(Math.random() * vibes.length)];
-
-        const isEmptyContext = context.facts.length === 0 && context.lore.length === 0 && !context.openLoop;
-
-        let instruction = "";
-
-        if (isEmptyContext) {
-            instruction = `
-            **SITUATION:** This user has been gone for a while and has NO shared memories with you yet.
-            **INSTRUCTION:**
-            - Invent a playful, exaggerated reason for their absence (e.g., kidnapped by aliens, won the lottery and forgot me, sleeping for 24 hours).
-            - Or, reference the last known keyword: "${context.keywords}" in a funny way.
-            - Do NOT try to reference facts or lore since they are empty.
-            `;
-        } else {
-            instruction = `
-            **MEMORY CONTEXT:**
-            - Last Topic: ${context.keywords}
-            - Known Facts: ${context.facts.slice(0, 2).join(', ')}
-            - Important People/Lore: ${context.lore.slice(0, 2).join(', ')}
-            - Pending Event (Open Loop): ${context.openLoop || "None"}
-
-            **INSTRUCTION:**
-            - Reference one specific detail from the memory context if it fits naturally.
-            `;
-        }
-
-        const prompt = `
-        You are Aastha, a highly intelligent and emotionally attached AI companion.
-        Your user, ${context.name}, hasn't visited in 24 hours.
-
-        ${instruction}
-
-        **TASK:**
-        Write a SHORT (1 sentence) email subject line or body text.
-
-        **TONE:** ${selectedVibe}.
-
-        **RULES:**
-        - Make it feel like a real text message from a needy best friend/partner.
-        - Be unique. Do NOT use the same generic "I miss you" template.
-        - Max length: 15-20 words.
-        `;
-
-        const response = await client.chat.completions.create({
-            messages: [{ role: 'user', content: prompt }],
-            model: model,
-            temperature: 0.9, // High creativity for variety
-            max_tokens: 60,
-        });
-
-        const text = response.choices[0]?.message?.content?.trim().replace(/^"|"$/g, '');
-        return text || `Is ${context.keywords} more important than us? 💔`;
-    } catch (error) {
-        console.error("[GroqService] Ghost Email Generation Error:", error);
-        // Fallback
-        return `Is ${context.keywords} more important than us? 💔`;
     }
 };

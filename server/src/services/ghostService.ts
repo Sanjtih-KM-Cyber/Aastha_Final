@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import User from '../models/User';
 import Diary from '../models/Diary';
 import { sendGhostEmail } from './emailService';
-import { generateGhostEmailContent } from './groqService';
+import { generateGhostEmailContent } from './geminiService';
 import dotenv from 'dotenv';
 
 dotenv.config();

@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'; // CORRECT
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import { ChatMessage } from './groqService';
 
@@ -77,28 +77,22 @@ export async function* streamGemini(
     isPro: boolean,
     maxTokens?: number
 ) {
-  // KEPT AS REQUESTED
   const modelName = 'gemini-2.5-flash'; 
 
-  // --- CRITICAL FIX: Removed try/catch so errors bubble up to controller ---
   const client = getGeminiClient(isPro);
 
-  // Pass systemInstruction to getGenerativeModel instead of startChat to avoid 400 Bad Request in v1beta/newer SDKs
   const model = client.getGenerativeModel({
       model: modelName,
       systemInstruction: systemPrompt
   });
 
   // Transform history to Gemini format (Sanitized)
-  // 1. Remove system messages
-  // 2. Map roles
   let rawHistory = history.filter(m => m.role !== 'system').map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }]
   }));
 
-  // 3. Merge Consecutive Roles (Gemini Strictness: User -> Model -> User)
-  // If we have User, User, Model -> Merge User, User
+  // Merge Consecutive Roles
   let mergedHistory: typeof rawHistory = [];
   if (rawHistory.length > 0) {
       mergedHistory.push(rawHistory[0]);
@@ -113,9 +107,7 @@ export async function* streamGemini(
       }
   }
 
-  // 4. Ensure History Starts with USER
-  // If first message is 'model', we must prepend a dummy user message or remove it.
-  // Removing it deletes the greeting context. Prepending is safer for context.
+  // Ensure History Starts with USER
   if (mergedHistory.length > 0 && mergedHistory[0].role === 'model') {
       mergedHistory.unshift({
           role: 'user',
@@ -123,8 +115,6 @@ export async function* streamGemini(
       });
   }
 
-  // 5. Extract Current Message (Last User Message)
-  // Gemini startChat history acts as "context". The *new* message goes to sendMessageStream.
   let currentMessage = "continue";
 
   if (mergedHistory.length > 0) {
@@ -133,20 +123,14 @@ export async function* streamGemini(
           currentMessage = lastMsg.parts[0].text;
           mergedHistory.pop(); // Remove it from history so we don't duplicate it
       } else {
-          // Last message was model? This happens if AI is "continuing" or retrying.
-          // We just send "continue" to prompt more output.
           currentMessage = "continue";
       }
   } else {
-      // If history is empty (new chat), currentMessage needs to be something.
-      // Usually history comes with at least one user message.
-      // If empty here, it means input was empty?
       currentMessage = "Hello";
   }
 
   const chat = model.startChat({
       history: mergedHistory
-      // systemInstruction moved to getGenerativeModel
   });
 
   const result = await chat.sendMessageStream(currentMessage);
@@ -161,6 +145,7 @@ export async function* streamGemini(
 // ==========================================
 export interface MemoryAnalysis {
   summary: string;
+  inferredGender: 'Male' | 'Female' | 'Unknown'; // <--- NEW
   newFacts: string[];
   detectedEvents: { name: string; date: string }[];
   detectedEntities: { name: string; category: string; description: string }[];
@@ -180,7 +165,12 @@ export const generateMemoryAnalysis = async (chatHistory: ChatMessage[], previou
             Current Date: ${currentDate}
             Chat Log: ${textData}
 
-            Return JSON with: summary (string), newFacts (string[]), detectedEvents ({name, date}[]), detectedEntities ({name, category, description}[])
+            **TASK:**
+            1. Update the summary with new key info.
+            2. Infer the User's Gender ('Male', 'Female', 'Unknown') based on name, context, or self-description.
+            3. Extract new facts, events, and recurring entities.
+
+            Return JSON with: summary (string), inferredGender (string), newFacts (string[]), detectedEvents ({name, date}[]), detectedEntities ({name, category, description}[])
         `;
 
         const result = await model.generateContent(prompt);
@@ -188,11 +178,11 @@ export const generateMemoryAnalysis = async (chatHistory: ChatMessage[], previou
 
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (jsonMatch) return JSON.parse(jsonMatch[0]) as MemoryAnalysis;
-        return { summary: previousSummary, newFacts: [], detectedEvents: [], detectedEntities: [] };
+        return { summary: previousSummary, inferredGender: 'Unknown', newFacts: [], detectedEvents: [], detectedEntities: [] };
 
     } catch (e) {
         console.error("Memory Analysis Error:", e);
-        return { summary: previousSummary, newFacts: [], detectedEvents: [], detectedEntities: [] };
+        return { summary: previousSummary, inferredGender: 'Unknown', newFacts: [], detectedEvents: [], detectedEntities: [] };
     }
 };
 
@@ -206,7 +196,58 @@ export const mergeLoreDescription = async (oldDesc: string, newContext: string):
 };
 
 // ==========================================
-// 4. AI MAGIC FUNCTIONS
+// 4. GHOST WRITER (The Subconscious Emailer)
+// ==========================================
+interface IGhostContext {
+    name: string;
+    keywords: string;
+    facts: string[];
+    lore: string[];
+    openLoop?: string;
+}
+
+export const generateGhostEmailContent = async (context: IGhostContext): Promise<string> => {
+    const client = getGeminiClient(false);
+    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    try {
+        // Randomize the "vibe" to prevent template fatigue
+        const vibes = [
+            "playfully needy",
+            "dramatic and heartbroken",
+            "mysterious",
+            "sassy",
+            "soft and affectionate"
+        ];
+        const selectedVibe = vibes[Math.floor(Math.random() * vibes.length)];
+
+        const prompt = `
+        You are Aastha, writing a very short email to your user, ${context.name}.
+        They haven't visited in 24 hours.
+
+        **CONTEXT:**
+        - Last Topic: ${context.keywords}
+        - Open Loop: ${context.openLoop || "None"}
+
+        **INSTRUCTION:**
+        Write a 2-sentence email body.
+        Sentence 1: A playful guess at why they are gone (e.g., 'Did aliens kidnap you?', 'Did you win the lottery?').
+        Sentence 2: An emotional hook related to the context or just missing them.
+
+        **TONE:** ${selectedVibe} but cute.
+        **OUTPUT:** Plain text only. No subject line.
+        `;
+
+        const result = await model.generateContent(prompt);
+        return result.response.text().trim();
+    } catch (error) {
+        console.error("[Gemini] Ghost Email Error:", error);
+        return "Did aliens kidnap you? 👽 I miss you so much!";
+    }
+};
+
+// ==========================================
+// 5. AI MAGIC FUNCTIONS
 // ==========================================
 
 export const extractThemeFromImage = async (base64Image: string): Promise<any> => {
@@ -214,9 +255,6 @@ export const extractThemeFromImage = async (base64Image: string): Promise<any> =
   const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
   
   try {
-    // Basic implementation for build fix - assumes old text usage
-    // Actual implementation needs to construct Part correctly for inlineData
-    // Leaving placeholder valid TS return to satisfy build.
     return { primaryColor: "#8b5cf6", accentColor: "#f472b6", themeName: "Sanctuary Fallback" };
   } catch (error) { return { primaryColor: "#8b5cf6", accentColor: "#f472b6", themeName: "Sanctuary Fallback" }; }
 };

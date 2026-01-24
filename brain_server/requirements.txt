@@ -2,16 +2,22 @@ fastapi
 uvicorn
 python-multipart
 torch
+torchaudio
 transformers
 scipy
 soundfile
 numpy
 Pillow
 accelerate
-# Kokoro (Using the huggingface library or onnx)
-kokoro-onnx
-# For F5-TTS, we usually need to install from git, but for HF Spaces we can use requirements.txt special syntax or just install dependencies
+huggingface_hub
+requests
+# CRITICAL: Force version 0.3.1+ to support voices.bin
+kokoro-onnx>=0.3.1
 einops
 vocos
 vector_quantize_pytorch
 tqdm
+# F5-TTS for Voice Cloning
+git+https://github.com/SWivid/F5-TTS.git
+# Parler-TTS for Expressive Style
+git+https://github.com/huggingface/parler-tts.git

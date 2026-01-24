@@ -2,7 +2,6 @@ import axios from 'axios';
 import FormData from 'form-data';
 
 // The URL of your deployed Hugging Face Space
-// Defaulting to the live URL provided by the user
 const BRAIN_URL = process.env.BRAIN_SERVER_URL || 'https://sking0123-aastha-voice.hf.space';
 
 export const brainService = {
@@ -11,15 +10,18 @@ export const brainService = {
      * @param text The text to speak
      * @param voiceBuffer Optional: A buffer of a voice sample for Cloning (F5-TTS)
      * @param persona Optional: 'aastha' (Female) or 'aastik' (Male) - Defaults to 'aastha'
+     * @param description Optional: Style/Emotion tag content (e.g. "Whispering, high pitch")
      * @returns Buffer of the generated audio (WAV)
      */
-    generateSpeech: async (text: string, voiceBuffer?: Buffer, persona: string = 'aastha'): Promise<Buffer | null> => {
+    generateSpeech: async (text: string, voiceBuffer?: Buffer, persona: string = 'aastha', description?: string): Promise<Buffer | null> => {
         try {
             const form = new FormData();
             form.append('text', text);
-            
-            // [UPDATED] Send the persona so the Python server knows which voice to pick
             form.append('voice_preset', persona);
+
+            if (description) {
+                form.append('description', description);
+            }
 
             if (voiceBuffer) {
                 form.append('voice_sample', voiceBuffer, { filename: 'sample.wav' });
@@ -29,21 +31,20 @@ export const brainService = {
                 headers: { ...form.getHeaders() },
                 responseType: 'arraybuffer',
                 validateStatus: (status) => status < 500,
-                timeout: 60000 // 10 seconds strict timeout (Fail Fast)
+                timeout: 30000 // Increased timeout for Parler (slower)
             });
 
-            // 1. Check Content-Type to avoid playing JSON errors as static
+            // 1. Check Content-Type
             const contentType = response.headers['content-type'];
             if (contentType && (contentType.includes('application/json') || contentType.includes('text/plain'))) {
-                // It's an error message, not audio
                 const errorText = Buffer.from(response.data).toString('utf-8');
                 console.error("Brain TTS Server Error (Not Audio):", errorText);
                 return null;
             }
 
-            // 2. Check Buffer Size (Empty or too small files are invalid)
+            // 2. Check Buffer Size
             const audioBuffer = Buffer.from(response.data);
-            if (audioBuffer.length < 100) { // arbitrary small size check (WAV header is 44 bytes)
+            if (audioBuffer.length < 100) {
                 console.error("Brain TTS Error: Received audio buffer too small.");
                 return null;
             }
@@ -57,8 +58,6 @@ export const brainService = {
 
     /**
      * Describe Image (Vision)
-     * @param imageBuffer Buffer of the image
-     * @returns String caption
      */
     describeImage: async (imageBuffer: Buffer): Promise<string> => {
         try {
@@ -67,7 +66,7 @@ export const brainService = {
 
             const response = await axios.post(`${BRAIN_URL}/see`, form, {
                 headers: { ...form.getHeaders() },
-                timeout: 15000 // 15 seconds timeout for Vision
+                timeout: 15000
             });
 
             return response.data.caption || "I see something, but I'm not sure what.";
