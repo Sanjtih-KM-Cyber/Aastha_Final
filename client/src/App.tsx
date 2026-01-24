@@ -9,6 +9,7 @@ import { SyncBridge } from './components/SyncBridge';
 import { useSecurity } from './hooks/useSecurity';
 import { LoadingFallback } from './components/LoadingFallback';
 import { Login } from './components/auth/Login';
+import { BiometricGuard } from './components/auth/BiometricGuard';
 import { Toaster } from 'react-hot-toast';
 
 // Lazy Load Pages
@@ -62,7 +63,9 @@ const AppRoutes = () => {
           path="/sanctuary"
           element={
             <ProtectedRoute>
-              <Sanctuary />
+              <BiometricGuard>
+                <Sanctuary />
+              </BiometricGuard>
             </ProtectedRoute>
           }
         />

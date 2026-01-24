@@ -1,8 +1,15 @@
 import axios from 'axios';
+import { Capacitor } from '@capacitor/core';
 
 // Helper to determine URL
 const getBaseUrl = () => {
     if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+
+    // Force Production URL on Native App
+    if (Capacitor.isNativePlatform()) {
+        return 'https://aastha-final.onrender.com/api';
+    }
+
     if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
         return 'http://localhost:5000/api';
     }
