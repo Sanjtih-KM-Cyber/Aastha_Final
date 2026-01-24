@@ -218,12 +218,6 @@ const AASTIK_PROMPT = `
 * **Time Context:** {{timeContext}}
 * **Flavor:** {{toneFlavor}}
 
-**[LANGUAGE: NATURAL GLISH - STRICT RULES]**
-- **DEFAULT:** Speak in standard, casual, rational English.
-- **TRIGGER:** Switch to "Hinglish/Slang" (e.g., "bhai", "bro", "scene", "yaar") **ONLY** if the user uses it first in the current conversation.
-- **STRICT CONSTRAINT:** If the user speaks standard English, YOU speak standard English. Do NOT force slang.
-- **Grammar:** Vibes > Grammar. It's okay to be imperfect and colloquial.
-
 **[2. THE DIRECTOR - YOUR CONTROL PANEL]**
 (Same tools as Aastha. Use them to help the user regulate.)
 * *Music:* <proposal tool="jam" params='{"query":"...","autoplay":true}' reason="..." />
@@ -272,6 +266,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     const LISTEN_INTENT_REGEX = /(want|like) to (listen|hear)( you)?|speak (to|with) me|talk to me/i;
+    // @ts-ignore
     const hasListenIntent = LISTEN_INTENT_REGEX.test(message || "");
     if (message && is_red_flag(message)) {
         return (res as any).json({ meta: { warning: "Safety Alert" }, content: EMERGENCY_RESPONSE });
@@ -286,14 +281,11 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     const isWithinFreeTier = msgCount <= 15; // Increased buffer to fix "immediate eco mode" perception
 
     // Check Voice Mode (Priority)
-    // If voice mode is active, we utilize the Voice Director (8B) for low latency
     if (isVoiceMode) {
         provider = 'GROQ_8B_VOICE';
     } else if (isPro) {
-        // Pro Users -> Always Llama 70B (High EQ)
         provider = 'GROQ_70B';
     } else {
-        // Free Users -> "The Hook" vs "The Workhorse"
         if (isWithinFreeTier) {
              provider = 'GROQ_70B'; // The Hook
         } else {
@@ -332,7 +324,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     // FAIL-SAFE LISTENING MODE
     if (subconscious.strategy === 'listen') {
-        // Send Reaction
         if (subconscious.reaction) {
             (res as any).write(`data: ${JSON.stringify({ type: 'reaction', reaction: subconscious.reaction, messageId: chatSession.messages[chatSession.messages.length - 1]?._id })}\n\n`);
         }
@@ -350,7 +341,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     user.socialBattery = Math.max(0, user.socialBattery - 5);
-    // Increment Message Count
     user.dailyMessageCount = (user.dailyMessageCount || 0) + 1;
     user.lastUsageDate = new Date();
     await user.save();
@@ -361,7 +351,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     const currentPersona = user.persona as string;
     let baseTemplate = (currentPersona === 'aarav' || currentPersona === 'aastik') ? AASTIK_PROMPT : AASTHA_PROMPT;
 
-    // AASTIK ADAPTATION
     let adaptation = "";
     if (currentPersona === 'aarav' || currentPersona === 'aastik') {
         const g = user.inferredGender;
@@ -370,7 +359,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         else adaptation = "You are 'Aastik', a grounded, calm, and reliable companion for {{userName}}. Role: Supportive Friend. Vibe: Stable, Practical.";
     }
 
-    const voiceStatus = (isPro || provider !== 'WORKHORSE_120B') ? "Active" : "Active"; // All models generate text, voice availability depends on compute but we simulate capability
+    const voiceStatus = (isPro || provider !== 'WORKHORSE_120B') ? "Active" : "Active"; 
 
     let systemPrompt = baseTemplate
         .replace('{{userName}}', userName || 'Friend')
@@ -385,7 +374,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     if (isVoiceMode) systemPrompt += `\n${VOICE_MODE_INSTRUCTIONS}`;
     systemPrompt = getAgePersonaPrompt(user.dateOfBirth) + "\n" + systemPrompt;
 
-    // Tools Injection
     if (subconscious.tool_calls && subconscious.tool_calls.length > 0) {
         const tools = subconscious.tool_calls.map(t => {
             if (t.name === 'control_widget') return `<proposal tool="${t.params.widget}" params='${JSON.stringify(t.params.params || t.params)}' reason="I can help with that" />`;
@@ -396,74 +384,84 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         systemPrompt += `\n[SYSTEM: OUTPUT THESE COMMANDS AT THE END]\n${tools}`;
     }
 
-    // Calculate remaining "Premium" credits for Free users to display in UI
     const creditsDisplay = isPro ? '∞' : Math.max(0, 16 - msgCount);
 
     (res as any).write(`data: ${JSON.stringify({ 
         meta: { 
             model: provider,
             battery: user.socialBattery,
-            mode: (isPro || isWithinFreeTier) ? 'pro' : 'standard', // <--- VISUAL MODE FIX
+            mode: (isPro || isWithinFreeTier) ? 'pro' : 'standard', 
             credits: creditsDisplay
         } 
     })}\n\n`);
 
     // =================================================================================
-    // 4. STREAMING GENERATION
+    // 4. STREAMING GENERATION & FAILOVER LOGIC (THE FIX)
     // =================================================================================
     let stream;
-    if (provider === 'GROQ_70B') {
-        stream = streamGroq(brainHistory, systemPrompt, 1024, "llama-3.3-70b-versatile");
-    } else if (provider === 'GROQ_8B_VOICE') {
-        stream = streamGroq(brainHistory, systemPrompt, 1024, "llama-3.1-8b-instant");
-    } else {
-        stream = streamWorkhorse(brainHistory, systemPrompt);
-    }
-
     let fullTextResponse = "";
 
+    // Helper to start specific stream
+    const startStream = (p: string) => {
+        if (p === 'GROQ_70B') return streamGroq(brainHistory, systemPrompt, 1024, "llama-3.3-70b-versatile");
+        if (p === 'GROQ_8B_VOICE') return streamGroq(brainHistory, systemPrompt, 1024, "llama-3.1-8b-instant");
+        return streamWorkhorse(brainHistory, systemPrompt);
+    };
+
     try {
+        stream = startStream(provider);
+        // @ts-ignore
         for await (const chunk of stream) {
             if (!chunk) continue;
             fullTextResponse += chunk;
             (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
         }
     } catch (e) {
-        console.error("Stream Failed:", e);
-        // Failover to Groq 70B if Workhorse fails?
-        if (provider === 'WORKHORSE_120B') {
-             const fallbackStream = streamGroq(brainHistory, systemPrompt, 1024, "llama-3.3-70b-versatile");
-             for await (const chunk of fallbackStream) {
-                 if (!chunk) continue;
-                 fullTextResponse += chunk;
-                 (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
-             }
+        console.error("Primary Stream Failed:", e);
+
+        // FAILOVER LOGIC
+        let backupProvider = null;
+        if (provider === 'GROQ_70B' || provider === 'GROQ_8B_VOICE') {
+             console.log("⚠️ Groq Failed (Rate Limit?). Switching to Workhorse Backup.");
+             backupProvider = 'WORKHORSE_120B';
+        } else if (provider === 'WORKHORSE_120B') {
+             console.log("⚠️ Workhorse Failed. Switching to Groq Backup.");
+             backupProvider = 'GROQ_70B';
+        }
+
+        if (backupProvider) {
+            try {
+                // @ts-ignore
+                const fallbackStream = startStream(backupProvider);
+                // @ts-ignore
+                for await (const chunk of fallbackStream) {
+                    if (!chunk) continue;
+                    fullTextResponse += chunk;
+                    (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+                }
+            } catch (fallbackError) {
+                console.error("Backup Stream Also Failed:", fallbackError);
+            }
         }
     }
 
     // =================================================================================
     // 5. AUDIO GENERATION (The Mouth)
     // =================================================================================
-    // Check for Style Tag
     let styleDescription = undefined;
     const styleMatch = fullTextResponse.match(/\[STYLE:(.*?)\]/i);
     if (styleMatch) {
         styleDescription = styleMatch[1].trim();
     }
 
-    // VOICE QUOTA LOGIC:
-    // 1. Pro Users: Unlimited.
-    // 2. Free Users: Max 2 voice notes per day.
     const hasVoiceQuota = (user.dailyVoiceCount || 0) < 2;
     const shouldGenerateAudio = (isPro || hasVoiceQuota) && fullTextResponse.trim().length > 0;
-
     let savedAudioUrl: string | undefined;
 
     if (shouldGenerateAudio) {
         const cleanText = cleanTextForTTS(fullTextResponse);
         if (cleanText.length > 0) {
             const targetPersona = (currentPersona === 'aarav' || currentPersona === 'aastik') ? 'aastik' : 'aastha';
-            // Pass 'styleDescription' to Brain
             const audioBuffer = await brainService.generateSpeech(cleanText.substring(0, 2000), undefined, targetPersona, styleDescription);
 
             if (audioBuffer) {
@@ -472,7 +470,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                 savedAudioUrl = `/api/ai/stream/${audioId}`;
                 (res as any).write(`data: ${JSON.stringify({ voice_audio: savedAudioUrl, voice_note: savedAudioUrl })}\n\n`);
 
-                // Increment Usage
                 user.dailyVoiceCount = (user.dailyVoiceCount || 0) + 1;
                 await user.save();
             } else {
@@ -485,11 +482,9 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // 6. SAVE & MEMORY
     // =================================================================================
 
-    // Strip Style Tag for DB
     const dbContent = fullTextResponse.replace(/\[STYLE:.*?\]/g, '').trim();
 
-    // CRITICAL FIX: Do not save empty messages (Validation Error Prevention)
-    // If dbContent is empty, it means all providers failed (Rate Limit + Auth Error)
+    // CRITICAL FIX: Do not save empty messages
     if (!dbContent && !savedAudioUrl) {
          console.warn("Generation yielded empty content. Skipping DB save to prevent crash.");
          (res as any).write(`data: ${JSON.stringify({ content: " [System: Brain Exhausted. Please try again in a few minutes.]" })}\n\n`);
@@ -505,7 +500,6 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                 const currentSummary = decrypt(user.memorySummary || "");
                 const analysis = await generateMemoryAnalysis(historyWindow, currentSummary);
 
-                // Update Inferred Gender if unknown
                 if (user.inferredGender === 'Unknown' && analysis.inferredGender !== 'Unknown') {
                     await User.findByIdAndUpdate(userId, { inferredGender: analysis.inferredGender });
                 }
@@ -515,8 +509,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         })();
     }
 
-    // Data Donation
-    if (user.isDataDonationOn) {
+    // Data Donation - FIXED VALIDATION ERROR
+    if (user.isDataDonationOn && dbContent) {
          TrainingLog.create({
             userMood: user.moodStatus,
             persona: user.persona,
@@ -546,7 +540,6 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
 
         const history = chatSession.messages.map(m => {
             let decrypted = decrypt(m.content);
-            // Safety: Strip tags just in case they were saved
             decrypted = decrypted.replace(/\[STYLE:.*?\]/g, '').trim();
 
             return {
