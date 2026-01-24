@@ -184,22 +184,36 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       }))
   ];
 
-  try {
-      const groqClient = getGroqClient();
-      const completion = await groqClient.chat.completions.create({
-          messages: messages,
-          model: model,
-          temperature: 0.7, 
-          max_tokens: maxTokens || 1024,
-          stream: true,
-      });
+  let attempt = 0;
+  const maxRetries = 3;
 
-      for await (const chunk of completion) {
-          const content = chunk.choices[0]?.delta?.content || "";
-          if (content) yield content;
-      }
-  } catch (error: any) {
-      console.error("Groq Stream Error:", error);
-      yield " [Connection drift... tell me that again?] ";
+  while (attempt < maxRetries) {
+    try {
+        const groqClient = getGroqClient();
+        const completion = await groqClient.chat.completions.create({
+            messages: messages,
+            model: model,
+            temperature: 0.7,
+            max_tokens: maxTokens || 1024,
+            stream: true,
+        });
+
+        for await (const chunk of completion) {
+            const content = chunk.choices[0]?.delta?.content || "";
+            if (content) yield content;
+        }
+        return; // Success, exit loop
+    } catch (error: any) {
+        console.error(`Groq Stream Error (Attempt ${attempt + 1}):`, error);
+        attempt++;
+
+        // If last attempt failed, throw error (don't yield garbage text)
+        if (attempt >= maxRetries) {
+             throw new Error("Weak connection. Please try again.");
+        }
+
+        // Short backoff before retry
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
   }
 }

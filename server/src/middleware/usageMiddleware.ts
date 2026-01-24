@@ -35,6 +35,11 @@ export const checkUsage = async (req: AuthRequest, res: Response, next: NextFunc
             user.dailyMessageCount = 0; // <--- RESET
             user.dailyVoiceCount = 0; // <--- RESET
             user.lastMessageDate = now;
+
+            // Force persistence
+            user.markModified('dailyMessageCount');
+            user.markModified('dailyVoiceCount');
+
             await user.save();
         }
 

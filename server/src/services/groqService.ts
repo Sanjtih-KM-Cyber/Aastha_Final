@@ -25,9 +25,12 @@ const getGroqClient = () => {
 // OPENROUTER (The Workhorse)
 // Uses OpenAI SDK but points to OpenRouter URL
 const getOpenRouterClient = () => {
+    const key = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
+    if (!key) console.warn("WARNING: No OPENROUTER_API_KEY found. Workhorse fallback will fail.");
+
     return new OpenAI({
         baseURL: "https://openrouter.ai/api/v1",
-        apiKey: process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || 'dummy_key',
+        apiKey: key || 'dummy_key_to_prevent_sdk_throw', // SDK throws if empty, so we provide dummy to allow graceful failure later
     });
 };
 
@@ -242,24 +245,35 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       }))
   ];
 
-  try {
-      const groqClient = getGroqClient();
-      const completion = await groqClient.chat.completions.create({
-          messages: messages,
-          model: model,
-          temperature: 0.7,
-          max_tokens: maxTokens || 1024,
-          stream: true,
-      });
+  let attempt = 0;
+  const maxRetries = 3;
 
-      for await (const chunk of completion) {
-          const content = chunk.choices[0]?.delta?.content || "";
-          if (content) yield content;
-      }
-  } catch (error: any) {
-      console.error("Groq Stream Error:", error);
-      // Silent fail or minimal indicator to avoid disrupting user flow
-      // The frontend will handle the lack of content or the user can retry.
+  while (attempt < maxRetries) {
+    try {
+        const groqClient = getGroqClient();
+        const completion = await groqClient.chat.completions.create({
+            messages: messages,
+            model: model,
+            temperature: 0.7,
+            max_tokens: maxTokens || 1024,
+            stream: true,
+        });
+
+        for await (const chunk of completion) {
+            const content = chunk.choices[0]?.delta?.content || "";
+            if (content) yield content;
+        }
+        return;
+    } catch (error: any) {
+        console.error(`Groq Stream Error (Attempt ${attempt + 1}):`, error);
+        attempt++;
+        if (attempt >= maxRetries) {
+             // If all retries fail, stop stream cleanly
+             break;
+        }
+        // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+    }
   }
 }
 
@@ -293,7 +307,10 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
       }
   } catch (error: any) {
       console.error("Workhorse Stream Error:", error);
-      // Fallback managed by controller logic
+      // Yield error as text if it's an Auth error, so user knows system is broken
+      if (error?.status === 401 || error?.code === 'invalid_api_key') {
+           yield " [System: Backup Provider Auth Failed. Please check server logs.] ";
+      }
   }
 }
 
