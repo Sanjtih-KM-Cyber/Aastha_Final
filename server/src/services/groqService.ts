@@ -1,4 +1,5 @@
 import Groq from 'groq-sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
@@ -8,21 +9,29 @@ dotenv.config();
 // 0. CONFIGURATION & CLIENTS
 // ==========================================
 
-// GROQ (The Brain, Voice Director & Workhorse)
-// We rotate keys to attempt to bypass rate limits if multiple keys are provided
+// GROQ KEYS (Load all available keys for rotation)
 const groqKeys = (process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '')
   .split(',')
   .map(key => key.trim())
   .filter(key => key.length > 0);
 
-const getGroqClient = () => {
+// Helper: Get a specific Groq client by index
+const getGroqClient = (index: number) => {
   if (groqKeys.length === 0) {
-      console.error("FATAL: No GROQ_API_KEYS found.");
+      // Return dummy if no keys, logic will fail over to Gemini
       return new Groq({ apiKey: 'dummy' });
   }
-  // Pick a random key to distribute load and avoid hitting rate limits on a single key
-  const randomKey = groqKeys[Math.floor(Math.random() * groqKeys.length)];
-  return new Groq({ apiKey: randomKey });
+  // Pick specific key based on index to ensure rotation
+  const key = groqKeys[index % groqKeys.length];
+  return new Groq({ apiKey: key });
+};
+
+// GEMINI (The Ultimate Backup)
+const getGeminiClient = () => {
+    const keys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').split(',');
+    const key = keys[Math.floor(Math.random() * keys.length)]?.trim();
+    if (!key) return null;
+    return new GoogleGenerativeAI(key);
 };
 
 export interface ChatMessage {
@@ -52,7 +61,6 @@ export const generateSubconscious = async (
     userContext: string,
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
-    const client = getGroqClient();
     
     // OPTIMIZATION: Use 8B for thoughts to save tokens/TPM. 
     // It is fast and smart enough for JSON logic.
@@ -181,35 +189,70 @@ export const generateSubconscious = async (
         messages.push({ role: 'system', content: "SYSTEM OVERRIDE: User explicitly requested a reply. Set strategy to 'reply'." });
     }
 
+    // --- STRATEGY A: ROTATE GROQ KEYS ---
+    for (let i = 0; i < groqKeys.length; i++) {
+        try {
+            const client = getGroqClient(i);
+            const response = await client.chat.completions.create({
+                messages: messages,
+                model: model,
+                temperature: 0.6, // Balanced creativity
+                max_tokens: 500,
+                response_format: { type: "json_object" }
+            });
+
+            const raw = response.choices[0]?.message?.content || "{}";
+            const parsed = JSON.parse(raw) as SubconsciousBlock;
+
+            // Failsafe for UI Action consistency
+            if (parsed.strategy === 'listen') parsed.ui_action = 'listen';
+            else parsed.ui_action = 'none';
+
+            return parsed; // SUCCESS!
+
+        } catch (error: any) {
+            console.warn(`⚠️ Subconscious: Groq Key ${i+1}/${groqKeys.length} Failed (${error?.status || error?.message}). Trying next...`);
+            // Continue loop
+        }
+    }
+
+    // --- STRATEGY B: GEMINI FLASH FALLBACK ---
+    console.error("❌ Subconscious: All Groq Keys Exhausted. Switching to GEMINI FLASH.");
     try {
-        const response = await client.chat.completions.create({
-            messages: messages,
-            model: model,
-            temperature: 0.6, // Balanced creativity
-            max_tokens: 500,
-            response_format: { type: "json_object" }
+        const gemini = getGeminiClient();
+        if (!gemini) throw new Error("No Gemini Keys");
+
+        const model = gemini.getGenerativeModel({ 
+            model: "gemini-1.5-flash", 
+            generationConfig: { responseMimeType: "application/json" } 
         });
 
-        const raw = response.choices[0]?.message?.content || "{}";
-        const parsed = JSON.parse(raw) as SubconsciousBlock;
+        const chat = model.startChat({
+            history: history.slice(-10).map(m => ({
+                role: m.role === 'user' ? 'user' : 'model',
+                parts: [{ text: typeof m.content === 'string' ? m.content : '[Image]' }]
+            })),
+            systemInstruction: systemPrompt
+        });
 
-        // Failsafe for UI Action consistency
-        if (parsed.strategy === 'listen') parsed.ui_action = 'listen';
-        else parsed.ui_action = 'none';
-
+        const result = await chat.sendMessage("Analyze and Respond JSON");
+        const text = result.response.text();
+        const jsonText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(jsonText) as SubconsciousBlock;
+        
+        if (parsed.strategy === 'listen') parsed.ui_action = 'listen'; else parsed.ui_action = 'none';
         return parsed;
 
-    } catch (error) {
-        console.error("Groq Brain Error:", error);
-        // Robust Fallback Block
-        return {
-            internal_monologue: "Connection fuzz...",
+    } catch (geminiError) {
+         console.error("Gemini Subconscious Failed:", geminiError);
+         return {
+            internal_monologue: "Systems critical...",
             mood: "neutral",
-            status_display: "Reconnecting...",
+            status_display: "Rebooting...",
             ui_action: "none",
             strategy: "reply",
             reaction: null,
-            suggested_replies: ["I'm still here", "Continue", "What happened?"],
+            suggested_replies: ["I'm here", "Wait", "Reload"],
             tool_calls: []
         };
     }
@@ -219,7 +262,6 @@ export const generateSubconscious = async (
 // 2. THE VOICE DIRECTOR (Low Latency + Style) & PREMIUM CHAT
 // ============================================================================
 export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number, model: string = "llama-3.1-8b-instant") {
-  // Only inject Voice Director prompt if using the instant model (Voice Mode)
   
   let finalPrompt = systemPrompt;
   if (model === "llama-3.1-8b-instant") {
@@ -239,14 +281,10 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       }))
   ];
 
-  // RETRY LOGIC: Try once. If it fails (429), THROW immediately so Controller switches to Workhorse.
-  // We do NOT want to wait 15s for retries if the key is burnt.
-  let attempt = 0;
-  const maxRetries = 1; 
-
-  while (attempt < maxRetries) {
+  // RETRY LOGIC: Rotate keys instead of retrying same key
+  for (let i = 0; i < groqKeys.length; i++) {
     try {
-        const groqClient = getGroqClient();
+        const groqClient = getGroqClient(i);
         const completion = await groqClient.chat.completions.create({
             messages: messages,
             model: model,
@@ -259,28 +297,22 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
             const content = chunk.choices[0]?.delta?.content || "";
             if (content) yield content;
         }
-        return; 
+        return; // Success!
     } catch (error: any) {
-        console.error(`Groq Stream Error (Attempt ${attempt + 1}):`, error?.error?.code || error.message);
-        attempt++;
-        if (attempt >= maxRetries) {
-             // CRITICAL: Throw error so Controller knows to switch to Workhorse
-             throw error;
-        }
-        // No sleep/backoff - just fail fast
+        console.warn(`Groq Stream Key ${i+1} Failed: ${error?.error?.code || error.message}`);
+        // Continue to next key
     }
   }
+
+  // If loop finishes, all keys failed
+  throw new Error("All Groq Keys Rate Limited");
 }
 
 // ============================================================================
-// 3. THE WORKHORSE (GROQ: openai/gpt-oss-120b)
+// 3. THE WORKHORSE (GROQ 120B -> GEMINI FLASH FALLBACK)
 // ============================================================================
 export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
-  // Using Groq Client for the "openai/gpt-oss-120b" model as requested
-  // This assumes the model is available on your Groq access or custom endpoint
-  const client = getGroqClient();
-  const model = "openai/gpt-oss-120b"; 
-
+  
   const messages: any[] = [
       { role: 'system', content: systemPrompt },
       ...history.map(m => ({
@@ -289,23 +321,61 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
       }))
   ];
 
+  // 1. PRIMARY: Try "openai/gpt-oss-120b" on Groq (with Key Rotation)
+  for (let i = 0; i < groqKeys.length; i++) {
+      try {
+          const client = getGroqClient(i);
+          const completion = await client.chat.completions.create({
+              model: "openai/gpt-oss-120b", 
+              messages: messages,
+              temperature: 0.7,
+              max_tokens: maxTokens || 1024,
+              stream: true,
+          });
+
+          for await (const chunk of completion) {
+              const content = chunk.choices[0]?.delta?.content || "";
+              if (content) yield content;
+          }
+          return; // Success!
+
+      } catch (groqError: any) {
+          console.warn(`⚠️ Workhorse (GPT-OSS-120B) Key ${i+1} Failed. Trying next...`);
+      }
+  }
+
+  // 2. ULTIMATE BACKUP: Gemini 1.5 Flash (When Groq is 100% Dead)
+  console.error("⚠️ All Groq Workhorse Keys Dead. Switching to GEMINI FLASH.");
   try {
-      const completion = await client.chat.completions.create({
-          model: model,
-          messages: messages,
-          temperature: 0.7,
-          max_tokens: maxTokens || 1024,
-          stream: true,
+      const gemini = getGeminiClient();
+      if (!gemini) {
+         yield " [System: No Backup Keys. Brain Offline.] ";
+         return;
+      }
+
+      const model = gemini.getGenerativeModel({ model: "gemini-1.5-flash" });
+      
+      const chatHistory = history.map(m => ({
+          role: m.role === 'user' ? 'user' : 'model',
+          parts: [{ text: typeof m.content === 'string' ? m.content : '[Multimedia]' }]
+      }));
+
+      const chat = model.startChat({
+          history: chatHistory,
+          systemInstruction: systemPrompt
       });
 
-      for await (const chunk of completion) {
-          const content = chunk.choices[0]?.delta?.content || "";
-          if (content) yield content;
+      const lastMsg = chatHistory.length > 0 ? "Continue conversation" : "Hello";
+      const result = await chat.sendMessageStream(lastMsg);
+
+      for await (const chunk of result.stream) {
+          const text = chunk.text();
+          if (text) yield text;
       }
-  } catch (error: any) {
-      console.error("Workhorse (Groq) Stream Error:", error);
-      // Yield error as text so user knows system is broken, as this is the last line of defense
-      yield " [System: Brain Overload. Please wait 1 minute.] ";
+
+  } catch (geminiError) {
+      console.error("Gemini Workhorse Error:", geminiError);
+      yield " [System: Brain Overload. Please try again in 5 minutes.] ";
   }
 }
 
@@ -313,23 +383,26 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
 // 4. WHISPER TRANSCRIPTION
 // ============================================================================
 export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
-    try {
-        const client = getGroqClient();
-        const tempPath = `/tmp/upload_${Date.now()}.m4a`;
-        fs.writeFileSync(tempPath, audioBuffer);
+    // Rotation for Whisper too
+    for (let i = 0; i < groqKeys.length; i++) {
+        try {
+            const client = getGroqClient(i);
+            const tempPath = `/tmp/upload_${Date.now()}.m4a`;
+            fs.writeFileSync(tempPath, audioBuffer);
 
-        const transcription = await client.audio.transcriptions.create({
-            file: fs.createReadStream(tempPath),
-            model: "whisper-large-v3",
-            response_format: "json",
-            language: "en",
-            temperature: 0.0
-        });
+            const transcription = await client.audio.transcriptions.create({
+                file: fs.createReadStream(tempPath),
+                model: "whisper-large-v3",
+                response_format: "json",
+                language: "en",
+                temperature: 0.0
+            });
 
-        fs.unlinkSync(tempPath);
-        return transcription.text;
-    } catch (error: any) {
-        console.error("Whisper Transcription Error:", error);
-        throw new Error("Failed to transcribe audio.");
+            fs.unlinkSync(tempPath);
+            return transcription.text;
+        } catch (error) {
+            console.warn(`Whisper Key ${i+1} Failed. Trying next...`);
+        }
     }
+    return "[Audio processing failed due to server load]";
 };
