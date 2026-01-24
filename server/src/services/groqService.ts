@@ -1,5 +1,4 @@
 import Groq from 'groq-sdk';
-import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
@@ -9,29 +8,21 @@ dotenv.config();
 // 0. CONFIGURATION & CLIENTS
 // ==========================================
 
-// GROQ (The Brain & Voice Director)
+// GROQ (The Brain, Voice Director & Workhorse)
+// We rotate keys to attempt to bypass rate limits if multiple keys are provided
 const groqKeys = (process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '')
   .split(',')
   .map(key => key.trim())
   .filter(key => key.length > 0);
 
 const getGroqClient = () => {
-  const randomKey = groqKeys.length > 0 
-    ? groqKeys[Math.floor(Math.random() * groqKeys.length)] 
-    : 'dummy_key_missing';
+  if (groqKeys.length === 0) {
+      console.error("FATAL: No GROQ_API_KEYS found.");
+      return new Groq({ apiKey: 'dummy' });
+  }
+  // Pick a random key to distribute load and avoid hitting rate limits on a single key
+  const randomKey = groqKeys[Math.floor(Math.random() * groqKeys.length)];
   return new Groq({ apiKey: randomKey });
-};
-
-// OPENROUTER (The Workhorse)
-// Uses OpenAI SDK but points to OpenRouter URL
-const getOpenRouterClient = () => {
-    const key = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
-    if (!key) console.warn("WARNING: No OPENROUTER_API_KEY found. Workhorse fallback will fail.");
-
-    return new OpenAI({
-        baseURL: "https://openrouter.ai/api/v1",
-        apiKey: key || 'dummy_key_to_prevent_sdk_throw', // SDK throws if empty, so we provide dummy to allow graceful failure later
-    });
 };
 
 export interface ChatMessage {
@@ -63,7 +54,8 @@ export const generateSubconscious = async (
 ): Promise<SubconsciousBlock> => {
     const client = getGroqClient();
     
-    // FIX 1: Use 8B model to save tokens (was 70B)
+    // OPTIMIZATION: Use 8B for thoughts to save tokens/TPM. 
+    // It is fast and smart enough for JSON logic.
     const model = "llama-3.1-8b-instant"; 
 
     const systemPrompt = `
@@ -247,9 +239,10 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       }))
   ];
 
+  // RETRY LOGIC: Try once. If it fails (429), THROW immediately so Controller switches to Workhorse.
+  // We do NOT want to wait 15s for retries if the key is burnt.
   let attempt = 0;
-  const maxRetries = 3;
-  let lastError: any = null;
+  const maxRetries = 1; 
 
   while (attempt < maxRetries) {
     try {
@@ -266,27 +259,27 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
             const content = chunk.choices[0]?.delta?.content || "";
             if (content) yield content;
         }
-        return;
+        return; 
     } catch (error: any) {
-        console.error(`Groq Stream Error (Attempt ${attempt + 1}):`, error);
-        lastError = error;
+        console.error(`Groq Stream Error (Attempt ${attempt + 1}):`, error?.error?.code || error.message);
         attempt++;
         if (attempt >= maxRetries) {
-             // FIX 2: THROW ERROR to trigger backup model in controller
-             throw lastError;
+             // CRITICAL: Throw error so Controller knows to switch to Workhorse
+             throw error;
         }
-        // Exponential backoff
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+        // No sleep/backoff - just fail fast
     }
   }
 }
 
 // ============================================================================
-// 3. THE WORKHORSE (OpenRouter / GPT-OSS-120B)
+// 3. THE WORKHORSE (GROQ: openai/gpt-oss-120b)
 // ============================================================================
 export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
-  const model = "openai/gpt-oss-120b"; // Verified Model ID
-  const client = getOpenRouterClient();
+  // Using Groq Client for the "openai/gpt-oss-120b" model as requested
+  // This assumes the model is available on your Groq access or custom endpoint
+  const client = getGroqClient();
+  const model = "openai/gpt-oss-120b"; 
 
   const messages: any[] = [
       { role: 'system', content: systemPrompt },
@@ -310,12 +303,9 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
           if (content) yield content;
       }
   } catch (error: any) {
-      console.error("Workhorse Stream Error:", error);
-      // Yield error as text if it's an Auth error, so user knows system is broken
-      if (error?.status === 401 || error?.code === 'invalid_api_key') {
-           yield " [System: Backup Provider Auth Failed. Please check server logs.] ";
-      }
-      throw error; // Throw so controller can handle if needed
+      console.error("Workhorse (Groq) Stream Error:", error);
+      // Yield error as text so user knows system is broken, as this is the last line of defense
+      yield " [System: Brain Overload. Please wait 1 minute.] ";
   }
 }
 
