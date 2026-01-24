@@ -282,6 +282,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
     let provider: 'GROQ_70B' | 'GROQ_8B_VOICE' | 'WORKHORSE_120B';
     const isPro = user.isPro || (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > new Date());
+    const msgCount = user.dailyMessageCount || 0;
+    const isWithinFreeTier = msgCount < 15;
 
     // Check Voice Mode (Priority)
     // If voice mode is active, we utilize the Voice Director (8B) for low latency
@@ -292,8 +294,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         provider = 'GROQ_70B';
     } else {
         // Free Users -> "The Hook" vs "The Workhorse"
-        const msgCount = user.dailyMessageCount || 0;
-        if (msgCount < 15) {
+        if (isWithinFreeTier) {
              provider = 'GROQ_70B'; // The Hook
         } else {
              provider = 'WORKHORSE_120B'; // The Workhorse
@@ -395,11 +396,15 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         systemPrompt += `\n[SYSTEM: OUTPUT THESE COMMANDS AT THE END]\n${tools}`;
     }
 
+    // Calculate remaining "Premium" credits for Free users to display in UI
+    const creditsDisplay = isPro ? '∞' : Math.max(0, 15 - msgCount);
+
     (res as any).write(`data: ${JSON.stringify({ 
         meta: { 
             model: provider,
             battery: user.socialBattery,
-            mode: isPro ? 'pro' : 'standard'
+            mode: (isPro || isWithinFreeTier) ? 'pro' : 'standard', // <--- VISUAL MODE FIX
+            credits: creditsDisplay
         } 
     })}\n\n`);
 
@@ -446,7 +451,12 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         styleDescription = styleMatch[1].trim();
     }
 
-    const shouldGenerateAudio = (isPro || isVoiceMode) && fullTextResponse.trim().length > 0;
+    // VOICE QUOTA LOGIC:
+    // 1. Pro Users: Unlimited.
+    // 2. Free Users: Max 2 voice notes per day.
+    const hasVoiceQuota = (user.dailyVoiceCount || 0) < 2;
+    const shouldGenerateAudio = (isPro || hasVoiceQuota) && fullTextResponse.trim().length > 0;
+
     let savedAudioUrl: string | undefined;
 
     if (shouldGenerateAudio) {
@@ -461,6 +471,10 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                 storeAudio(audioId, audioBuffer);
                 savedAudioUrl = `/api/ai/stream/${audioId}`;
                 (res as any).write(`data: ${JSON.stringify({ voice_audio: savedAudioUrl, voice_note: savedAudioUrl })}\n\n`);
+
+                // Increment Usage
+                user.dailyVoiceCount = (user.dailyVoiceCount || 0) + 1;
+                await user.save();
             } else {
                 (res as any).write(`data: ${JSON.stringify({ meta: { voice_status: "failed" } })}\n\n`);
             }

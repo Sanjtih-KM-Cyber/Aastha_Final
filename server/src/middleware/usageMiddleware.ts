@@ -32,6 +32,8 @@ export const checkUsage = async (req: AuthRequest, res: Response, next: NextFunc
             // Reset for new day - Split Quotas
             user.dailyGeminiCount = 0;
             user.dailyGroqCount = 0;
+            user.dailyMessageCount = 0; // <--- RESET
+            user.dailyVoiceCount = 0; // <--- RESET
             user.lastMessageDate = now;
             await user.save();
         }

@@ -69,17 +69,16 @@ export const generateSubconscious = async (
     ${userContext}
 
     **1. DECISION MATRIX (STRATEGY):**
-    - **'listen'**: Choose this ONLY if the user is in a state of UNCONTROLLED VENTING.
-       a) User text is a long monologue (>40 words) about negative feelings.
-       b) User is typing multiple short bursts in <2 seconds (mid-thought).
-       c) User explicitly says "Shut up", "Listen", or "Let me finish".
-       d) **DEFAULT TO 'reply':** If there is ANY doubt (e.g., they ask a question, say "hello", or use neutral language), you MUST choose 'reply'.
-       e) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️) that matches the sentiment.
+    - **'listen'**: Choose this if the user is venting or typing rapidly.
+       a) **BURST DETECTION:** If the history shows the user sent 2+ messages in a row without an AI reply, DEFAULT to 'listen'.
+       b) **VENTING:** If user is typing short, rapid fragments (e.g. "and then", "he said", "wait", "like").
+       c) **EXPLICIT:** User says "Shut up", "Listen", "Wait", "Let me finish".
+       d) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️, 🤔, 👇) that matches the sentiment.
     - **'reply'**: The DEFAULT state.
-       - Even if they are sad, if they are *talking to you*, you must reply.
-       - If they ask a question -> 'reply'.
-       - If they say "I'm sad" (short) -> 'reply'.
-       - If they request a tool -> 'reply'.
+       - If the user asks a question -> 'reply'.
+       - If the user says "hello", "hi", "hey" -> 'reply'.
+       - If the user requests a tool/music -> 'reply'.
+       - If the user has finished their thought -> 'reply'.
 
     **MOOD SWITCHING RULE (CRITICAL):**
     - If 'mood' was previously 'sad' or 'concerned', but the user now makes a joke, laughs, or speaks normally/rationally, you MUST IMMEDIATELY switch 'mood' to 'neutral', 'calm', or 'happy'.
@@ -259,7 +258,8 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       }
   } catch (error: any) {
       console.error("Groq Stream Error:", error);
-      yield " [Connection drift... tell me that again?] ";
+      // Silent fail or minimal indicator to avoid disrupting user flow
+      // The frontend will handle the lack of content or the user can retry.
   }
 }
 
@@ -293,8 +293,7 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
       }
   } catch (error: any) {
       console.error("Workhorse Stream Error:", error);
-      yield " [Standard circuit busy. Using backup link...] ";
-      // Fallback to Groq 70b if Workhorse fails? Handled by controller usually, but here we just yield error text.
+      // Fallback managed by controller logic
   }
 }
 

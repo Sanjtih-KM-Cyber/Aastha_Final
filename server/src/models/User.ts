@@ -137,6 +137,7 @@ export interface IUser extends Document {
   // --- ARCHITECTURE V2 ---
   inferredGender: 'Male' | 'Female' | 'Unknown';
   dailyMessageCount: number;
+  dailyVoiceCount: number; // <--- NEW: Daily Voice Note Limit for Free Users
 }
 
 const securityQuestionSchema = new Schema({
@@ -271,7 +272,8 @@ const userSchema = new Schema<IUser>({
 
   // --- ARCHITECTURE V2 ---
   inferredGender: { type: String, enum: ['Male', 'Female', 'Unknown'], default: 'Unknown' },
-  dailyMessageCount: { type: Number, default: 0 }
+  dailyMessageCount: { type: Number, default: 0 },
+  dailyVoiceCount: { type: Number, default: 0 } // <--- NEW
 }, {
   timestamps: true,
 });
