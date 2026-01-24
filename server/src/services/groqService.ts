@@ -69,46 +69,110 @@ export const generateSubconscious = async (
     ${userContext}
 
     **1. DECISION MATRIX (STRATEGY):**
-    - **'listen'**: Choose this ONLY if the user is in a state of UNCONTROLLED VENTING, emotional, or telling a story without a question.
-       a) User text is a long monologue about negative feelings.
-       b) User is typing multiple short bursts in <2 seconds.
+    - **'listen'**: Choose this ONLY if the user is in a state of UNCONTROLLED VENTING.
+       a) User text is a long monologue (>40 words) about negative feelings.
+       b) User is typing multiple short bursts in <2 seconds (mid-thought).
        c) User explicitly says "Shut up", "Listen", or "Let me finish".
-       d) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️) that matches the sentiment.
-    - **'reply'**: Choose this ONLY if the user asks a question, says "Hello", or explicitly grants permission/requests input.
-       - The DEFAULT is 'reply' for normal conversation.
+       d) **DEFAULT TO 'reply':** If there is ANY doubt (e.g., they ask a question, say "hello", or use neutral language), you MUST choose 'reply'.
+       e) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️) that matches the sentiment.
+    - **'reply'**: The DEFAULT state.
+       - Even if they are sad, if they are *talking to you*, you must reply.
        - If they ask a question -> 'reply'.
+       - If they say "I'm sad" (short) -> 'reply'.
+       - If they request a tool -> 'reply'.
 
     **MOOD SWITCHING RULE (CRITICAL):**
     - If 'mood' was previously 'sad' or 'concerned', but the user now makes a joke, laughs, or speaks normally/rationally, you MUST IMMEDIATELY switch 'mood' to 'neutral', 'calm', or 'happy'.
+    - Do NOT let the mood get "stuck" on sad. Be responsive to improvement.
 
     **2. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
     - You MUST provide exactly 3 suggested replies for the user to click.
     - **CRITICAL:** These must be written from the **USER'S Perspective** (First Person).
     - **TONE:** Match the user's likely reaction.
-    - ⛔ **Do NOT** ask questions or use 'You'.
+
+    **NEGATIVE CONSTRAINTS (STRICT):**
+    - ⛔ **Do NOT** ask the user questions from your perspective (e.g., "Do you want to...?", "Shall I...?").
+    - ⛔ **Do NOT** use 'You' to refer to the user in these chips.
+    - ⛔ **Do NOT** offer help (e.g., "I can help with that"). The chip is what the USER says.
+    - ⛔ **Do NOT** start with verbs that imply the AI is asking (e.g., "Want me to...", "Should I...").
+
+    **EXAMPLES:**
+    - ❌ BAD: "Do you want to vent?" (AI asking User)
+    - ❌ BAD: "Shall I play some music?" (AI offering)
+    - ❌ BAD: "Want me to tell a joke?" (AI offering)
+    - ✅ GOOD: "I really need to vent" (User Statement)
+    - ✅ GOOD: "Play some sad music" (User Command)
+    - ✅ GOOD: "Tell me a joke" (User Command)
+    - ✅ GOOD: "What do you think about this?" (User Question to AI)
+
+    **RULES:**
+       - **YES:** Statements or questions the USER would ask YOU.
+       - **YES:** First-person ("I", "Me", "My").
+       - **LENGTH:** Natural and conversational. Avoid 1-word replies.
 
     **3. GOD MODE TOOLS (The Hands):**
-    - **Music (Jam):** Trigger: "Play music", "Play Tamil songs from 2025". Map "Latest" to "2024, 2025, 2026".
-      - { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil"], "genres": ["Romantic"], "duration": 50, "autoplay": true } } }
-    - **Soundscape:** "Play rain". { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6" } } }
-    - **Focus:** "Study mode". { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 25 } } }
-    - **Breathing:** "I'm anxious". { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
-    - **Theme:** "Change theme to blue". { "name": "change_theme", "params": { "color": "blue" } }
-    - **Diary:** "Write a note". { "name": "write_diary", "params": { "title": "Auto Entry", "content": "...", "date": "YYYY-MM-DD" } }
+    You have full control. Anticipate needs.
+    **IMPORTANT:** Be CONSERVATIVE with tools. Do NOT open Music or Soundscapes unless the user **explicitly** asks for it or the emotional need is overwhelming (e.g. "I'm having a panic attack" -> Breathing).
+    Use 'control_widget' for most things.
 
-    **OUTPUT JSON ONLY:**
+    **Structure:** { "name": "control_widget", "params": { "widget": "...", "params": { ... } } }
+
+    - **Music (Jam):**
+      - Trigger: "Play music", "Play some songs", "I need a vibe", "50 mins of south indian romantic music", "Play Tamil songs from 2025", "Latest Bollywood songs".
+      - ⛔ **CRITICAL:** Do NOT just list songs in the chat. You MUST use the 'control_widget' tool to actually play them.
+      - **VIBE MODE (PREFERRED):** If user specifies ANY of: Duration, Language, Genre, Year, or Mood -> Use this.
+        - **IMPORTANT:** Even if user provides partial info (e.g. only "Tamil" or "2010s"), send what you have. The system will default Duration to 30 mins and infer Mood.
+        - Map "South Indian" -> ["Tamil", "Telugu", "Malayalam", "Kannada"].
+        - Map "Latest", "New", "Current" -> Set 'year' to "2024, 2025, 2026".
+        - Params: 'languages' (Array), 'genres' (Array), 'mood' (String), 'duration' (Number, minutes), 'year' (String).
+        - Example: { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil", "Telugu"], "genres": ["Romantic"], "duration": 50, "autoplay": true } } }
+      - **Simple Search:** Use ONLY for specific song titles (e.g. "Play Tum Hi Ho").
+        - Example: { "name": "control_widget", "params": { "widget": "jam", "params": { "query": "Play <Name>", "autoplay": true } } }
+
+    - **Soundscape (Ambient Mixer):**
+      - Trigger: "Play rain", "White noise", "Nature sounds".
+      - Mix sounds (rain, forest, fire, ocean, night, wind, thunder, birds).
+      - { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6,fire:0.3", "volume": 0.8 } } }
+
+    - **Focus (Pomodoro):**
+      - Trigger: "Let's focus", "Study mode", "Work time".
+      - { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 25 } } }
+
+    - **Breathing:**
+      - Trigger: "I'm anxious", "Panic attack", "Help me breathe".
+      - { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
+
+    - **Diary:**
+      - Trigger: "I want to journal", "Open diary", "Write a note for Jan 15".
+      - Params: "date" should be YYYY-MM-DD. If user says "tomorrow" or "next friday", calculate it.
+      - { "name": "write_diary", "params": { "title": "Auto Entry", "content": "<Summarize user input>", "date": "YYYY-MM-DD" } }
+
+    - **Mood Tracker:**
+      - Trigger: "Log my mood", "Track my mood", "I'm feeling...".
+      - { "name": "control_widget", "params": { "widget": "mood", "params": { "action": "open" } } }
+
+    - **Theme (Magician):**
+      - **STRICT TRIGGER:** Trigger ONLY if the user EXPLICITLY asks to "change theme", "make it pink", "dark mode".
+      - **PROHIBITED:** Do NOT change theme based on mood (e.g. don't turn blue just because user is sad).
+      - { "name": "change_theme", "params": { "color": "blue" } }
+
+    - **Social Detective (The Web):**
+      - { "name": "update_dossier", "params": { "name": "Bob", "deltaScore": -5, "verdict": "SUSPECT", "newTrait": "Flakes" } }
+
+    **OUTPUT JSON ONLY (Strict Format):**
     {
-      "internal_monologue": "string",
-      "mood": "happy" | "sad" | "concerned" | "sassy" | "calm" | "excited" | "neutral",
-      "status_display": "string",
-      "ui_action": "none" | "listen",
+      "internal_monologue": "Raw thought process about the user's state.",
+      "mood": "happy" | "sad" | "concerned" | "sassy" | 'calm' | 'excited' | 'neutral',
+      "status_display": "UI Status (e.g. 'Listening...', 'Vibing', 'Thinking')",
+      "ui_action": "listen" | "none",
       "strategy": "reply" | "listen",
-      "reaction": "string" | null,
-      "suggested_replies": ["string", "string", "string"],
+      "reaction": "string" | null, // Emojis: thumbsup, heart, laugh, sad, shock, fire, clap, nod, smile, cry, angry, think, cool, party, etc.
+      "suggested_replies": ["User phrase 1", "User phrase 2", "User phrase 3"],
       "tool_calls": []
     }
     `;
 
+    // Construct Messages (Keep only last 10 turns to save tokens/speed)
     const messages: any[] = [
         { role: 'system', content: systemPrompt },
         ...history.slice(-10).map(m => ({
@@ -125,7 +189,7 @@ export const generateSubconscious = async (
         const response = await client.chat.completions.create({
             messages: messages,
             model: model,
-            temperature: 0.6,
+            temperature: 0.6, // Balanced creativity
             max_tokens: 500,
             response_format: { type: "json_object" }
         });
@@ -133,6 +197,7 @@ export const generateSubconscious = async (
         const raw = response.choices[0]?.message?.content || "{}";
         const parsed = JSON.parse(raw) as SubconsciousBlock;
 
+        // Failsafe for UI Action consistency
         if (parsed.strategy === 'listen') parsed.ui_action = 'listen';
         else parsed.ui_action = 'none';
 
@@ -140,6 +205,7 @@ export const generateSubconscious = async (
 
     } catch (error) {
         console.error("Groq Brain Error:", error);
+        // Robust Fallback Block
         return {
             internal_monologue: "Connection fuzz...",
             mood: "neutral",
@@ -158,19 +224,6 @@ export const generateSubconscious = async (
 // ============================================================================
 export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number, model: string = "llama-3.1-8b-instant") {
   // Only inject Voice Director prompt if using the instant model (Voice Mode)
-  // OR if explicitly requested?
-  // For simplicity: The controller will pass the correct systemPrompt.
-  // But wait, the previous logic injected it inside the function.
-  // I should check if I should inject it conditionally.
-
-  // Plan: "The Voice Director... generates [STYLE: ...] tags."
-  // "Premium Brain... High EQ." (No style tags needed implicitly, but maybe for TTS?)
-  // If model is 8b-instant, we assume Voice Mode -> Inject Tag instructions?
-  // Or better, let the Controller handle the prompt injection and just pass the model here.
-
-  // Refactoring: Remove the hardcoded injection from here and let Controller do it if needed.
-  // BUT the Plan Step 4 said: "Update streamGroq... Prepend this exact instruction".
-  // So I'll keep it but only if model is 8b-instant.
   
   let finalPrompt = systemPrompt;
   if (model === "llama-3.1-8b-instant") {
