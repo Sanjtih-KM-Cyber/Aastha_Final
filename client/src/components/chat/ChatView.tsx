@@ -147,6 +147,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null); // STOP BUTTON REF
 
   // Subconscious State
   const [statusDisplay, setStatusDisplay] = useState(currentActivity || 'Online');
@@ -597,6 +598,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   // --- 5. SEND LOGIC (INTEGRATED WITH SERVER BRAIN) ---
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+    }
+    setIsTyping(false);
+    setStatusDisplay('Online');
+  };
+
   const handleSend = async (e?: React.FormEvent, overrideInput?: string, overrideImage?: string, audioBlob?: Blob) => {
     if (e) e.preventDefault();
     
@@ -638,6 +648,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
     // 2. CALL BACKEND
     try {
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       let token = '';
       try {
         const storedInfo = localStorage.getItem('userInfo');
@@ -654,6 +668,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             'Authorization': `Bearer ${token}` 
         },
         credentials: 'include', 
+        signal: abortController.signal,
         body: JSON.stringify({
             message: actualContent,
             images: overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []),
@@ -763,11 +778,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
                         // B. HANDLE META & FAIL-FAST FALLBACK
                         if (data.meta) { 
-                            const creditVal = Number(data.meta.credits);
-                            setLocalCredits(data.meta.credits === '∞' ? 9999 : (isNaN(creditVal) ? 0 : creditVal));
+                            // Update Credits (If '∞', it stays as is. If number, it updates remaining quota)
+                            if (data.meta.credits !== undefined) {
+                                setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits));
+                            }
                             setModelMode(data.meta.mode); 
 
                             // FORCE ECO MODE IF BACKEND SAYS SO
+                            // Backend now handles the logic: 'standard' only if quota exceeded
                             const isEco = data.meta.mode === 'standard';
                             setIsStandardMode(isEco);
 
@@ -844,10 +862,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
 
     } catch (error: any) {
+      if (error.name === 'AbortError') {
+          console.log("Generation stopped by user.");
+          return;
+      }
       console.error(error);
       setMessages(prev => prev.filter(m => m.id !== tempBotId)); 
       setError(error.message || "Connection failed.");
-    } finally { setIsTyping(false); }
+    } finally {
+        setIsTyping(false);
+        abortControllerRef.current = null;
+    }
   };
 
   const processMagicTags = (text: string) => {
@@ -1362,8 +1387,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         </div>
                     </form>
 
-                    <button onClick={(e) => handleSend(e)} disabled={!input.trim() && !attachedImage} className="p-3.5 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-1" style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #4f46e5)` }}>
-                        <Send size={18} className="ml-0.5" fill="currentColor" />
+                    <button
+                        onClick={(e) => isTyping ? handleStop() : handleSend(e)}
+                        disabled={!isTyping && !input.trim() && !attachedImage}
+                        className={`p-3.5 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-1 ${isTyping ? 'bg-red-500 hover:bg-red-600' : ''}`}
+                        style={{ background: isTyping ? undefined : `linear-gradient(135deg, ${currentTheme.primaryColor}, #4f46e5)` }}
+                    >
+                        {isTyping ? (
+                            <div className="w-[18px] h-[18px] flex items-center justify-center">
+                                <div className="w-3 h-3 bg-white rounded-[2px]" />
+                            </div>
+                        ) : (
+                            <Send size={18} className="ml-0.5" fill="currentColor" />
+                        )}
                     </button>
                     </>
              </div>
