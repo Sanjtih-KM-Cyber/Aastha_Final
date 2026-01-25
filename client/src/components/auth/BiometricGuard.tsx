@@ -19,7 +19,22 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
         const check = async () => {
             if (isEnabled) {
                setIsLocked(true);
-               const success = await promptBiometrics();
+
+               // Timeout race: If biometrics plugin hangs, stop waiting but DO NOT UNLOCK automatically.
+               // Fail closed (secure) so user has to tap 'Unlock' again.
+               // Increased to 30s to allow ample time for user interaction.
+               const timeoutPromise = new Promise<boolean>((resolve) => {
+                   setTimeout(() => {
+                       console.warn("Biometric prompt timed out.");
+                       resolve(false);
+                   }, 30000);
+               });
+
+               const success = await Promise.race([
+                   promptBiometrics(),
+                   timeoutPromise
+               ]);
+
                setIsLocked(!success);
             }
             setHasCheckedInitial(true);
