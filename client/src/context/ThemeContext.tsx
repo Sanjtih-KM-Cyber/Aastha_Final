@@ -14,8 +14,10 @@ export interface Theme {
 interface ThemeContextType {
   currentTheme: Theme;
   wallpaper: string | null;
+  isLowPowerMode: boolean; // Added
   setTheme: (themeId: string, fromSync?: boolean) => void;
   setWallpaper: (file: File | null) => void;
+  setLowPowerMode: (enabled: boolean) => void; // Added
   resetTheme: () => void;
 }
 
@@ -58,6 +60,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [wallpaper, setWallpaperState] = useState<string | null>(() => {
       const w = localStorage.getItem('user_wallpaper');
       return w !== 'undefined' && w !== 'null' ? w : null;
+  });
+
+  // --- LITE MODE STATE ---
+  const [isLowPowerMode, setIsLowPowerMode] = useState<boolean>(() => {
+      const saved = localStorage.getItem('lite-mode-enabled');
+      if (saved !== null) {
+          return saved === 'true';
+      }
+      // Default to TRUE (Lite Mode) on mobile (< 768px)
+      return window.innerWidth < 768;
   });
 
   useEffect(() => {
@@ -103,6 +115,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!fromSync && user) {
         emit('THEME_UPDATE', { theme: themeId });
     }
+  };
+
+  const setLowPowerMode = (enabled: boolean) => {
+      setIsLowPowerMode(enabled);
+      localStorage.setItem('lite-mode-enabled', String(enabled));
   };
 
   const extractThemeFromImage = async (base64Image: string) => {
@@ -190,7 +207,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   return (
-    <ThemeContext.Provider value={{ currentTheme, wallpaper, setTheme, setWallpaper, resetTheme }}>
+    <ThemeContext.Provider value={{ currentTheme, wallpaper, isLowPowerMode, setTheme, setWallpaper, setLowPowerMode, resetTheme }}>
       {children}
     </ThemeContext.Provider>
   );

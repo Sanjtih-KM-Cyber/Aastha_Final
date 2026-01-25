@@ -9,7 +9,7 @@ interface AppContainerProps {
 
 export const AppContainer: React.FC<AppContainerProps> = ({ children }) => {
   const location = useLocation();
-  const { wallpaper, currentTheme } = useTheme();
+  const { wallpaper, currentTheme, isLowPowerMode } = useTheme(); // Consuming isLowPowerMode
   // ✅ FIX: Local state to handle broken image URLs gracefully
   const [imageError, setImageError] = useState(false);
 
@@ -32,34 +32,53 @@ export const AppContainer: React.FC<AppContainerProps> = ({ children }) => {
                 className="w-full h-full object-cover opacity-60"
                 onError={() => setImageError(true)} // Hide on error
             />
+            {/* LITE MODE: Remove the blend-multiply overlay if in lite mode for slight gain? No, keep for legibility. */}
             <div className="absolute inset-0 bg-black/40 mix-blend-multiply" />
           </motion.div>
         ) : (
           /* Default Gradient Background (Fallback) */
           <>
-            <motion.div 
-              animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3], x: [0, 20, 0] }}
-              transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute top-[-10%] left-[-10%] w-[70vw] h-[70vw] rounded-full blur-[120px] mix-blend-screen opacity-30"
-              style={{ backgroundColor: currentTheme.primaryColor }}
-            />
-            <motion.div 
-              animate={{ scale: [1, 1.1, 1], x: [0, -30, 0] }}
-              transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-              className={`absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] rounded-full blur-[120px] mix-blend-screen opacity-20 bg-gradient-to-t ${currentTheme.gradient}`}
-            />
+            {isLowPowerMode ? (
+               // LITE MODE: Static Gradient Background (No Animation, No Blur Calculation)
+               <div
+                  className="absolute inset-0 opacity-20"
+                  style={{
+                      background: `radial-gradient(circle at 50% 50%, ${currentTheme.primaryColor}, transparent 70%)`
+                  }}
+               />
+            ) : (
+               // HIGH QUALITY: Animated Blobs
+               <>
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3], x: [0, 20, 0] }}
+                  transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                  className="absolute top-[-10%] left-[-10%] w-[70vw] h-[70vw] rounded-full blur-[120px] mix-blend-screen opacity-30"
+                  style={{ backgroundColor: currentTheme.primaryColor }}
+                />
+                <motion.div
+                  animate={{ scale: [1, 1.1, 1], x: [0, -30, 0] }}
+                  transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                  className={`absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] rounded-full blur-[120px] mix-blend-screen opacity-20 bg-gradient-to-t ${currentTheme.gradient}`}
+                />
+               </>
+            )}
           </>
         )}
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] brightness-100 contrast-150 mix-blend-overlay"></div>
+
+        {/* LITE MODE: Remove Noise Overlay */}
+        {!isLowPowerMode && (
+           <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] brightness-100 contrast-150 mix-blend-overlay"></div>
+        )}
       </div>
 
       <AnimatePresence mode="wait">
         <motion.div
           key={location.pathname}
-          initial={{ opacity: 0, filter: 'blur(5px)' }}
-          animate={{ opacity: 1, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, filter: 'blur(5px)' }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
+          // LITE MODE: Simplified Page Transition
+          initial={isLowPowerMode ? { opacity: 0 } : { opacity: 0, filter: 'blur(5px)' }}
+          animate={isLowPowerMode ? { opacity: 1 } : { opacity: 1, filter: 'blur(0px)' }}
+          exit={isLowPowerMode ? { opacity: 0 } : { opacity: 0, filter: 'blur(5px)' }}
+          transition={{ duration: isLowPowerMode ? 0.2 : 0.4, ease: "easeOut" }}
           className="relative z-10 w-full h-full min-h-screen flex flex-col"
         >
           {children}

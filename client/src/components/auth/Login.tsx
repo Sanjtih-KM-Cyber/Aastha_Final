@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SECURITY_QUESTIONS } from '../../constants';
+import { useTheme } from '../../context/ThemeContext'; // Import for Lite Mode
 
 const MOTIVATIONAL_QUOTES = [
   "Your mind is a garden. Your thoughts are the seeds. You can grow flowers or you can grow weeds.",
@@ -32,6 +33,7 @@ interface LoginProps {
 type AuthMode = 'login' | 'register' | 'forgot-init' | 'forgot-otp' | 'forgot-complete' | 'verify-otp';
 
 export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
+  const { isLowPowerMode } = useTheme(); // LITE MODE
   const [mode, setMode] = useState<AuthMode>('login');
   const [isLoading, setIsLoading] = useState(false);
   const { login, register } = useAuth();
@@ -290,11 +292,15 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   return (
     <div className="min-h-screen bg-[#0B0F17] flex font-sans">
       {/* Left Panel - Art/Sanctuary (Desktop Only) */}
+      {/* LITE MODE: REMOVED LEFT PANEL ANIMATIONS */}
       <div className="hidden lg:flex w-1/2 relative overflow-hidden items-center justify-center p-12 text-white bg-black">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-violet-900/40 via-black to-black" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px] animate-pulse-glow" />
 
-        <div className="relative z-10 max-w-lg backdrop-blur-sm p-12 rounded-3xl border border-white/5 bg-white/5">
+        {!isLowPowerMode && (
+           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px] animate-pulse-glow" />
+        )}
+
+        <div className={`relative z-10 max-w-lg p-12 rounded-3xl border border-white/5 bg-white/5 ${!isLowPowerMode ? 'backdrop-blur-sm' : ''}`}>
           <div className="w-16 h-16 bg-gradient-to-br from-violet-50 to-indigo-600 rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-violet-500/20">
             {mode === 'verify-otp' || mode === 'forgot-otp' ? <Shield size={32} className="text-white"/> : <img src="/logo.png" alt="Logo" className="w-10 h-10 object-contain drop-shadow-md" />}
           </div>

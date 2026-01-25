@@ -1,21 +1,34 @@
 import React from 'react';
 import { ArrowRight, ShieldCheck, Heart } from 'lucide-react';
 import { FadeIn } from './FadeIn';
+import { useTheme } from '../../context/ThemeContext'; // Import Theme Context
 
 interface HeroProps {
   onLogin: () => void;
 }
 
 export const Hero: React.FC<HeroProps> = ({ onLogin }) => {
+  const { isLowPowerMode } = useTheme();
+
   return (
     <section className="relative pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden bg-white dark:bg-[#0B0F17] transition-colors duration-500">
-      {/* Background Decor */}
+      {/* Background Decor - SIMPLIFIED FOR LITE MODE */}
       <div className="absolute inset-0 bg-grid-slate-100 dark:bg-grid-white/[0.05] [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0.6))] dark:[mask-image:linear-gradient(0deg,black,rgba(0,0,0,0.6))] bg-[center_top_-1px] pointer-events-none" />
       <div className="absolute top-0 left-0 right-0 h-px bg-slate-100 dark:bg-white/5 pointer-events-none" />
 
       {/* Added pointer-events-none to these blobs so they don't block clicks */}
-      <div className="absolute top-20 left-1/4 w-96 h-96 bg-violet-200/50 dark:bg-violet-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-3xl opacity-40 animate-float pointer-events-none" />
-      <div className="absolute top-40 right-1/4 w-96 h-96 bg-teal-200/50 dark:bg-teal-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-3xl opacity-40 animate-float pointer-events-none" style={{ animationDelay: '2s' }} />
+      {/* LITE MODE: Replaced animated blobs with static gradients */}
+      {isLowPowerMode ? (
+          <>
+            <div className="absolute top-20 left-1/4 w-96 h-96 bg-violet-900/10 rounded-full filter blur-3xl pointer-events-none" />
+            <div className="absolute top-40 right-1/4 w-96 h-96 bg-teal-900/10 rounded-full filter blur-3xl pointer-events-none" />
+          </>
+      ) : (
+          <>
+            <div className="absolute top-20 left-1/4 w-96 h-96 bg-violet-200/50 dark:bg-violet-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-3xl opacity-40 animate-float pointer-events-none" />
+            <div className="absolute top-40 right-1/4 w-96 h-96 bg-teal-200/50 dark:bg-teal-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-3xl opacity-40 animate-float pointer-events-none" style={{ animationDelay: '2s' }} />
+          </>
+      )}
 
       <div className="max-w-7xl mx-auto px-6 relative z-10 text-center">
         <FadeIn delay={100} direction="up">

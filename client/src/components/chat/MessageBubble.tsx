@@ -35,13 +35,11 @@ const reactionMap: Record<string, string> = {
   'bye': '👋', 'cya': '👋',
   'nice': '👌',
   'smirking': '😏', 'relieved': '😌',
-  'pensive': '😔', 'sleepy': '😪',
-  'mask': '😷', 'sick': '🤒',
+  'pensive': '😔',
+  'mask': '😷',
   'zipper': '🤐', 'money_mouth': '🤑',
-  'nerd': '🤓',
   'hugging': '🤗',
   'rolling_eyes': '🙄',
-  'thinking': '🤔',
 
   // Agreement / Acknowledgment
   'nod': '👌', 'ok': '👌', 'okay': '👌', 'check': '✅',
@@ -93,8 +91,8 @@ const reactionMap: Record<string, string> = {
   'lightbulb': '💡', 'question': '❓', 'what': '❓',
   'awesome': '🤩', 'amazing': '🤩',
   'k': '👌', 'correct': '✅', 'wrong': '❌',
-  'hi': '👋', 'hello': '👋', 'bye': '👋', 'wave': '👋',
-  'welcome': '🤝', 'thanks': '🙏', 'ty': '🙏', 'grateful': '🙏',
+  'hi': '👋', 'hello': '👋', 'wave': '👋',
+  'welcome': '🤝', 'grateful': '🙏',
   'music': '🎵', 'song': '🎶', 'dance': '💃',
   'food': '🍕', 'eat': '🍽️', 'drink': '🥤', 'cheers': '🥂',
   'coffee': '☕', 'tea': '🍵', 'beer': '🍺', 'wine': '🍷',
@@ -169,7 +167,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   isMobile = false,
 }) => {
   const isUser = role === 'user';
-  const { currentTheme } = useTheme();
+  const { currentTheme, isLowPowerMode } = useTheme(); // Consume isLowPowerMode
   const [isHovered, setIsHovered] = useState(false);
 
   // Long Press Logic for Mobile
@@ -276,11 +274,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       }
   }, [mood, currentTheme]);
 
+  // LITE MODE: If lite mode is enabled, we skip framer-motion animation on initial mount
+  // by using a simple div or passing specific props to motion.div
+  const Wrapper = isLowPowerMode ? 'div' : motion.div;
+  const animationProps = isLowPowerMode ? {} : {
+      initial: { opacity: 0, y: 10, scale: 0.98 },
+      animate: { opacity: 1, y: 0, scale: 1 },
+      transition: { duration: 0.25, ease: 'easeOut' }
+  };
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
+    // @ts-ignore
+    <Wrapper
+      {...animationProps}
       className={`group flex w-full relative ${
         isUser ? 'justify-end' : 'justify-start'
       } ${isMobile ? 'mb-10' : 'mb-6'}`}
@@ -297,7 +303,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-500 overflow-hidden border-2"
             style={{
               borderColor: moodColor,
-              boxShadow: `0 0 15px ${moodColor}50`,
+              boxShadow: isLowPowerMode ? 'none' : `0 0 15px ${moodColor}50`, // Remove glow in Lite Mode
               background: '#000'
             }}
           >
@@ -350,19 +356,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 ? 'rounded-[22px] rounded-br-none border border-white/10'
                 : 'rounded-[22px] rounded-bl-none border border-white/10'
             }
-            ${!isMobile ? 'backdrop-blur-xl' : 'backdrop-blur-none'}
+            ${!isMobile && !isLowPowerMode ? 'backdrop-blur-xl' : 'backdrop-blur-none'}
           `}
           style={{
              ...( !isUser
               ? {
-                  background: isMobile
-                    ? '#111827'
+                  background: isMobile || isLowPowerMode
+                    ? '#111827' // Solid Dark Gray in Lite/Mobile
                     : `linear-gradient(135deg, ${moodColor}15, #00000080)`,
                   borderLeft: `3px solid ${moodColor}`,
                 }
               : {
-                  background: isMobile
-                    ? '#1f2937'
+                  background: isMobile || isLowPowerMode
+                    ? '#1f2937' // Solid Gray in Lite/Mobile
                     : `linear-gradient(135deg, #1f293780, #11182780)`,
                 }),
                 wordBreak: 'break-word',
@@ -376,9 +382,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 Thinking
               </span>
               <div className="flex gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce" />
-                <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce delay-150" />
-                <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce delay-300" />
+                {/* LITE MODE: Simplify thinking animation */}
+                <div className={`w-1.5 h-1.5 rounded-full bg-white/60 ${isLowPowerMode ? 'opacity-50' : 'animate-bounce'}`} />
+                <div className={`w-1.5 h-1.5 rounded-full bg-white/60 ${isLowPowerMode ? 'opacity-50' : 'animate-bounce delay-150'}`} />
+                <div className={`w-1.5 h-1.5 rounded-full bg-white/60 ${isLowPowerMode ? 'opacity-50' : 'animate-bounce delay-300'}`} />
               </div>
             </div>
           ) : (
@@ -446,8 +453,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         <AnimatePresence>
           {isUser && displayReaction && (
               <motion.div
-                  initial={{ scale: 0, opacity: 0, rotate: -20 }}
-                  animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                  initial={isLowPowerMode ? { opacity: 0 } : { scale: 0, opacity: 0, rotate: -20 }}
+                  animate={isLowPowerMode ? { opacity: 1 } : { scale: 1, opacity: 1, rotate: 0 }}
                   exit={{ scale: 0, opacity: 0 }}
                   className="absolute -left-3 -bottom-3 z-50 text-xl bg-[#2a2a2a] text-white rounded-full p-1.5 border border-white/20 shadow-xl flex items-center justify-center min-w-[32px] min-h-[32px]"
               >
@@ -490,6 +497,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
         </AnimatePresence>
       </div>
-    </motion.div>
+    </Wrapper>
   );
 };

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
-import { useLowPowerMode } from '../../hooks/useLowPowerMode';
+// import { useLowPowerMode } from '../../hooks/useLowPowerMode'; // REMOVED
 
 interface WellnessHubProps {
   onToggleWidget: (widget: string) => void;
@@ -47,8 +47,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
   onCloseMobile 
 }) => {
   const { user } = useAuth();
-  const { currentTheme } = useTheme();
-  const { isLowPower } = useLowPowerMode(); // Mobile Lite Mode
+  const { currentTheme, isLowPowerMode } = useTheme(); // Consume global isLowPowerMode
   const sidebarRef = useRef<HTMLDivElement>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<(HTMLDivElement | null)[]>([]);
@@ -184,7 +183,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                                 w-full h-full max-h-[60vh] relative overflow-hidden rounded-[2.5rem]
                                                 flex flex-col items-center justify-center
                                                 transition-all duration-500 ease-out
-                                                ${isLowPower ? 'bg-[#151515] border-white/5' : 'bg-[#151515]/80 backdrop-blur-3xl border-white/10 shadow-2xl'}
+                                                ${isLowPowerMode ? 'bg-[#151515] border-white/5' : 'bg-[#151515]/80 backdrop-blur-3xl border-white/10 shadow-2xl'}
                                                 border
                                                 ${isActive
                                                     ? 'scale-100 opacity-100 grayscale-0'
@@ -196,7 +195,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                             }}
                                         >
                                             {/* Static gradient for Lite Mode, Complex for High Quality */}
-                                            {isLowPower ? (
+                                            {isLowPowerMode ? (
                                                 <div className={`absolute inset-0 bg-gradient-to-br ${widget.from} to-transparent opacity-10`} />
                                             ) : (
                                                 <>
@@ -209,7 +208,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                                 w-24 h-24 rounded-full flex items-center justify-center mb-8
                                                 bg-black/20 shadow-inner border border-white/5 relative z-10
                                             `}>
-                                                {!isLowPower && <div className={`absolute inset-0 rounded-full opacity-20 ${widget.barColor} blur-xl animate-pulse`} />}
+                                                {!isLowPowerMode && <div className={`absolute inset-0 rounded-full opacity-20 ${widget.barColor} blur-xl animate-pulse`} />}
                                                 <widget.icon size={48} className={widget.color} />
                                             </div>
 
