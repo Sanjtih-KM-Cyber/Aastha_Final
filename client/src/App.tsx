@@ -10,6 +10,7 @@ import { useSecurity } from './hooks/useSecurity';
 import { LoadingFallback } from './components/LoadingFallback';
 import { Login } from './components/auth/Login';
 import { BiometricGuard } from './components/auth/BiometricGuard';
+import { ErrorBoundary } from './components/ErrorBoundary'; // Import ErrorBoundary
 import { Toaster } from 'react-hot-toast';
 
 // Lazy Load Pages
@@ -81,24 +82,26 @@ const App: React.FC = () => {
   useSecurity();
 
   return (
-    <AuthProvider>
-      <EncryptionProvider>
-        {/* SyncProvider is independent and provides socket infrastructure */}
-        <SyncProvider>
-          {/* ThemeProvider manages state but also consumes Sync via Bridge */}
-          <ThemeProvider>
-             {/* Bridge connects Sync events to Theme updates */}
-             <SyncBridge />
-             <Router>
-              <AppContainer>
-                <AppRoutes />
-                <Toaster position="top-center" reverseOrder={false} />
-              </AppContainer>
-            </Router>
-          </ThemeProvider>
-        </SyncProvider>
-      </EncryptionProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <EncryptionProvider>
+          {/* SyncProvider is independent and provides socket infrastructure */}
+          <SyncProvider>
+            {/* ThemeProvider manages state but also consumes Sync via Bridge */}
+            <ThemeProvider>
+               {/* Bridge connects Sync events to Theme updates */}
+               <SyncBridge />
+               <Router>
+                <AppContainer>
+                  <AppRoutes />
+                  <Toaster position="top-center" reverseOrder={false} />
+                </AppContainer>
+              </Router>
+            </ThemeProvider>
+          </SyncProvider>
+        </EncryptionProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 };
 
