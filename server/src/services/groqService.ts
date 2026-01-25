@@ -190,10 +190,12 @@ export const generateSubconscious = async (
         messages.push({ role: 'system', content: "SYSTEM OVERRIDE: User explicitly requested a reply. Set strategy to 'reply'." });
     }
 
-    // --- STRATEGY A: ROTATE GROQ KEYS ---
+    // --- STRATEGY A: ROTATE GROQ KEYS (Randomized Load Balancing) ---
+    const start = Math.floor(Math.random() * groqKeys.length);
     for (let i = 0; i < groqKeys.length; i++) {
+        const keyIndex = (start + i) % groqKeys.length;
         try {
-            const client = getGroqClient(i);
+            const client = getGroqClient(keyIndex);
             const response = await client.chat.completions.create({
                 messages: messages,
                 model: model,
@@ -315,10 +317,12 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       }))
   ];
 
-  // RETRY LOGIC: Rotate keys instead of retrying same key
+  // RETRY LOGIC: Rotate keys instead of retrying same key (Randomized Load Balancing)
+  const start = Math.floor(Math.random() * groqKeys.length);
   for (let i = 0; i < groqKeys.length; i++) {
+    const keyIndex = (start + i) % groqKeys.length;
     try {
-        const groqClient = getGroqClient(i);
+        const groqClient = getGroqClient(keyIndex);
         const completion = await groqClient.chat.completions.create({
             messages: messages,
             model: model,
@@ -333,7 +337,7 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
         }
         return; // Success!
     } catch (error: any) {
-        console.warn(`Groq Stream Key ${i+1} Failed: ${error?.error?.code || error.message}`);
+        console.warn(`Groq Stream Key ${keyIndex+1} Failed: ${error?.error?.code || error.message}`);
         // Continue to next key
     }
   }
@@ -397,10 +401,12 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
       }))
   ];
 
-  // 1. PRIMARY: Try "openai/gpt-oss-120b" on Groq (with Key Rotation)
+  // 1. PRIMARY: Try "openai/gpt-oss-120b" on Groq (with Key Rotation & Load Balancing)
+  const start = Math.floor(Math.random() * groqKeys.length);
   for (let i = 0; i < groqKeys.length; i++) {
+      const keyIndex = (start + i) % groqKeys.length;
       try {
-          const client = getGroqClient(i);
+          const client = getGroqClient(keyIndex);
           const completion = await client.chat.completions.create({
               model: "openai/gpt-oss-120b", 
               messages: messages,
@@ -416,7 +422,7 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
           return; // Success!
 
       } catch (groqError: any) {
-          console.warn(`⚠️ Workhorse (GPT-OSS-120B) Key ${i+1} Failed. Trying next...`);
+          console.warn(`⚠️ Workhorse (GPT-OSS-120B) Key ${keyIndex+1} Failed. Trying next...`);
       }
   }
 
@@ -459,10 +465,12 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
 // 4. WHISPER TRANSCRIPTION
 // ============================================================================
 export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
-    // Rotation for Whisper too
+    // Rotation for Whisper too (Randomized Load Balancing)
+    const start = Math.floor(Math.random() * groqKeys.length);
     for (let i = 0; i < groqKeys.length; i++) {
+        const keyIndex = (start + i) % groqKeys.length;
         try {
-            const client = getGroqClient(i);
+            const client = getGroqClient(keyIndex);
             const tempPath = `/tmp/upload_${Date.now()}.m4a`;
             fs.writeFileSync(tempPath, audioBuffer);
 
@@ -477,7 +485,7 @@ export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
             fs.unlinkSync(tempPath);
             return transcription.text;
         } catch (error) {
-            console.warn(`Whisper Key ${i+1} Failed. Trying next...`);
+            console.warn(`Whisper Key ${keyIndex+1} Failed. Trying next...`);
         }
     }
     return "[Audio processing failed due to server load]";
