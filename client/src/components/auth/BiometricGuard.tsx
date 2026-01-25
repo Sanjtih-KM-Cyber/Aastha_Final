@@ -12,6 +12,7 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
     const { isEnabled, promptBiometrics, toggleBiometrics, isLoading } = useBiometrics();
     const [isLocked, setIsLocked] = useState(false);
     const [hasCheckedInitial, setHasCheckedInitial] = useState(false);
+    const lastVerifiedRef = React.useRef<number>(0);
     const navigate = useNavigate();
 
     // Reusable Safe Check Logic
@@ -32,6 +33,9 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
                 timeoutPromise
             ]);
             setIsLocked(!success);
+            if (success) {
+                lastVerifiedRef.current = Date.now();
+            }
             return success;
         } catch (e) {
             console.error("Biometric check failed", e);
@@ -56,6 +60,14 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
         // Listen for App Resume
         const listener = App.addListener('appStateChange', async ({ isActive }) => {
             if (isActive && isEnabled) {
+                // GRACE PERIOD CHECK:
+                // If we just verified (e.g., the prompt closing triggered 'resume'), ignore it.
+                // 3000ms is generous enough to cover the prompt transition but short enough to be secure.
+                if (Date.now() - lastVerifiedRef.current < 3000) {
+                    console.log("Biometric check skipped (Grace Period)");
+                    return;
+                }
+
                 // On Resume, wait a moment for the app to settle (Fix for S23/Android lag)
                 setTimeout(async () => {
                    await performSafeBiometricCheck();
