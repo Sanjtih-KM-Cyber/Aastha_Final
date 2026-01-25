@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSync } from '../../context/SyncContext';
 import api from '../../services/api';
 import { SettingsPanel } from '../settings/SettingsPanel';
+import { Capacitor } from '@capacitor/core';
 
 // --- NEW COMPONENT: THOUGHT CLOUD MODAL ---
 const ThoughtCloudModal: React.FC<{ isOpen: boolean; onClose: () => void; content: any }> = ({ isOpen, onClose, content }) => {
@@ -455,6 +456,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const getApiUrl = (endpoint: string) => {
+    // Force production API on native devices to avoid localhost loopback issues
+    if (Capacitor.isNativePlatform()) {
+        return `https://aastha-final.onrender.com/api${endpoint}`;
+    }
+
     const envUrl = import.meta.env.VITE_API_URL;
     if (envUrl) return `${envUrl}${endpoint}`;
     const host = window.location.hostname;
@@ -496,7 +502,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         setIsVoiceMode(true);
         setTtsEnabled(true);
         localStorage.setItem('user_tts_enabled', 'true');
-        const voices = window.speechSynthesis.getVoices();
+        const voices = ('speechSynthesis' in window) ? window.speechSynthesis.getVoices() : [];
         const indianVoice = voices.find(v => v.lang.includes('IN') || v.name.includes('India'));
         if (indianVoice) {
             setSelectedVoiceURI(indianVoice.voiceURI);
