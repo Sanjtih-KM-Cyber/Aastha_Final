@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { motion, AnimatePresence } from 'framer-motion';
 import { userService, MoodEntryDTO } from '../../services/userService';
-import { Check, Grid, BarChart2, Sparkles, Book, MessageCircle, ChevronLeft, ChevronRight, Loader2, Smile } from 'lucide-react';
+import { Check, Grid, BarChart2, Sparkles, Book, MessageCircle, ChevronLeft, ChevronRight, Loader2, Smile, RefreshCw } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useEncryption } from '../../context/EncryptionContext';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -16,19 +16,32 @@ interface MoodTrackerProps {
 }
 
 const MOODS = [
-  { emoji: '🤩', label: 'Excited', score: 10, color: '#F59E0B' }, 
-  { emoji: '🙂', label: 'Good', score: 8, color: '#10B981' },    
-  { emoji: '😌', label: 'Calm', score: 7, color: '#14B8A6' },    
-  { emoji: '😐', label: 'Neutral', score: 5, color: '#9CA3AF' }, 
-  { emoji: '😫', label: 'Tired', score: 4, color: '#8B5CF6' },   
-  { emoji: '😔', label: 'Down', score: 3, color: '#3B82F6' },    
-  { emoji: '😰', label: 'Anxious', score: 2, color: '#6366F1' }, 
-  { emoji: '🤯', label: 'Overwhelmed', score: 1, color: '#F97316' }, 
-  { emoji: '😡', label: 'Angry', score: 1, color: '#EF4444' },   
+  // High Positives (8-10)
+  { emoji: '🤩', label: 'Excited', score: 10, color: '#F59E0B' },
+  { emoji: '🥰', label: 'Love', score: 10, color: '#EC4899' },
+  { emoji: '🦁', label: 'Proud', score: 9, color: '#F59E0B' },
+  { emoji: '🙏', label: 'Grateful', score: 9, color: '#8B5CF6' },
+  { emoji: '🙂', label: 'Good', score: 8, color: '#10B981' },
+  { emoji: '🕊️', label: 'Peaceful', score: 8, color: '#60A5FA' },
+
+  // Neutrals (4-7)
+  { emoji: '😌', label: 'Calm', score: 7, color: '#14B8A6' },
+  { emoji: '😐', label: 'Neutral', score: 5, color: '#9CA3AF' },
+  { emoji: '😫', label: 'Tired', score: 4, color: '#8B5CF6' },
+
+  // Negatives (1-3)
+  { emoji: '😔', label: 'Down', score: 3, color: '#3B82F6' },
+  { emoji: '😟', label: 'Anxious', score: 2, color: '#6366F1' },
+  { emoji: '🌵', label: 'Lonely', score: 2, color: '#64748B' },
+  { emoji: '😣', label: 'Guilty', score: 2, color: '#F43F5E' },
+  { emoji: '🤯', label: 'Stressed', score: 1, color: '#F97316' }, // Renamed Overwhelmed -> Stressed for brevity
+  { emoji: '😡', label: 'Angry', score: 1, color: '#EF4444' },
+  { emoji: '🌧️', label: 'Depressed', score: 1, color: '#1E293B' },
+  { emoji: '😶', label: 'Numb', score: 1, color: '#475569' },
 ];
 
 export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLogMood, zIndex, onFocus }) => {
-  const { currentTheme } = useTheme();
+  const { currentTheme, isLowPowerMode } = useTheme(); // LITE MODE: Consume isLowPowerMode
   const { decrypt } = useEncryption();
   const [activeTab, setActiveTab] = useState<'log' | 'trends' | 'insights'>('log');
   const [history, setHistory] = useState<MoodEntryDTO[]>([]);
@@ -51,14 +64,24 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
     finally { setIsLoadingHistory(false); }
   };
 
-  const handleLog = async (moodItem: typeof MOODS[0]) => {
-    try {
-      await userService.saveMood(moodItem.label, moodItem.score);
-      setLastLogged(moodItem);
-      if (onLogMood) onLogMood(moodItem.label);
-      fetchHistory(); 
-      setTimeout(() => setLastLogged(null), 1500);
-    } catch (e) { console.error("Log failed", e); }
+  const handleLog = (moodItem: typeof MOODS[0]) => {
+    // 1. OPTIMISTIC UPDATE: Update UI Immediately
+    setLastLogged(moodItem);
+    if (onLogMood) onLogMood(moodItem.label);
+
+    // 2. BACKGROUND API CALL: Fire and Forget
+    userService.saveMood(moodItem.label, moodItem.score)
+        .then(() => {
+            // Optional: Silent refresh history in background
+            fetchHistory();
+        })
+        .catch((e) => {
+            console.error("Log failed", e);
+            // Ideally revert UI, but for mood logging, retry/ignore is often acceptable UX vs blocking
+        });
+
+    // 3. AUTO-CLOSE DISABLED per user request.
+    // It stays on success screen until user switches tabs or closes window manually.
   };
   
   const handleAnalyze = async (source: 'diary' | 'chat') => {
@@ -95,7 +118,7 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
       }
   };
 
-  // --- FIX: Stacked Histogram Data ---
+  // Stacked Histogram Data
   const getWeeklyData = () => {
       const days = [];
       const today = new Date();
@@ -132,6 +155,22 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
   const weeklyData = getWeeklyData();
   const dateRangeLabel = `${weeklyData[0].fullDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} - ${weeklyData[6].fullDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}`;
 
+  // LITE MODE WRAPPER: Use simple div instead of motion.div for transitions in Lite Mode
+  const TransitionWrapper: React.FC<{children: React.ReactNode, className?: string}> = ({children, className}) => {
+      if (isLowPowerMode) return <div className={className}>{children}</div>;
+      return (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className={className}
+          >
+              {children}
+          </motion.div>
+      );
+  };
+
   return (
     <DraggableWindow 
       isOpen={isOpen} onClose={onClose} title="Mood Tracker"
@@ -140,18 +179,24 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
       icon={Smile}
       color="#F97316"
     >
-      <div className="flex flex-col h-full w-full rounded-3xl overflow-hidden font-sans shadow-2xl">
+      <div className="flex flex-col h-full w-full rounded-3xl overflow-hidden font-sans shadow-2xl bg-[#111827]">
         
         {/* HEADER */}
-        <div className="h-[45%] flex flex-col items-center justify-center p-6 relative transition-colors duration-700 ease-in-out text-center" style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #111827)` }}>
-            <AnimatePresence mode="wait">
+        <div className={`h-[40%] flex flex-col items-center justify-center p-6 relative transition-colors duration-700 ease-in-out text-center`} style={{ background: isLowPowerMode ? currentTheme.primaryColor : `linear-gradient(135deg, ${currentTheme.primaryColor}, #111827)` }}>
+            <AnimatePresence mode={isLowPowerMode ? undefined : "wait"}>
                 {activeTab === 'log' && lastLogged ? (
-                    <motion.div key="logged" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
-                        <div className="text-8xl mb-4 filter drop-shadow-2xl">{lastLogged.emoji}</div>
-                        <h2 className="font-serif text-3xl text-white">{lastLogged.label}</h2>
-                    </motion.div>
+                    <TransitionWrapper key="logged" className="flex flex-col items-center">
+                        <div className="text-8xl mb-4 filter drop-shadow-2xl animate-bounce-short">{lastLogged.emoji}</div>
+                        <h2 className="font-serif text-3xl text-white font-bold">{lastLogged.label}</h2>
+                        <div className="mt-2 px-3 py-1 bg-white/20 rounded-full text-xs font-medium text-white/90">
+                            Logged Successfully
+                        </div>
+                        <button onClick={() => setLastLogged(null)} className="mt-6 flex items-center gap-2 text-white/60 hover:text-white text-xs uppercase tracking-widest font-bold">
+                            <RefreshCw size={12} /> Log Another
+                        </button>
+                    </TransitionWrapper>
                 ) : (
-                    <motion.div key="header-default" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                    <TransitionWrapper key="header-default" className="w-full">
                          {activeTab === 'insights' ? (
                              <div className="px-4">
                                  <h2 className="font-serif text-2xl text-white mb-2">Deep Insights</h2>
@@ -166,14 +211,14 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
                          ) : (
                              <h2 className="font-serif text-4xl text-white leading-tight">How is your <br/><span className="italic opacity-80">heart</span>?</h2>
                          )}
-                    </motion.div>
+                    </TransitionWrapper>
                 )}
             </AnimatePresence>
-            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] mix-blend-overlay pointer-events-none" />
+            {!isLowPowerMode && <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] mix-blend-overlay pointer-events-none" />}
         </div>
 
         {/* BODY */}
-        <div className="h-[55%] bg-gray-900 flex flex-col p-4">
+        <div className="h-[60%] bg-[#0B0F17] flex flex-col p-4">
             <div className="flex bg-white/5 p-1 rounded-xl mb-4 shrink-0 border border-white/10">
                 {['log', 'trends', 'insights'].map((tab) => (
                     <button key={tab} onClick={() => setActiveTab(tab as any)} className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 ${activeTab === tab ? 'bg-white text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
@@ -183,22 +228,28 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
             </div>
 
             <div className="flex-1 relative overflow-hidden">
-                <AnimatePresence mode="wait">
+                <AnimatePresence mode={isLowPowerMode ? undefined : "wait"}>
                     {/* LOG TAB */}
                     {activeTab === 'log' && (
-                        <motion.div key="grid" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="grid grid-cols-3 gap-2 h-full overflow-y-auto scrollbar-hide pb-2">
-                            {MOODS.map((m) => (
-                                <button key={m.label} onClick={() => handleLog(m)} className="flex flex-col items-center justify-center p-2 rounded-xl transition-all border bg-white/5 border-transparent hover:bg-white/10 hover:border-white/20">
-                                    <span className="text-2xl mb-1 filter drop-shadow-md">{m.emoji}</span>
-                                    <span className="text-[9px] text-white/60 font-medium uppercase">{m.label}</span>
-                                </button>
-                            ))}
-                        </motion.div>
+                        <TransitionWrapper key="grid" className="h-full">
+                            <div className="grid grid-cols-3 gap-2 h-full overflow-y-auto scrollbar-hide pb-2 content-start">
+                                {MOODS.map((m) => (
+                                    <button
+                                        key={m.label}
+                                        onClick={() => handleLog(m)}
+                                        className="flex flex-col items-center justify-center p-3 rounded-xl transition-all border bg-white/5 border-transparent active:scale-95 hover:bg-white/10 hover:border-white/20"
+                                    >
+                                        <span className="text-3xl mb-1 filter drop-shadow-md">{m.emoji}</span>
+                                        <span className="text-[10px] text-white/60 font-medium uppercase tracking-wide">{m.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </TransitionWrapper>
                     )}
 
                     {/* TRENDS TAB - Stacked Bar Chart */}
                     {activeTab === 'trends' && (
-                        <motion.div key="chart" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="h-full w-full pt-2 flex flex-col">
+                        <TransitionWrapper key="chart" className="h-full w-full pt-2 flex flex-col">
                              <div className="flex justify-between items-center mb-2 px-2">
                                 <button onClick={() => setWeekOffset(prev => prev - 1)} className="p-1 hover:bg-white/10 rounded"><ChevronLeft size={14} className="text-white/70"/></button>
                                 <span className="text-[10px] text-white/40 uppercase font-mono">{dateRangeLabel}</span>
@@ -215,21 +266,21 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
                                     ))}
                                 </BarChart>
                              </ResponsiveContainer>
-                        </motion.div>
+                        </TransitionWrapper>
                     )}
 
                     {/* INSIGHTS TAB */}
                     {activeTab === 'insights' && (
-                        <motion.div key="insights" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="flex flex-col justify-center gap-4 h-full px-4">
-                            <button onClick={() => handleAnalyze('diary')} disabled={isAnalyzing} className="w-full py-4 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 rounded-2xl flex items-center justify-center gap-3 text-indigo-200 transition-all group disabled:opacity-50">
+                        <TransitionWrapper key="insights" className="flex flex-col justify-center gap-4 h-full px-4">
+                            <button onClick={() => handleAnalyze('diary')} disabled={isAnalyzing} className="w-full py-4 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 rounded-2xl flex items-center justify-center gap-3 text-indigo-200 transition-all group disabled:opacity-50 active:scale-95">
                                 <Book size={20} className="group-hover:scale-110 transition-transform"/>
                                 <span className="font-bold">Analyze Diary</span>
                             </button>
-                            <button onClick={() => handleAnalyze('chat')} disabled={isAnalyzing} className="w-full py-4 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 rounded-2xl flex items-center justify-center gap-3 text-teal-200 transition-all group disabled:opacity-50">
+                            <button onClick={() => handleAnalyze('chat')} disabled={isAnalyzing} className="w-full py-4 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 rounded-2xl flex items-center justify-center gap-3 text-teal-200 transition-all group disabled:opacity-50 active:scale-95">
                                 <MessageCircle size={20} className="group-hover:scale-110 transition-transform"/>
                                 <span className="font-bold">Analyze Chat</span>
                             </button>
-                        </motion.div>
+                        </TransitionWrapper>
                     )}
                 </AnimatePresence>
             </div>
