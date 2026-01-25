@@ -21,6 +21,7 @@ interface TheWebProps {
     onClose: () => void;
     zIndex?: number;
     onFocus?: () => void;
+    persistenceKey?: string;
 }
 
 const VERDICT_COLORS = {
@@ -157,7 +158,7 @@ const CaseFile: React.FC<{ person: Person; onClose: () => void; onUpdate: () => 
     );
 };
 
-export const TheWebWidget: React.FC<TheWebProps> = ({ isOpen, onClose, zIndex, onFocus }) => {
+export const TheWebWidget: React.FC<TheWebProps> = ({ isOpen, onClose, zIndex, onFocus, persistenceKey }) => {
     const { currentTheme } = useTheme();
     const { user } = useAuth();
 
@@ -233,6 +234,7 @@ export const TheWebWidget: React.FC<TheWebProps> = ({ isOpen, onClose, zIndex, o
             onFocus={onFocus || (() => {})}
             icon={Network}
             color="#60A5FA"
+            persistenceKey={persistenceKey}
         >
             <div className="relative w-full h-full bg-[#0a0e17] overflow-hidden flex flex-col">
 

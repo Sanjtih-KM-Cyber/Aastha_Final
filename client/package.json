@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "cap-dist": "npm run build && npx cap sync"
+    "cap-dist": "npm run build && npx cap sync && npm run configure-android",
+    "configure-android": "node scripts/update-manifest.js"
   },
   "dependencies": {
+    "@anuradev/capacitor-background-mode": "^6.0.0",
     "@capacitor-community/privacy-screen": "^5.2.1",
     "@capacitor/android": "^6.0.0",
     "@capacitor/app": "^6.0.3",

@@ -9,6 +9,7 @@ import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import { backgroundService } from '../../services/backgroundService';
 
 declare global {
   interface Window {
@@ -23,6 +24,7 @@ interface JamWidgetProps {
   zIndex?: number;
   onFocus?: () => void;
   initialParams?: any;
+  persistenceKey?: string;
 }
 
 interface Track {
@@ -180,7 +182,7 @@ const DesktopQueueItem = ({ track, index, isActive, onRemove, onPlay, onMoveUp, 
 };
 
 
-export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose, zIndex, onFocus, initialParams }) => {
+export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose, zIndex, onFocus, initialParams, persistenceKey }) => {
   const { currentTheme } = useTheme();
   const { setPreventAutoLock } = useAuth();
   
@@ -196,6 +198,8 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   useEffect(() => {
     const savedQ = localStorage.getItem('jam_queue');
     const savedIdx = localStorage.getItem('jam_index');
+    const savedState = localStorage.getItem('jam_state');
+
     if (savedQ) {
         try {
             const parsed = JSON.parse(savedQ);
@@ -213,13 +217,26 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
         const idx = parseInt(savedIdx);
         if (!isNaN(idx)) setCurrentIndex(idx);
     }
+    if (savedState) {
+        try {
+            const parsed = JSON.parse(savedState);
+            if (parsed.loopMode) setLoopMode(parsed.loopMode);
+            if (parsed.loopTarget) setLoopTarget(parsed.loopTarget);
+            if (parsed.isPlaying !== undefined) setIsPlaying(parsed.isPlaying);
+        } catch (e) { console.error("Failed to load jam state", e); }
+    }
   }, []);
 
   // Persistence: Save on Change
   useEffect(() => {
       localStorage.setItem('jam_queue', JSON.stringify(queue));
       localStorage.setItem('jam_index', currentIndex.toString());
-  }, [queue, currentIndex]);
+      localStorage.setItem('jam_state', JSON.stringify({
+          loopMode,
+          loopTarget,
+          isPlaying // Save playing state to auto-resume
+      }));
+  }, [queue, currentIndex, loopMode, loopTarget, isPlaying]);
 
   // --- MANAGER MODE: Auto-Generate Playlist from Params ---
   useEffect(() => {
@@ -386,8 +403,11 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
              // Attempt to restore time again after cue
              if (savedTime) event.target.seekTo(parseFloat(savedTime));
          }
-         // Try to play
-         event.target.playVideo();
+
+         // RESUME PLAYBACK IF WAS PLAYING
+         if (isPlaying) {
+             event.target.playVideo();
+         }
       }
   };
 
@@ -397,9 +417,19 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       setIsPlaying(true);
       setDuration(playerRef.current.getDuration());
       startProgressLoop();
+
+      // Enable Background Mode
+      const currentTrack = queue[currentIndex];
+      backgroundService.enable(
+          'jam',
+          "Jam with Aastha 🎵",
+          currentTrack ? `${currentTrack.title} - ${currentTrack.artist}` : "Playing Music..."
+      );
+
     } else if (event.data === 2) { // Paused
       setIsPlaying(false);
       stopProgressLoop();
+      backgroundService.disable('jam');
     } else if (event.data === 0) { // Ended
       handleTrackEnd();
     }
@@ -755,6 +785,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       icon={Music}
       color="#8B5CF6"
       minimizedContent={MinimizedContent}
+      persistenceKey={persistenceKey}
     >
       <div className="flex flex-col h-full w-full font-sans select-none relative">
         

@@ -29,6 +29,7 @@ interface DiaryProps {
   zIndex?: number;
   onFocus?: () => void;
   initialParams?: any;
+  persistenceKey?: string;
 }
 
 type DiaryMode = 'view' | 'edit';
@@ -271,7 +272,7 @@ const CalendarView: React.FC<{
   );
 }
 
-export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, initialParams }) => {
+export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, initialParams, persistenceKey }) => {
   const { user, unlockSanctuary } = useAuth();
   const { encrypt, decrypt } = useEncryption();
   const { currentTheme } = useTheme();
@@ -330,6 +331,59 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
   useEffect(() => {
     if (isOpen && isUnlocked) fetchEntries();
   }, [isOpen, isUnlocked, user]);
+
+  // PERSISTENCE: Restore State (View/Date)
+  useEffect(() => {
+      if (isOpen && isUnlocked) {
+          const savedState = localStorage.getItem('diary_state');
+          if (savedState) {
+              try {
+                  const parsed = JSON.parse(savedState);
+                  if (parsed.activeDate) setActiveDate(new Date(parsed.activeDate));
+                  if (parsed.editMode) setEditMode(parsed.editMode);
+
+                  // Restore Draft if in Edit Mode
+                  if (parsed.editMode === 'edit') {
+                      const draft = localStorage.getItem('diary_draft');
+                      if (draft) {
+                          const parsedDraft = JSON.parse(draft);
+                          // Ensure draft belongs to this date
+                          const draftDate = new Date(parsedDraft.date);
+                          const restoredDate = new Date(parsed.activeDate);
+                          if (toDateString(draftDate) === toDateString(restoredDate)) {
+                              setEditTitle(parsedDraft.title || '');
+                              setEditContent(parsedDraft.content || '');
+                          }
+                      }
+                  }
+              } catch (e) { console.error("Diary restore failed", e); }
+          }
+      }
+  }, [isOpen, isUnlocked]);
+
+  // PERSISTENCE: Save State (View/Date)
+  useEffect(() => {
+      if (isUnlocked) {
+          localStorage.setItem('diary_state', JSON.stringify({
+              activeDate: activeDate.toISOString(),
+              editMode
+          }));
+      }
+  }, [activeDate, editMode, isUnlocked]);
+
+  // PERSISTENCE: Save Draft
+  useEffect(() => {
+      if (editMode === 'edit') {
+          localStorage.setItem('diary_draft', JSON.stringify({
+              title: editTitle,
+              content: editContent,
+              date: activeDate.toISOString()
+          }));
+      } else {
+          // If viewing, clear draft? No, maybe keep until explicit save?
+          // Actually, handleSaveEntry clears it.
+      }
+  }, [editTitle, editContent, activeDate, editMode]);
 
   // MANAGER MODE: Handle Initial Params (Prompt / Content Pre-fill)
   useEffect(() => {
@@ -520,6 +574,10 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
       
       const key = toDateString(activeDate);
       setEntriesMap(prev => ({ ...prev, [key]: newEntry }));
+
+      // Clear Draft on successful save
+      localStorage.removeItem('diary_draft');
+
     } catch (e) {
       console.error("Save error", e);
       if (!silent) alert("Failed to save entry.");
@@ -645,6 +703,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
       zIndex={zIndex || 20} onFocus={onFocus || (() => {})}
       icon={BookOpen}
       color="#F59E0B"
+      persistenceKey={persistenceKey}
     >
       <div
         className="flex h-full w-full bg-[#222] text-gray-800 relative overflow-hidden rounded-b-xl shadow-inner font-sans items-center justify-center"

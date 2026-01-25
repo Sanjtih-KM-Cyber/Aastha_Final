@@ -10,6 +10,7 @@ interface BreathingWidgetProps {
   initialMode?: string;
   zIndex?: number;
   onFocus?: () => void;
+  persistenceKey?: string;
 }
 
 const MODES = {
@@ -45,7 +46,7 @@ const MODES = {
   }
 };
 
-export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClose, initialMode, zIndex, onFocus }) => {
+export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClose, initialMode, zIndex, onFocus, persistenceKey }) => {
   const { currentTheme } = useTheme();
   const [activeMode, setActiveMode] = useState<keyof typeof MODES>('Box');
   const [phaseIndex, setPhaseIndex] = useState(0);
@@ -55,6 +56,19 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
   const currentSteps = MODES[activeMode].steps;
   const phaseLabel = currentSteps[phaseIndex];
   const duration = currentPattern[phaseIndex];
+
+  // PERSISTENCE: Load
+  useEffect(() => {
+      const saved = localStorage.getItem('breathing_mode');
+      if (saved && MODES[saved as keyof typeof MODES]) {
+          setActiveMode(saved as keyof typeof MODES);
+      }
+  }, []);
+
+  // PERSISTENCE: Save
+  useEffect(() => {
+      localStorage.setItem('breathing_mode', activeMode);
+  }, [activeMode]);
 
   // Handle AI Pre-selection (Updated for flexibility)
   useEffect(() => {
@@ -118,6 +132,7 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
       zIndex={zIndex || 10} onFocus={onFocus || (() => {})}
       icon={Wind}
       color="#10B981"
+      persistenceKey={persistenceKey}
     >
       <div className="flex flex-col h-full w-full bg-[#0a0a0a] font-sans relative overflow-hidden">
          

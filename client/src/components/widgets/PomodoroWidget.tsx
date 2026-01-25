@@ -4,12 +4,16 @@ import { Play, Pause, RotateCcw, Settings, Check, AlertCircle, Clock } from 'luc
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { App as CapacitorApp } from '@capacitor/app';
+import { backgroundService } from '../../services/backgroundService';
 
 interface PomodoroWidgetProps {
   isOpen: boolean;
   onClose: () => void;
   zIndex?: number;
   onFocus?: () => void;
+  persistenceKey?: string;
   initialParams?: {
       mode?: 'focus' | 'break';
       focusDuration?: number;
@@ -48,7 +52,7 @@ const MESSAGES = {
   ]
 };
 
-export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose, zIndex, onFocus, initialParams }) => {
+export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose, zIndex, onFocus, persistenceKey, initialParams }) => {
   const { currentTheme } = useTheme();
   const { setPreventAutoLock } = useAuth();
   
@@ -66,6 +70,9 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
   const [currentMessage, setCurrentMessage] = useState<string>("");
   const [lastMilestone, setLastMilestone] = useState<number>(0);
 
+  // Persistence State
+  const [targetEndTime, setTargetEndTime] = useState<number | null>(null);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Calculate total time based on current mode settings
@@ -82,6 +89,86 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
       setPreventAutoLock('pomodoro-widget', isActive);
       return () => setPreventAutoLock('pomodoro-widget', false);
   }, [isActive, setPreventAutoLock]);
+
+  // --- PERSISTENCE: LOAD ---
+  useEffect(() => {
+      const saved = localStorage.getItem('pomodoro_state');
+      if (saved) {
+          try {
+              const parsed = JSON.parse(saved);
+              if (parsed.focusDuration) setFocusDuration(parsed.focusDuration);
+              if (parsed.breakDuration) setBreakDuration(parsed.breakDuration);
+              if (parsed.mode) setMode(parsed.mode);
+
+              if (parsed.isActive && parsed.targetEndTime) {
+                  const now = Date.now();
+                  const remaining = Math.floor((parsed.targetEndTime - now) / 1000);
+
+                  if (remaining > 0) {
+                      setTimeLeft(remaining);
+                      setIsActive(true);
+                      setTargetEndTime(parsed.targetEndTime);
+                  } else {
+                      // Timer finished while away
+                      setTimeLeft(0);
+                      setIsActive(false); // It finished
+                      setTargetEndTime(null);
+                      setCurrentMessage(parsed.mode === 'focus' ? "Focus session completed while away!" : "Break finished!");
+                  }
+              } else if (parsed.timeLeft) {
+                  // Not active, just restore paused time
+                  setTimeLeft(parsed.timeLeft);
+              }
+          } catch (e) { console.error("Failed to load pomodoro state", e); }
+      }
+  }, []);
+
+  // --- PERSISTENCE: SAVE ---
+  useEffect(() => {
+      const state = {
+          isActive,
+          targetEndTime,
+          timeLeft,
+          mode,
+          focusDuration,
+          breakDuration
+      };
+      localStorage.setItem('pomodoro_state', JSON.stringify(state));
+  }, [isActive, targetEndTime, timeLeft, mode, focusDuration, breakDuration]);
+
+
+  // --- BACKGROUND HANDLING ---
+  useEffect(() => {
+      // Re-sync time on app resume (failsafe)
+      const handleAppStateChange = async (state: any) => {
+          if (state.isActive) {
+              if (isActive && targetEndTime) {
+                  const now = Date.now();
+                  const remaining = Math.floor((targetEndTime - now) / 1000);
+                  if (remaining > 0) {
+                      setTimeLeft(remaining);
+                  } else {
+                      setTimeLeft(0);
+                  }
+              }
+          }
+      };
+
+      const listener = CapacitorApp.addListener('appStateChange', handleAppStateChange);
+      return () => { listener.then(l => l.remove()); };
+  }, [isActive, targetEndTime]);
+
+  // Update Background Notification periodically
+  useEffect(() => {
+    if (isActive && timeLeft > 0) {
+       const title = mode === 'focus' ? `Focusing: ${formatTime(timeLeft)}` : `Break: ${formatTime(timeLeft)}`;
+       // Use currentMessage or a default one
+       const body = currentMessage || (mode === 'focus' ? "Stay in the flow. 🌊" : "Recharge your energy. 🍃");
+
+       backgroundService.updateNotification(title, body);
+    }
+  }, [timeLeft, isActive, mode, currentMessage]);
+
 
   // GOD MODE: Apply AI Instructions
   useEffect(() => {
@@ -109,7 +196,12 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
               // Only reset if duration changed significantly or user asked for it
               if (Math.abs(timeLeft - duration * 60) > 10) {
                   setTimeLeft(duration * 60);
-                  setIsActive(true); // Auto-start
+                  // Don't auto-start here unless explicit?
+                  // Logic says: setIsActive(true) in original code.
+                  // We should also set targetEndTime
+                  const newTarget = Date.now() + (duration * 60 * 1000);
+                  setTargetEndTime(newTarget);
+                  setIsActive(true);
               }
           }
       }
@@ -120,14 +212,36 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
     if (isActive && timeLeft > 0) {
       interval = setInterval(() => {
         setTimeLeft((prev) => {
+           // Self-correction using targetEndTime if available
+           if (targetEndTime) {
+               const now = Date.now();
+               const remaining = Math.floor((targetEndTime - now) / 1000);
+               // If deviation is large, sync. Else smooth decrement.
+               if (Math.abs(remaining - prev) > 2) {
+                   checkMilestones(remaining);
+                   return remaining;
+               }
+           }
+
            const newVal = prev - 1;
-           checkMilestones(newVal); // Check for cheer messages
+           checkMilestones(newVal);
            return newVal;
         });
       }, 1000);
-    } else if (timeLeft === 0 && isActive) {
+    } else if (timeLeft <= 0 && isActive) { // changed === 0 to <= 0 for safety
       // Timer Finished Logic
       audioRef.current?.play().catch(e => console.log(e));
+
+      // Schedule a distinct "Finished" notification since background mode might be silent or generic
+      LocalNotifications.schedule({
+        notifications: [{
+            id: 3001,
+            title: mode === 'focus' ? "Session Complete! 🎉" : "Break Over! 🚀",
+            body: mode === 'focus' ? "Great work. Time to recharge." : "Ready to focus again?",
+            schedule: { at: new Date() },
+            sound: 'res_bell.mp3'
+        }]
+      }).catch(console.error);
       
       if (mode === 'focus') {
           // Focus Finished -> Auto-Start Break
@@ -136,7 +250,9 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
           setTimeLeft(nextDuration);
           setLastMilestone(0);
           setCurrentMessage("Break started automatically. Relax! 🍃");
-          setIsActive(true); // Keep running for break
+          // Update Target for Break
+          setTargetEndTime(Date.now() + nextDuration * 1000);
+          setIsActive(true);
       } else {
           // Break Finished -> Stop and Wait
           const nextDuration = focusDuration * 60;
@@ -144,11 +260,13 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
           setTimeLeft(nextDuration);
           setLastMilestone(0);
           setCurrentMessage("Break over. Ready to focus? 🚀");
-          setIsActive(false); // Stop running
+          setIsActive(false);
+          setTargetEndTime(null);
+          backgroundService.disable('pomodoro'); // Stop background mode
       }
     }
     return () => clearInterval(interval);
-  }, [isActive, timeLeft, mode, focusDuration, breakDuration]);
+  }, [isActive, timeLeft, mode, focusDuration, breakDuration, targetEndTime]);
 
   const checkMilestones = (currentSeconds: number) => {
     if (totalTime === 0) return; 
@@ -175,7 +293,23 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
 
   const toggleTimer = (e: React.MouseEvent) => {
     e.stopPropagation(); // Stop propagation for Minimized button
-    setIsActive(!isActive);
+    if (!isActive) {
+        // Start
+        const now = Date.now();
+        const end = now + (timeLeft * 1000);
+        setTargetEndTime(end);
+        setIsActive(true);
+        backgroundService.enable(
+            'pomodoro',
+            mode === 'focus' ? "Focus Mode Active 🧠" : "Break Time 🍃",
+            "Starting..."
+        );
+    } else {
+        // Pause
+        setTargetEndTime(null);
+        setIsActive(false);
+        backgroundService.disable('pomodoro');
+    }
   };
   
   const resetTimer = () => {
@@ -183,6 +317,8 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
     setTimeLeft(mode === 'focus' ? focusDuration * 60 : breakDuration * 60);
     setLastMilestone(0);
     setCurrentMessage("");
+    setTargetEndTime(null);
+    backgroundService.disable('pomodoro');
   };
 
   const handleSaveSettings = () => {
@@ -191,8 +327,8 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
   };
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    const mins = Math.floor(Math.max(0, seconds) / 60);
+    const secs = Math.floor(Math.max(0, seconds) % 60);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -238,6 +374,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
       color="#F43F5E"
       minimizedContent={MinimizedContent}
       mobileMinimizedType="squircle"
+      persistenceKey={persistenceKey}
     >
       <div className="flex flex-col items-center justify-center py-6 bg-black/80 h-full relative overflow-hidden font-sans">
         
