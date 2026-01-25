@@ -30,6 +30,18 @@ const reactionMap: Record<string, string> = {
   'joy': '🥹', 'blush': '😊',
   'wink': '😉',
   'cool': '😎', 'chill': '😎', 'shades': '😎',
+  'yup': '👍', 'yep': '👍', 'yeah': '👍', 'sure': '👍',
+  'thanks': '🙏', 'thx': '🙏', 'ty': '🙏',
+  'bye': '👋', 'cya': '👋',
+  'nice': '👌',
+  'smirking': '😏', 'relieved': '😌',
+  'pensive': '😔', 'sleepy': '😪',
+  'mask': '😷', 'sick': '🤒',
+  'zipper': '🤐', 'money_mouth': '🤑',
+  'nerd': '🤓',
+  'hugging': '🤗',
+  'rolling_eyes': '🙄',
+  'thinking': '🤔',
 
   // Agreement / Acknowledgment
   'nod': '👌', 'ok': '👌', 'okay': '👌', 'check': '✅',

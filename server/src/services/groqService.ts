@@ -81,7 +81,7 @@ export const generateSubconscious = async (
        d) **EXPLICIT:** User says "Shut up", "Listen", "Wait", "Let me finish".
        e) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️, 🤔, 👇) that matches the sentiment.
     - **'reply'**: The DEFAULT state.
-       - If the user asks a question -> 'reply'.
+       - **QUESTION OVERRIDE (CRITICAL):** If the user asks a direct question (e.g., "What else?", "How are you?", "Why?", "Can you help?"), you **MUST** choose 'reply', even if it looks like a burst. Do NOT ignore questions.
        - If the user says "hello", "hi", "hey" -> 'reply'.
        - If the user requests a tool/music -> 'reply'.
        - If the user has finished their thought -> 'reply'.

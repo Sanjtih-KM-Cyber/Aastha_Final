@@ -871,6 +871,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
     if (isPermissionGrant) {
         setUiAction('none'); // FORCE EXIT Listening Mode
+        setIsWaitingForPermission(false); // Hide Popup Immediately
+        if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current); // Kill timer
     }
 
     if (isPermissionGrant || isVoiceMode) {
