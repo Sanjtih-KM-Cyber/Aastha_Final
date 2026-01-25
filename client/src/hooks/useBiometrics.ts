@@ -18,6 +18,12 @@ export const useBiometrics = () => {
     }, []);
 
     const checkAvailability = async () => {
+        // WEB GUARD: Do not call native plugin on web
+        if (!Capacitor.isNativePlatform()) {
+            setIsAvailable(false);
+            return;
+        }
+
         try {
             const result = await NativeBiometric.isAvailable();
             setIsAvailable(result.isAvailable);
@@ -41,7 +47,8 @@ export const useBiometrics = () => {
     };
 
     const promptBiometrics = async (): Promise<boolean> => {
-        if (!isAvailable) return true; // Bypass if not available
+        // Double check platform availability to be safe
+        if (!isAvailable || !Capacitor.isNativePlatform()) return true;
 
         try {
             const result = await NativeBiometric.verifyIdentity({
