@@ -389,9 +389,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // --- 4. VOICE & HELPERS ---
   useEffect(() => {
-    const loadVoices = () => { window.speechSynthesis.getVoices(); };
+    const loadVoices = () => {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.getVoices();
+        }
+    };
     loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
   }, []);
 
   useEffect(() => {
@@ -938,7 +944,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         currentAudioRef.current.pause();
         currentAudioRef.current = null;
     }
-    window.speechSynthesis.cancel(); // Stop browser TTS too
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Stop browser TTS too
+    }
 
     // 1. Detect if it's a URL (server audio)
     if (textOrUrl.startsWith('http') || textOrUrl.startsWith('/api/') || textOrUrl.startsWith('data:')) {
@@ -958,6 +966,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     // 2. Fallback: Browser TTS (Pro Perk: Reliable Fallback)
     if ('speechSynthesis' in window) {
        const cleanText = textOrUrl.replace(/[*#]/g, '').replace(/[\u{1F600}-\u{1F64F}]/gu, '');
+       // Check if SpeechSynthesisUtterance is supported (some older webviews lack it)
+       if (typeof SpeechSynthesisUtterance === 'undefined') return;
+
        const utterance = new SpeechSynthesisUtterance(cleanText);
        const voices = window.speechSynthesis.getVoices();
 
