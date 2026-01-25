@@ -76,9 +76,10 @@ export const generateSubconscious = async (
     **1. DECISION MATRIX (STRATEGY):**
     - **'listen'**: Choose this if the user is venting or typing rapidly.
        a) **BURST DETECTION:** If the history shows the user sent 2+ messages in a row without an AI reply, DEFAULT to 'listen'.
-       b) **IGNORE FILLERS:** Do NOT choose 'listen' for short, neutral inputs like "hmm", "ok", "cool", "yea", "lol", "wait". Treat these as 'reply'.
-       c) **EXPLICIT:** User says "Shut up", "Listen", "Wait", "Let me finish".
-       d) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️, 🤔, 👇) that matches the sentiment.
+       b) **MULTI-LINE INPUT:** If the user's input contains multiple lines or distinct sentences separated by newlines (e.g., "I'm sad.\nAnd tired."), TREAT THIS AS A BURST and default to 'listen'.
+       c) **IGNORE FILLERS:** Do NOT choose 'listen' for short, neutral inputs like "hmm", "ok", "cool", "yea", "lol", "wait". Treat these as 'reply'.
+       d) **EXPLICIT:** User says "Shut up", "Listen", "Wait", "Let me finish".
+       e) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️, 🤔, 👇) that matches the sentiment.
     - **'reply'**: The DEFAULT state.
        - If the user asks a question -> 'reply'.
        - If the user says "hello", "hi", "hey" -> 'reply'.
