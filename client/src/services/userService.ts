@@ -81,10 +81,12 @@ export const userService = {
       for (const entry of queue) {
           try {
               // We discard the temp ID and let server assign new one
-              // We must preserve the timestamp if the backend supports it (assuming backend defaults to 'now' if not provided, which is okay for casual tracking, or we update backend DTO)
-              // For now, we accept 'now' as the timestamp of sync, or we could pass createdAt if backend allows.
-              // Given the constraints, just syncing is better than nothing.
-              await api.post('/data/moods', { mood: entry.mood, score: entry.score, createdAt: entry.timestamp });
+              // We must preserve the timestamp since we updated the backend to support it
+              await api.post('/data/moods', {
+                  mood: entry.mood,
+                  score: entry.score,
+                  timestamp: entry.timestamp
+              });
           } catch (e) {
               console.error("Sync failed for entry", entry, e);
               failed.push(entry); // Keep it in queue

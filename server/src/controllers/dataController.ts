@@ -165,17 +165,20 @@ export const getMoods = async (req: AuthRequest, res: Response) => {
 export const createMood = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-    const { mood, score } = (req as any).body;
+    const { mood, score, timestamp, createdAt } = (req as any).body;
     
     if (!mood) return (res as any).status(400).json({ message: 'Mood required' });
 
     const encryptedMood = encrypt(mood);
 
+    // Accept timestamp from client (for offline sync) or default to now
+    const dateToSave = timestamp || createdAt ? new Date(timestamp || createdAt) : new Date();
+
     const newEntry = await Mood.create({
         user: req.user._id,
         mood: encryptedMood, 
         score: score || 5,
-        timestamp: new Date()
+        timestamp: dateToSave
     });
     
     (res as any).status(201).json({
