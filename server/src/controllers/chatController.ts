@@ -279,7 +279,7 @@ Memory: {{userFacts}}
 export const chatWithAI = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
 
-  let { message, images, image, forceReply, audio, isVoiceMode, userLocalTime, userLocalHour } = (req as any).body;
+  let { message, images, image, forceReply, audio, isVoiceMode, userLocalTime, userLocalHour, tempId } = (req as any).body;
   if (!images && image) images = [image];
 
   const userName = req.user.name;
@@ -313,6 +313,16 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     const hasListenIntent = LISTEN_INTENT_REGEX.test(message || "");
     if (message && is_red_flag(message)) {
         return (res as any).json({ meta: { warning: "Safety Alert" }, content: EMERGENCY_RESPONSE });
+    }
+
+    // BROADCAST USER MESSAGE (SYNC)
+    if (message) {
+         broadcast(userId.toString(), 'message', {
+            content: message,
+            role: 'user',
+            timestamp: new Date(),
+            tempId: tempId
+        });
     }
 
     // =================================================================================
