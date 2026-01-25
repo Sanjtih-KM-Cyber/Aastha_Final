@@ -82,7 +82,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       return localStorage.getItem('settings_autoLock') || '0';
   });
 
-  const { isAvailable: isBiometricAvailable, isEnabled: isBiometricEnabled, toggleBiometrics } = useBiometrics();
+  const { isAvailable: isBiometricAvailable, isEnabled: isBiometricEnabled, toggleBiometrics, promptBiometrics } = useBiometrics();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   
   // Subscription
@@ -103,8 +103,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   }, [user]);
 
   useEffect(() => {
-    const loadVoices = () => setAvailableVoices(window.speechSynthesis.getVoices());
-    loadVoices(); window.speechSynthesis.onvoiceschanged = loadVoices;
+    const loadVoices = () => {
+        if ('speechSynthesis' in window) {
+            setAvailableVoices(window.speechSynthesis.getVoices());
+        }
+    };
+    loadVoices();
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
   }, []);
 
   // Load Razorpay SDK
@@ -151,6 +158,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       } else {
           await notificationService.disable();
           setNotificationsEnabled(false);
+      }
+  };
+
+  const handleToggleBiometrics = async () => {
+      if (!isBiometricEnabled) {
+          // Enforce verification before enabling to prevent lockout
+          const success = await promptBiometrics();
+          if (success) {
+              toggleBiometrics(true);
+          } else {
+              alert("Verification failed. Biometric lock could not be enabled.");
+          }
+      } else {
+          toggleBiometrics(false);
       }
   };
 
@@ -564,7 +585,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                                   </div>
                               </div>
                               <button
-                                  onClick={() => toggleBiometrics(!isBiometricEnabled)}
+                                  onClick={handleToggleBiometrics}
                                   className={`text-teal-400 transition-colors ${!isBiometricEnabled ? 'opacity-50 grayscale' : ''}`}
                               >
                                   {isBiometricEnabled ? <ToggleRight size={32} /> : <ToggleLeft size={32} className="text-white/20" />}
