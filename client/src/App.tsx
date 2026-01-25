@@ -85,27 +85,39 @@ const App: React.FC = () => {
 
   // Offline Ghost Logic: Schedule notifications on background, clear on foreground
   React.useEffect(() => {
-      const listener = App.addListener('appStateChange', async ({ isActive }) => {
-          if (!isActive) {
-              // App went to background: Schedule the ghosts
-              const userInfo = localStorage.getItem('userInfo');
-              if (userInfo) {
-                  try {
-                      const user = JSON.parse(userInfo);
-                      scheduleGhostNotifications(user);
-                  } catch(e) {}
-              }
-          } else {
-              // App came to foreground: Clear pending ghosts (because they are here!)
-              clearGhostNotifications();
-          }
-      });
+      let listener: any;
 
-      // Also clear on initial mount (if opening from notification)
-      clearGhostNotifications();
+      const initGhostService = async () => {
+          try {
+              listener = await App.addListener('appStateChange', async ({ isActive }) => {
+                  try {
+                      if (!isActive) {
+                          // App went to background: Schedule the ghosts
+                          const userInfo = localStorage.getItem('userInfo');
+                          if (userInfo) {
+                              const user = JSON.parse(userInfo);
+                              await scheduleGhostNotifications(user).catch(e => console.warn("Ghost schedule failed", e));
+                          }
+                      } else {
+                          // App came to foreground: Clear pending ghosts (because they are here!)
+                          await clearGhostNotifications().catch(e => console.warn("Ghost clear failed", e));
+                      }
+                  } catch (innerError) {
+                      console.warn("Ghost listener error", innerError);
+                  }
+              });
+
+              // Also clear on initial mount (if opening from notification)
+              await clearGhostNotifications().catch(() => {});
+          } catch (e) {
+              console.warn("Ghost service init failed", e);
+          }
+      };
+
+      initGhostService();
 
       return () => {
-          listener.then(l => l.remove());
+          if (listener) listener.remove();
       };
   }, []);
 

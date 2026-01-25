@@ -184,15 +184,19 @@ const MESSAGES = {
 
 export const scheduleGhostNotifications = async (user: any) => {
     try {
+        // Safety Check: Ensure LocalNotifications is defined (avoid crash if plugin missing)
+        if (!LocalNotifications) return;
+
         // 1. Permission Check
-        const perm = await LocalNotifications.checkPermissions();
-        if (perm.display !== 'granted') {
-            const req = await LocalNotifications.requestPermissions();
-            if (req.display !== 'granted') return;
+        const perm = await LocalNotifications.checkPermissions().catch(() => null);
+        if (!perm || perm.display !== 'granted') {
+            const req = await LocalNotifications.requestPermissions().catch(() => null);
+            if (!req || req.display !== 'granted') return;
         }
 
         // 2. Clear Existing Ghost Notifications
-        const pending = await LocalNotifications.getPending();
+        const pending = await LocalNotifications.getPending().catch(() => null);
+        if (!pending) return;
         if (pending.notifications.length > 0) {
             await LocalNotifications.cancel(pending);
         }
@@ -283,6 +287,7 @@ export const scheduleGhostNotifications = async (user: any) => {
 
 export const clearGhostNotifications = async () => {
     try {
-        await LocalNotifications.cancel({ notifications: [{ id: 1001 }, { id: 1002 }, { id: 1003 }] });
+        if (!LocalNotifications) return;
+        await LocalNotifications.cancel({ notifications: [{ id: 1001 }, { id: 1002 }, { id: 1003 }] }).catch(() => {});
     } catch(e) {}
 };
