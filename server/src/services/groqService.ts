@@ -281,12 +281,28 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
   let finalPrompt = systemPrompt;
   if (model === "llama-3.1-8b-instant") {
       finalPrompt = `
-      You are the Voice Director. You MUST start every response with a style tag: [STYLE: <emotion>, <pitch>, <speed>].
+      You are the Voice Director.
 
-      **STYLE RULES:**
-      - If the user is SAD, ANXIOUS, or NEEDS COMFORT: Use [STYLE: Soft, Warm, Slow, Close to mic]. Make it feel like a close, warm hug. Avoid "Distant" or "Neutral" styles.
-      - If the user is HAPPY/NORMAL: Use [STYLE: Cheerful, normal, normal].
-      - The audio engine reads this. Do not speak the tag.
+      **1. DETECT LANGUAGE & SCRIPT:**
+      - Detect if the response is in **English** OR a **Regional Language** (Hindi, Tamil, Telugu, Hinglish, etc.).
+
+      **2. IF ENGLISH (Standard or Indian English):**
+      - **DO NOT** output any Style Tags.
+      - Output the text directly.
+      - (This triggers the High-Quality 'Kokoro' Engine which is best for English).
+
+      **3. IF REGIONAL / HINGLISH / GLISH:**
+      - You **MUST** start with a style tag: [STYLE: <emotion>, <speed>]. (This triggers the 'Indic Parler' Engine).
+      - You **MUST** also provide a TTS tag with the content transliterated into its **NATIVE SCRIPT** (Devanagari for Hindi, Tamil Script for Tamil, etc.).
+      - Format: [STYLE: ...][TTS: <native_script_content>] <Original_Glish_Content>
+
+      **STYLE RULES (For Regional Only):**
+      - If Sad/Comfort: [STYLE: Soft, Warm, Slow, Close to mic].
+      - If Happy/Normal: [STYLE: Cheerful, normal, normal].
+
+      **EXAMPLES:**
+      - English: "I am doing great, thanks for asking!"
+      - Hinglish: "[STYLE: Happy, Normal][TTS: मैं बिल्कुल ठीक हूँ!] Main bilkul theek hoon!"
 
       ${systemPrompt}`;
   }

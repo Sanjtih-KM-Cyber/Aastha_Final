@@ -72,6 +72,7 @@ const getToneFlavor = (): string => {
 const cleanTextForTTS = (text: string): string => {
     return text
         .replace(/\[STYLE:.*?\]/g, '') // Remove style tags
+        .replace(/\[TTS:.*?\]/g, '')   // Remove TTS content tags
         .replace(/<proposal[^>]*\/>/g, '') // Remove proposal tags first
         .replace(/\*.*?\*/g, '')      // Remove actions like *sighs* or *laughs*
         .replace(/\(.*?\)/g, '')      // Remove parenthetical directions like (warmly) or (laughs)
@@ -498,6 +499,13 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         styleDescription = styleMatch[1].trim();
     }
 
+    // Check for Native Script TTS content
+    let ttsContent = undefined;
+    const ttsMatch = fullTextResponse.match(/\[TTS:(.*?)\]/i);
+    if (ttsMatch) {
+        ttsContent = ttsMatch[1].trim();
+    }
+
     // Force Audio if Mood is High Emotion
     const isEmotional = ['sad', 'concerned', 'sassy', 'angry'].includes(subconscious.mood || '');
     const hasVoiceQuota = (user.dailyVoiceCount || 0) < 2;
@@ -505,10 +513,12 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let savedAudioUrl: string | undefined;
 
     if (shouldGenerateAudio) {
-        const cleanText = cleanTextForTTS(fullTextResponse);
-        if (cleanText.length > 0) {
+        // Use ttsContent (Native Script) if available, otherwise use cleaned fullText (English/Glish)
+        const textToSpeak = ttsContent || cleanTextForTTS(fullTextResponse);
+
+        if (textToSpeak.length > 0) {
             const targetPersona = (currentPersona === 'aarav' || currentPersona === 'aastik') ? 'aastik' : 'aastha';
-            const audioBuffer = await brainService.generateSpeech(cleanText.substring(0, 2000), undefined, targetPersona, styleDescription);
+            const audioBuffer = await brainService.generateSpeech(textToSpeak.substring(0, 2000), undefined, targetPersona, styleDescription);
 
             if (audioBuffer) {
                 const audioId = `vn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -528,7 +538,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // 6. SAVE & MEMORY
     // =================================================================================
 
-    const dbContent = fullTextResponse.replace(/\[STYLE:.*?\]/g, '').trim();
+    // Clean all tags for DB (Style and TTS tags)
+    const dbContent = fullTextResponse.replace(/\[STYLE:.*?\]/g, '').replace(/\[TTS:.*?\]/g, '').trim();
 
     // CRITICAL FIX: Do not save empty messages
     if (!dbContent && !savedAudioUrl) {
