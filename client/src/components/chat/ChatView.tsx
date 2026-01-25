@@ -250,17 +250,28 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
             } else {
                 // ASSISTANT MESSAGE BROADCAST
                 setMessages(prev => {
-                    const lastMsg = prev[prev.length - 1];
+                    // Reverse search for a matching temp message or identical content
+                    // We search the last 5 messages to handle potential race conditions where user typed more
+                    const reversed = [...prev].reverse();
+                    const existingTempIndex = reversed.findIndex(m =>
+                        m.role === 'assistant' && (m.id?.startsWith('temp') || m.id === 'temp-ai')
+                    );
+                    const identicalContentIndex = reversed.findIndex(m =>
+                        m.role === 'assistant' && m.content.trim() === data.content.trim()
+                    );
 
-                    // 1. Deduplication by Content (Prevent double-posting on Sender or Receiver if re-sent)
-                    if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content.trim() === data.content.trim()) {
+                    // 1. Deduplication by Content (Check if we ALREADY have this message anywhere recently)
+                    if (identicalContentIndex !== -1 && identicalContentIndex < 5) {
                         return prev;
                     }
 
-                    // 2. Sender: Replace placeholder (if content is different or we just want to finalize ID)
-                    if (lastMsg && lastMsg.role === 'assistant' && (lastMsg.id?.startsWith('temp') || lastMsg.id === 'temp-ai')) {
-                          // Keep the temp ID to prevent 'callChatAPI' from creating a duplicate if it's still running
-                          return [...prev.slice(0, -1), { ...lastMsg, content: data.content }];
+                    // 2. Sender: Found a temp placeholder to replace?
+                    if (existingTempIndex !== -1 && existingTempIndex < 5) {
+                        const realIndex = prev.length - 1 - existingTempIndex;
+                        const newArr = [...prev];
+                        // Update content but KEEP temp ID to avoid callChatAPI JIT duplication
+                        newArr[realIndex] = { ...newArr[realIndex], content: data.content };
+                        return newArr;
                     }
 
                     // 3. Receiver: Append new message
@@ -866,8 +877,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                         newArr[index] = { ...newArr[index], content: cleanContent };
                                         return newArr;
                                     } else {
-                                        // JIT Creation if we were silent but got content (Safety Fallback)
-                                        return [...prev, { role: 'assistant', content: cleanContent, timestamp: Date.now(), id: tempBotId }];
+                                        // SAFETY: If we can't find the message, it likely means it was replaced by a broadcast
+                                        // or removed. We should NOT create a duplicate unless it's the very first chunk.
+                                        // Since we don't track chunk index easily here, we will trust the broadcast to handle it
+                                        // if the message is missing.
+                                        return prev;
                                     }
                                 });
                             }
