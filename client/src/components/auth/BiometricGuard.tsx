@@ -15,11 +15,13 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
     const { isEnabled, promptBiometrics, toggleBiometrics, isLoading } = useBiometrics();
     const [isLocked, setIsLocked] = useState(false);
     const [hasCheckedInitial, setHasCheckedInitial] = useState(false);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
     const navigate = useNavigate();
 
     // Reusable Safe Check Logic
     const performSafeBiometricCheck = async () => {
         if (!isEnabled) return true;
+        if (isLoggingOut) return false;
 
         setIsLocked(true);
         const timeoutPromise = new Promise<boolean>((resolve) => {
@@ -34,6 +36,10 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
                 promptBiometrics(),
                 timeoutPromise
             ]);
+
+            // SECURITY CHECK: If user clicked 'Use Password' while this was running, ignore success.
+            if (isLoggingOut) return false;
+
             setIsLocked(!success);
             if (success) {
                 globalLastVerifiedTime = Date.now();
@@ -113,17 +119,16 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
                     {/* Fallback for "Disaster" scenarios where sensor fails */}
                     <button
                         onClick={async () => {
+                            setIsLoggingOut(true); // Immediate block to prevent race-condition unlock
                             // Emergency bypass: Disable the broken biometric setting AND logout
-                            // We MUST await this to ensure the preference is saved before we reload
                             await toggleBiometrics(false);
-                            setIsLocked(false);
                             localStorage.removeItem('userInfo');
                             // Force a hard reload to clear any stuck native plugin state
                             window.location.replace('/login');
                         }}
                         className="text-sm text-white/40 hover:text-white underline mt-4"
                     >
-                        Use Password (Logout)
+                        {isLoggingOut ? "Securing..." : "Use Password (Logout)"}
                     </button>
                 </div>
             </div>
