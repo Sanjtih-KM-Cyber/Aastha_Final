@@ -251,9 +251,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 // ASSISTANT MESSAGE BROADCAST
                 setMessages(prev => {
                     const lastMsg = prev[prev.length - 1];
-                    if (lastMsg && lastMsg.role === 'assistant' && (lastMsg.id?.startsWith('temp') || lastMsg.id === 'temp-ai')) {
-                          return [...prev.slice(0, -1), { ...lastMsg, content: data.content, id: data._id || Date.now().toString() }];
+
+                    // 1. Deduplication by Content (Prevent double-posting on Sender or Receiver if re-sent)
+                    if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content.trim() === data.content.trim()) {
+                        return prev;
                     }
+
+                    // 2. Sender: Replace placeholder (if content is different or we just want to finalize ID)
+                    if (lastMsg && lastMsg.role === 'assistant' && (lastMsg.id?.startsWith('temp') || lastMsg.id === 'temp-ai')) {
+                          // Keep the temp ID to prevent 'callChatAPI' from creating a duplicate if it's still running
+                          return [...prev.slice(0, -1), { ...lastMsg, content: data.content }];
+                    }
+
+                    // 3. Receiver: Append new message
                     return [...prev, { role: 'assistant', content: data.content, timestamp: Date.now() }];
                 });
                 setIsTyping(false);
