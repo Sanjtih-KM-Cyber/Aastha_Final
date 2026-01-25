@@ -20,6 +20,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { useEncryption } from '../../context/EncryptionContext';
 import { useTheme } from '../../context/ThemeContext';
 import { userService, DiaryEntryDTO } from '../../services/userService';
+import { useBiometrics } from '../../hooks/useBiometrics';
+import { Capacitor } from '@capacitor/core';
 
 interface DiaryProps {
   isOpen: boolean;
@@ -71,7 +73,7 @@ const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string
           <Lock size={32} style={{ color: currentTheme.primaryColor }} />
         </div>
         <h2 className="text-3xl font-serif mb-2">Sanctuary Vault</h2>
-        <p className="text-white/50 text-center mb-8 text-sm">Enter your unique diary password to decrypt your journal.</p>
+        <p className="text-white/50 text-center mb-8 text-sm">Enter your unique diary password to decrypt your diary.</p>
         <form onSubmit={handleSubmit} className="w-full relative">
           <div className="relative">
               <input
@@ -273,6 +275,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
   const { user, unlockSanctuary } = useAuth();
   const { encrypt, decrypt } = useEncryption();
   const { currentTheme } = useTheme();
+  const { promptBiometrics, isEnabled: isBioEnabled } = useBiometrics();
 
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [authError, setAuthError] = useState('');
@@ -304,10 +307,25 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
   }, []);
 
   useEffect(() => {
-    if (isOpen && user) {
-       if (!user.hasDiarySetup) setIsUnlocked(true); 
+    if (!isOpen) {
+        setIsUnlocked(false);
+        return;
     }
-  }, [isOpen, user]);
+
+    if (isOpen && user) {
+       if (!user.hasDiarySetup) {
+           setIsUnlocked(true);
+       } else {
+           // Native + Biometrics Enabled -> Try Auto-Unlock
+           if (Capacitor.isNativePlatform() && isBioEnabled) {
+               promptBiometrics().then(success => {
+                   if (success) setIsUnlocked(true);
+               });
+           }
+           // Web or No Bio -> Stay Locked (Password Required)
+       }
+    }
+  }, [isOpen, user, isBioEnabled]);
 
   useEffect(() => {
     if (isOpen && isUnlocked) fetchEntries();
@@ -622,7 +640,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
 
   return (
     <DraggableWindow 
-      isOpen={isOpen} onClose={handleClose} title="Personal Journal"
+      isOpen={isOpen} onClose={handleClose} title="Personal Diary"
       initialWidth={900} initialHeight={650} defaultPosition={{ x: 100, y: 80 }}
       zIndex={zIndex || 20} onFocus={onFocus || (() => {})}
       icon={BookOpen}

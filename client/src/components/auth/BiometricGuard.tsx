@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { App } from '@capacitor/app';
 import { useBiometrics } from '../../hooks/useBiometrics';
 import { LoadingFallback } from '../LoadingFallback';
@@ -18,11 +18,16 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const navigate = useNavigate();
 
+    // Guard against race conditions (double prompts)
+    const isCheckInProgress = useRef(false);
+
     // Reusable Safe Check Logic
     const performSafeBiometricCheck = async () => {
         if (!isEnabled) return true;
         if (isLoggingOut) return false;
+        if (isCheckInProgress.current) return false;
 
+        isCheckInProgress.current = true;
         setIsLocked(true);
         const timeoutPromise = new Promise<boolean>((resolve) => {
             setTimeout(() => {
@@ -38,16 +43,21 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
             ]);
 
             // SECURITY CHECK: If user clicked 'Use Password' while this was running, ignore success.
-            if (isLoggingOut) return false;
+            if (isLoggingOut) {
+                isCheckInProgress.current = false;
+                return false;
+            }
 
             setIsLocked(!success);
             if (success) {
                 globalLastVerifiedTime = Date.now();
             }
+            isCheckInProgress.current = false;
             return success;
         } catch (e) {
             console.error("Biometric check failed", e);
             setIsLocked(true); // Fail Safe
+            isCheckInProgress.current = false;
             return false;
         }
     };
