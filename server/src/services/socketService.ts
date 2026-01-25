@@ -83,7 +83,7 @@ export const broadcast = (userId: string, type: string, payload: any) => {
     if (!wss) return;
     const userSockets = clients.get(userId);
     if (userSockets) {
-        const message = JSON.stringify({ type, ...payload });
+        const message = JSON.stringify({ type, payload });
         userSockets.forEach(client => {
             if (client.readyState === WebSocket.OPEN) {
                 client.send(message);
