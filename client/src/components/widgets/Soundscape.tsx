@@ -23,6 +23,7 @@ interface SoundscapeProps {
   onFocus?: () => void;
   preset?: string; 
   volume?: number; // Added volume prop
+  persistenceKey?: string;
 }
 
 // Updated SOUNDS array to use Vercel Blob URLs
@@ -37,7 +38,7 @@ const SOUNDS = [
   { id: 'birds', label: 'Birds', color: '#FACC15', path: SOUND_URLS.birds }
 ];
 
-export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex, onFocus, preset, volume }) => {
+export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex, onFocus, preset, volume, persistenceKey }) => {
   const { currentTheme } = useTheme();
   
   // State
@@ -113,7 +114,29 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
     });
   }, [activeLoops, masterVolume, previewId]);
 
-  // Auto-configure from preset and volume
+  // PERSISTENCE: Load state on mount
+  useEffect(() => {
+      const saved = localStorage.getItem('soundscape_state');
+      if (saved) {
+          try {
+              const parsed = JSON.parse(saved);
+              if (parsed.activeLoops) {
+                  // Re-hydrate audio objects
+                  Object.keys(parsed.activeLoops).forEach(id => getAudio(id));
+                  setActiveLoops(parsed.activeLoops);
+              }
+              if (parsed.masterVolume !== undefined) setMasterVolume(parsed.masterVolume);
+          } catch (e) { console.error("Failed to load soundscape state", e); }
+      }
+  }, []);
+
+  // PERSISTENCE: Save state on change
+  useEffect(() => {
+      const state = { activeLoops, masterVolume };
+      localStorage.setItem('soundscape_state', JSON.stringify(state));
+  }, [activeLoops, masterVolume]);
+
+  // Auto-configure from preset and volume (Overrides persistence if preset provided)
   useEffect(() => {
       if (isOpen) {
           if (preset) {
@@ -215,6 +238,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
       onFocus={onFocus || (() => {})}
       icon={Sliders}
       color="#06B6D4"
+      persistenceKey={persistenceKey}
     >
       <div className="flex flex-col h-full w-full font-sans select-none">
         

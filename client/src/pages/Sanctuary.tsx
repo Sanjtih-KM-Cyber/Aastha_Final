@@ -159,8 +159,24 @@ export const Sanctuary: React.FC = () => {
     soundscape: false,
     breathing: false,
     mood: false,
-    lore: false, // Keeps ID as 'lore' for compatibility with old state, but UI shows "The Web"
+    lore: false,
   });
+
+  // --- PERSISTENCE: Load & Save Widget State ---
+  useEffect(() => {
+      try {
+          const savedWidgets = localStorage.getItem('sanctuary_active_widgets');
+          if (savedWidgets) {
+              setWidgets(JSON.parse(savedWidgets));
+          }
+      } catch (e) {
+          console.warn("Failed to load active widgets", e);
+      }
+  }, []);
+
+  useEffect(() => {
+      localStorage.setItem('sanctuary_active_widgets', JSON.stringify(widgets));
+  }, [widgets]);
 
   // Derived Status for Smart Header
   const currentActivity = widgets.diary ? 'Journaling' : (widgets.jam ? 'Jamming' : 'Online');
@@ -276,6 +292,7 @@ export const Sanctuary: React.FC = () => {
                 zIndex={zIndices.diary}
                 onFocus={focusDiary}
                 initialParams={widgetConfigs.diary}
+                persistenceKey="diary"
               />
             </React.Suspense>
           </div>
@@ -288,6 +305,7 @@ export const Sanctuary: React.FC = () => {
                   zIndex={zIndices.pomodoro}
                   onFocus={focusPomodoro}
                   initialParams={widgetConfigs.pomodoro}
+                  persistenceKey="pomodoro"
               />
             </React.Suspense>
           </div>
@@ -300,6 +318,7 @@ export const Sanctuary: React.FC = () => {
                   zIndex={zIndices.jam}
                   onFocus={focusJam}
                   initialParams={widgetConfigs.jam}
+                  persistenceKey="jam"
               />
             </React.Suspense>
           </div>
@@ -313,6 +332,7 @@ export const Sanctuary: React.FC = () => {
                   onFocus={focusSoundscape}
                   preset={widgetConfigs.soundscape?.preset}
                   volume={widgetConfigs.soundscape?.volume}
+                  persistenceKey="soundscape"
               />
             </React.Suspense>
           </div>
@@ -325,6 +345,7 @@ export const Sanctuary: React.FC = () => {
                   zIndex={zIndices.breathing}
                   onFocus={focusBreathing}
                   initialMode={widgetConfigs.breathing?.mode}
+                  persistenceKey="breathing"
               />
             </React.Suspense>
           </div>
@@ -336,6 +357,7 @@ export const Sanctuary: React.FC = () => {
                   onClose={() => closeWidget('mood')}
                   zIndex={zIndices.mood}
                   onFocus={focusMood}
+                  persistenceKey="mood"
               />
             </React.Suspense>
           </div>
@@ -348,6 +370,7 @@ export const Sanctuary: React.FC = () => {
                   onClose={() => closeWidget('lore')}
                   zIndex={zIndices.lore}
                   onFocus={focusLore}
+                  persistenceKey="lore"
               />
             </React.Suspense>
           </div>

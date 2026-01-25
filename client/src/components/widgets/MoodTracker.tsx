@@ -13,6 +13,7 @@ interface MoodTrackerProps {
   onLogMood?: (mood: string) => void;
   zIndex?: number;
   onFocus?: () => void;
+  persistenceKey?: string;
 }
 
 // ==========================================
@@ -43,7 +44,7 @@ const MOODS = [
   { emoji: '😶', label: 'Numb', score: 1, color: '#475569' },
 ];
 
-export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLogMood, zIndex, onFocus }) => {
+export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLogMood, zIndex, onFocus, persistenceKey }) => {
   const { currentTheme, isLowPowerMode } = useTheme();
   const { decrypt } = useEncryption();
   const [activeTab, setActiveTab] = useState<'log' | 'trends' | 'insights'>('log');
@@ -227,6 +228,7 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
       zIndex={zIndex || 10} onFocus={onFocus || (() => {})}
       icon={Smile}
       color="#F97316"
+      persistenceKey={persistenceKey}
     >
       <div className="flex flex-col h-full w-full rounded-3xl overflow-hidden font-sans shadow-2xl bg-[#111827]">
         

@@ -19,6 +19,7 @@ interface DraggableWindowProps {
   color?: string; // New Prop for Brand Color
   minimizedContent?: React.ReactNode; // New Prop for Minimized Content (Nano View)
   mobileMinimizedType?: 'bubble' | 'squircle'; // New Prop for custom mobile view type
+  persistenceKey?: string; // New Prop for Persistence
 }
 
 export const DraggableWindow: React.FC<DraggableWindowProps> = ({ 
@@ -37,7 +38,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   icon: Icon,
   color,
   minimizedContent,
-  mobileMinimizedType = 'bubble'
+  mobileMinimizedType = 'bubble',
+  persistenceKey
 }) => {
   const dragControls = useDragControls();
   
@@ -45,6 +47,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight });
   const [isMobile, setIsMobile] = useState(false);
   const [centerPos, setCenterPos] = useState({ x: 100, y: 100 });
+  const [position, setPosition] = useState<{x: number, y: number} | null>(null);
   
   // Minimize State
   const [isMinimized, setIsMinimized] = useState(false);
@@ -54,6 +57,41 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   // Resize State
   const [isResizing, setIsResizing] = useState(false);
   const resizeStartRef = useRef<{x: number, y: number, w: number, h: number} | null>(null);
+
+  // --- PERSISTENCE LOGIC ---
+  useEffect(() => {
+    if (persistenceKey) {
+        try {
+            const saved = localStorage.getItem(`window_${persistenceKey}`);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed.width && parsed.height) setSize({ width: parsed.width, height: parsed.height });
+                if (parsed.x !== undefined && parsed.y !== undefined) setPosition({ x: parsed.x, y: parsed.y });
+                if (parsed.isMinimized !== undefined) setIsMinimized(parsed.isMinimized);
+            }
+        } catch (e) {
+            console.warn("Failed to load window state", e);
+        }
+    }
+  }, [persistenceKey]);
+
+  const saveState = (updates: Partial<{ width: number, height: number, x: number, y: number, isMinimized: boolean }>) => {
+      if (!persistenceKey) return;
+      try {
+          // Get current state to merge
+          const current = {
+              width: size.width,
+              height: size.height,
+              x: position?.x ?? (defaultPosition?.x || centerPos.x),
+              y: position?.y ?? (defaultPosition?.y || centerPos.y),
+              isMinimized: isMinimized,
+              ...updates
+          };
+          localStorage.setItem(`window_${persistenceKey}`, JSON.stringify(current));
+      } catch (e) {
+          console.warn("Failed to save window state", e);
+      }
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -105,20 +143,33 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
     resizeStartRef.current = null;
     document.removeEventListener('pointermove', handleResizeMove);
     document.removeEventListener('pointerup', stopResize);
+
+    // Save Size
+    saveState({ width: size.width, height: size.height });
   };
 
   const handleClose = (e: React.MouseEvent) => {
     e.stopPropagation();
     onClose();
-    setTimeout(() => setIsMinimized(false), 500);
+    // Don't save "closed" state here, parent handles open/close.
+    // But we should probably reset minimized state for next open?
+    // Actually, user might want it to re-open minimized?
+    // Let's assume on close we DON'T reset persistence, so it remembers preference.
+    // BUT we do animate out.
+    // NOTE: If we want "reset on close", we'd clear storage. But goal is persistence.
   };
 
   const toggleMinimize = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsMinimized(!isMinimized);
+    const newState = !isMinimized;
+    setIsMinimized(newState);
+    saveState({ isMinimized: newState });
   };
 
-  const effectivePos = defaultPosition || centerPos;
+  // Determine effective position: Saved > Default > Center
+  // Note: On mobile, we force 0,0 usually.
+  const effectivePos = position || defaultPosition || centerPos;
+
   // If not minimized, Mobile height is 100%. If minimized, desktop is 48px.
   // Note: logic below is for the MAIN window. The bubble is handled separately.
   const minimizedHeight = isMobile ? 64 : 48;
@@ -130,6 +181,20 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   // Use lite mode hook if available, otherwise fallback to mobile check
   // (Assuming context is not passed, using simple check for now)
   const isLiteMode = isMobile; // Can extend this later
+
+  // Handle Drag End to Save Position
+  const onDragEnd = (event: any, info: any) => {
+      if (isMobile) return;
+      // Framer motion 'drag' uses transform. We need to calculate the new "top/left"
+      // effectively if we want to persist "absolute" position, OR we just persist the offset?
+      // "effectivePos" is passed to 'top/left'. 'drag' modifies x/y.
+      // So newPos = oldPos + offset.
+      const newX = effectivePos.x + info.offset.x;
+      const newY = effectivePos.y + info.offset.y;
+
+      setPosition({ x: newX, y: newY });
+      saveState({ x: newX, y: newY });
+  };
 
   return (
     <>
@@ -145,6 +210,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             height: currentHeight,
             top: isMobile ? 0 : effectivePos.y,
             left: isMobile ? 0 : effectivePos.x,
+            // We set x/y to 0 because we update 'top/left' onDragEnd.
+            // This prevents "double" movement (transform + top/left).
             x: 0,
             y: 0,
             borderRadius: isMobile ? 0 : 24,
@@ -164,6 +231,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           dragControls={dragControls}
           dragMomentum={false}
           dragListener={false}
+          onDragEnd={onDragEnd} // SAVE POSITION
           onPointerDownCapture={onFocus}
           onMouseDownCapture={onFocus}
           onTouchStartCapture={onFocus}
@@ -272,7 +340,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
                 drag
                 dragMomentum={false}
                 whileDrag={{ scale: 1.1 }}
-                onClick={() => setIsMinimized(false)}
+                onClick={(e) => { e.stopPropagation(); toggleMinimize(e); }} // Update to toggle logic
                 className="fixed z-[100] cursor-pointer shadow-2xl flex items-center justify-center overflow-hidden"
                 style={{
                     // DYNAMIC STYLE BASED ON TYPE
