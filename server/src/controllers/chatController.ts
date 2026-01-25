@@ -31,7 +31,7 @@ const is_red_flag = (message: string): boolean => {
 const VOICE_MODE_INSTRUCTIONS = `
 **[CRITICAL: VOICE MODE ACTIVE]**
 * You are currently speaking on a phone call.
-* Use short, punchy, and conversational sentences.
+* Keep length natural and conversational. Do not be artificially brief.
 * **Do NOT** use markdown (no bold, no italics, no bullet points).
 * **Do NOT** describe actions (no *sigh*, *laughs*, *pauses*).
 * **Do NOT** use parenthetical tone indicators like (warmly) or (whispering). Just speak.
