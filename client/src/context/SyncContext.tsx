@@ -19,6 +19,11 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const listenersRef = useRef<Map<string, Set<SyncListener>>>(new Map());
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Backoff State
+  const retryCountRef = useRef(0);
+  const MAX_RETRIES = 5;
+  const BASE_DELAY = 1000;
+
   useEffect(() => {
     // STRICT CHECK: Do not attempt connection if user is missing or ID is undefined
     if (!user || !user._id) {
@@ -27,6 +32,7 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
             wsRef.current = null;
         }
         setIsConnected(false);
+        retryCountRef.current = 0; // Reset retries
         return;
     }
 
@@ -81,6 +87,7 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // AUTH HANDSHAKE
             ws.send(JSON.stringify({ type: 'AUTH', token: token, userId: userId }));
             setIsConnected(true);
+            retryCountRef.current = 0; // Reset retries on successful connection
             if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         };
 
@@ -106,10 +113,26 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsConnected(false);
             wsRef.current = null;
 
-            // Only reconnect if user is still logged in
-            // Don't reconnect if the server kicked us for auth failure (often code 4000-4999)
-            if (user && user._id && event.code !== 4001) {
-                reconnectTimeoutRef.current = setTimeout(connect, 3000);
+            // Auth Failures (4xxx) -> Do Not Retry
+            if (event.code >= 4000 && event.code < 5000) {
+                console.warn("[Sync] Auth failed or fatal error. Not reconnecting.");
+                return;
+            }
+
+            // Normal Closure (1000) or Going Away (1001) or No Status (1005)
+            // We implement Exponential Backoff
+            if (user && user._id) {
+                if (retryCountRef.current < MAX_RETRIES) {
+                    const delay = Math.min(10000, BASE_DELAY * Math.pow(2, retryCountRef.current));
+                    console.log(`[Sync] Reconnecting in ${delay}ms (Attempt ${retryCountRef.current + 1}/${MAX_RETRIES})...`);
+
+                    reconnectTimeoutRef.current = setTimeout(() => {
+                        retryCountRef.current++;
+                        connect();
+                    }, delay);
+                } else {
+                    console.error("[Sync] Max retries reached. Giving up.");
+                }
             }
         };
 
