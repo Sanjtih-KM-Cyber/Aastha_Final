@@ -368,22 +368,25 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               </div>
             </div>
           ) : (
-            <div className="space-y-1" style={{ maxWidth: '100%', overflowWrap: 'anywhere' }}>
-              {visibleContent.split('\n').map((line, i) => (
-                <p
-                  key={i}
-                  className="text-white/95 font-light select-text"
-                  style={{
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    overflowWrap: 'anywhere',
-                    maxWidth: '100%'
-                  }}
-                >
-                  {renderContent(line)}
-                </p>
-              ))}
-            </div>
+            // Hide Text if Voice Note is present (for clean look), unless it's the User
+            (!voice_note || isUser) && (
+                <div className="space-y-1" style={{ maxWidth: '100%', overflowWrap: 'anywhere' }}>
+                {visibleContent.split('\n').map((line, i) => (
+                    <p
+                    key={i}
+                    className="text-white/95 font-light select-text"
+                    style={{
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'anywhere',
+                        maxWidth: '100%'
+                    }}
+                    >
+                    {renderContent(line)}
+                    </p>
+                ))}
+                </div>
+            )
           )}
 
           {/* SMART ACTION CHIPS */}

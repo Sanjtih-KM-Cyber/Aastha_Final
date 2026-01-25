@@ -31,7 +31,7 @@ export const brainService = {
                 headers: { ...form.getHeaders() },
                 responseType: 'arraybuffer',
                 validateStatus: (status) => status < 500,
-                timeout: 30000 // Increased timeout for Parler (slower)
+                timeout: 120000 // Increased timeout for Parler (slower) to 2 mins
             });
 
             // 1. Check Content-Type

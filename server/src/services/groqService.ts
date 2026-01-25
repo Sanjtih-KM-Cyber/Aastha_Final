@@ -75,7 +75,7 @@ export const generateSubconscious = async (
 
     **1. DECISION MATRIX (STRATEGY):**
     - **'listen'**: Choose this if the user is venting or typing rapidly.
-       a) **BURST DETECTION:** If the history shows the user sent 2+ messages in a row without an AI reply, DEFAULT to 'listen'.
+       a) **BURST DETECTION:** If the history shows the user sent 3+ messages in a row without an AI reply, DEFAULT to 'listen'.
        b) **MULTI-LINE INPUT:** If the user's input contains multiple lines or distinct sentences separated by newlines (e.g., "I'm sad.\nAnd tired."), TREAT THIS AS A BURST and default to 'listen'.
        c) **IGNORE FILLERS:** Do NOT choose 'listen' for short, neutral inputs like "hmm", "ok", "cool", "yea", "lol", "wait". Treat these as 'reply'.
        d) **EXPLICIT:** User says "Shut up", "Listen", "Wait", "Let me finish".
@@ -284,7 +284,7 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       You are the Voice Director. You MUST start every response with a style tag: [STYLE: <emotion>, <pitch>, <speed>].
 
       **STYLE RULES:**
-      - If the user is SAD, ANXIOUS, or NEEDS COMFORT: Use [STYLE: Soft, low, slow] or [STYLE: Intimate, low, very slow]. Make it feel like a close, warm hug. Avoid "Distant" or "Neutral" styles.
+      - If the user is SAD, ANXIOUS, or NEEDS COMFORT: Use [STYLE: Soft, Warm, Slow, Close to mic]. Make it feel like a close, warm hug. Avoid "Distant" or "Neutral" styles.
       - If the user is HAPPY/NORMAL: Use [STYLE: Cheerful, normal, normal].
       - The audio engine reads this. Do not speak the tag.
 

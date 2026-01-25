@@ -617,15 +617,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     setStatusDisplay('Online');
   };
 
-  const callChatAPI = async (finalText: string, images: string[], audioBase64: string | null, isPermissionGrant: boolean, tempBotId: string) => {
+  const callChatAPI = async (finalText: string, images: string[], audioBase64: string | null, isPermissionGrant: boolean, tempBotId: string, isSilent: boolean = false) => {
       try {
           if (abortControllerRef.current) abortControllerRef.current.abort();
           const abortController = new AbortController();
           abortControllerRef.current = abortController;
 
-          // Set "Thinking..." ONLY when we actually make the call
-          setIsTyping(true);
-          setStatusDisplay('Thinking...');
+          // Set "Thinking..." ONLY if NOT in silent mode (Listening Mode)
+          if (!isSilent || isPermissionGrant) {
+            setIsTyping(true);
+            setStatusDisplay('Thinking...');
+          }
 
           let token = '';
           try {
@@ -794,12 +796,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             if (data.content && !data.type) {
                                 aiContentRaw += data.content;
                                 const cleanContent = processMagicTags(aiContentRaw);
-                                setMessages(prev => prev.map(msg => {
-                                    if (msg.id === tempBotId) {
-                                        return { ...msg, content: cleanContent };
+                                setMessages(prev => {
+                                    const index = prev.findIndex(m => m.id === tempBotId);
+                                    if (index !== -1) {
+                                        const newArr = [...prev];
+                                        newArr[index] = { ...newArr[index], content: cleanContent };
+                                        return newArr;
+                                    } else {
+                                        // JIT Creation if we were silent but got content (Safety Fallback)
+                                        return [...prev, { role: 'assistant', content: cleanContent, timestamp: Date.now(), id: tempBotId }];
                                     }
-                                    return msg;
-                                }));
+                                });
                             }
                         } catch (e: any) {}
                     }
@@ -862,6 +869,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     // 2. CHECK "PERMISSION GRANT" / FORCE REPLY
     const isPermissionGrant = finalContent === 'PERMISSION_GRANT_REPLY';
 
+    if (isPermissionGrant) {
+        setUiAction('none'); // FORCE EXIT Listening Mode
+    }
+
     if (isPermissionGrant || isVoiceMode) {
         // BYPASS DEBOUNCE for Force Reply or Voice Mode
         if (sendDebounceTimer.current) clearTimeout(sendDebounceTimer.current);
@@ -877,7 +888,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
         // Fire API Immediately
         const finalImages = overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []);
-        await callChatAPI(allText, finalImages, audioBase64, isPermissionGrant, tempBotId);
+        await callChatAPI(allText, finalImages, audioBase64, isPermissionGrant, tempBotId, false);
         return;
     }
 
@@ -898,13 +909,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         const fullText = newPending.join('\n');
         setPendingMessages([]); // clear buffer before sending
 
-        // Check if this is a "Burst" (>= 2 msgs)
+        // Check if this is a "Burst" (>= 3 msgs)
         // If burst, we assume "Listening Mode" => DO NOT show bubble immediately
-        // If single message, we assume "Reply" => Show bubble
-        const isBurst = newPending.length >= 2;
+        const isBurst = newPending.length >= 3;
         const tempBotId = `temp-${Date.now()}`;
 
-        if (!isBurst) {
+        // Only show bubble if NOT burst and NOT already listening
+        const shouldShowBubble = !isBurst && uiAction !== 'listen';
+
+        if (shouldShowBubble) {
             setMessages(prev => {
                  const withBot = [...prev, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
                  return withBot.length > SLICE_LIMIT ? withBot.slice(withBot.length - SLICE_LIMIT) : withBot;
@@ -912,7 +925,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         }
 
         const finalImages = overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []);
-        await callChatAPI(fullText, finalImages, audioBase64, false, tempBotId);
+        await callChatAPI(fullText, finalImages, audioBase64, false, tempBotId, !shouldShowBubble);
 
     }, 6000); // 6 Seconds Pause (High Latency Mode)
   };
