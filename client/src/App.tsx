@@ -14,6 +14,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'; // Import ErrorBound
 import { Toaster } from 'react-hot-toast';
 import { App as CapacitorApp } from '@capacitor/app';
 import { scheduleGhostNotifications, clearGhostNotifications } from './services/offlineGhostService';
+import { userService } from './services/userService';
 
 // Lazy Load Pages
 // Note: We use the default export from the new Landing.tsx
@@ -83,41 +84,51 @@ const AppRoutes = () => {
 const App: React.FC = () => {
   useSecurity();
 
-  // Offline Ghost Logic: Schedule notifications on background, clear on foreground
+  // Offline Ghost Logic & Data Sync
   React.useEffect(() => {
       let listener: any;
 
-      const initGhostService = async () => {
+      const initServices = async () => {
           try {
+              // 1. Ghost Service (Notifications)
               listener = await CapacitorApp.addListener('appStateChange', async ({ isActive }) => {
                   try {
                       if (!isActive) {
-                          // App went to background: Schedule the ghosts
+                          // Background: Schedule ghosts
                           const userInfo = localStorage.getItem('userInfo');
                           if (userInfo) {
                               const user = JSON.parse(userInfo);
                               await scheduleGhostNotifications(user).catch(e => console.warn("Ghost schedule failed", e));
                           }
                       } else {
-                          // App came to foreground: Clear pending ghosts (because they are here!)
+                          // Foreground: Clear ghosts & SYNC DATA
                           await clearGhostNotifications().catch(e => console.warn("Ghost clear failed", e));
+                          userService.syncOfflineMoods().catch(e => console.warn("Sync failed", e));
                       }
                   } catch (innerError) {
-                      console.warn("Ghost listener error", innerError);
+                      console.warn("App state listener error", innerError);
                   }
               });
 
-              // Also clear on initial mount (if opening from notification)
+              // 2. Initial Checks on Mount
               await clearGhostNotifications().catch(() => {});
+              userService.syncOfflineMoods().catch(() => {});
+
+              // 3. Web Online Listener (Fallback for non-Capacitor)
+              window.addEventListener('online', () => {
+                  userService.syncOfflineMoods().catch(() => {});
+              });
+
           } catch (e) {
-              console.warn("Ghost service init failed", e);
+              console.warn("Service init failed", e);
           }
       };
 
-      initGhostService();
+      initServices();
 
       return () => {
           if (listener) listener.remove();
+          window.removeEventListener('online', () => {});
       };
   }, []);
 

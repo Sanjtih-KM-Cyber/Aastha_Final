@@ -34,7 +34,7 @@ const MOODS = [
   { emoji: '😟', label: 'Anxious', score: 2, color: '#6366F1' },
   { emoji: '🌵', label: 'Lonely', score: 2, color: '#64748B' },
   { emoji: '😣', label: 'Guilty', score: 2, color: '#F43F5E' },
-  { emoji: '🤯', label: 'Stressed', score: 1, color: '#F97316' }, // Renamed Overwhelmed -> Stressed for brevity
+  { emoji: '🤯', label: 'Stressed', score: 1, color: '#F97316' },
   { emoji: '😡', label: 'Angry', score: 1, color: '#EF4444' },
   { emoji: '🌧️', label: 'Depressed', score: 1, color: '#1E293B' },
   { emoji: '😶', label: 'Numb', score: 1, color: '#475569' },
@@ -58,30 +58,30 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
   const fetchHistory = async () => {
     if(history.length === 0) setIsLoadingHistory(true);
     try {
-      const data = await userService.getMoods();
-      setHistory(data);
-    } catch (e) { console.error(e); }
+      const serverData = await userService.getMoods();
+      // MERGE: Combine Server Data with Local Offline Queue
+      const combined = userService.getCombinedMoodHistory(serverData);
+      setHistory(combined);
+    } catch (e) {
+        console.error(e);
+        // Fallback: If server fails, at least show local queue
+        setHistory(userService.getCombinedMoodHistory([]));
+    }
     finally { setIsLoadingHistory(false); }
   };
 
-  const handleLog = (moodItem: typeof MOODS[0]) => {
+  const handleLog = async (moodItem: typeof MOODS[0]) => {
     // 1. OPTIMISTIC UPDATE: Update UI Immediately
     setLastLogged(moodItem);
     if (onLogMood) onLogMood(moodItem.label);
 
-    // 2. BACKGROUND API CALL: Fire and Forget
-    userService.saveMood(moodItem.label, moodItem.score)
-        .then(() => {
-            // Optional: Silent refresh history in background
-            fetchHistory();
-        })
-        .catch((e) => {
-            console.error("Log failed", e);
-            // Ideally revert UI, but for mood logging, retry/ignore is often acceptable UX vs blocking
-        });
+    // 2. ROBUST SAVE: Use Retry Mechanism
+    // This saves to local storage if API fails, ensuring it's "compulsory"
+    await userService.saveMoodWithRetry(moodItem.label, moodItem.score);
 
-    // 3. AUTO-CLOSE DISABLED per user request.
-    // It stays on success screen until user switches tabs or closes window manually.
+    // 3. REFRESH: Fetch combined history (Server + New Offline Entry)
+    // This updates the chart instantly even if offline
+    fetchHistory();
   };
   
   const handleAnalyze = async (source: 'diary' | 'chat') => {
