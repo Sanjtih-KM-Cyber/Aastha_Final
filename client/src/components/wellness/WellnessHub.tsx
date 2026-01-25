@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
-// import { useLowPowerMode } from '../../hooks/useLowPowerMode'; // REMOVED
 
 interface WellnessHubProps {
   onToggleWidget: (widget: string) => void;
@@ -126,13 +125,14 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
         <AnimatePresence>
             {isMobileOpen && (
                 <div className="fixed inset-0 z-[60] flex flex-col pointer-events-auto">
+                    {/* LITE MODE: Simplified Overlay */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.3 }}
                         onClick={onCloseMobile}
-                        className="absolute inset-0 bg-black/80 backdrop-blur-md"
+                        className={`absolute inset-0 ${isLowPowerMode ? 'bg-black/90' : 'bg-black/80 backdrop-blur-md'}`}
                     />
 
                     <motion.div
@@ -183,7 +183,10 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                                 w-full h-full max-h-[60vh] relative overflow-hidden rounded-[2.5rem]
                                                 flex flex-col items-center justify-center
                                                 transition-all duration-500 ease-out
-                                                ${isLowPowerMode ? 'bg-[#151515] border-white/5' : 'bg-[#151515]/80 backdrop-blur-3xl border-white/10 shadow-2xl'}
+                                                ${isLowPowerMode
+                                                    ? 'bg-[#151515] border-white/5' // Simplified solid bg for Lite Mode
+                                                    : 'bg-[#151515]/80 backdrop-blur-3xl border-white/10 shadow-2xl'
+                                                }
                                                 border
                                                 ${isActive
                                                     ? 'scale-100 opacity-100 grayscale-0'

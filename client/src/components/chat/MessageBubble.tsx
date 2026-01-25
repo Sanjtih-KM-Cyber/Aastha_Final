@@ -362,13 +362,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
              ...( !isUser
               ? {
                   background: isMobile || isLowPowerMode
-                    ? '#111827' // Solid Dark Gray in Lite/Mobile
+                    ? 'rgba(10, 14, 23, 0.7)' // See-through dark tint in Lite Mode
                     : `linear-gradient(135deg, ${moodColor}15, #00000080)`,
                   borderLeft: `3px solid ${moodColor}`,
                 }
               : {
                   background: isMobile || isLowPowerMode
-                    ? '#1f2937' // Solid Gray in Lite/Mobile
+                    ? 'rgba(31, 41, 55, 0.7)' // See-through gray tint in Lite Mode
                     : `linear-gradient(135deg, #1f293780, #11182780)`,
                 }),
                 wordBreak: 'break-word',

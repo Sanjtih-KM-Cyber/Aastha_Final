@@ -9,11 +9,9 @@ interface AppContainerProps {
 
 export const AppContainer: React.FC<AppContainerProps> = ({ children }) => {
   const location = useLocation();
-  const { wallpaper, currentTheme, isLowPowerMode } = useTheme(); // Consuming isLowPowerMode
-  // ✅ FIX: Local state to handle broken image URLs gracefully
+  const { wallpaper, currentTheme, isLowPowerMode } = useTheme();
   const [imageError, setImageError] = useState(false);
 
-  // Reset error state when wallpaper changes
   React.useEffect(() => {
       setImageError(false);
   }, [wallpaper]);
@@ -23,29 +21,39 @@ export const AppContainer: React.FC<AppContainerProps> = ({ children }) => {
       <div className="fixed inset-0 z-0 pointer-events-none transform-gpu transition-colors duration-1000">
         <div className="absolute inset-0 bg-midnight opacity-90" />
         
-        {/* ✅ FIX: Only render if wallpaper exists AND hasn't errored */}
         {wallpaper && !imageError ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-0">
             <img 
                 src={wallpaper} 
                 alt="Sanctuary Wallpaper" 
                 className="w-full h-full object-cover opacity-60"
-                onError={() => setImageError(true)} // Hide on error
+                onError={() => setImageError(true)}
             />
-            {/* LITE MODE: Remove the blend-multiply overlay if in lite mode for slight gain? No, keep for legibility. */}
             <div className="absolute inset-0 bg-black/40 mix-blend-multiply" />
           </motion.div>
         ) : (
-          /* Default Gradient Background (Fallback) */
+          /* Default Background */
           <>
             {isLowPowerMode ? (
-               // LITE MODE: Static Gradient Background (No Animation, No Blur Calculation)
-               <div
-                  className="absolute inset-0 opacity-20"
-                  style={{
-                      background: `radial-gradient(circle at 50% 50%, ${currentTheme.primaryColor}, transparent 70%)`
-                  }}
-               />
+               // LITE MODE: Static Aurora (Layered Gradients for Depth)
+               <div className="absolute inset-0">
+                   {/* Top Left Primary Glow */}
+                   <div
+                      className="absolute top-[-20%] left-[-20%] w-[80vw] h-[80vw] rounded-full opacity-30 mix-blend-screen"
+                      style={{
+                          background: `radial-gradient(circle, ${currentTheme.primaryColor}, transparent 70%)`
+                      }}
+                   />
+                   {/* Bottom Right Secondary Glow */}
+                   <div
+                      className="absolute bottom-[-20%] right-[-20%] w-[80vw] h-[80vw] rounded-full opacity-20 mix-blend-screen"
+                      style={{
+                          background: `radial-gradient(circle, ${currentTheme.primaryColor}, transparent 70%)` // Fallback to primary if gradient parsing is complex, or use simple secondary color logic later
+                      }}
+                   />
+                   {/* Center Deep Tint */}
+                   <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/20 to-black/60" />
+               </div>
             ) : (
                // HIGH QUALITY: Animated Blobs
                <>
@@ -74,7 +82,6 @@ export const AppContainer: React.FC<AppContainerProps> = ({ children }) => {
       <AnimatePresence mode="wait">
         <motion.div
           key={location.pathname}
-          // LITE MODE: Simplified Page Transition
           initial={isLowPowerMode ? { opacity: 0 } : { opacity: 0, filter: 'blur(5px)' }}
           animate={isLowPowerMode ? { opacity: 1 } : { opacity: 1, filter: 'blur(0px)' }}
           exit={isLowPowerMode ? { opacity: 0 } : { opacity: 0, filter: 'blur(5px)' }}
