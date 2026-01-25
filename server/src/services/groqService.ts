@@ -81,7 +81,9 @@ export const generateSubconscious = async (
         - If user says "Why does this happen to me?" -> They want COMFORT (Reply).
     - **Completion Check:**
         - Does the last message feel complete? If yes -> REPLY.
-        - Does it end with "..." or feel like they cut off? -> LISTEN.
+        - **ELLIPSIS RULE:** If it ends with "...", check CONTEXT:
+            - "I don't know..." (Stylistic/Complete) -> REPLY.
+            - "And then I..." (Incomplete) -> LISTEN.
 
     **2. DECISION MATRIX (STRATEGY):**
     - **'listen'**: Choose this ONLY if the user is explicitly unfinished or asking to be heard without interruption.
