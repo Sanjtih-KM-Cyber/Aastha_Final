@@ -18,6 +18,7 @@ import chatRoutes from './routes/chatRoutes';
 import dataRoutes from './routes/dataRoutes';
 import aiRoutes from './routes/aiRoutes';
 import * as ghostService from './services/ghostService';
+import * as socketService from './services/socketService';
 
 // --- CRITICAL SECURITY CHECK ---
 const requiredEnvVars = ['JWT_SECRET', 'SERVER_ENCRYPTION_KEY', 'MONGO_URI'];
@@ -37,95 +38,7 @@ const app = express();
 const server = createServer(app);
 
 // --- REAL-TIME SYNC ENGINE (SECURED) ---
-const wss = new WebSocketServer({ server, path: '/ws' });
-// Support multiple devices per user: userId -> Set<WebSocket>
-const clients = new Map<string, Set<WebSocket>>();
-
-wss.on('connection', (ws, req) => {
-    let isAuthenticated = false;
-    let authenticatedUserId: string | null = null;
-
-    // Timeout: If auth not received in 5s, close.
-    const authTimeout = setTimeout(() => {
-        if (!isAuthenticated) {
-            console.log('[WS] Auth timeout, closing.');
-            ws.close(4001, 'Auth Timeout');
-        }
-    }, 5000);
-
-    ws.on('message', (message) => {
-        try {
-            const data = JSON.parse(message.toString());
-
-            // --- AUTH HANDSHAKE ---
-            if (!isAuthenticated) {
-                if (data.type === 'AUTH' && data.token && data.userId) {
-                    try {
-                        const secret = process.env.JWT_SECRET as string;
-                        const decoded = jwt.verify(data.token, secret) as any;
-
-                        if (decoded.id !== data.userId) {
-                            console.log(`[WS] Security Alert: ID Mismatch.`);
-                            ws.close(4003, 'Forbidden: ID Mismatch');
-                            return;
-                        }
-
-                        // Success
-                        isAuthenticated = true;
-                        authenticatedUserId = data.userId;
-                        clearTimeout(authTimeout);
-
-                        // Add to client set
-                        if (!clients.has(authenticatedUserId!)) {
-                            clients.set(authenticatedUserId!, new Set());
-                        }
-                        clients.get(authenticatedUserId!)?.add(ws);
-
-                        console.log(`[WS] Client authenticated: ${authenticatedUserId}`);
-                        return; // Handshake complete, don't broadcast this message
-                    } catch (e) {
-                         console.error('[WS] Invalid Token');
-                         ws.close(4001, 'Invalid Token');
-                         return;
-                    }
-                } else {
-                    // First message MUST be AUTH
-                    console.log('[WS] First message not AUTH, closing.');
-                    ws.close(4001, 'Protocol Error: First message must be AUTH');
-                    return;
-                }
-            }
-
-            // --- NORMAL MESSAGES ---
-            if (isAuthenticated && authenticatedUserId) {
-                const userSockets = clients.get(authenticatedUserId);
-                if (userSockets) {
-                    userSockets.forEach(client => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            client.send(JSON.stringify(data));
-                        }
-                    });
-                }
-            }
-
-        } catch (e) {
-            console.error('[WS] Error processing message', e);
-        }
-    });
-
-    ws.on('close', () => {
-        if (authenticatedUserId) {
-            console.log(`[WS] Client disconnected: ${authenticatedUserId}`);
-            const userSockets = clients.get(authenticatedUserId);
-            if (userSockets) {
-                userSockets.delete(ws);
-                if (userSockets.size === 0) {
-                    clients.delete(authenticatedUserId);
-                }
-            }
-        }
-    });
-});
+socketService.init(server);
 
 // --- DEFENSE IN DEPTH ---
 app.disable('x-powered-by'); // Hide the Tech Stack
