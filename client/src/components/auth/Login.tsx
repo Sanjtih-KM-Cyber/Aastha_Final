@@ -167,8 +167,8 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
           }
 
           if (onLoginSuccess) onLoginSuccess();
-          // Hard reload to sync context completely
-          window.location.href = '/sanctuary';
+          // Use client-side navigation instead of hard reload to support Capacitor/SPA
+          navigate('/sanctuary');
       } catch(err: any) {
           console.error(err);
           setError(err.response?.data?.message || 'Invalid code');
