@@ -56,8 +56,10 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
         // Listen for App Resume
         const listener = App.addListener('appStateChange', async ({ isActive }) => {
             if (isActive && isEnabled) {
-                // On Resume, use the same safe timeout logic
-                await performSafeBiometricCheck();
+                // On Resume, wait a moment for the app to settle (Fix for S23/Android lag)
+                setTimeout(async () => {
+                   await performSafeBiometricCheck();
+                }, 500);
             }
         });
 
@@ -90,12 +92,14 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
 
                     {/* Fallback for "Disaster" scenarios where sensor fails */}
                     <button
-                        onClick={() => {
+                        onClick={async () => {
                             // Emergency bypass: Disable the broken biometric setting AND logout
-                            toggleBiometrics(false);
+                            // We MUST await this to ensure the preference is saved before we reload
+                            await toggleBiometrics(false);
                             setIsLocked(false);
                             localStorage.removeItem('userInfo');
-                            navigate('/login', { replace: true });
+                            // Force a hard reload to clear any stuck native plugin state
+                            window.location.replace('/login');
                         }}
                         className="text-sm text-white/40 hover:text-white underline mt-4"
                     >
