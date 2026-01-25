@@ -12,7 +12,7 @@ import { Login } from './components/auth/Login';
 import { BiometricGuard } from './components/auth/BiometricGuard';
 import { ErrorBoundary } from './components/ErrorBoundary'; // Import ErrorBoundary
 import { Toaster } from 'react-hot-toast';
-import { App } from '@capacitor/app';
+import { App as CapacitorApp } from '@capacitor/app';
 import { scheduleGhostNotifications, clearGhostNotifications } from './services/offlineGhostService';
 
 // Lazy Load Pages
@@ -89,7 +89,7 @@ const App: React.FC = () => {
 
       const initGhostService = async () => {
           try {
-              listener = await App.addListener('appStateChange', async ({ isActive }) => {
+              listener = await CapacitorApp.addListener('appStateChange', async ({ isActive }) => {
                   try {
                       if (!isActive) {
                           // App went to background: Schedule the ghosts

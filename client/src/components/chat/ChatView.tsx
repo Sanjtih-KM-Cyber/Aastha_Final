@@ -232,14 +232,32 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         }
 
         if (data && data.content) {
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.role === 'assistant' && (lastMsg.id?.startsWith('temp') || lastMsg.id === 'temp-ai')) {
-                      return [...prev.slice(0, -1), { ...lastMsg, content: data.content, id: data._id || Date.now().toString() }];
-                }
-                return [...prev, { role: 'assistant', content: data.content, timestamp: Date.now() }];
-            });
-            setIsTyping(false);
+            if (data.role === 'user') {
+                 // USER MESSAGE BROADCAST (Handle deduplication)
+                 setMessages(prev => {
+                     // 1. Check if we already have this message by tempId (Sender View)
+                     if (data.tempId && prev.some(m => m.id === data.tempId)) {
+                         return prev;
+                     }
+                     // 2. Check for duplicate content at the end (Optimistic UI race condition)
+                     const lastMsg = prev[prev.length - 1];
+                     if (lastMsg && lastMsg.role === 'user' && lastMsg.content === data.content && (Date.now() - (lastMsg.timestamp || 0) < 10000)) {
+                         return prev;
+                     }
+
+                     return [...prev, { role: 'user', content: data.content, timestamp: data.timestamp || Date.now(), id: data.tempId }];
+                 });
+            } else {
+                // ASSISTANT MESSAGE BROADCAST
+                setMessages(prev => {
+                    const lastMsg = prev[prev.length - 1];
+                    if (lastMsg && lastMsg.role === 'assistant' && (lastMsg.id?.startsWith('temp') || lastMsg.id === 'temp-ai')) {
+                          return [...prev.slice(0, -1), { ...lastMsg, content: data.content, id: data._id || Date.now().toString() }];
+                    }
+                    return [...prev, { role: 'assistant', content: data.content, timestamp: Date.now() }];
+                });
+                setIsTyping(false);
+            }
         }
     });
     return () => {
@@ -651,7 +669,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     setStatusDisplay('Online');
   };
 
-  const callChatAPI = async (finalText: string, images: string[], audioBase64: string | null, isPermissionGrant: boolean, tempBotId: string, isSilent: boolean = false) => {
+  const callChatAPI = async (finalText: string, images: string[], audioBase64: string | null, isPermissionGrant: boolean, tempBotId: string, isSilent: boolean = false, tempId?: string) => {
       try {
           if (abortControllerRef.current) abortControllerRef.current.abort();
           const abortController = new AbortController();
@@ -684,7 +702,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 forceReply: isPermissionGrant,
                 isVoiceMode: isVoiceMode,
                 userLocalTime: new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true }),
-                userLocalHour: new Date().getHours()
+                userLocalHour: new Date().getHours(),
+                tempId: tempId
             }),
           });
 
@@ -922,7 +941,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
         // Fire API Immediately
         const finalImages = overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []);
-        await callChatAPI(allText, finalImages, audioBase64, isPermissionGrant, tempBotId, false);
+        await callChatAPI(allText, finalImages, audioBase64, isPermissionGrant, tempBotId, false, userMsg.id);
         return;
     }
 
@@ -959,7 +978,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         }
 
         const finalImages = overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []);
-        await callChatAPI(fullText, finalImages, audioBase64, false, tempBotId, !shouldShowBubble);
+        await callChatAPI(fullText, finalImages, audioBase64, false, tempBotId, !shouldShowBubble, userMsg.id);
 
     }, 6000); // 6 Seconds Pause (High Latency Mode)
   };
