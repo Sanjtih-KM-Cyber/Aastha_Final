@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { Capacitor } from '@capacitor/core';
 
 type SyncListener = (payload: any) => void;
 
@@ -45,11 +46,14 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Determine WS URL
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    
-    // Safer host detection
+    let protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     let host = window.location.host;
-    if (window.location.hostname === 'localhost') {
+
+    // FIX: Capacitor needs explicit remote URL, otherwise it tries ws://localhost
+    if (Capacitor.isNativePlatform()) {
+        host = 'aastha-final.onrender.com';
+        protocol = 'wss:';
+    } else if (window.location.hostname === 'localhost') {
         host = 'localhost:5000';
     } else if (import.meta.env.VITE_API_URL) {
         try {
