@@ -59,7 +59,23 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
-    if (isOpen) fetchHistory();
+    if (isOpen) {
+        fetchHistory();
+
+        // Listen for background sync (Optimistic UI -> Server Confirmation)
+        const handleSync = () => {
+             console.log("[MoodTracker] Background sync detected, refreshing...");
+             fetchHistory();
+        };
+
+        window.addEventListener('mood-synced', handleSync);
+        window.addEventListener('online', handleSync);
+
+        return () => {
+            window.removeEventListener('mood-synced', handleSync);
+            window.removeEventListener('online', handleSync);
+        };
+    }
   }, [isOpen]);
 
   const fetchHistory = async () => {

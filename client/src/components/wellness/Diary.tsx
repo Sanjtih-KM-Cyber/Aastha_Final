@@ -500,7 +500,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
       const d = String(activeDate.getDate()).padStart(2, '0');
       const stableDateISO = `${y}-${m}-${d}T12:00:00.000Z`;
 
-      const saved = await userService.saveDiaryEntry({
+      const saved = await userService.saveDiaryEntryWithRetry({
         title: encTitle,
         content: encContent,
         tags: ['journal'],

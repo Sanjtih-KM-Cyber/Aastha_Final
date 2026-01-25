@@ -79,6 +79,12 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Prevent multiple connections
         if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return;
 
+        // STRICT CHECK: Token is mandatory
+        if (!token) {
+             console.warn("[Sync] No token available. Aborting connection.");
+             return;
+        }
+
         console.log(`[Sync] Connecting to WS...`);
         const ws = new WebSocket(wsUrl);
 
@@ -121,7 +127,8 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             // Normal Closure (1000) or Going Away (1001) or No Status (1005)
             // We implement Exponential Backoff
-            if (user && user._id) {
+            // STRICTER RETRY: Only retry if we actually have a token
+            if (user && user._id && token) {
                 if (retryCountRef.current < MAX_RETRIES) {
                     const delay = Math.min(10000, BASE_DELAY * Math.pow(2, retryCountRef.current));
                     console.log(`[Sync] Reconnecting in ${delay}ms (Attempt ${retryCountRef.current + 1}/${MAX_RETRIES})...`);

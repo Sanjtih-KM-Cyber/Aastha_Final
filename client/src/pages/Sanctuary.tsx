@@ -188,9 +188,6 @@ export const Sanctuary: React.FC = () => {
         const values = Object.values(prev);
         const maxZ = values.length > 0 ? Math.max(...values) : 50;
         
-        // OPTIMIZATION: If already highest, do nothing to prevent re-renders
-        if (prev[key] === maxZ) return prev;
-
         // Always increment maxZ to ensure this specific window becomes the highest
         return { ...prev, [key]: maxZ + 1 };
     });
