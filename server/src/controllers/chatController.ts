@@ -316,7 +316,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     if (!chatSession) chatSession = await Chat.create({ user: userId, messages: [] });
 
     // Decrypt History
-    const historyWindow: ChatMessage[] = chatSession.messages.slice(-50).map(m => ({
+    const historyWindow: ChatMessage[] = chatSession.messages.slice(-20).map(m => ({
         role: m.role as 'user' | 'assistant' | 'system',
         content: decrypt(m.content)
     }));
