@@ -8,11 +8,9 @@ interface BiometricGuardProps {
     children: React.ReactNode;
 }
 
-// Module-level variable to persist across remounts
-let globalLastVerifiedTime = 0;
-
 export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
-    const { isEnabled, promptBiometrics, toggleBiometrics, isLoading } = useBiometrics();
+    // Destructure isRecentSuccess from the hook
+    const { isEnabled, promptBiometrics, toggleBiometrics, isLoading, isRecentSuccess } = useBiometrics();
     const [isLocked, setIsLocked] = useState(false);
     const [hasCheckedInitial, setHasCheckedInitial] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -49,9 +47,7 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
             }
 
             setIsLocked(!success);
-            if (success) {
-                globalLastVerifiedTime = Date.now();
-            }
+            // Note: globalLastVerifiedTime update is now handled inside useBiometrics (promptBiometrics)
             isCheckInProgress.current = false;
             return success;
         } catch (e) {
@@ -69,7 +65,8 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
         if (!hasCheckedInitial) {
             if (isEnabled) {
                 // Check if we verified recently (e.g. just before a reload or remount)
-                if (Date.now() - globalLastVerifiedTime < 5000) {
+                // Use 5000ms for initial load grace period
+                if (isRecentSuccess(5000)) {
                      setHasCheckedInitial(true);
                      setIsLocked(false);
                 } else {
@@ -87,13 +84,15 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
                 // GRACE PERIOD CHECK:
                 // If we just verified (e.g., the prompt closing triggered 'resume'), ignore it.
                 // 3000ms is generous enough to cover the prompt transition but short enough to be secure.
-                if (Date.now() - globalLastVerifiedTime < 3000) {
+                if (isRecentSuccess()) { // Defaults to 3000ms
                     console.log("Biometric check skipped (Grace Period)");
                     return;
                 }
 
                 // On Resume, wait a moment for the app to settle (Fix for S23/Android lag)
                 setTimeout(async () => {
+                   // Double check grace period in case another check finished while we waited 500ms
+                   if (isRecentSuccess()) return;
                    await performSafeBiometricCheck();
                 }, 500);
             }

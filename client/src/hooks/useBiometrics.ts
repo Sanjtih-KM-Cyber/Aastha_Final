@@ -1,8 +1,12 @@
 import { NativeBiometric } from '@capgo/capacitor-native-biometric';
 import { Preferences } from '@capacitor/preferences';
+import { Capacitor } from '@capacitor/core';
 import { useState, useEffect } from 'react';
 
 const BIOMETRIC_ENABLED_KEY = 'biometric_enabled';
+
+// SHARED STATE: Persists across component mounts (Diary vs Guard)
+let lastSuccessTime = 0;
 
 export const useBiometrics = () => {
     const [isAvailable, setIsAvailable] = useState(false);
@@ -57,6 +61,8 @@ export const useBiometrics = () => {
                 subtitle: "Confirm your identity to access your sanctuary",
                 description: "Please authenticate to continue"
             });
+            // SUCCESS: Update global timestamp
+            lastSuccessTime = Date.now();
             return true;
         } catch (error) {
             console.error("Authentication failed", error);
@@ -64,5 +70,9 @@ export const useBiometrics = () => {
         }
     };
 
-    return { isAvailable, isEnabled, toggleBiometrics, promptBiometrics, isLoading };
+    const isRecentSuccess = (gracePeriodMs = 3000) => {
+        return (Date.now() - lastSuccessTime) < gracePeriodMs;
+    };
+
+    return { isAvailable, isEnabled, toggleBiometrics, promptBiometrics, isLoading, isRecentSuccess };
 };

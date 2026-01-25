@@ -1521,22 +1521,26 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             rows={1}
                         />
                         <div className="relative">
-                            <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
-                                <Smile size={20} />
-                            </button>
-                            {showEmojiPicker && (
-                                <div className="absolute bottom-14 right-0 shadow-2xl z-50">
-                                    <EmojiPicker
-                                        theme={Theme.DARK}
-                                        emojiStyle={EmojiStyle.APPLE}
-                                        onEmojiClick={(e) => { setInput(prev => prev + e.emoji); }}
-                                        lazyLoadEmojis={true}
-                                        width={300}
-                                        height={400}
-                                        searchDisabled={false}
-                                        skinTonesDisabled={false}
-                                    />
-                                </div>
+                            {!isMobile && (
+                                <>
+                                    <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 transition-colors ${showEmojiPicker ? 'text-white' : 'text-white/30 hover:text-white'}`}>
+                                        <Smile size={20} />
+                                    </button>
+                                    {showEmojiPicker && (
+                                        <div className="absolute bottom-14 right-0 shadow-2xl z-50">
+                                            <EmojiPicker
+                                                theme={Theme.DARK}
+                                                emojiStyle={EmojiStyle.APPLE}
+                                                onEmojiClick={(e) => { setInput(prev => prev + e.emoji); }}
+                                                lazyLoadEmojis={true}
+                                                width={300}
+                                                height={400}
+                                                searchDisabled={false}
+                                                skinTonesDisabled={false}
+                                            />
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                     </form>
