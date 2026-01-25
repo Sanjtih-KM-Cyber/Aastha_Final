@@ -208,7 +208,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
                        className="w-3 h-3 rounded-full flex items-center justify-center bg-[#FF5F57] shadow-inner active:brightness-75 transition-all"
                        title="Close"
                     >
-                        <X size={8} className="text-black/60 opacity-0 group-hover:opacity-100 transition-opacity" strokeWidth={3} />
+                        <X size={8} className="text-black/60 transition-opacity" strokeWidth={3} />
                     </button>
 
                     {/* Yellow (Minimize) */}
@@ -217,7 +217,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
                        className="w-3 h-3 rounded-full flex items-center justify-center bg-[#FEBC2E] shadow-inner active:brightness-75 transition-all"
                        title={isMinimized ? "Expand" : "Minimize"}
                     >
-                        <Minus size={8} className="text-black/60 opacity-0 group-hover:opacity-100 transition-opacity" strokeWidth={3} />
+                        <Minus size={8} className="text-black/60 transition-opacity" strokeWidth={3} />
                     </button>
                 </div>
 
