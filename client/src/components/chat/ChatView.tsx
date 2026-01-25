@@ -16,6 +16,7 @@ import { useSync } from '../../context/SyncContext';
 import api from '../../services/api';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
 
 // --- NEW COMPONENT: THOUGHT CLOUD MODAL ---
 const ThoughtCloudModal: React.FC<{ isOpen: boolean; onClose: () => void; content: any }> = ({ isOpen, onClose, content }) => {
@@ -320,6 +321,33 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
      initChat();
      return () => { isMounted = false; };
   }, [user, navigate, botName]);
+
+  // --- RE-SYNC ON APP RESUME (Mobile) ---
+  useEffect(() => {
+      const listener = App.addListener('appStateChange', async ({ isActive }) => {
+          if (isActive && user) {
+              // Silent refresh of history when app comes to foreground
+              try {
+                  const res = await api.get('/chat/history');
+                  if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+                      const history = res.data.map((msg: any) => {
+                        let clean = msg.content || "";
+                        clean = clean.replace(/<color>[\s\S]*?<\/color>/gi, '');
+                        clean = clean.replace(/<(?!proposal)[^>]+>/g, '');
+                        return {
+                            ...msg,
+                            content: clean,
+                            voice_note: msg.voice_note ? resolveAudioUrl(msg.voice_note) : undefined
+                        };
+                     });
+                     // Update state only if we have new data or to ensure consistency
+                     setMessages(history.slice(-50));
+                  }
+              } catch (e) { console.error("Resume sync failed", e); }
+          }
+      });
+      return () => { listener.then(l => l.remove()); };
+  }, [user]);
 
   // --- FIX: SYNC HEIGHT WITH MOBILE KEYBOARD & VIEWPORT ---
   // This is the "God Mode" fix for mobile browsers (Safari/Chrome)

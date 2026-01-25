@@ -8,16 +8,20 @@ interface BiometricGuardProps {
     children: React.ReactNode;
 }
 
+// Module-level variable to persist across remounts
+let globalLastVerifiedTime = 0;
+
 export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
     const { isEnabled, promptBiometrics, toggleBiometrics, isLoading } = useBiometrics();
     const [isLocked, setIsLocked] = useState(false);
     const [hasCheckedInitial, setHasCheckedInitial] = useState(false);
-    const lastVerifiedRef = React.useRef<number>(0);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
     const navigate = useNavigate();
 
     // Reusable Safe Check Logic
     const performSafeBiometricCheck = async () => {
         if (!isEnabled) return true;
+        if (isLoggingOut) return false;
 
         setIsLocked(true);
         const timeoutPromise = new Promise<boolean>((resolve) => {
@@ -32,9 +36,13 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
                 promptBiometrics(),
                 timeoutPromise
             ]);
+
+            // SECURITY CHECK: If user clicked 'Use Password' while this was running, ignore success.
+            if (isLoggingOut) return false;
+
             setIsLocked(!success);
             if (success) {
-                lastVerifiedRef.current = Date.now();
+                globalLastVerifiedTime = Date.now();
             }
             return success;
         } catch (e) {
@@ -50,7 +58,13 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
         // Initial Check
         if (!hasCheckedInitial) {
             if (isEnabled) {
-                performSafeBiometricCheck().then(() => setHasCheckedInitial(true));
+                // Check if we verified recently (e.g. just before a reload or remount)
+                if (Date.now() - globalLastVerifiedTime < 5000) {
+                     setHasCheckedInitial(true);
+                     setIsLocked(false);
+                } else {
+                     performSafeBiometricCheck().then(() => setHasCheckedInitial(true));
+                }
             } else {
                 setIsLocked(false);
                 setHasCheckedInitial(true);
@@ -63,7 +77,7 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
                 // GRACE PERIOD CHECK:
                 // If we just verified (e.g., the prompt closing triggered 'resume'), ignore it.
                 // 3000ms is generous enough to cover the prompt transition but short enough to be secure.
-                if (Date.now() - lastVerifiedRef.current < 3000) {
+                if (Date.now() - globalLastVerifiedTime < 3000) {
                     console.log("Biometric check skipped (Grace Period)");
                     return;
                 }
@@ -105,17 +119,16 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
                     {/* Fallback for "Disaster" scenarios where sensor fails */}
                     <button
                         onClick={async () => {
+                            setIsLoggingOut(true); // Immediate block to prevent race-condition unlock
                             // Emergency bypass: Disable the broken biometric setting AND logout
-                            // We MUST await this to ensure the preference is saved before we reload
                             await toggleBiometrics(false);
-                            setIsLocked(false);
                             localStorage.removeItem('userInfo');
                             // Force a hard reload to clear any stuck native plugin state
                             window.location.replace('/login');
                         }}
                         className="text-sm text-white/40 hover:text-white underline mt-4"
                     >
-                        Use Password (Logout)
+                        {isLoggingOut ? "Securing..." : "Use Password (Logout)"}
                     </button>
                 </div>
             </div>

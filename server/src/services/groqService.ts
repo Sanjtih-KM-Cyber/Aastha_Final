@@ -339,10 +339,13 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       }))
   ];
 
-  // RETRY LOGIC: Rotate keys instead of retrying same key (Randomized Load Balancing)
-  const start = Math.floor(Math.random() * groqKeys.length);
+  // RETRY LOGIC: Rotate keys using Randomized Load Balancing
+  // We start at a random index to distribute load across keys (if they are from different projects)
+  // instead of always hammering Key 0 first.
+  const startIdx = Math.floor(Math.random() * groqKeys.length);
+
   for (let i = 0; i < groqKeys.length; i++) {
-    const keyIndex = (start + i) % groqKeys.length;
+    const keyIndex = (startIdx + i) % groqKeys.length;
     try {
         const groqClient = getGroqClient(keyIndex);
         const completion = await groqClient.chat.completions.create({
@@ -359,7 +362,7 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
         }
         return; // Success!
     } catch (error: any) {
-        console.warn(`Groq Stream Key ${keyIndex+1} Failed: ${error?.error?.code || error.message}`);
+        console.warn(`Groq Stream Key (Index ${keyIndex}) Failed: ${error?.error?.code || error.message}`);
         // Continue to next key
     }
   }
