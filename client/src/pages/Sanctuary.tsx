@@ -183,15 +183,18 @@ export const Sanctuary: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // FIX: Logic to bring window to front
-  const bringToFront = (key: string) => {
+  const bringToFront = React.useCallback((key: string) => {
     setZIndices(prev => {
         const values = Object.values(prev);
         const maxZ = values.length > 0 ? Math.max(...values) : 50;
         
+        // OPTIMIZATION: If already highest, do nothing to prevent re-renders
+        if (prev[key] === maxZ) return prev;
+
         // Always increment maxZ to ensure this specific window becomes the highest
         return { ...prev, [key]: maxZ + 1 };
     });
-  };
+  }, []);
 
   const toggleWidget = (key: string) => {
     setWidgets(prev => {
@@ -226,6 +229,15 @@ export const Sanctuary: React.FC = () => {
         return newWidgets;
     });
   };
+
+  // MEMOIZED HANDLERS
+  const focusDiary = React.useCallback(() => bringToFront('diary'), [bringToFront]);
+  const focusPomodoro = React.useCallback(() => bringToFront('pomodoro'), [bringToFront]);
+  const focusJam = React.useCallback(() => bringToFront('jam'), [bringToFront]);
+  const focusSoundscape = React.useCallback(() => bringToFront('soundscape'), [bringToFront]);
+  const focusBreathing = React.useCallback(() => bringToFront('breathing'), [bringToFront]);
+  const focusMood = React.useCallback(() => bringToFront('mood'), [bringToFront]);
+  const focusLore = React.useCallback(() => bringToFront('lore'), [bringToFront]);
 
   return (
     <div className="relative w-full h-screen flex bg-transparent overflow-hidden">
@@ -265,7 +277,7 @@ export const Sanctuary: React.FC = () => {
                 isOpen={widgets.diary} 
                 onClose={() => closeWidget('diary')} 
                 zIndex={zIndices.diary}
-                onFocus={() => bringToFront('diary')}
+                onFocus={focusDiary}
                 initialParams={widgetConfigs.diary}
               />
             </React.Suspense>
@@ -277,7 +289,7 @@ export const Sanctuary: React.FC = () => {
                   isOpen={widgets.pomodoro}
                   onClose={() => closeWidget('pomodoro')}
                   zIndex={zIndices.pomodoro}
-                  onFocus={() => bringToFront('pomodoro')}
+                  onFocus={focusPomodoro}
                   initialParams={widgetConfigs.pomodoro}
               />
             </React.Suspense>
@@ -289,7 +301,7 @@ export const Sanctuary: React.FC = () => {
                   isOpen={widgets.jam}
                   onClose={() => closeWidget('jam')}
                   zIndex={zIndices.jam}
-                  onFocus={() => bringToFront('jam')}
+                  onFocus={focusJam}
                   initialParams={widgetConfigs.jam}
               />
             </React.Suspense>
@@ -301,7 +313,7 @@ export const Sanctuary: React.FC = () => {
                   isOpen={widgets.soundscape}
                   onClose={() => closeWidget('soundscape')}
                   zIndex={zIndices.soundscape}
-                  onFocus={() => bringToFront('soundscape')}
+                  onFocus={focusSoundscape}
                   preset={widgetConfigs.soundscape?.preset}
                   volume={widgetConfigs.soundscape?.volume}
               />
@@ -314,7 +326,7 @@ export const Sanctuary: React.FC = () => {
                   isOpen={widgets.breathing}
                   onClose={() => closeWidget('breathing')}
                   zIndex={zIndices.breathing}
-                  onFocus={() => bringToFront('breathing')}
+                  onFocus={focusBreathing}
                   initialMode={widgetConfigs.breathing?.mode}
               />
             </React.Suspense>
@@ -326,7 +338,7 @@ export const Sanctuary: React.FC = () => {
                   isOpen={widgets.mood}
                   onClose={() => closeWidget('mood')}
                   zIndex={zIndices.mood}
-                  onFocus={() => bringToFront('mood')}
+                  onFocus={focusMood}
               />
             </React.Suspense>
           </div>
@@ -338,7 +350,7 @@ export const Sanctuary: React.FC = () => {
                   isOpen={widgets.lore}
                   onClose={() => closeWidget('lore')}
                   zIndex={zIndices.lore}
-                  onFocus={() => bringToFront('lore')}
+                  onFocus={focusLore}
               />
             </React.Suspense>
           </div>
