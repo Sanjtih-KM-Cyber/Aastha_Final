@@ -282,8 +282,11 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
   if (model === "llama-3.1-8b-instant") {
       finalPrompt = `
       You are the Voice Director. You MUST start every response with a style tag: [STYLE: <emotion>, <pitch>, <speed>].
-      Example: [STYLE: Whispering, high, slow].
-      The audio engine reads this. Do not speak the tag.
+
+      **STYLE RULES:**
+      - If the user is SAD, ANXIOUS, or NEEDS COMFORT: Use [STYLE: Soft, low, slow] or [STYLE: Intimate, low, very slow]. Make it feel like a close, warm hug. Avoid "Distant" or "Neutral" styles.
+      - If the user is HAPPY/NORMAL: Use [STYLE: Cheerful, normal, normal].
+      - The audio engine reads this. Do not speak the tag.
 
       ${systemPrompt}`;
   }
