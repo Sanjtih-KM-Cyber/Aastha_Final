@@ -163,6 +163,9 @@ app.use(helmet({
 
 // Accept a list of origins (add your domains)
 const allowedOrigins = [
+  'http://localhost',             // ✅ Android Capacitor App
+  'https://localhost',            // ✅ iOS Capacitor App
+  'capacitor://localhost',        // ✅ Native Capacitor Scheme
   'http://localhost:3000',
   'http://localhost:5173',
   'http://127.0.0.1:3000',
