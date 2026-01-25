@@ -73,14 +73,29 @@ export const generateSubconscious = async (
     User Context:
     ${userContext}
 
-    **1. DECISION MATRIX (STRATEGY):**
-    - **'listen'**: Choose this ONLY if the user is typing rapidly, mid-thought, or sending a multi-part story.
-       a) **BURST DETECTION:** If the history shows the user sent 3+ messages in a row without an AI reply, DEFAULT to 'listen'.
-       b) **MULTI-LINE INPUT:** If the user's input contains multiple lines or distinct sentences separated by newlines (e.g., "I'm sad.\nAnd tired."), TREAT THIS AS A BURST and default to 'listen'.
-       c) **SINGLE VENTS ARE REPLIES:** If the user sends a SINGLE message venting (e.g. "Life is fucked", "I hate my boss"), select 'reply' so the AI can validate/comfort them. Do NOT silence the AI for single vents.
-       d) **EXPLICIT:** User says "Shut up", "Listen", "Wait", "Let me finish".
-       e) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️, 🤔, 👇) that matches the sentiment.
-    - **'reply'**: The DEFAULT state.
+    **1. NUANCE & INTENT ANALYSIS (PRE-COMPUTATION):**
+    - **Venting vs. Storytelling:**
+        - If user says "Life is fucked" -> They want VALIDATION (Reply).
+        - If user says "So I went to the store..." (and stops) -> They are STORYTELLING (Listen).
+    - **Rhetorical Questions:**
+        - If user says "Why does this happen to me?" -> They want COMFORT (Reply).
+    - **Completion Check:**
+        - Does the last message feel complete? If yes -> REPLY.
+        - Does it end with "..." or feel like they cut off? -> LISTEN.
+
+    **2. DECISION MATRIX (STRATEGY):**
+    - **'listen'**: Choose this ONLY if the user is explicitly unfinished or asking to be heard without interruption.
+       a) **BURST DETECTION:** If user sent 3+ messages, check the LAST message.
+           - Is the LAST message a question? -> **OVERRIDE: 'reply'**.
+           - Is the LAST message a demand (e.g., "Help me")? -> **OVERRIDE: 'reply'**.
+           - Otherwise -> 'listen'.
+       b) **MULTI-LINE INPUT:**
+           - If it's a long, complete paragraph -> **'reply'**.
+           - If it looks like a list of distinct thoughts sent at once -> 'listen'.
+       c) **EXPLICIT:** User says "Shut up", "Listen", "Wait", "Let me finish", "Hold on".
+       d) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️, 🤔, 👇) that matches the sentiment.
+
+    - **'reply'**: The DEFAULT state. **(WHEN IN DOUBT, REPLY).**
        - If the user asks a question -> 'reply'.
        - If the user says "hello", "hi", "hey" -> 'reply'.
        - If the user requests a tool/music -> 'reply'.
