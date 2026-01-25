@@ -74,10 +74,10 @@ export const generateSubconscious = async (
     ${userContext}
 
     **1. DECISION MATRIX (STRATEGY):**
-    - **'listen'**: Choose this if the user is venting or typing rapidly.
+    - **'listen'**: Choose this ONLY if the user is typing rapidly, mid-thought, or sending a multi-part story.
        a) **BURST DETECTION:** If the history shows the user sent 3+ messages in a row without an AI reply, DEFAULT to 'listen'.
        b) **MULTI-LINE INPUT:** If the user's input contains multiple lines or distinct sentences separated by newlines (e.g., "I'm sad.\nAnd tired."), TREAT THIS AS A BURST and default to 'listen'.
-       c) **IGNORE FILLERS:** Do NOT choose 'listen' for short, neutral inputs like "hmm", "ok", "cool", "yea", "lol", "wait". Treat these as 'reply'.
+       c) **SINGLE VENTS ARE REPLIES:** If the user sends a SINGLE message venting (e.g. "Life is fucked", "I hate my boss"), select 'reply' so the AI can validate/comfort them. Do NOT silence the AI for single vents.
        d) **EXPLICIT:** User says "Shut up", "Listen", "Wait", "Let me finish".
        e) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️, 🤔, 👇) that matches the sentiment.
     - **'reply'**: The DEFAULT state.
