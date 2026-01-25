@@ -34,9 +34,10 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 1. GET THE TOKEN (The Fix)
     // We need to send the token in the URL because WebSockets don't support headers
+    // PRIORITY: Check Session Storage first (Current Tab), then Local Storage (Persistence)
     let token = '';
     try {
-        const storedInfo = localStorage.getItem('userInfo');
+        const storedInfo = sessionStorage.getItem('userInfo') || localStorage.getItem('userInfo');
         if (storedInfo) {
             const parsed = JSON.parse(storedInfo);
             token = parsed.token || '';

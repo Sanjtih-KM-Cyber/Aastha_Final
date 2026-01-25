@@ -12,6 +12,8 @@ import { Login } from './components/auth/Login';
 import { BiometricGuard } from './components/auth/BiometricGuard';
 import { ErrorBoundary } from './components/ErrorBoundary'; // Import ErrorBoundary
 import { Toaster } from 'react-hot-toast';
+import { App } from '@capacitor/app';
+import { scheduleGhostNotifications, clearGhostNotifications } from './services/offlineGhostService';
 
 // Lazy Load Pages
 // Note: We use the default export from the new Landing.tsx
@@ -80,6 +82,44 @@ const AppRoutes = () => {
 
 const App: React.FC = () => {
   useSecurity();
+
+  // Offline Ghost Logic: Schedule notifications on background, clear on foreground
+  React.useEffect(() => {
+      let listener: any;
+
+      const initGhostService = async () => {
+          try {
+              listener = await App.addListener('appStateChange', async ({ isActive }) => {
+                  try {
+                      if (!isActive) {
+                          // App went to background: Schedule the ghosts
+                          const userInfo = localStorage.getItem('userInfo');
+                          if (userInfo) {
+                              const user = JSON.parse(userInfo);
+                              await scheduleGhostNotifications(user).catch(e => console.warn("Ghost schedule failed", e));
+                          }
+                      } else {
+                          // App came to foreground: Clear pending ghosts (because they are here!)
+                          await clearGhostNotifications().catch(e => console.warn("Ghost clear failed", e));
+                      }
+                  } catch (innerError) {
+                      console.warn("Ghost listener error", innerError);
+                  }
+              });
+
+              // Also clear on initial mount (if opening from notification)
+              await clearGhostNotifications().catch(() => {});
+          } catch (e) {
+              console.warn("Ghost service init failed", e);
+          }
+      };
+
+      initGhostService();
+
+      return () => {
+          if (listener) listener.remove();
+      };
+  }, []);
 
   return (
     <ErrorBoundary>

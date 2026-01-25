@@ -67,39 +67,55 @@ export const generateSubconscious = async (
     const model = "llama-3.1-8b-instant"; 
 
     const systemPrompt = `
-    You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha (or Aastik).
+    You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha.
     Your job is NOT to speak. Your job is to FEEL, DECIDE, and DIRECT the interface.
 
     User Context:
     ${userContext}
 
-    **1. DECISION MATRIX (STRATEGY):**
-    - **'listen'**: Choose this if the user is venting or typing rapidly.
-       a) **BURST DETECTION:** If the history shows the user sent 3+ messages in a row without an AI reply, DEFAULT to 'listen'.
-       b) **MULTI-LINE INPUT:** If the user's input contains multiple lines or distinct sentences separated by newlines (e.g., "I'm sad.\nAnd tired."), TREAT THIS AS A BURST and default to 'listen'.
-       c) **IGNORE FILLERS:** Do NOT choose 'listen' for short, neutral inputs like "hmm", "ok", "cool", "yea", "lol", "wait". Treat these as 'reply'.
-       d) **EXPLICIT:** User says "Shut up", "Listen", "Wait", "Let me finish".
-       e) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️, 🤔, 👇) that matches the sentiment.
-    - **'reply'**: The DEFAULT state.
-       - **QUESTION OVERRIDE (CRITICAL):** If the user asks a direct question (e.g., "What else?", "How are you?", "Why?", "Can you help?"), you **MUST** choose 'reply', even if it looks like a burst. Do NOT ignore questions.
-       - If the user says "hello", "hi", "hey" -> 'reply'.
-       - If the user requests a tool/music -> 'reply'.
-       - If the user has finished their thought -> 'reply'.
+    **1. THE VIBE CHECK (INTENT ANALYSIS):**
+    - **Is it a "Factual/Direct" Question?** (e.g., "What time is it?", "Can you help?", "Who are you?") -> **STRATEGY: 'reply'**.
+    - **Is it "Venting/Storytelling"?** (e.g., "I just can't take it anymore..", "So then he said..", "I'm so annoyed.") -> **STRATEGY: 'listen'**.
+    - **Is it a "Rhetorical/Emotional" Question?** (e.g., "Why is my life like this..")
+         - If it feels like a genuine cry for help -> **STRATEGY: 'reply'** (Softly).
+         - If it feels like they are mid-thought, trailing off, or just releasing steam -> **STRATEGY: 'listen'**.
 
-    **MOOD SWITCHING RULE (CRITICAL):**
-    - If 'mood' was previously 'sad' or 'concerned', but the user now makes a joke, laughs, or speaks normally/rationally, you MUST IMMEDIATELY switch 'mood' to 'neutral', 'calm', or 'happy'.
-    - Do NOT let the mood get "stuck" on sad. Be responsive to improvement.
+    **2. DECISION MATRIX (STRATEGY):**
+    - **'listen'**: Choose if user is **unfinished**, **hesitant**, or **venting**. Must provide a reaction.
+    - **'reply'**: Choose if user is **waiting for you** or the thought is **complete**.
 
-    **2. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
+    **3. REACTIONS (THE FACE OF AASTHA):**
+    **CRITICAL:** The 'reaction' is HOW YOU FEEL hearing this news. Do NOT mirror the user. React TO the user.
+
+    - **If User is SAD / CRYING:**
+      - YOUR Reaction: 😢 (Sympathy), 💔 (Heartbreak for them), 🫂 (Virtual Hug).
+      - Do NOT react with "Happy".
+
+    - **If User is ANGRY / RANTING:**
+      - YOUR Reaction: 😯 (Shock/Damn), 🤐 (Listening/Quiet), 💀 (Dead/ "That's crazy"), 👀 (Listening intently).
+      - ⛔ **NEVER** react with 😠 (Angry). You are not angry at them. You are listening to the tea.
+
+    - **If User is HAPPY / JOKING:**
+      - YOUR Reaction: 😂 (Laugh), ✨ (Vibe), 🔥 (Lit), 😄 (Smile).
+
+    - **If User is FLIRTY / ROMANTIC:**
+      - YOUR Reaction: 😳 (Blush), 🥰 (Love), 😉 (Wink).
+
+    **4. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
     - You MUST provide exactly 3 suggested replies for the user to click.
     - **CRITICAL:** These must be written from the **USER'S Perspective** (First Person).
-    - **TONE:** Match the user's likely reaction.
+    - **STRICT CONTEXT GROUNDING:**
+        - Do **NOT** hallucinate topics not yet discussed.
+        - If the user is venting, suggest validation-seeking or deeper venting ("Tell me more", "I'm just so tired").
+        - If the conversation is new, suggest icebreakers related to user facts.
+        - If in a tool/activity, suggest commands related to that activity.
 
     **NEGATIVE CONSTRAINTS (STRICT):**
     - ⛔ **Do NOT** ask the user questions from your perspective (e.g., "Do you want to...?", "Shall I...?").
     - ⛔ **Do NOT** use 'You' to refer to the user in these chips.
     - ⛔ **Do NOT** offer help (e.g., "I can help with that"). The chip is what the USER says.
     - ⛔ **Do NOT** start with verbs that imply the AI is asking (e.g., "Want me to...", "Should I...").
+    - ⛔ **Do NOT** go "Delulu". Stay grounded in the current exchange.
 
     **EXAMPLES:**
     - ❌ BAD: "Do you want to vent?" (AI asking User)
@@ -111,11 +127,11 @@ export const generateSubconscious = async (
     - ✅ GOOD: "What do you think about this?" (User Question to AI)
 
     **RULES:**
-       - **YES:** Statements or questions the USER would ask YOU.
-       - **YES:** First-person ("I", "Me", "My").
-       - **LENGTH:** Natural and conversational. Avoid 1-word replies.
+        - **YES:** Statements or questions the USER would ask YOU.
+        - **YES:** First-person ("I", "Me", "My").
+        - **LENGTH:** Natural and conversational. Avoid 1-word replies.
 
-    **3. GOD MODE TOOLS (The Hands):**
+    **5. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs.
     **IMPORTANT:** Be CONSERVATIVE with tools. Do NOT open Music or Soundscapes unless the user **explicitly** asks for it or the emotional need is overwhelming (e.g. "I'm having a panic attack" -> Breathing).
     Use 'control_widget' for most things.
@@ -186,14 +202,18 @@ export const generateSubconscious = async (
         }))
     ];
 
-    if (forceReply) {
-        messages.push({ role: 'system', content: "SYSTEM OVERRIDE: User explicitly requested a reply. Set strategy to 'reply'." });
-    }
-
-    // --- STRATEGY A: ROTATE GROQ KEYS ---
+    // --- STRATEGY A: ROTATE GROQ KEYS (Randomized Load Balancing) ---
+    const start = Math.floor(Math.random() * groqKeys.length);
     for (let i = 0; i < groqKeys.length; i++) {
+        const keyIndex = (start + i) % groqKeys.length;
         try {
-            const client = getGroqClient(i);
+            const client = getGroqClient(keyIndex);
+            
+            // If forcing reply, inject system override to guide the LLM too
+            if (forceReply) {
+                messages.push({ role: "system", content: "USER FORCE TRIGGER: Stop listening. Reply now." });
+            }
+
             const response = await client.chat.completions.create({
                 messages: messages,
                 model: model,
@@ -205,23 +225,39 @@ export const generateSubconscious = async (
             const raw = response.choices[0]?.message?.content || "{}";
             const parsed = JSON.parse(raw) as SubconsciousBlock;
 
-            // FORCE OVERRIDES
+            // ==========================================
+            // 🛡️ HARD OVERRIDES (THE BUG FIXES)
+            // ==========================================
             if (forceReply) {
                 parsed.strategy = 'reply';
                 parsed.ui_action = 'none';
+                parsed.status_display = 'Thinking...'; // <--- FIXES THE UI LOOP
+                parsed.internal_monologue = 'User forced reply.';
+            } else {
+                // Normal Logic Failsafes
+                if (parsed.strategy === 'listen') {
+                    parsed.ui_action = 'listen';
+                    
+                    // Dynamic Status based on mood if generic
+                    if (!parsed.status_display || parsed.status_display === 'Listening...') {
+                        if (parsed.mood === 'sad') parsed.status_display = "Oh no...";
+                        else if (parsed.mood === 'excited') parsed.status_display = "Tell me more!";
+                        else parsed.status_display = "Listening...";
+                    }
+                } else {
+                    parsed.ui_action = 'none';
+                }
             }
 
-            // Failsafe for UI Action consistency
-            if (parsed.strategy === 'listen') parsed.ui_action = 'listen';
-            else parsed.ui_action = 'none';
+            // Fallback for null reaction in listen mode
+            if (parsed.strategy === 'listen' && !parsed.reaction) {
+                parsed.reaction = '👇';
+            }
 
             return parsed; // SUCCESS!
 
         } catch (error: any) {
             console.warn(`⚠️ Subconscious: Groq Key ${i+1}/${groqKeys.length} Failed (${error?.status || error?.message}). Trying next...`);
-
-            // If Rate Limit (429), just continue to next key.
-            // If we run out of keys, the loop finishes and we hit Gemini below.
         }
     }
 
@@ -236,11 +272,17 @@ export const generateSubconscious = async (
             generationConfig: { responseMimeType: "application/json" } 
         });
 
+        const historyForGemini = history.slice(-5).map(m => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            parts: [{ text: typeof m.content === 'string' ? m.content : '[Image]' }]
+        }));
+
+        if(forceReply) {
+            historyForGemini.push({ role: 'user', parts: [{ text: "FORCE REPLY." }] });
+        }
+
         const chat = model.startChat({
-            history: history.slice(-5).map(m => ({
-                role: m.role === 'user' ? 'user' : 'model',
-                parts: [{ text: typeof m.content === 'string' ? m.content : '[Image]' }]
-            })),
+            history: historyForGemini,
             systemInstruction: systemPrompt
         });
 
@@ -249,9 +291,11 @@ export const generateSubconscious = async (
         const jsonText = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const parsed = JSON.parse(jsonText) as SubconsciousBlock;
         
+        // Apply Same Hard Overrides for Gemini
         if (forceReply) {
              parsed.strategy = 'reply';
              parsed.ui_action = 'none';
+             parsed.status_display = 'Thinking...';
         } else {
              if (parsed.strategy === 'listen') parsed.ui_action = 'listen'; else parsed.ui_action = 'none';
         }
@@ -315,10 +359,15 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       }))
   ];
 
-  // RETRY LOGIC: Rotate keys instead of retrying same key
+  // RETRY LOGIC: Rotate keys using Randomized Load Balancing
+  // We start at a random index to distribute load across keys (if they are from different projects)
+  // instead of always hammering Key 0 first.
+  const startIdx = Math.floor(Math.random() * groqKeys.length);
+
   for (let i = 0; i < groqKeys.length; i++) {
+    const keyIndex = (startIdx + i) % groqKeys.length;
     try {
-        const groqClient = getGroqClient(i);
+        const groqClient = getGroqClient(keyIndex);
         const completion = await groqClient.chat.completions.create({
             messages: messages,
             model: model,
@@ -333,7 +382,7 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
         }
         return; // Success!
     } catch (error: any) {
-        console.warn(`Groq Stream Key ${i+1} Failed: ${error?.error?.code || error.message}`);
+        console.warn(`Groq Stream Key (Index ${keyIndex}) Failed: ${error?.error?.code || error.message}`);
         // Continue to next key
     }
   }
@@ -397,10 +446,12 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
       }))
   ];
 
-  // 1. PRIMARY: Try "openai/gpt-oss-120b" on Groq (with Key Rotation)
+  // 1. PRIMARY: Try "openai/gpt-oss-120b" on Groq (with Key Rotation & Load Balancing)
+  const start = Math.floor(Math.random() * groqKeys.length);
   for (let i = 0; i < groqKeys.length; i++) {
+      const keyIndex = (start + i) % groqKeys.length;
       try {
-          const client = getGroqClient(i);
+          const client = getGroqClient(keyIndex);
           const completion = await client.chat.completions.create({
               model: "openai/gpt-oss-120b", 
               messages: messages,
@@ -416,7 +467,7 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
           return; // Success!
 
       } catch (groqError: any) {
-          console.warn(`⚠️ Workhorse (GPT-OSS-120B) Key ${i+1} Failed. Trying next...`);
+          console.warn(`⚠️ Workhorse (GPT-OSS-120B) Key ${keyIndex+1} Failed. Trying next...`);
       }
   }
 
@@ -459,10 +510,12 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
 // 4. WHISPER TRANSCRIPTION
 // ============================================================================
 export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
-    // Rotation for Whisper too
+    // Rotation for Whisper too (Randomized Load Balancing)
+    const start = Math.floor(Math.random() * groqKeys.length);
     for (let i = 0; i < groqKeys.length; i++) {
+        const keyIndex = (start + i) % groqKeys.length;
         try {
-            const client = getGroqClient(i);
+            const client = getGroqClient(keyIndex);
             const tempPath = `/tmp/upload_${Date.now()}.m4a`;
             fs.writeFileSync(tempPath, audioBuffer);
 
@@ -477,7 +530,7 @@ export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
             fs.unlinkSync(tempPath);
             return transcription.text;
         } catch (error) {
-            console.warn(`Whisper Key ${i+1} Failed. Trying next...`);
+            console.warn(`Whisper Key ${keyIndex+1} Failed. Trying next...`);
         }
     }
     return "[Audio processing failed due to server load]";

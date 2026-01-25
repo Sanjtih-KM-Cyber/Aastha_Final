@@ -2,61 +2,97 @@ import React, { useState, useEffect } from 'react';
 import { App } from '@capacitor/app';
 import { useBiometrics } from '../../hooks/useBiometrics';
 import { LoadingFallback } from '../LoadingFallback';
+import { useNavigate } from 'react-router-dom';
 
 interface BiometricGuardProps {
     children: React.ReactNode;
 }
 
+// Module-level variable to persist across remounts
+let globalLastVerifiedTime = 0;
+
 export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
-    const { isEnabled, promptBiometrics, isLoading } = useBiometrics();
+    const { isEnabled, promptBiometrics, toggleBiometrics, isLoading } = useBiometrics();
     const [isLocked, setIsLocked] = useState(false);
     const [hasCheckedInitial, setHasCheckedInitial] = useState(false);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
+    const navigate = useNavigate();
+
+    // Reusable Safe Check Logic
+    const performSafeBiometricCheck = async () => {
+        if (!isEnabled) return true;
+        if (isLoggingOut) return false;
+
+        setIsLocked(true);
+        const timeoutPromise = new Promise<boolean>((resolve) => {
+            setTimeout(() => {
+                console.warn("Biometric prompt timed out.");
+                resolve(false);
+            }, 30000);
+        });
+
+        try {
+            const success = await Promise.race([
+                promptBiometrics(),
+                timeoutPromise
+            ]);
+
+            // SECURITY CHECK: If user clicked 'Use Password' while this was running, ignore success.
+            if (isLoggingOut) return false;
+
+            setIsLocked(!success);
+            if (success) {
+                globalLastVerifiedTime = Date.now();
+            }
+            return success;
+        } catch (e) {
+            console.error("Biometric check failed", e);
+            setIsLocked(true); // Fail Safe
+            return false;
+        }
+    };
 
     useEffect(() => {
         if (isLoading) return;
 
-        // Initial Check (Only once per load)
-        const check = async () => {
-            if (isEnabled) {
-               setIsLocked(true);
-
-               // Timeout race: If biometrics plugin hangs, stop waiting but DO NOT UNLOCK automatically.
-               // Fail closed (secure) so user has to tap 'Unlock' again.
-               // Increased to 30s to allow ample time for user interaction.
-               const timeoutPromise = new Promise<boolean>((resolve) => {
-                   setTimeout(() => {
-                       console.warn("Biometric prompt timed out.");
-                       resolve(false);
-                   }, 30000);
-               });
-
-               const success = await Promise.race([
-                   promptBiometrics(),
-                   timeoutPromise
-               ]);
-
-               setIsLocked(!success);
-            }
-            setHasCheckedInitial(true);
-        };
-
+        // Initial Check
         if (!hasCheckedInitial) {
-            check();
+            if (isEnabled) {
+                // Check if we verified recently (e.g. just before a reload or remount)
+                if (Date.now() - globalLastVerifiedTime < 5000) {
+                     setHasCheckedInitial(true);
+                     setIsLocked(false);
+                } else {
+                     performSafeBiometricCheck().then(() => setHasCheckedInitial(true));
+                }
+            } else {
+                setIsLocked(false);
+                setHasCheckedInitial(true);
+            }
         }
 
         // Listen for App Resume
         const listener = App.addListener('appStateChange', async ({ isActive }) => {
             if (isActive && isEnabled) {
-                setIsLocked(true);
-                const success = await promptBiometrics();
-                setIsLocked(!success);
+                // GRACE PERIOD CHECK:
+                // If we just verified (e.g., the prompt closing triggered 'resume'), ignore it.
+                // 3000ms is generous enough to cover the prompt transition but short enough to be secure.
+                if (Date.now() - globalLastVerifiedTime < 3000) {
+                    console.log("Biometric check skipped (Grace Period)");
+                    return;
+                }
+
+                // On Resume, wait a moment for the app to settle (Fix for S23/Android lag)
+                setTimeout(async () => {
+                   await performSafeBiometricCheck();
+                }, 500);
             }
         });
 
         return () => {
              listener.then(l => l.remove());
         };
-    }, [isEnabled, isLoading]);
+    }, [isEnabled, isLoading, hasCheckedInitial]);
 
     if (isLoading || !hasCheckedInitial) return <LoadingFallback />;
 
@@ -68,15 +104,33 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
                 </div>
                 <h2 className="text-2xl font-bold mb-2">Sanctuary Locked</h2>
                 <p className="text-white/50 mb-8">Authentication required</p>
-                <button
-                    onClick={async () => {
-                        const success = await promptBiometrics();
-                        setIsLocked(!success);
-                    }}
-                    className="px-8 py-3 bg-violet-600 rounded-full font-bold hover:bg-violet-700 transition-colors"
-                >
-                    Unlock
-                </button>
+
+                <div className="flex flex-col gap-3">
+                    <button
+                        onClick={async () => {
+                            const success = await promptBiometrics();
+                            setIsLocked(!success);
+                        }}
+                        className="px-8 py-3 bg-violet-600 rounded-full font-bold hover:bg-violet-700 transition-colors"
+                    >
+                        Try Again
+                    </button>
+
+                    {/* Fallback for "Disaster" scenarios where sensor fails */}
+                    <button
+                        onClick={async () => {
+                            setIsLoggingOut(true); // Immediate block to prevent race-condition unlock
+                            // Emergency bypass: Disable the broken biometric setting AND logout
+                            await toggleBiometrics(false);
+                            localStorage.removeItem('userInfo');
+                            // Force a hard reload to clear any stuck native plugin state
+                            window.location.replace('/login');
+                        }}
+                        className="text-sm text-white/40 hover:text-white underline mt-4"
+                    >
+                        {isLoggingOut ? "Securing..." : "Use Password (Logout)"}
+                    </button>
+                </div>
             </div>
         );
     }

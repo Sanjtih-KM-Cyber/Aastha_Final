@@ -15,6 +15,8 @@ import { useNavigate } from 'react-router-dom';
 import { useSync } from '../../context/SyncContext';
 import api from '../../services/api';
 import { SettingsPanel } from '../settings/SettingsPanel';
+import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
 
 // --- NEW COMPONENT: THOUGHT CLOUD MODAL ---
 const ThoughtCloudModal: React.FC<{ isOpen: boolean; onClose: () => void; content: any }> = ({ isOpen, onClose, content }) => {
@@ -320,6 +322,33 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
      return () => { isMounted = false; };
   }, [user, navigate, botName]);
 
+  // --- RE-SYNC ON APP RESUME (Mobile) ---
+  useEffect(() => {
+      const listener = App.addListener('appStateChange', async ({ isActive }) => {
+          if (isActive && user) {
+              // Silent refresh of history when app comes to foreground
+              try {
+                  const res = await api.get('/chat/history');
+                  if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+                      const history = res.data.map((msg: any) => {
+                        let clean = msg.content || "";
+                        clean = clean.replace(/<color>[\s\S]*?<\/color>/gi, '');
+                        clean = clean.replace(/<(?!proposal)[^>]+>/g, '');
+                        return {
+                            ...msg,
+                            content: clean,
+                            voice_note: msg.voice_note ? resolveAudioUrl(msg.voice_note) : undefined
+                        };
+                     });
+                     // Update state only if we have new data or to ensure consistency
+                     setMessages(history.slice(-50));
+                  }
+              } catch (e) { console.error("Resume sync failed", e); }
+          }
+      });
+      return () => { listener.then(l => l.remove()); };
+  }, [user]);
+
   // --- FIX: SYNC HEIGHT WITH MOBILE KEYBOARD & VIEWPORT ---
   // This is the "God Mode" fix for mobile browsers (Safari/Chrome)
   useEffect(() => {
@@ -455,6 +484,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   const getApiUrl = (endpoint: string) => {
+    // Force production API on native devices to avoid localhost loopback issues
+    if (Capacitor.isNativePlatform()) {
+        return `https://aastha-final.onrender.com/api${endpoint}`;
+    }
+
     const envUrl = import.meta.env.VITE_API_URL;
     if (envUrl) return `${envUrl}${endpoint}`;
     const host = window.location.hostname;
@@ -496,7 +530,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         setIsVoiceMode(true);
         setTtsEnabled(true);
         localStorage.setItem('user_tts_enabled', 'true');
-        const voices = window.speechSynthesis.getVoices();
+        const voices = ('speechSynthesis' in window) ? window.speechSynthesis.getVoices() : [];
         const indianVoice = voices.find(v => v.lang.includes('IN') || v.name.includes('India'));
         if (indianVoice) {
             setSelectedVoiceURI(indianVoice.voiceURI);
@@ -1078,7 +1112,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
        if (typeof SpeechSynthesisUtterance === 'undefined') return;
 
        const utterance = new SpeechSynthesisUtterance(cleanText);
-       const voices = window.speechSynthesis.getVoices();
+       // Safety: Ensure window.speechSynthesis is available before getting voices
+       const voices = ('speechSynthesis' in window) ? window.speechSynthesis.getVoices() : [];
 
        // Priority: Indian -> Female -> Default
        let chosenVoice =
