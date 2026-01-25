@@ -15,6 +15,9 @@ interface MoodTrackerProps {
   onFocus?: () => void;
 }
 
+// ==========================================
+// MOOD CONFIGURATION (The "It" List)
+// ==========================================
 const MOODS = [
   // High Positives (8-10)
   { emoji: '🤩', label: 'Excited', score: 10, color: '#F59E0B' },
@@ -34,14 +37,14 @@ const MOODS = [
   { emoji: '😟', label: 'Anxious', score: 2, color: '#6366F1' },
   { emoji: '🌵', label: 'Lonely', score: 2, color: '#64748B' },
   { emoji: '😣', label: 'Guilty', score: 2, color: '#F43F5E' },
-  { emoji: '🤯', label: 'Stressed', score: 1, color: '#F97316' },
+  { emoji: '🤯', label: 'Stressed', score: 1, color: '#F97316' }, 
   { emoji: '😡', label: 'Angry', score: 1, color: '#EF4444' },
   { emoji: '🌧️', label: 'Depressed', score: 1, color: '#1E293B' },
   { emoji: '😶', label: 'Numb', score: 1, color: '#475569' },
 ];
 
 export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLogMood, zIndex, onFocus }) => {
-  const { currentTheme, isLowPowerMode } = useTheme(); // LITE MODE: Consume isLowPowerMode
+  const { currentTheme, isLowPowerMode } = useTheme();
   const { decrypt } = useEncryption();
   const [activeTab, setActiveTab] = useState<'log' | 'trends' | 'insights'>('log');
   const [history, setHistory] = useState<MoodEntryDTO[]>([]);
@@ -58,30 +61,25 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
   const fetchHistory = async () => {
     if(history.length === 0) setIsLoadingHistory(true);
     try {
-      const serverData = await userService.getMoods();
-      // MERGE: Combine Server Data with Local Offline Queue
-      const combined = userService.getCombinedMoodHistory(serverData);
-      setHistory(combined);
-    } catch (e) {
-        console.error(e);
-        // Fallback: If server fails, at least show local queue
-        setHistory(userService.getCombinedMoodHistory([]));
-    }
+      const data = await userService.getMoods();
+      setHistory(data);
+    } catch (e) { console.error(e); }
     finally { setIsLoadingHistory(false); }
   };
 
-  const handleLog = async (moodItem: typeof MOODS[0]) => {
+  const handleLog = (moodItem: typeof MOODS[0]) => {
     // 1. OPTIMISTIC UPDATE: Update UI Immediately
     setLastLogged(moodItem);
     if (onLogMood) onLogMood(moodItem.label);
 
-    // 2. ROBUST SAVE: Use Retry Mechanism
-    // This saves to local storage if API fails, ensuring it's "compulsory"
-    await userService.saveMoodWithRetry(moodItem.label, moodItem.score);
-
-    // 3. REFRESH: Fetch combined history (Server + New Offline Entry)
-    // This updates the chart instantly even if offline
-    fetchHistory();
+    // 2. BACKGROUND API CALL: Fire and Forget
+    userService.saveMood(moodItem.label, moodItem.score)
+        .then(() => {
+            fetchHistory(); // Silent refresh
+        })
+        .catch((e) => {
+            console.error("Log failed", e);
+        });
   };
   
   const handleAnalyze = async (source: 'diary' | 'chat') => {
@@ -155,7 +153,7 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
   const weeklyData = getWeeklyData();
   const dateRangeLabel = `${weeklyData[0].fullDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} - ${weeklyData[6].fullDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}`;
 
-  // LITE MODE WRAPPER: Use simple div instead of motion.div for transitions in Lite Mode
+  // LITE MODE WRAPPER
   const TransitionWrapper: React.FC<{children: React.ReactNode, className?: string}> = ({children, className}) => {
       if (isLowPowerMode) return <div className={className}>{children}</div>;
       return (
