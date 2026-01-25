@@ -454,8 +454,10 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         styleDescription = styleMatch[1].trim();
     }
 
+    // Force Audio if Mood is High Emotion
+    const isEmotional = ['sad', 'concerned', 'sassy', 'angry'].includes(subconscious.mood || '');
     const hasVoiceQuota = (user.dailyVoiceCount || 0) < 2;
-    const shouldGenerateAudio = (isPro || hasVoiceQuota) && fullTextResponse.trim().length > 0;
+    const shouldGenerateAudio = (isPro || hasVoiceQuota || isEmotional) && fullTextResponse.trim().length > 0;
     let savedAudioUrl: string | undefined;
 
     if (shouldGenerateAudio) {

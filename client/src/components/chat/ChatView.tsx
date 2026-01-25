@@ -149,6 +149,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null); // STOP BUTTON REF
 
+  // --- DEBOUNCE STATE ---
+  const [pendingMessages, setPendingMessages] = useState<string[]>([]);
+  const sendDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Subconscious State
   const [statusDisplay, setStatusDisplay] = useState(currentActivity || 'Online');
   const [uiAction, setUiAction] = useState<'none' | 'listen' | 'block_widget'>('none');
@@ -607,11 +611,220 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     setStatusDisplay('Online');
   };
 
+  const callChatAPI = async (finalText: string, images: string[], audioBase64: string | null, isPermissionGrant: boolean, tempBotId: string) => {
+      try {
+          if (abortControllerRef.current) abortControllerRef.current.abort();
+          const abortController = new AbortController();
+          abortControllerRef.current = abortController;
+
+          // Set "Thinking..." ONLY when we actually make the call
+          setIsTyping(true);
+          setStatusDisplay('Thinking...');
+
+          let token = '';
+          try {
+            const storedInfo = localStorage.getItem('userInfo');
+            if (storedInfo) token = JSON.parse(storedInfo).token;
+          } catch(e) {}
+
+          const streamResponse = await fetch(getApiUrl('/chat'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            credentials: 'include',
+            signal: abortController.signal,
+            body: JSON.stringify({
+                message: finalText,
+                images: images,
+                audio: audioBase64,
+                forceReply: isPermissionGrant,
+                isVoiceMode: isVoiceMode,
+                userLocalTime: new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true }),
+                userLocalHour: new Date().getHours()
+            }),
+          });
+
+          if (!streamResponse.ok) {
+              setIsTyping(false);
+              if (streamResponse.status === 401) {
+                   setError("Session expired. Please login again.");
+                   return;
+              }
+              const errData = await streamResponse.json().catch(() => ({}));
+              throw new Error(errData.message || `${botName} is unreachable.`);
+          }
+
+          const reader = streamResponse.body?.getReader();
+          const decoder = new TextDecoder();
+          processedTagsRef.current.clear();
+
+          let aiContentRaw = '';
+          let buffer = '';
+          let serverAudioPlayed = false;
+
+          if (reader) {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const dataStr = line.replace('data: ', '');
+                        if (dataStr.trim() === '[DONE]') break;
+                        try {
+                            const data = JSON.parse(dataStr);
+
+                            // A. HANDLE THOUGHT (THE BRAIN)
+                            if (data.type === 'thought') {
+                                const brain = data.content;
+                                if (brain) {
+                                    setLastSubconscious(brain);
+                                    if (brain.mood) setCurrentMood(brain.mood);
+                                    if (brain.status_display) setStatusDisplay(brain.status_display);
+                                    if (brain.suggested_replies) setSuggestedChips(brain.suggested_replies);
+                                    if (brain.ui_action) setUiAction(brain.ui_action as any);
+
+                                    // Sticky Reaction
+                                    if (brain.reaction) {
+                                         // Find the LAST user message (the one we just sent) to attach reaction
+                                         setMessages(prev => {
+                                             const newList = [...prev];
+                                             for (let i = newList.length - 1; i >= 0; i--) {
+                                                 if (newList[i].role === 'user') {
+                                                     newList[i] = { ...newList[i], reaction: brain.reaction };
+                                                     break;
+                                                 }
+                                             }
+                                             return newList;
+                                          });
+                                    }
+
+                                    // GOD MODE TOOLS
+                                    if (brain.tool_calls && brain.tool_calls.length > 0) {
+                                        brain.tool_calls.forEach((tool: any) => {
+                                            let toolName = '';
+                                            let params = {};
+                                            let reason = "I can help with that";
+
+                                            if (tool.name === 'control_widget') {
+                                                toolName = tool.params.widget;
+                                                params = tool.params.params || tool.params;
+                                            } else if (tool.name === 'write_diary') {
+                                                toolName = 'diary';
+                                                params = tool.params;
+                                                reason = "Write in Diary";
+                                            }
+
+                                            if (toolName === 'voice_hug') {
+                                                const hugTag = `\n\n[Voice Hug Playing 🎵]`;
+                                                aiContentRaw += hugTag;
+                                            }
+
+                                            if (toolName) {
+                                                const proposalTag = `\n<proposal tool="${toolName}" params='${JSON.stringify(params)}' reason="${reason}" />`;
+                                                aiContentRaw += proposalTag;
+                                            }
+                                        });
+                                    }
+
+                                    // Stop typing indicator if listening
+                                    if (brain.strategy === 'listen') {
+                                        setIsTyping(false);
+                                        // Remove the temporary bubble if empty
+                                        if (!aiContentRaw) {
+                                            setMessages(prev => prev.filter(m => m.id !== tempBotId));
+                                        }
+                                    }
+                                }
+                            }
+
+                            // B. HANDLE META
+                            if (data.meta) {
+                                if (data.meta.credits !== undefined) {
+                                    setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits));
+                                }
+                                setModelMode(data.meta.mode);
+                                const isEco = data.meta.mode === 'standard';
+                                setIsStandardMode(isEco);
+                                if (data.meta.limitReached) setIsCloneMode(false);
+
+                                if (data.meta.voice_status === 'failed') {
+                                    const hasProAccess = user?.isPro || (user?.credits || 0) > 0 || data.meta.use_fallback_tts;
+                                    if (!hasProAccess) {
+                                        toast("My voice engine is taking a nap. Waking up... try again in 1 minute.", {
+                                            icon: '😴',
+                                            style: { borderRadius: '10px', background: '#333', color: '#fff' },
+                                            duration: 4000
+                                        });
+                                        serverAudioPlayed = true;
+                                    }
+                                }
+                            }
+
+                            // C. VOICE NOTE
+                            if (data.voice_note) {
+                                setMessages(prev => prev.map(msg => {
+                                    if (msg.id === tempBotId) {
+                                        return { ...msg, voice_note: resolveAudioUrl(data.voice_note) };
+                                    }
+                                    return msg;
+                                }));
+                            }
+
+                            // D. STREAMING AUDIO
+                            if (data.voice_audio) {
+                                serverAudioPlayed = true;
+                                const resolvedUrl = resolveAudioUrl(data.voice_audio);
+                                speakMessage(resolvedUrl);
+                            }
+
+                            // E. CONTENT
+                            if (data.content && !data.type) {
+                                aiContentRaw += data.content;
+                                const cleanContent = processMagicTags(aiContentRaw);
+                                setMessages(prev => prev.map(msg => {
+                                    if (msg.id === tempBotId) {
+                                        return { ...msg, content: cleanContent };
+                                    }
+                                    return msg;
+                                }));
+                            }
+                        } catch (e: any) {}
+                    }
+                }
+            }
+          }
+
+          const cleanFinal = processMagicTags(aiContentRaw);
+          if ((isVoiceMode || ttsEnabled) && aiContentRaw && !serverAudioPlayed) {
+              speakMessage(cleanFinal);
+          }
+
+      } catch (error: any) {
+          if (error.name === 'AbortError') {
+              console.log("Generation stopped by user.");
+              return;
+          }
+          console.error(error);
+          setMessages(prev => prev.filter(m => m.id !== tempBotId));
+          setError(error.message || "Connection failed.");
+      } finally {
+          setIsTyping(false);
+          abortControllerRef.current = null;
+      }
+  };
+
   const handleSend = async (e?: React.FormEvent, overrideInput?: string, overrideImage?: string, audioBlob?: Blob) => {
     if (e) e.preventDefault();
     
     // Audio Handling
-    let audioBase64 = null;
+    let audioBase64: string | null = null;
     if (audioBlob) {
         audioBase64 = await new Promise<string>((resolve) => {
             const reader = new FileReader();
@@ -623,44 +836,77 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     const textToSend = overrideInput || input;
     if (!textToSend.trim() && !attachedImage && !overrideImage && !audioBlob) return;
 
+    // Construct UI Message
     let finalContent = textToSend;
     if (replyingTo) { finalContent = `> Replying to: "${replyingTo}"\n\n${textToSend}`; setReplyingTo(null); }
     if (attachedImage || overrideImage) { finalContent = `[Image Attached] ${finalContent}`; }
     if (audioBlob) { finalContent = `[Voice Note]`; }
 
-    const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
-    const tempBotId = `temp-${Date.now()}`;
-    
     // 1. UPDATE UI IMMEDIATELY
+    const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
     const updatedMessages = [...messages, userMsg];
     const SLICE_LIMIT = 50;
-    const nextState = [...updatedMessages, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
-    setMessages(nextState.length > SLICE_LIMIT ? nextState.slice(nextState.length - SLICE_LIMIT) : nextState);
     
+    // Clear Input
     setInput(''); setAttachedImage(null); setShowEmojiPicker(false);
-    setIsTyping(true); 
     setError(null);
-    setStatusDisplay('Thinking...'); 
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
-
-    // FIX: Close keyboard on mobile to reset view when sending
     if (isMobile) textareaRef.current?.blur();
 
-    // 2. CALL BACKEND
-    try {
-      if (abortControllerRef.current) abortControllerRef.current.abort();
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
+    // 2. CHECK "PERMISSION GRANT" / FORCE REPLY
+    const isPermissionGrant = finalContent === 'PERMISSION_GRANT_REPLY';
 
-      let token = '';
-      try {
-        const storedInfo = localStorage.getItem('userInfo');
-        if (storedInfo) token = JSON.parse(storedInfo).token;
-      } catch(e) {}
+    if (isPermissionGrant || isVoiceMode) {
+        // BYPASS DEBOUNCE for Force Reply or Voice Mode
+        if (sendDebounceTimer.current) clearTimeout(sendDebounceTimer.current);
 
-      const isPermissionGrant = finalContent === 'PERMISSION_GRANT_REPLY';
-      const actualContent = isPermissionGrant ? "Please reply now." : finalContent;
+        // Flush any pending
+        const allText = [...pendingMessages, isPermissionGrant ? "Please reply now." : finalContent].join('\n');
+        setPendingMessages([]); // clear buffer
 
+        // Add placeholder bubble
+        const tempBotId = `temp-${Date.now()}`;
+        const nextState = [...updatedMessages, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
+        setMessages(nextState.length > SLICE_LIMIT ? nextState.slice(nextState.length - SLICE_LIMIT) : nextState);
+
+        // Fire API Immediately
+        const finalImages = overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []);
+        await callChatAPI(allText, finalImages, audioBase64, isPermissionGrant, tempBotId);
+        return;
+    }
+
+    // 3. DEBOUNCE LOGIC (The "Wait" Feature)
+    // Add message to UI (done above)
+    setMessages(updatedMessages.length > SLICE_LIMIT ? updatedMessages.slice(updatedMessages.length - SLICE_LIMIT) : updatedMessages);
+
+    // Add to buffer
+    const newPending = [...pendingMessages, finalContent];
+    setPendingMessages(newPending);
+
+    // Cancel previous timer
+    if (sendDebounceTimer.current) clearTimeout(sendDebounceTimer.current);
+
+    // Start new timer (3 seconds)
+    sendDebounceTimer.current = setTimeout(async () => {
+        // Prepare to send
+        const fullText = newPending.join('\n');
+        setPendingMessages([]); // clear buffer before sending
+
+        // Add placeholder bubble NOW (after delay)
+        const tempBotId = `temp-${Date.now()}`;
+        setMessages(prev => {
+             const withBot = [...prev, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
+             return withBot.length > SLICE_LIMIT ? withBot.slice(withBot.length - SLICE_LIMIT) : withBot;
+        });
+
+        const finalImages = overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []);
+        await callChatAPI(fullText, finalImages, audioBase64, false, tempBotId);
+
+    }, 3000); // 3 Seconds Pause
+  };
+
+  /* REMOVED OLD FETCH BLOCK, MOVED TO callChatAPI */
+/*
       const streamResponse = await fetch(getApiUrl('/chat'), {
         method: 'POST',
         headers: { 
@@ -714,166 +960,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     try {
                         const data = JSON.parse(dataStr);
 
-                        // A. HANDLE THOUGHT (THE BRAIN)
-                        if (data.type === 'thought') {
-                            const brain = data.content;
-                            if (brain) {
-                                setLastSubconscious(brain); // Save for Thought Cloud
-                                if (brain.mood) setCurrentMood(brain.mood);
-                                if (brain.status_display) setStatusDisplay(brain.status_display);
-                                if (brain.suggested_replies) setSuggestedChips(brain.suggested_replies);
-                                if (brain.ui_action) setUiAction(brain.ui_action as any);
-
-                                // Sticky Reaction
-                                if (brain.reaction) {
-                                     setMessages(prev => {
-                                         const newList = [...prev];
-                                         const targetIdx = newList.findIndex(m => m.id === userMsg.id);
-                                         if (targetIdx !== -1) {
-                                             newList[targetIdx] = { ...newList[targetIdx], reaction: brain.reaction };
-                                         }
-                                         return newList;
-                                      });
-                                }
-
-                                // GOD MODE TOOLS (THE HANDS) -> TRANSFORM TO PROPOSALS
-                                if (brain.tool_calls && brain.tool_calls.length > 0) {
-                                    brain.tool_calls.forEach((tool: any) => {
-                                        let toolName = '';
-                                        let params = {};
-                                        let reason = "I can help with that";
-
-                                        if (tool.name === 'control_widget') {
-                                            toolName = tool.params.widget;
-                                            params = tool.params.params || tool.params;
-                                        } else if (tool.name === 'write_diary') {
-                                            toolName = 'diary';
-                                            params = tool.params;
-                                            reason = "Write in Diary";
-                                        }
-
-                                        // Special Widget: Voice Hug
-                                        if (toolName === 'voice_hug') {
-                                            // Append audio placeholder
-                                            const hugTag = `\n\n[Voice Hug Playing 🎵]`;
-                                            aiContentRaw += hugTag;
-                                        }
-
-                                        if (toolName) {
-                                            const proposalTag = `\n<proposal tool="${toolName}" params='${JSON.stringify(params)}' reason="${reason}" />`;
-                                            aiContentRaw += proposalTag;
-                                        }
-                                    });
-                                }
-
-                                // Stop typing indicator if listening
-                                if (brain.strategy === 'listen') {
-                                    setIsTyping(false);
-                                    if (!aiContentRaw) {
-                                        setMessages(prev => prev.filter(m => m.id !== tempBotId));
-                                    }
-                                }
-                            }
-                        }
-
-                        // B. HANDLE META & FAIL-FAST FALLBACK
-                        if (data.meta) { 
-                            // Update Credits (If '∞', it stays as is. If number, it updates remaining quota)
-                            if (data.meta.credits !== undefined) {
-                                setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits));
-                            }
-                            setModelMode(data.meta.mode); 
-
-                            // FORCE ECO MODE IF BACKEND SAYS SO
-                            // Backend now handles the logic: 'standard' only if quota exceeded
-                            const isEco = data.meta.mode === 'standard';
-                            setIsStandardMode(isEco);
-
-                            if (data.meta.limitReached) {
-                                setIsCloneMode(false);
-                            }
-
-                            // HANDLE INTELLIGENT FALLBACK
-                            if (data.meta.voice_status === 'failed') {
-                                // Explicitly check user Pro status (or credits) for the "Pro Perk"
-                                const hasProAccess = user?.isPro || (user?.credits || 0) > 0 || data.meta.use_fallback_tts;
-
-                                if (hasProAccess) {
-                                    // PRO USER or already expecting fallback: Use Browser TTS
-                                    // Wait for text stream to finish or use what we have
-                                    // Logic handled in final block
-                                } else {
-                                    // FREE USER: Show Friendly Toast
-                                    toast("My voice engine is taking a nap. Waking up... try again in 1 minute.", {
-                                        icon: '😴',
-                                        style: {
-                                            borderRadius: '10px',
-                                            background: '#333',
-                                            color: '#fff',
-                                        },
-                                        duration: 4000
-                                    });
-                                    // Don't play audio
-                                    serverAudioPlayed = true; // Fake it so browser TTS doesn't trigger
-                                }
-                            }
-                        }
-
-                        // C. HANDLE VOICE NOTE (AUDIO URL - PERSISTENT)
-                        if (data.voice_note) {
-                            setMessages(prev => prev.map(msg => {
-                                if (msg.id === tempBotId) {
-                                    // RESOLVE URL before saving to state
-                                    return { ...msg, voice_note: resolveAudioUrl(data.voice_note) };
-                                }
-                                return msg;
-                            }));
-                        }
-
-                        // D. HANDLE STREAMING AUDIO (AUTO-PLAY FOR CALL MODE)
-                        if (data.voice_audio) {
-                            serverAudioPlayed = true;
-                            // RESOLVE URL before playing
-                            const resolvedUrl = resolveAudioUrl(data.voice_audio);
-                            speakMessage(resolvedUrl);
-                        }
-
-                        // E. HANDLE CONTENT (THE VOICE)
-                        if (data.content && !data.type) { 
-                            aiContentRaw += data.content;
-                            const cleanContent = processMagicTags(aiContentRaw);
-                            setMessages(prev => prev.map(msg => {
-                                if (msg.id === tempBotId) {
-                                    return { ...msg, content: cleanContent };
-                                }
-                                return msg;
-                            }));
-                        }
-                    } catch (e: any) {}
-                }
-            }
-        }
-      }
-      
-      const cleanFinal = processMagicTags(aiContentRaw);
-      // Play Browser TTS only if server audio wasn't played AND (Voice Mode active OR TTS enabled)
-      if ((isVoiceMode || ttsEnabled) && aiContentRaw && !serverAudioPlayed) {
-          speakMessage(cleanFinal);
-      }
-
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-          console.log("Generation stopped by user.");
-          return;
-      }
-      console.error(error);
-      setMessages(prev => prev.filter(m => m.id !== tempBotId)); 
-      setError(error.message || "Connection failed.");
-    } finally {
-        setIsTyping(false);
-        abortControllerRef.current = null;
-    }
-  };
+*/
 
   const processMagicTags = (text: string) => {
     // Legacy Tag Processing (Retained for backward compat)
