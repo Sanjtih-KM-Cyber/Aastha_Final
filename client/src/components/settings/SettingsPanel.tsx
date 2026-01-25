@@ -103,15 +103,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   }, [user]);
 
   useEffect(() => {
-    const loadVoices = () => {
-        if ('speechSynthesis' in window) {
-            setAvailableVoices(window.speechSynthesis.getVoices());
-        }
-    };
-    loadVoices();
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.onvoiceschanged = loadVoices;
-    }
+    const loadVoices = () => setAvailableVoices(window.speechSynthesis.getVoices());
+    loadVoices(); window.speechSynthesis.onvoiceschanged = loadVoices;
   }, []);
 
   // Load Razorpay SDK
