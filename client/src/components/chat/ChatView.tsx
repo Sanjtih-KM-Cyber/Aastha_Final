@@ -1076,7 +1076,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
        if (typeof SpeechSynthesisUtterance === 'undefined') return;
 
        const utterance = new SpeechSynthesisUtterance(cleanText);
-       const voices = window.speechSynthesis.getVoices();
+       // Safety: Ensure window.speechSynthesis is available before getting voices
+       const voices = ('speechSynthesis' in window) ? window.speechSynthesis.getVoices() : [];
 
        // Priority: Indian -> Female -> Default
        let chosenVoice =
