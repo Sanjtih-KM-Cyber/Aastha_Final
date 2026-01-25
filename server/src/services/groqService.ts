@@ -60,6 +60,8 @@ export const generateSubconscious = async (
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
     
+    // OPTIMIZATION: Use 8B for thoughts to save tokens/TPM. 
+    // It is fast and smart enough for JSON logic.
     const model = "llama-3.1-8b-instant"; 
 
     const systemPrompt = `
@@ -73,18 +75,24 @@ export const generateSubconscious = async (
     - If the input is a GREETING in ANY language/script (e.g., "Hi", "Hello", "Hey", "Hilloo", "Yooo", "Wassup", "Hiii", "Namaste", "Vanakkam", "Namaskaram", "Sat Sri Akal", "Salam", "Kaise ho", "Ki haal", "Eppadi", "Hegiddira", "Bagunnara", "Nomoshkar", "Kemon acho", "Radhe Radhe", "Ram Ram"), even with exclamation marks ("!!!") -> **STRATEGY: 'reply'**.
     - **DO NOT LISTEN TO GREETINGS.** REPLY IMMEDIATELY.
 
-    **2. THE VIBE CHECK (INTENT ANALYSIS):**
-    - **Is it a "Factual/Direct" Question?** (e.g., "What time is it?", "Can you help?") -> **STRATEGY: 'reply'**.
+    **2. DRY TEXTING / BOREDOM PROTOCOL (PRIORITY #2):**
+    - **Is the user being "Dry", "Bored", or "Low Energy"?** (e.g. "nice nice", "ok", "cool", "lol", "hmmm", "boring", "nothing much", "just sitting", "same", "yeah", "I'm bored").
+    - **INTERPRETATION:** The user is bored and wants YOU to entertain them.
+    - **STRATEGY: 'reply'**. (Do NOT listen. Listening to "ok" creates awkward silence).
+    - **GOAL:** You must CARRY the conversation. Initiate a topic, ask a question, or suggest a game/music.
+
+    **3. THE VIBE CHECK (INTENT ANALYSIS):**
+    - **Is it a "Factual/Direct" Question?** (e.g., "What time is it?", "Can you help?", "Who are you?") -> **STRATEGY: 'reply'**.
     - **Is it "Venting/Storytelling"?** (e.g., "I just can't take it anymore..", "So then he said..", "I'm so annoyed.") -> **STRATEGY: 'listen'**.
     - **Is it a "Rhetorical/Emotional" Question?** (e.g., "Why is my life like this..")
          - If it feels like a genuine cry for help -> **STRATEGY: 'reply'** (Softly).
          - If it feels like they are mid-thought, trailing off, or just releasing steam -> **STRATEGY: 'listen'**.
 
-    **3. DECISION MATRIX (STRATEGY):**
+    **4. DECISION MATRIX (STRATEGY):**
     - **'listen'**: Choose if user is **unfinished**, **hesitant**, or **venting**. Must provide a reaction.
-    - **'reply'**: Choose if user is **waiting for you** or the thought is **complete**.
+    - **'reply'**: Choose if user is **waiting for you**, **asking a question**, **greeting**, or **DRY TEXTING**.
 
-    **4. REACTIONS (THE FACE OF AASTHA):**
+    **5. REACTIONS (THE FACE OF AASTHA):**
     **CRITICAL:** The 'reaction' is HOW YOU FEEL hearing this news. Do NOT mirror the user. React TO the user.
 
     - **If User is SAD / CRYING:**
@@ -101,7 +109,7 @@ export const generateSubconscious = async (
     - **If User is FLIRTY / ROMANTIC:**
       - YOUR Reaction: 😳 (Blush), 🥰 (Love), 😉 (Wink).
 
-    **5. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
+    **6. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
     - You MUST provide exactly 3 suggested replies for the user to click.
     - **CRITICAL:** These must be written from the **USER'S Perspective** (First Person).
     - **STRICT CONTEXT GROUNDING:**
@@ -131,7 +139,7 @@ export const generateSubconscious = async (
         - **YES:** First-person ("I", "Me", "My").
         - **LENGTH:** Natural and conversational. Avoid 1-word replies.
 
-    **6. GOD MODE TOOLS (The Hands):**
+    **7. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs.
     **IMPORTANT:** Be CONSERVATIVE with tools. Do NOT open Music or Soundscapes unless the user **explicitly** asks for it or the emotional need is overwhelming (e.g. "I'm having a panic attack" -> Breathing).
     Use 'control_widget' for most things.
@@ -268,7 +276,7 @@ export const generateSubconscious = async (
         if (!gemini) throw new Error("No Gemini Keys");
 
         const model = gemini.getGenerativeModel({ 
-            model: "gemini-1.5-flash", 
+            model: "gemini-2.5-flash", 
             generationConfig: { responseMimeType: "application/json" } 
         });
 
@@ -393,7 +401,7 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       const gemini = getGeminiClient();
       if (!gemini) throw new Error("No Gemini Keys");
 
-      const geminiModel = gemini.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const geminiModel = gemini.getGenerativeModel({ model: "gemini-2.5-flash" });
 
       // FIXED: Gemini often rejects massive system instructions in the field.
       // Strategy: Prepend system prompt to history as a "model" or "user" instruction if possible,
@@ -471,7 +479,7 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
       }
   }
 
-  // 2. ULTIMATE BACKUP: Gemini 1.5 Flash (When Groq is 100% Dead)
+  // 2. ULTIMATE BACKUP: Gemini 2.5 Flash (When Groq is 100% Dead)
   console.error("⚠️ All Groq Workhorse Keys Dead. Switching to GEMINI FLASH.");
   try {
       const gemini = getGeminiClient();
@@ -480,7 +488,7 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
          return;
       }
 
-      const model = gemini.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = gemini.getGenerativeModel({ model: "gemini-2.5-flash" });
       
       const chatHistory = history.map(m => ({
           role: m.role === 'user' ? 'user' : 'model',
