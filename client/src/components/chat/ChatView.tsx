@@ -886,23 +886,29 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     // Cancel previous timer
     if (sendDebounceTimer.current) clearTimeout(sendDebounceTimer.current);
 
-    // Start new timer (3 seconds)
+    // Start new timer (6 seconds)
     sendDebounceTimer.current = setTimeout(async () => {
         // Prepare to send
         const fullText = newPending.join('\n');
         setPendingMessages([]); // clear buffer before sending
 
-        // Add placeholder bubble NOW (after delay)
+        // Check if this is a "Burst" (>= 2 msgs)
+        // If burst, we assume "Listening Mode" => DO NOT show bubble immediately
+        // If single message, we assume "Reply" => Show bubble
+        const isBurst = newPending.length >= 2;
         const tempBotId = `temp-${Date.now()}`;
-        setMessages(prev => {
-             const withBot = [...prev, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
-             return withBot.length > SLICE_LIMIT ? withBot.slice(withBot.length - SLICE_LIMIT) : withBot;
-        });
+
+        if (!isBurst) {
+            setMessages(prev => {
+                 const withBot = [...prev, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
+                 return withBot.length > SLICE_LIMIT ? withBot.slice(withBot.length - SLICE_LIMIT) : withBot;
+            });
+        }
 
         const finalImages = overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []);
         await callChatAPI(fullText, finalImages, audioBase64, false, tempBotId);
 
-    }, 3000); // 3 Seconds Pause
+    }, 6000); // 6 Seconds Pause (High Latency Mode)
   };
 
   /* REMOVED OLD FETCH BLOCK, MOVED TO callChatAPI */

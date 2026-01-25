@@ -326,17 +326,31 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       if (!gemini) throw new Error("No Gemini Keys");
 
       const geminiModel = gemini.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const chatHistory = history.map(m => ({
-          role: m.role === 'user' ? 'user' : 'model',
-          parts: [{ text: typeof m.content === 'string' ? m.content : '[Multimedia]' }]
-      }));
+
+      // FIXED: Gemini often rejects massive system instructions in the field.
+      // Strategy: Prepend system prompt to history as a "model" or "user" instruction if possible,
+      // OR just simplify. Here we try prepending.
+      const chatHistory = [
+          {
+              role: 'user',
+              parts: [{ text: "SYSTEM INSTRUCTION:\n" + systemPrompt }]
+          },
+          {
+              role: 'model',
+              parts: [{ text: "Understood. I will act as the Voice Director." }]
+          },
+          ...history.map(m => ({
+              role: m.role === 'user' ? 'user' : 'model',
+              parts: [{ text: typeof m.content === 'string' ? m.content : '[Multimedia]' }]
+          }))
+      ];
 
       const chat = geminiModel.startChat({
-          history: chatHistory,
-          systemInstruction: systemPrompt
+          history: chatHistory
+          // systemInstruction removed to prevent 400 errors with large prompts
       });
 
-      const lastMsg = chatHistory.length > 0 ? "Continue conversation" : "Hello";
+      const lastMsg = "Continue conversation";
       const result = await chat.sendMessageStream(lastMsg);
 
       for await (const chunk of result.stream) {

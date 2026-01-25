@@ -331,11 +331,39 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         ];
     }
 
-    // Generate Subconscious Thought
-    const brainHistory: ChatMessage[] = [...historyWindow, { role: 'user', content: newUserMsgContent }];
-    const subconscious = await generateSubconscious(brainHistory, userContextString, forceReply);
+    // PERSISTENT LISTENING MODE CHECK
+    let subconscious: any = {};
+
+    if (user.isListeningModeActive && !forceReply) {
+        // FAST PATH: STAY IN LISTENING MODE
+        subconscious = {
+            internal_monologue: "User is in persistent listening mode. Staying silent.",
+            mood: user.moodStatus || 'neutral',
+            status_display: 'Listening...',
+            ui_action: 'listen',
+            strategy: 'listen',
+            reaction: null,
+            suggested_replies: ["Can I reply now?", "I'm done", "Keep listening"],
+            tool_calls: []
+        };
+    } else {
+        // NORMAL PATH: ASK BRAIN
+        const brainHistory: ChatMessage[] = [...historyWindow, { role: 'user', content: newUserMsgContent }];
+        subconscious = await generateSubconscious(brainHistory, userContextString, forceReply);
+    }
 
     (res as any).write(`data: ${JSON.stringify({ type: 'thought', content: subconscious })}\n\n`);
+
+    // UPDATE LISTENING STATE
+    if (forceReply) {
+        user.isListeningModeActive = false;
+        await user.save();
+    } else if (subconscious.strategy === 'listen') {
+        if (!user.isListeningModeActive) {
+            user.isListeningModeActive = true;
+            await user.save();
+        }
+    }
 
     // FAIL-SAFE LISTENING MODE
     if (subconscious.strategy === 'listen') {
@@ -390,7 +418,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     systemPrompt = getAgePersonaPrompt(user.dateOfBirth) + "\n" + systemPrompt;
 
     if (subconscious.tool_calls && subconscious.tool_calls.length > 0) {
-        const tools = subconscious.tool_calls.map(t => {
+        const tools = subconscious.tool_calls.map((t: any) => {
             if (t.name === 'control_widget') return `<proposal tool="${t.params.widget}" params='${JSON.stringify(t.params.params || t.params)}' reason="I can help with that" />`;
             if (t.name === 'write_diary') return `<proposal tool="diary" params='${JSON.stringify(t.params)}' reason="Writing in diary" />`;
             if (t.name === 'change_theme') return `<color>${t.params.color}</color>`;
@@ -417,10 +445,11 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let fullTextResponse = "";
 
     // Helper to start specific stream
+    const generationHistory: ChatMessage[] = [...historyWindow, { role: 'user', content: newUserMsgContent }];
     const startStream = (p: string) => {
-        if (p === 'GROQ_70B') return streamGroq(brainHistory, systemPrompt, 1024, "llama-3.3-70b-versatile");
-        if (p === 'GROQ_8B_VOICE') return streamGroq(brainHistory, systemPrompt, 1024, "llama-3.1-8b-instant");
-        return streamWorkhorse(brainHistory, systemPrompt);
+        if (p === 'GROQ_70B') return streamGroq(generationHistory, systemPrompt, 1024, "llama-3.3-70b-versatile");
+        if (p === 'GROQ_8B_VOICE') return streamGroq(generationHistory, systemPrompt, 1024, "llama-3.1-8b-instant");
+        return streamWorkhorse(generationHistory, systemPrompt);
     };
 
     try {
