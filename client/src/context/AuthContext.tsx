@@ -65,7 +65,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const handleUnauthorized = () => {
       // ✅ Clear token immediately on 401
-      localStorage.removeItem('userInfo'); 
+      localStorage.removeItem('userInfo');
+      sessionStorage.removeItem('userInfo'); // Tab Isolation Clear
       setState(prev => ({
         ...prev,
         user: null,
@@ -84,8 +85,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await api.get('/users/logout').catch(console.error);
     } finally {
-      // ✅ CLEAR LOCAL STORAGE
+      // ✅ CLEAR LOCAL STORAGE & SESSION STORAGE
       localStorage.removeItem('userInfo');
+      sessionStorage.removeItem('userInfo'); // Tab Isolation Clear
       localStorage.removeItem('auth_last_active'); // Clear lock timer on explicit logout
 
       setState({
@@ -160,8 +162,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const checkAuth = async () => {
       try {
-        // ✅ Pre-check: If no token in storage, don't bother waiting for timeout
-        const storedInfo = localStorage.getItem('userInfo');
+        // ✅ Pre-check: Priority to Session Storage (Tab Isolation)
+        let storedInfo = sessionStorage.getItem('userInfo');
+
+        // If not in session, fall back to persistent storage (Restore Session)
+        if (!storedInfo) {
+           storedInfo = localStorage.getItem('userInfo');
+           if (storedInfo) {
+               // Hydrate session storage for isolation
+               sessionStorage.setItem('userInfo', storedInfo);
+           }
+        }
         
         // If not in storage, treat as logged out immediately
         if (!storedInfo) {
@@ -217,6 +228,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isMounted) {
             // ✅ Cleanup if check fails
             localStorage.removeItem('userInfo');
+            sessionStorage.removeItem('userInfo');
             setState({
                 user: null,
                 isAuthenticated: false,
@@ -244,7 +256,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const user: User = res.data;
     
     // ✅ SAVE TOKEN & INIT TIMER
-    localStorage.setItem('userInfo', JSON.stringify(user));
+    // Save to BOTH for Persistence + Isolation
+    const userStr = JSON.stringify(user);
+    localStorage.setItem('userInfo', userStr);
+    sessionStorage.setItem('userInfo', userStr);
     localStorage.setItem('auth_last_active', Date.now().toString());
 
     let key = null;
@@ -279,7 +294,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const user: User = res.data;
     
     // ✅ SAVE TOKEN & INIT TIMER
-    localStorage.setItem('userInfo', JSON.stringify(user));
+    const userStr = JSON.stringify(user);
+    localStorage.setItem('userInfo', userStr);
+    sessionStorage.setItem('userInfo', userStr);
     localStorage.setItem('auth_last_active', Date.now().toString());
 
     let key = null;
@@ -335,10 +352,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setState(prev => {
         const updatedUser = prev.user ? { ...prev.user, ...data } : null;
         
-        // ✅ Sync updates to Local Storage
+        // ✅ Sync updates to Local Storage & Session Storage
         if (updatedUser) {
             const currentStorage = JSON.parse(localStorage.getItem('userInfo') || '{}');
-            localStorage.setItem('userInfo', JSON.stringify({ ...currentStorage, ...updatedUser }));
+            const newStorage = JSON.stringify({ ...currentStorage, ...updatedUser });
+            localStorage.setItem('userInfo', newStorage);
+            sessionStorage.setItem('userInfo', newStorage);
         }
 
         return { ...prev, user: updatedUser };

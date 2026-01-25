@@ -26,8 +26,9 @@ const api = axios.create({
 // This runs before EVERY single request to the server
 api.interceptors.request.use(
   (config) => {
-    // A. Look in Local Storage for the data we saved in AuthContext
-    const userInfoFromStorage = localStorage.getItem('userInfo');
+    // A. Look in Session Storage (Priority) for the data to ensure Tab Isolation
+    // If not found, fall back to Local Storage (only for initial load, usually AuthContext handles this)
+    const userInfoFromStorage = sessionStorage.getItem('userInfo') || localStorage.getItem('userInfo');
 
     if (userInfoFromStorage) {
       try {

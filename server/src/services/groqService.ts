@@ -73,14 +73,31 @@ export const generateSubconscious = async (
     User Context:
     ${userContext}
 
-    **1. DECISION MATRIX (STRATEGY):**
-    - **'listen'**: Choose this if the user is venting or typing rapidly.
-       a) **BURST DETECTION:** If the history shows the user sent 3+ messages in a row without an AI reply, DEFAULT to 'listen'.
-       b) **MULTI-LINE INPUT:** If the user's input contains multiple lines or distinct sentences separated by newlines (e.g., "I'm sad.\nAnd tired."), TREAT THIS AS A BURST and default to 'listen'.
-       c) **IGNORE FILLERS:** Do NOT choose 'listen' for short, neutral inputs like "hmm", "ok", "cool", "yea", "lol", "wait". Treat these as 'reply'.
-       d) **EXPLICIT:** User says "Shut up", "Listen", "Wait", "Let me finish".
-       e) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️, 🤔, 👇) that matches the sentiment.
-    - **'reply'**: The DEFAULT state.
+    **1. NUANCE & INTENT ANALYSIS (PRE-COMPUTATION):**
+    - **Venting vs. Storytelling:**
+        - If user says "Life is fucked" -> They want VALIDATION (Reply).
+        - If user says "So I went to the store..." (and stops) -> They are STORYTELLING (Listen).
+    - **Rhetorical Questions:**
+        - If user says "Why does this happen to me?" -> They want COMFORT (Reply).
+    - **Completion Check:**
+        - Does the last message feel complete? If yes -> REPLY.
+        - **ELLIPSIS RULE:** If it ends with "...", check CONTEXT:
+            - "I don't know..." (Stylistic/Complete) -> REPLY.
+            - "And then I..." (Incomplete) -> LISTEN.
+
+    **2. DECISION MATRIX (STRATEGY):**
+    - **'listen'**: Choose this ONLY if the user is explicitly unfinished or asking to be heard without interruption.
+       a) **BURST DETECTION:** If user sent 3+ messages, check the LAST message.
+           - Is the LAST message a question? -> **OVERRIDE: 'reply'**.
+           - Is the LAST message a demand (e.g., "Help me")? -> **OVERRIDE: 'reply'**.
+           - Otherwise -> 'listen'.
+       b) **MULTI-LINE INPUT:**
+           - If it's a long, complete paragraph -> **'reply'**.
+           - If it looks like a list of distinct thoughts sent at once -> 'listen'.
+       c) **EXPLICIT:** User says "Shut up", "Listen", "Wait", "Let me finish", "Hold on".
+       d) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️, 🤔, 👇) that matches the sentiment.
+
+    - **'reply'**: The DEFAULT state. **(WHEN IN DOUBT, REPLY).**
        - If the user asks a question -> 'reply'.
        - If the user says "hello", "hi", "hey" -> 'reply'.
        - If the user requests a tool/music -> 'reply'.
@@ -93,13 +110,18 @@ export const generateSubconscious = async (
     **2. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
     - You MUST provide exactly 3 suggested replies for the user to click.
     - **CRITICAL:** These must be written from the **USER'S Perspective** (First Person).
-    - **TONE:** Match the user's likely reaction.
+    - **STRICT CONTEXT GROUNDING:**
+        - Do **NOT** hallucinate topics not yet discussed.
+        - If the user is venting, suggest validation-seeking or deeper venting ("Tell me more", "I'm just so tired").
+        - If the conversation is new, suggest icebreakers related to user facts.
+        - If in a tool/activity, suggest commands related to that activity.
 
     **NEGATIVE CONSTRAINTS (STRICT):**
     - ⛔ **Do NOT** ask the user questions from your perspective (e.g., "Do you want to...?", "Shall I...?").
     - ⛔ **Do NOT** use 'You' to refer to the user in these chips.
     - ⛔ **Do NOT** offer help (e.g., "I can help with that"). The chip is what the USER says.
     - ⛔ **Do NOT** start with verbs that imply the AI is asking (e.g., "Want me to...", "Should I...").
+    - ⛔ **Do NOT** go "Delulu". Stay grounded in the current exchange.
 
     **EXAMPLES:**
     - ❌ BAD: "Do you want to vent?" (AI asking User)
@@ -190,10 +212,12 @@ export const generateSubconscious = async (
         messages.push({ role: 'system', content: "SYSTEM OVERRIDE: User explicitly requested a reply. Set strategy to 'reply'." });
     }
 
-    // --- STRATEGY A: ROTATE GROQ KEYS ---
+    // --- STRATEGY A: ROTATE GROQ KEYS (Randomized Load Balancing) ---
+    const start = Math.floor(Math.random() * groqKeys.length);
     for (let i = 0; i < groqKeys.length; i++) {
+        const keyIndex = (start + i) % groqKeys.length;
         try {
-            const client = getGroqClient(i);
+            const client = getGroqClient(keyIndex);
             const response = await client.chat.completions.create({
                 messages: messages,
                 model: model,
@@ -402,10 +426,12 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
       }))
   ];
 
-  // 1. PRIMARY: Try "openai/gpt-oss-120b" on Groq (with Key Rotation)
+  // 1. PRIMARY: Try "openai/gpt-oss-120b" on Groq (with Key Rotation & Load Balancing)
+  const start = Math.floor(Math.random() * groqKeys.length);
   for (let i = 0; i < groqKeys.length; i++) {
+      const keyIndex = (start + i) % groqKeys.length;
       try {
-          const client = getGroqClient(i);
+          const client = getGroqClient(keyIndex);
           const completion = await client.chat.completions.create({
               model: "openai/gpt-oss-120b", 
               messages: messages,
@@ -421,7 +447,7 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
           return; // Success!
 
       } catch (groqError: any) {
-          console.warn(`⚠️ Workhorse (GPT-OSS-120B) Key ${i+1} Failed. Trying next...`);
+          console.warn(`⚠️ Workhorse (GPT-OSS-120B) Key ${keyIndex+1} Failed. Trying next...`);
       }
   }
 
@@ -464,10 +490,12 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
 // 4. WHISPER TRANSCRIPTION
 // ============================================================================
 export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
-    // Rotation for Whisper too
+    // Rotation for Whisper too (Randomized Load Balancing)
+    const start = Math.floor(Math.random() * groqKeys.length);
     for (let i = 0; i < groqKeys.length; i++) {
+        const keyIndex = (start + i) % groqKeys.length;
         try {
-            const client = getGroqClient(i);
+            const client = getGroqClient(keyIndex);
             const tempPath = `/tmp/upload_${Date.now()}.m4a`;
             fs.writeFileSync(tempPath, audioBuffer);
 
@@ -482,7 +510,7 @@ export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
             fs.unlinkSync(tempPath);
             return transcription.text;
         } catch (error) {
-            console.warn(`Whisper Key ${i+1} Failed. Trying next...`);
+            console.warn(`Whisper Key ${keyIndex+1} Failed. Trying next...`);
         }
     }
     return "[Audio processing failed due to server load]";
