@@ -1116,7 +1116,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              <React.Fragment key={domId}>
                 {showSeparator && (
                     <div className="flex justify-center my-8 shrink-0">
-                        <span className="bg-black/30 backdrop-blur-md border border-white/5 text-white/50 text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm">{dateLabel}</span>
+                        <span className={`text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm ${isLowPowerMode ? 'bg-black/40 text-white/50 border border-white/10' : 'bg-black/30 backdrop-blur-md border border-white/5 text-white/50'}`}>{dateLabel}</span>
                     </div>
                 )}
                 <div 
@@ -1247,8 +1247,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       <ThoughtCloudModal isOpen={showThoughtCloud} onClose={() => setShowThoughtCloud(false)} content={lastSubconscious} />
 
       {/* --- SECTION 1: HEADER --- */}
-      {/* LITE MODE: Use solid color fallback instead of just blur if needed, or rely on simplified CSS */}
-      <div className={`shrink-0 w-full z-30 pt-[env(safe-area-inset-top)] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-2 pointer-events-auto ${isMobile ? (isLowPowerMode ? 'bg-black/90' : 'bg-gradient-to-b from-black/80 to-transparent') : 'md:top-0 md:pt-6 bg-none'}`}>
+      {/* LITE MODE: Updated to use transparent black for "See-Through" effect */}
+      <div className={`shrink-0 w-full z-30 pt-[env(safe-area-inset-top)] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-2 pointer-events-auto ${isMobile ? (isLowPowerMode ? 'bg-[#0a0e17]/80' : 'bg-gradient-to-b from-black/80 to-transparent') : 'md:top-0 md:pt-6 bg-none'}`}>
         <div className="flex items-center gap-3 h-14 justify-between relative">
              <div className="shrink-0 flex items-center z-20">
                  {/* LITE MODE: Remove backdrop-blur */}
@@ -1395,7 +1395,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       {/* --- SECTION 3: INPUT AREA --- */}
       {/* FIXED: pb-6 adds padding so the input text isn't covered by Android gesture bar */}
-      <div className={`shrink-0 w-full pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-10 pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? (isLowPowerMode ? 'bg-black' : 'bg-gradient-to-t from-black via-black/80 to-transparent') : 'md:pb-6 bg-none'}`}>
+      <div className={`shrink-0 w-full pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-10 pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? (isLowPowerMode ? 'bg-[#0a0e17]/80' : 'bg-gradient-to-t from-black via-black/80 to-transparent') : 'md:pb-6 bg-none'}`}>
           <div className="flex flex-col gap-2">
              <AnimatePresence>
                  {replyingTo && (
