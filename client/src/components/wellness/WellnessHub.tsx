@@ -28,7 +28,7 @@ interface WellnessHubProps {
 }
 
 const WIDGETS = [
-  { id: 'diary', label: 'Journal', icon: Book, color: 'text-teal-300', barColor: 'bg-teal-400', glow: 'shadow-teal-500/20', from: 'from-teal-500/20', desc: 'Reflect on your day' },
+  { id: 'diary', label: 'Diary', icon: Book, color: 'text-teal-300', barColor: 'bg-teal-400', glow: 'shadow-teal-500/20', from: 'from-teal-500/20', desc: 'Reflect on your day' },
   { id: 'mood', label: 'Mood', icon: Smile, color: 'text-amber-300', barColor: 'bg-amber-400', glow: 'shadow-amber-500/20', from: 'from-amber-500/20', desc: 'Track your emotions' },
   { id: 'lore', label: 'The Web', icon: Network, color: 'text-blue-300', barColor: 'bg-blue-400', glow: 'shadow-blue-500/20', from: 'from-blue-500/20', desc: 'Social Detective Board' },
   { id: 'breathing', label: 'Breathing', icon: Wind, color: 'text-cyan-300', barColor: 'bg-cyan-400', glow: 'shadow-cyan-500/20', from: 'from-cyan-500/20', desc: 'Calm your mind' },

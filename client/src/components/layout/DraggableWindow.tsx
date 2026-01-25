@@ -141,7 +141,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           animate={{
             opacity: 1, 
             scale: 1, 
-            width: isMobile ? '100%' : size.width,
+            width: isMobile ? '100%' : (isMinimized ? 250 : size.width),
             height: currentHeight,
             top: isMobile ? 0 : effectivePos.y,
             left: isMobile ? 0 : effectivePos.x,
