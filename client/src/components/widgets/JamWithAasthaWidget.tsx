@@ -9,6 +9,7 @@ import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import { backgroundService } from '../../services/backgroundService';
 
 declare global {
   interface Window {
@@ -416,9 +417,19 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       setIsPlaying(true);
       setDuration(playerRef.current.getDuration());
       startProgressLoop();
+
+      // Enable Background Mode
+      const currentTrack = queue[currentIndex];
+      backgroundService.enable(
+          'jam',
+          "Jam with Aastha 🎵",
+          currentTrack ? `${currentTrack.title} - ${currentTrack.artist}` : "Playing Music..."
+      );
+
     } else if (event.data === 2) { // Paused
       setIsPlaying(false);
       stopProgressLoop();
+      backgroundService.disable('jam');
     } else if (event.data === 0) { // Ended
       handleTrackEnd();
     }

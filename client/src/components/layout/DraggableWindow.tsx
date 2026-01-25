@@ -138,14 +138,22 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
     });
   };
 
-  const stopResize = () => {
+  const stopResize = (e: PointerEvent) => {
     setIsResizing(false);
+
+    // Calculate final size to avoid stale closure state
+    if (resizeStartRef.current) {
+        const dx = e.clientX - resizeStartRef.current.x;
+        const dy = e.clientY - resizeStartRef.current.y;
+        const finalWidth = Math.max(minWidth, resizeStartRef.current.w + dx);
+        const finalHeight = Math.max(minHeight, resizeStartRef.current.h + dy);
+
+        saveState({ width: finalWidth, height: finalHeight });
+    }
+
     resizeStartRef.current = null;
     document.removeEventListener('pointermove', handleResizeMove);
     document.removeEventListener('pointerup', stopResize);
-
-    // Save Size
-    saveState({ width: size.width, height: size.height });
   };
 
   const handleClose = (e: React.MouseEvent) => {

@@ -3,6 +3,7 @@ import { DraggableWindow } from '../layout/DraggableWindow';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import { SOUND_URLS } from '../../constants'; // IMPORTED CONSTANT
+import { backgroundService } from '../../services/backgroundService';
 import { 
   Volume2, 
   VolumeX,
@@ -112,6 +113,15 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
         }
       }
     });
+
+    // Background Mode Logic
+    const isPlaying = Object.keys(activeLoops).length > 0 || !!previewId;
+    if (isPlaying && masterVolume > 0) {
+        const names = Object.keys(activeLoops).map(id => SOUNDS.find(s => s.id === id)?.label).join(', ');
+        backgroundService.enable('soundscape', 'Soundscape Active 🌿', names || 'Playing ambient sounds...');
+    } else {
+        backgroundService.disable('soundscape');
+    }
   }, [activeLoops, masterVolume, previewId]);
 
   // PERSISTENCE: Load state on mount

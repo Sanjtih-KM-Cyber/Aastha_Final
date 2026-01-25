@@ -10,6 +10,7 @@
     "cap-dist": "npm run build && npx cap sync"
   },
   "dependencies": {
+    "@anuradev/capacitor-background-mode": "^6.0.0",
     "@capacitor-community/privacy-screen": "^5.2.1",
     "@capacitor/android": "^6.0.0",
     "@capacitor/app": "^6.0.3",

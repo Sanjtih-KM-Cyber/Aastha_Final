@@ -6,6 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
+import { backgroundService } from '../../services/backgroundService';
 
 interface PomodoroWidgetProps {
   isOpen: boolean;
@@ -138,20 +139,9 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
 
   // --- BACKGROUND HANDLING ---
   useEffect(() => {
+      // Re-sync time on app resume (failsafe)
       const handleAppStateChange = async (state: any) => {
-          if (!state.isActive) {
-              // BACKGROUND: Schedule Notifications if active
-              if (isActive && targetEndTime) {
-                  const now = Date.now();
-                  if (targetEndTime > now) {
-                      await schedulePomodoroNotifications(targetEndTime, mode);
-                  }
-              }
-          } else {
-              // FOREGROUND: Cancel and Re-sync
-              await LocalNotifications.cancel({ notifications: [{ id: 2001 }, { id: 2002 }] }).catch(() => {});
-
-              // Re-sync time
+          if (state.isActive) {
               if (isActive && targetEndTime) {
                   const now = Date.now();
                   const remaining = Math.floor((targetEndTime - now) / 1000);
@@ -159,10 +149,6 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
                       setTimeLeft(remaining);
                   } else {
                       setTimeLeft(0);
-                      // Let the interval tick to 0 handle the switch/stop logic naturally?
-                      // Or force it here?
-                      // The interval below handles timeLeft > 0.
-                      // If we set 0 here, the interval effect needs to trigger.
                   }
               }
           }
@@ -170,45 +156,18 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
 
       const listener = CapacitorApp.addListener('appStateChange', handleAppStateChange);
       return () => { listener.then(l => l.remove()); };
-  }, [isActive, targetEndTime, mode]);
+  }, [isActive, targetEndTime]);
 
-  const schedulePomodoroNotifications = async (endEpoch: number, currentMode: string) => {
-      try {
-          const perm = await LocalNotifications.checkPermissions();
-          if (perm.display !== 'granted') await LocalNotifications.requestPermissions();
+  // Update Background Notification periodically
+  useEffect(() => {
+    if (isActive && timeLeft > 0) {
+       const title = mode === 'focus' ? `Focusing: ${formatTime(timeLeft)}` : `Break: ${formatTime(timeLeft)}`;
+       // Use currentMessage or a default one
+       const body = currentMessage || (mode === 'focus' ? "Stay in the flow. 🌊" : "Recharge your energy. 🍃");
 
-          const now = new Date();
-          const endDate = new Date(endEpoch);
-
-          const notifications = [];
-
-          // 1. Immediate Sticky Notification
-          notifications.push({
-              id: 2001,
-              title: currentMode === 'focus' ? "Focus Mode Active 🧠" : "Break Time 🍃",
-              body: "Tap to return to Sanctuary.",
-              schedule: { at: new Date(now.getTime() + 1000) }, // 1 sec later
-              ongoing: true,
-              autoCancel: false
-          });
-
-          // 2. End Notification
-          if (endDate > now) {
-              notifications.push({
-                  id: 2002,
-                  title: currentMode === 'focus' ? "Session Complete! 🎉" : "Break Over! 🚀",
-                  body: currentMode === 'focus' ? "Great work. Time to recharge." : "Ready to focus again?",
-                  schedule: { at: endDate },
-                  sound: 'res_bell.mp3'
-              });
-          }
-
-          await LocalNotifications.schedule({ notifications });
-
-      } catch (e) {
-          console.error("Failed to schedule pomodoro notifications", e);
-      }
-  };
+       backgroundService.updateNotification(title, body);
+    }
+  }, [timeLeft, isActive, mode, currentMessage]);
 
 
   // GOD MODE: Apply AI Instructions
@@ -272,6 +231,17 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
     } else if (timeLeft <= 0 && isActive) { // changed === 0 to <= 0 for safety
       // Timer Finished Logic
       audioRef.current?.play().catch(e => console.log(e));
+
+      // Schedule a distinct "Finished" notification since background mode might be silent or generic
+      LocalNotifications.schedule({
+        notifications: [{
+            id: 3001,
+            title: mode === 'focus' ? "Session Complete! 🎉" : "Break Over! 🚀",
+            body: mode === 'focus' ? "Great work. Time to recharge." : "Ready to focus again?",
+            schedule: { at: new Date() },
+            sound: 'res_bell.mp3'
+        }]
+      }).catch(console.error);
       
       if (mode === 'focus') {
           // Focus Finished -> Auto-Start Break
@@ -292,6 +262,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
           setCurrentMessage("Break over. Ready to focus? 🚀");
           setIsActive(false);
           setTargetEndTime(null);
+          backgroundService.disable('pomodoro'); // Stop background mode
       }
     }
     return () => clearInterval(interval);
@@ -328,10 +299,16 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
         const end = now + (timeLeft * 1000);
         setTargetEndTime(end);
         setIsActive(true);
+        backgroundService.enable(
+            'pomodoro',
+            mode === 'focus' ? "Focus Mode Active 🧠" : "Break Time 🍃",
+            "Starting..."
+        );
     } else {
         // Pause
         setTargetEndTime(null);
         setIsActive(false);
+        backgroundService.disable('pomodoro');
     }
   };
   
@@ -341,6 +318,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
     setLastMilestone(0);
     setCurrentMessage("");
     setTargetEndTime(null);
+    backgroundService.disable('pomodoro');
   };
 
   const handleSaveSettings = () => {
