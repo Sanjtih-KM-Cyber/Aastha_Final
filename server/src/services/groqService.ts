@@ -218,7 +218,9 @@ export const generateSubconscious = async (
 
         } catch (error: any) {
             console.warn(`⚠️ Subconscious: Groq Key ${i+1}/${groqKeys.length} Failed (${error?.status || error?.message}). Trying next...`);
-            // Continue loop
+
+            // If Rate Limit (429), just continue to next key.
+            // If we run out of keys, the loop finishes and we hit Gemini below.
         }
     }
 
@@ -317,7 +319,35 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
   }
 
   // If loop finishes, all keys failed
-  throw new Error("All Groq Keys Rate Limited");
+  console.error("❌ All Groq Stream Keys Exhausted. Switching to GEMINI FLASH.");
+  try {
+      const gemini = getGeminiClient();
+      if (!gemini) throw new Error("No Gemini Keys");
+
+      const geminiModel = gemini.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const chatHistory = history.map(m => ({
+          role: m.role === 'user' ? 'user' : 'model',
+          parts: [{ text: typeof m.content === 'string' ? m.content : '[Multimedia]' }]
+      }));
+
+      const chat = geminiModel.startChat({
+          history: chatHistory,
+          systemInstruction: systemPrompt
+      });
+
+      const lastMsg = chatHistory.length > 0 ? "Continue conversation" : "Hello";
+      const result = await chat.sendMessageStream(lastMsg);
+
+      for await (const chunk of result.stream) {
+          const text = chunk.text();
+          if (text) yield text;
+      }
+      return; // Success with Fallback
+
+  } catch (geminiError) {
+      console.error("Gemini Fallback Failed:", geminiError);
+      throw new Error("Brain Offline (All Providers Failed)");
+  }
 }
 
 // ============================================================================
