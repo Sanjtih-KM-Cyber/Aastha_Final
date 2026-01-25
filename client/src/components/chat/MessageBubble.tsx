@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Copy, Reply, Sparkles, Wand2 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { VoiceNotePlayer } from './VoiceNotePlayer';
 
 interface MessageBubbleProps {
   role: 'user' | 'assistant' | 'system';
@@ -410,8 +411,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
           {/* VOICE NOTE PLAYER */}
           {voice_note && (
-             <div className="mt-3 mb-1 w-full max-w-[240px]">
-                <audio controls src={voice_note} className="w-full h-8 opacity-80" style={{ borderRadius: '16px' }} />
+             <div className="mt-3 mb-1 w-full max-w-[280px]">
+                <VoiceNotePlayer src={voice_note} accentColor={moodColor} />
              </div>
           )}
 
