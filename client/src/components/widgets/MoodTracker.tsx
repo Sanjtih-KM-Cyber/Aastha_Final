@@ -67,8 +67,9 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
     if (history.length === 0) setIsLoadingHistory(true);
     try {
       const data = await userService.getMoods();
-      // Ensure we always have an array
-      setHistory(Array.isArray(data) ? data : []);
+      // MERGE: Combine server data with local offline queue to show EVERYTHING
+      const combined = userService.getCombinedMoodHistory(Array.isArray(data) ? data : []);
+      setHistory(combined);
     } catch (e) { 
         console.error("Failed to fetch history:", e); 
     } finally { 
@@ -77,26 +78,34 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
   };
 
   const handleLog = async (moodItem: typeof MOODS[0]) => {
-    // 1. BLOCK UI - START LOADING
+    // 1. BLOCK UI - START LOADING (User requested visibility over blind speed)
     setIsLoggingLabel(moodItem.label);
 
     try {
-        // 2. WAIT FOR SERVER RESPONSE (The "Slow but Working" part)
-        await userService.saveMood(moodItem.label, moodItem.score);
+        // 2. ROBUST SAVE: Try online, fallback to offline, return result
+        // We await this so the UI reflects the actual save state
+        const savedEntry = await userService.saveMoodWithRetry(moodItem.label, moodItem.score);
 
-        // 3. RE-FETCH HISTORY TO GUARANTEE SYNC
-        // This ensures the chart gets exactly what the database has
-        await fetchHistory();
+        // 3. INSTANT UPDATE: Update local history immediately without waiting for fetch
+        // This makes the chart update instantly
+        setHistory(prev => {
+            const newHistory = [...prev, savedEntry];
+            // Re-sort by timestamp
+            return newHistory.sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime());
+        });
 
         // 4. SHOW SUCCESS SCREEN
         setLastLogged(moodItem);
         if (onLogMood) onLogMood(moodItem.label);
 
+        // 5. BACKGROUND SYNC (Just to be sure)
+        // fetchHistory();
+
     } catch (e) {
         console.error("Log failed", e);
-        // Optional: Alert user here
+        // Even if catastrophic failure, we might want to alert, but saveMoodWithRetry handles most cases
     } finally {
-        // 5. UNBLOCK UI
+        // 6. UNBLOCK UI
         setIsLoggingLabel(null);
     }
   };
