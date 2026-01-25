@@ -4,6 +4,7 @@ import { generateMemoryAnalysis, getAgePersonaPrompt } from '../services/geminiS
 import { streamGroq, streamWorkhorse, ChatMessage, generateSubconscious, transcribeAudio } from '../services/groqService';
 import { generateCloneResponse, analyzeScreenshot } from '../services/cloneService';
 import { brainService } from '../services/brainService';
+import { broadcast } from '../services/socketService';
 import User from '../models/User';
 import Chat from '../models/Chat';
 import TrainingLog from '../models/TrainingLog';
@@ -573,8 +574,17 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
          (res as any).write(`data: ${JSON.stringify({ content: " [System: Brain Exhausted. Please try again in a few minutes.]" })}\n\n`);
     } else {
         chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
-        chatSession.messages.push({ role: 'assistant', content: encrypt(dbContent || "[...]"), timestamp: new Date(), voice_note: savedAudioUrl });
+        const aiMessage = { role: 'assistant' as 'assistant', content: encrypt(dbContent || "[...]"), timestamp: new Date(), voice_note: savedAudioUrl };
+        chatSession.messages.push(aiMessage);
         await chatSession.save();
+
+        // BROADCAST TO SYNC DEVICES
+        broadcast(userId.toString(), 'message', {
+            content: dbContent || "[...]",
+            role: 'assistant',
+            timestamp: new Date(),
+            voice_note: savedAudioUrl
+        });
     }
 
     if (chatSession.messages.length % 5 === 0) {

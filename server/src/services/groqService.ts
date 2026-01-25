@@ -110,13 +110,18 @@ export const generateSubconscious = async (
     **2. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
     - You MUST provide exactly 3 suggested replies for the user to click.
     - **CRITICAL:** These must be written from the **USER'S Perspective** (First Person).
-    - **TONE:** Match the user's likely reaction.
+    - **STRICT CONTEXT GROUNDING:**
+        - Do **NOT** hallucinate topics not yet discussed.
+        - If the user is venting, suggest validation-seeking or deeper venting ("Tell me more", "I'm just so tired").
+        - If the conversation is new, suggest icebreakers related to user facts.
+        - If in a tool/activity, suggest commands related to that activity.
 
     **NEGATIVE CONSTRAINTS (STRICT):**
     - ⛔ **Do NOT** ask the user questions from your perspective (e.g., "Do you want to...?", "Shall I...?").
     - ⛔ **Do NOT** use 'You' to refer to the user in these chips.
     - ⛔ **Do NOT** offer help (e.g., "I can help with that"). The chip is what the USER says.
     - ⛔ **Do NOT** start with verbs that imply the AI is asking (e.g., "Want me to...", "Should I...").
+    - ⛔ **Do NOT** go "Delulu". Stay grounded in the current exchange.
 
     **EXAMPLES:**
     - ❌ BAD: "Do you want to vent?" (AI asking User)
