@@ -12,6 +12,8 @@ import { Login } from './components/auth/Login';
 import { BiometricGuard } from './components/auth/BiometricGuard';
 import { ErrorBoundary } from './components/ErrorBoundary'; // Import ErrorBoundary
 import { Toaster } from 'react-hot-toast';
+import { App } from '@capacitor/app';
+import { scheduleGhostNotifications, clearGhostNotifications } from './services/offlineGhostService';
 
 // Lazy Load Pages
 // Note: We use the default export from the new Landing.tsx
@@ -80,6 +82,32 @@ const AppRoutes = () => {
 
 const App: React.FC = () => {
   useSecurity();
+
+  // Offline Ghost Logic: Schedule notifications on background, clear on foreground
+  React.useEffect(() => {
+      const listener = App.addListener('appStateChange', async ({ isActive }) => {
+          if (!isActive) {
+              // App went to background: Schedule the ghosts
+              const userInfo = localStorage.getItem('userInfo');
+              if (userInfo) {
+                  try {
+                      const user = JSON.parse(userInfo);
+                      scheduleGhostNotifications(user);
+                  } catch(e) {}
+              }
+          } else {
+              // App came to foreground: Clear pending ghosts (because they are here!)
+              clearGhostNotifications();
+          }
+      });
+
+      // Also clear on initial mount (if opening from notification)
+      clearGhostNotifications();
+
+      return () => {
+          listener.then(l => l.remove());
+      };
+  }, []);
 
   return (
     <ErrorBoundary>

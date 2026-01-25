@@ -4,6 +4,7 @@ import Diary from '../models/Diary';
 import { sendGhostEmail } from './emailService';
 import { generateGhostEmailContent } from './geminiService';
 import dotenv from 'dotenv';
+// import { sendPushNotification } from './notificationService'; // Placeholder for Firebase
 
 dotenv.config();
 
@@ -67,6 +68,18 @@ export const init = () => {
                     // @ts-ignore: TS thinks persona is only 'aastha' because of default but it can be 'aarav'/'aastik'
                     const senderName = (user.persona === 'aarav' || user.persona === 'aastik') ? 'Aastik' : 'Aastha';
                     const sent = await sendGhostEmail(user.email!, user.name, emailBody, senderName);
+
+                    /*
+                    // --- FUTURE FIREBASE INTEGRATION STUB ---
+                    // This logic is ready for when FCM is set up.
+                    if (user.fcmToken) {
+                        await sendPushNotification(user.fcmToken, {
+                            title: `Message from ${senderName}`,
+                            body: "I've been thinking about what you said...",
+                            data: { type: 'ghost_message', context: context }
+                        });
+                    }
+                    */
 
                     if (sent) {
                         // 5. Update User State
