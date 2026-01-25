@@ -104,6 +104,7 @@ const App: React.FC = () => {
                           // Foreground: Clear ghosts & SYNC DATA
                           await clearGhostNotifications().catch(e => console.warn("Ghost clear failed", e));
                           userService.syncOfflineMoods().catch(e => console.warn("Sync failed", e));
+                          userService.syncOfflineDiary().catch(e => console.warn("Diary sync failed", e));
                       }
                   } catch (innerError) {
                       console.warn("App state listener error", innerError);
@@ -113,10 +114,12 @@ const App: React.FC = () => {
               // 2. Initial Checks on Mount
               await clearGhostNotifications().catch(() => {});
               userService.syncOfflineMoods().catch(() => {});
+              userService.syncOfflineDiary().catch(() => {});
 
               // 3. Web Online Listener (Fallback for non-Capacitor)
               window.addEventListener('online', () => {
                   userService.syncOfflineMoods().catch(() => {});
+                  userService.syncOfflineDiary().catch(() => {});
               });
 
           } catch (e) {

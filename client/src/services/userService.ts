@@ -16,17 +16,95 @@ export interface MoodEntryDTO {
 }
 
 const OFFLINE_MOOD_KEY = 'offline_mood_queue';
+const OFFLINE_DIARY_KEY = 'offline_diary_queue';
 
 export const userService = {
   // --- Diary ---
   async getDiaryEntries(): Promise<DiaryEntryDTO[]> {
     const res = await api.get('/data/diary');
-    return res.data;
+    const serverEntries = res.data;
+
+    // MERGE OFFLINE ENTRIES
+    try {
+        const queueRaw = localStorage.getItem(OFFLINE_DIARY_KEY);
+        if (queueRaw) {
+            const queue = JSON.parse(queueRaw);
+            const offlineEntries = queue.map((q: any) => ({
+                _id: q.tempId || `temp-${Date.now()}`,
+                title: q.title,
+                content: q.content,
+                tags: q.tags,
+                createdAt: q.date, // Use date as createdAt for sorting
+                entryDate: q.date
+            }));
+            // Return combined (Server + Offline)
+            return [...serverEntries, ...offlineEntries];
+        }
+    } catch (e) {
+        console.error("Error merging offline diary", e);
+    }
+
+    return serverEntries;
   },
 
   async saveDiaryEntry(entry: { title: string; content: string; tags?: string[]; date?: string; moodKeywords?: string }): Promise<DiaryEntryDTO> {
     const res = await api.post('/data/diary', entry);
     return res.data;
+  },
+
+  async saveDiaryEntryWithRetry(entry: { title: string; content: string; tags?: string[]; date?: string; moodKeywords?: string }): Promise<DiaryEntryDTO> {
+      try {
+          const res = await api.post('/data/diary', entry);
+          return res.data;
+      } catch (error) {
+          console.warn("API Failed, saving diary offline", error);
+
+          // Create payload for queue
+          const tempId = `temp-${Date.now()}`;
+          const queuePayload = { ...entry, tempId };
+
+          // Save to Queue
+          const currentQueue = JSON.parse(localStorage.getItem(OFFLINE_DIARY_KEY) || '[]');
+          currentQueue.push(queuePayload);
+          localStorage.setItem(OFFLINE_DIARY_KEY, JSON.stringify(currentQueue));
+
+          // Return compatible DTO
+          return {
+              _id: tempId,
+              title: entry.title,
+              content: entry.content,
+              tags: entry.tags,
+              createdAt: entry.date,
+              entryDate: entry.date
+          };
+      }
+  },
+
+  async syncOfflineDiary(): Promise<void> {
+      const queueRaw = localStorage.getItem(OFFLINE_DIARY_KEY);
+      if (!queueRaw) return;
+
+      const queue = JSON.parse(queueRaw);
+      if (queue.length === 0) return;
+
+      console.log(`Syncing ${queue.length} offline diary entries...`);
+      const failed: any[] = [];
+
+      for (const item of queue) {
+          try {
+              const { tempId, ...payload } = item;
+              await api.post('/data/diary', payload);
+          } catch (e) {
+              console.error("Sync failed for diary entry", item, e);
+              failed.push(item);
+          }
+      }
+
+      if (failed.length > 0) {
+          localStorage.setItem(OFFLINE_DIARY_KEY, JSON.stringify(failed));
+      } else {
+          localStorage.removeItem(OFFLINE_DIARY_KEY);
+      }
   },
 
   // --- Moods ---
@@ -97,6 +175,8 @@ export const userService = {
           localStorage.setItem(OFFLINE_MOOD_KEY, JSON.stringify(failed));
       } else {
           localStorage.removeItem(OFFLINE_MOOD_KEY);
+          // SIGNAL UI TO REFRESH
+          window.dispatchEvent(new Event('mood-synced'));
       }
   },
 

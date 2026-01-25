@@ -164,7 +164,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           dragControls={dragControls}
           dragMomentum={false}
           dragListener={false}
-          onPointerDown={onFocus}
+          onPointerDownCapture={onFocus}
           className={`fixed flex flex-col ${isMobile ? '' : 'cursor-auto'}`}
           // --- MOBILE OPTIMIZATION 2: Hardware Acceleration ---
           // FIX: Don't unmount on mobile minimize, just hide visibility to keep background processes (audio) alive
