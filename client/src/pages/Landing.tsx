@@ -8,9 +8,9 @@ import { MobileExperience } from '../components/landing/MobileExperience';
 import { FAQ } from '../components/landing/FAQ';
 import { CallToAction } from '../components/landing/CallToAction';
 import { Footer } from '../components/landing/Footer';
-import { Login } from '../components/auth/Login';
 import { OnboardingTour, TourStep } from '../components/landing/OnboardingTour';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../context/ThemeContext'; // Import Theme Context for Lite Mode
 
 const LANDING_TOUR_STEPS: TourStep[] = [
   {
@@ -42,6 +42,7 @@ const LANDING_TOUR_STEPS: TourStep[] = [
 const Landing: React.FC = () => {
   const [isTourOpen, setIsTourOpen] = useState(false);
   const navigate = useNavigate();
+  const { isLowPowerMode } = useTheme(); // Detect Lite Mode
 
   const handleLoginNav = () => {
     navigate('/login');
@@ -61,11 +62,13 @@ const Landing: React.FC = () => {
           <Hero onLogin={handleLoginNav} />
           <Features />
 
-          {/* Desktop Only Sections */}
-          <div className="hidden md:block">
-              <InteractiveDemo />
-              <Comparison />
-          </div>
+          {/* Desktop Only Sections - HIDE COMPLETELY IN LITE MODE FOR SPEED */}
+          {!isLowPowerMode && (
+              <div className="hidden md:block">
+                  <InteractiveDemo />
+                  <Comparison />
+              </div>
+          )}
 
           {/* Mobile Only Section */}
           <div className="block md:hidden">

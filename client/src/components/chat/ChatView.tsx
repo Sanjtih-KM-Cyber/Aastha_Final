@@ -123,7 +123,7 @@ const mapColorToTheme = (colorName: string): string => {
 
 export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false, currentActivity = 'Online' }) => {
   const { user } = useAuth();
-  const { setTheme, currentTheme } = useTheme();
+  const { setTheme, currentTheme, isLowPowerMode } = useTheme(); // Consuming isLowPowerMode
   const { subscribe } = useSync();
   const navigate = useNavigate();
   
@@ -985,63 +985,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     }, 6000); // 6 Seconds Pause (High Latency Mode)
   };
 
-  /* REMOVED OLD FETCH BLOCK, MOVED TO callChatAPI */
-/*
-      const streamResponse = await fetch(getApiUrl('/chat'), {
-        method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
-        },
-        credentials: 'include', 
-        signal: abortController.signal,
-        body: JSON.stringify({
-            message: actualContent,
-            images: overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []),
-            audio: audioBase64,
-            forceReply: isPermissionGrant,
-            isVoiceMode: isVoiceMode, // <--- Pass Voice Mode Flag
-            userLocalTime: new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true }),
-            userLocalHour: new Date().getHours()
-        }),
-      });
-
-      if (!streamResponse.ok) {
-          setIsTyping(false);
-          if (streamResponse.status === 401) { 
-               setError("Session expired. Please login again.");
-               return; 
-          }
-          const errData = await streamResponse.json().catch(() => ({}));
-          throw new Error(errData.message || `${botName} is unreachable.`);
-      }
-
-      const reader = streamResponse.body?.getReader();
-      const decoder = new TextDecoder();
-      processedTagsRef.current.clear();
-      
-      let aiContentRaw = '';
-      let buffer = '';
-      let serverAudioPlayed = false; // Flag to prevent double speaking
-
-      if (reader) {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            buffer += chunk;
-            const lines = buffer.split('\n\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const dataStr = line.replace('data: ', '');
-                    if (dataStr.trim() === '[DONE]') break;
-                    try {
-                        const data = JSON.parse(dataStr);
-
-*/
-
   const processMagicTags = (text: string) => {
     // Legacy Tag Processing (Retained for backward compat)
     const tagRegex = /<[^>]+>/g;
@@ -1246,7 +1189,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           ) : (
               <div className="w-full h-full bg-[#0a0e17] md:bg-transparent" />
           )}
-          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
+
+          {/* LITE MODE: No noise texture */}
+          {!isLowPowerMode && (
+              <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
+          )}
       </div>
 
       <AnimatePresence>
@@ -1273,7 +1220,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/90 backdrop-blur-3xl flex flex-col items-center justify-center">
               <button onClick={toggleVoiceMode} className="absolute top-8 right-8 text-white/50 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors"><X size={24} /></button>
               <div className="relative mb-12">
-                 <motion.div animate={{ scale: isListening ? [1, 1.4, 1] : 1, opacity: isListening ? [0.4, 0.8, 0.4] : 0.2 }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }} className="absolute inset-0 rounded-full blur-3xl" style={{ backgroundColor: currentTheme.primaryColor }} />
+                 {/* LITE MODE: Static circle instead of animated blob */}
+                 {isLowPowerMode ? (
+                     <div className="absolute inset-0 rounded-full blur-3xl opacity-40" style={{ backgroundColor: currentTheme.primaryColor }} />
+                 ) : (
+                     <motion.div animate={{ scale: isListening ? [1, 1.4, 1] : 1, opacity: isListening ? [0.4, 0.8, 0.4] : 0.2 }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }} className="absolute inset-0 rounded-full blur-3xl" style={{ backgroundColor: currentTheme.primaryColor }} />
+                 )}
+
                  <div className="w-48 h-48 rounded-full border border-white/10 bg-black/50 backdrop-blur-2xl relative z-10 flex items-center justify-center">
                      <Headphones size={64} className={isListening ? "text-white" : "text-white/30"} />
                  </div>
@@ -1294,10 +1247,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       <ThoughtCloudModal isOpen={showThoughtCloud} onClose={() => setShowThoughtCloud(false)} content={lastSubconscious} />
 
       {/* --- SECTION 1: HEADER --- */}
-      <div className={`shrink-0 w-full z-30 pt-[env(safe-area-inset-top)] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-2 pointer-events-auto ${isMobile ? 'bg-gradient-to-b from-black/80 to-transparent' : 'md:top-0 md:pt-6 bg-none'}`}>
+      {/* LITE MODE: Use solid color fallback instead of just blur if needed, or rely on simplified CSS */}
+      <div className={`shrink-0 w-full z-30 pt-[env(safe-area-inset-top)] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-2 pointer-events-auto ${isMobile ? (isLowPowerMode ? 'bg-black/90' : 'bg-gradient-to-b from-black/80 to-transparent') : 'md:top-0 md:pt-6 bg-none'}`}>
         <div className="flex items-center gap-3 h-14 justify-between relative">
              <div className="shrink-0 flex items-center z-20">
-                 <button id="mobile-menu-btn" onClick={onMobileMenuClick} className={`p-2.5 rounded-full backdrop-blur-md border border-white/5 text-white/70 bg-black/20 ${!isMobile ? 'md:hidden' : ''}`}>
+                 {/* LITE MODE: Remove backdrop-blur */}
+                 <button id="mobile-menu-btn" onClick={onMobileMenuClick} className={`p-2.5 rounded-full border border-white/5 text-white/70 bg-black/20 ${!isLowPowerMode ? 'backdrop-blur-md' : ''} ${!isMobile ? 'md:hidden' : ''}`}>
                     <Menu size={20} />
                  </button>
              </div>
@@ -1333,15 +1288,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                 </div>
                              </motion.div>
                         ) : (
+                            // LITE MODE: Remove backdrop-blur-xl and animate-pulse
                             <motion.div
                                 key="status-pill"
                                 onClick={() => setShowThoughtCloud(true)}
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
-                                className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 backdrop-blur-xl border border-white/5 shadow-lg cursor-pointer hover:bg-black/30 transition-colors"
+                                className={`flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 border border-white/5 shadow-lg cursor-pointer hover:bg-black/30 transition-colors ${!isLowPowerMode ? 'backdrop-blur-xl' : ''}`}
                             >
-                                <div className={`w-2 h-2 rounded-full ${currentActivity === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-400 animate-pulse'}`} />
+                                <div className={`w-2 h-2 rounded-full ${currentActivity === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : `bg-amber-400 ${!isLowPowerMode ? 'animate-pulse' : ''}`}`} />
                                 <span className="text-xs font-medium text-white/80 tracking-wide uppercase">{statusDisplay}</span>
                             </motion.div>
                         )
@@ -1351,7 +1307,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
              <div className="shrink-0 flex items-center gap-3 justify-end z-20">
                  {/* CREDITS INDICATOR */}
-                 <div className={`hidden md:flex px-3 py-1.5 rounded-full backdrop-blur-xl border items-center gap-2 shadow-lg transition-colors ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
+                 <div className={`hidden md:flex px-3 py-1.5 rounded-full border items-center gap-2 shadow-lg transition-colors ${!isLowPowerMode ? 'backdrop-blur-xl' : ''} ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
                     {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-emerald-400" fill="currentColor" />}
                     <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-white/40'}`}>
                         {!isStandardMode ? (localCredits > 100 ? '∞' : `${isNaN(localCredits) ? 0 : localCredits} Premium`) : 'Eco Mode'}
@@ -1362,7 +1318,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  <button
                     onClick={() => toggleVoiceMode()}
                     disabled={isStandardMode && !user?.isPro}
-                    className={`shrink-0 w-10 h-10 rounded-full border border-white/10 backdrop-blur-xl flex items-center justify-center transition-all shadow-lg ${isVoiceMode ? 'bg-red-500 text-white hover:bg-red-600' : (isStandardMode && !user?.isPro ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-black/20 text-white/70 hover:bg-white/10 hover:text-white')}`}
+                    className={`shrink-0 w-10 h-10 rounded-full border border-white/10 flex items-center justify-center transition-all shadow-lg ${!isLowPowerMode ? 'backdrop-blur-xl' : ''} ${isVoiceMode ? 'bg-red-500 text-white hover:bg-red-600' : (isStandardMode && !user?.isPro ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-black/20 text-white/70 hover:bg-white/10 hover:text-white')}`}
                  >
                     <Headphones size={18} />
                  </button>
@@ -1429,8 +1385,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
                 onClick={scrollToBottom}
-                // FIXED: bottom-48 lifts it up so it's not hidden by the input bar. z-50 keeps it on top.
-                className="fixed bottom-48 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-50 hover:bg-white/10 hover:text-white transition-colors"
+                // LITE MODE: Simplified
+                className={`fixed bottom-48 left-1/2 -translate-x-1/2 bg-black/60 border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-50 hover:bg-white/10 hover:text-white transition-colors ${!isLowPowerMode ? 'backdrop-blur-md' : ''}`}
             >
                 <ArrowDown size={20} />
             </motion.button>
@@ -1439,11 +1395,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       {/* --- SECTION 3: INPUT AREA --- */}
       {/* FIXED: pb-6 adds padding so the input text isn't covered by Android gesture bar */}
-      <div className={`shrink-0 w-full pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-10 pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? 'bg-gradient-to-t from-black via-black/80 to-transparent' : 'md:pb-6 bg-none'}`}>
+      <div className={`shrink-0 w-full pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-10 pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? (isLowPowerMode ? 'bg-black' : 'bg-gradient-to-t from-black via-black/80 to-transparent') : 'md:pb-6 bg-none'}`}>
           <div className="flex flex-col gap-2">
              <AnimatePresence>
                  {replyingTo && (
-                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="self-center w-[95%] bg-black/60 backdrop-blur-xl border border-white/10 rounded-t-2xl border-b-0 p-3 flex justify-between items-center text-xs text-white/70 shadow-lg">
+                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className={`self-center w-[95%] bg-black/60 border border-white/10 rounded-t-2xl border-b-0 p-3 flex justify-between items-center text-xs text-white/70 shadow-lg ${!isLowPowerMode ? 'backdrop-blur-xl' : ''}`}>
                          <div className="flex items-center gap-2 truncate"><Reply size={12} className="text-white/40" /><span className="italic truncate max-w-[200px]">"{replyingTo}"</span></div>
                          <button onClick={() => setReplyingTo(null)} className="hover:text-white"><X size={14} /></button>
                      </motion.div>
@@ -1486,7 +1442,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     {/* Dismiss Button */}
                     <button
                         onClick={() => setSuggestedChips([])}
-                        className="sticky right-0 bg-black/40 backdrop-blur-sm p-1.5 rounded-full border border-white/10 text-white/40 hover:text-white hover:bg-white/10 ml-2"
+                        className={`sticky right-0 bg-black/40 p-1.5 rounded-full border border-white/10 text-white/40 hover:text-white hover:bg-white/10 ml-2 ${!isLowPowerMode ? 'backdrop-blur-sm' : ''}`}
                     >
                         <X size={12} />
                     </button>
@@ -1495,12 +1451,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              </AnimatePresence>
 
              {/* INPUT AREA */}
-             <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 backdrop-blur-3xl border ${uiAction === 'listen' ? 'border-teal-500/50 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'border-white/5'} p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
+             {/* LITE MODE: Removed backdrop-blur-3xl */}
+             <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 border ${uiAction === 'listen' ? 'border-teal-500/50 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'border-white/5'} p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'} ${!isLowPowerMode ? 'backdrop-blur-3xl' : ''}`}>
                  {uiAction === 'listen' && (
                      <div className="absolute -top-8 left-0 right-0 flex justify-center pointer-events-none">
                          <motion.div
                              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                             className="bg-teal-500/20 text-teal-200 text-xs px-3 py-1 rounded-full backdrop-blur-md border border-teal-500/30 flex items-center gap-2"
+                             className={`bg-teal-500/20 text-teal-200 text-xs px-3 py-1 rounded-full border border-teal-500/30 flex items-center gap-2 ${!isLowPowerMode ? 'backdrop-blur-md' : ''}`}
                          >
                              <Headphones size={12} /> Listening Mode Active
                          </motion.div>
