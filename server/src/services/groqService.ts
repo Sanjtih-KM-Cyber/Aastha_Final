@@ -76,7 +76,7 @@ export const generateSubconscious = async (
     **1. DECISION MATRIX (STRATEGY):**
     - **'listen'**: Choose this if the user is venting or typing rapidly.
        a) **BURST DETECTION:** If the history shows the user sent 2+ messages in a row without an AI reply, DEFAULT to 'listen'.
-       b) **VENTING:** If user is typing short, rapid fragments (e.g. "and then", "he said", "wait", "like").
+       b) **IGNORE FILLERS:** Do NOT choose 'listen' for short, neutral inputs like "hmm", "ok", "cool", "yea", "lol", "wait". Treat these as 'reply'.
        c) **EXPLICIT:** User says "Shut up", "Listen", "Wait", "Let me finish".
        d) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️, 🤔, 👇) that matches the sentiment.
     - **'reply'**: The DEFAULT state.
@@ -176,10 +176,10 @@ export const generateSubconscious = async (
     }
     `;
 
-    // Construct Messages (Keep only last 10 turns to save tokens/speed)
+    // Construct Messages (Keep only last 5 turns to save tokens/speed)
     const messages: any[] = [
         { role: 'system', content: systemPrompt },
-        ...history.slice(-10).map(m => ({
+        ...history.slice(-5).map(m => ({
             role: m.role,
             content: typeof m.content === 'string' ? m.content : '[Image/Media]'
         }))
@@ -203,6 +203,12 @@ export const generateSubconscious = async (
 
             const raw = response.choices[0]?.message?.content || "{}";
             const parsed = JSON.parse(raw) as SubconsciousBlock;
+
+            // FORCE OVERRIDES
+            if (forceReply) {
+                parsed.strategy = 'reply';
+                parsed.ui_action = 'none';
+            }
 
             // Failsafe for UI Action consistency
             if (parsed.strategy === 'listen') parsed.ui_action = 'listen';
@@ -228,7 +234,7 @@ export const generateSubconscious = async (
         });
 
         const chat = model.startChat({
-            history: history.slice(-10).map(m => ({
+            history: history.slice(-5).map(m => ({
                 role: m.role === 'user' ? 'user' : 'model',
                 parts: [{ text: typeof m.content === 'string' ? m.content : '[Image]' }]
             })),
@@ -240,7 +246,13 @@ export const generateSubconscious = async (
         const jsonText = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const parsed = JSON.parse(jsonText) as SubconsciousBlock;
         
-        if (parsed.strategy === 'listen') parsed.ui_action = 'listen'; else parsed.ui_action = 'none';
+        if (forceReply) {
+             parsed.strategy = 'reply';
+             parsed.ui_action = 'none';
+        } else {
+             if (parsed.strategy === 'listen') parsed.ui_action = 'listen'; else parsed.ui_action = 'none';
+        }
+
         return parsed;
 
     } catch (geminiError) {

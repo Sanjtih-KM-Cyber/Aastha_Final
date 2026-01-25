@@ -353,6 +353,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
 
       // Reset Daily Limits
       if (user.dailyPremiumUsage === undefined) { user.dailyPremiumUsage = 0; needsSave = true; }
+      if (user.dailyMessageCount === undefined) { user.dailyMessageCount = 0; needsSave = true; }
       if (user.isPro === undefined) { user.isPro = false; needsSave = true; }
 
       const lastUsage = new Date(user.lastUsageDate || user.createdAt || Date.now());
@@ -360,6 +361,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           lastUsage.getMonth() !== now.getMonth() ||
           lastUsage.getFullYear() !== now.getFullYear()) {
           user.dailyPremiumUsage = 0;
+          user.dailyMessageCount = 0;
           user.lastUsageDate = now;
           needsSave = true;
       }
@@ -386,7 +388,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         requireUsername: !user.username,
         hasDiarySetup: !!user.diaryPasswordHash,
         isPro: user.isPro,
-        credits: user.isPro ? 9999 : (10 - (user.dailyPremiumUsage || 0)),
+        credits: user.isPro ? 9999 : Math.max(0, 16 - (user.dailyMessageCount || 0)),
         streak: user.streak,
         avatar: user.avatar,
         wallpaper: user.wallpaper,
@@ -443,6 +445,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     if (!user.streak) user.streak = 1;
     if (!user.lastVisit) user.lastVisit = new Date(); 
     if (user.dailyPremiumUsage === undefined) user.dailyPremiumUsage = 0;
+    if (user.dailyMessageCount === undefined) user.dailyMessageCount = 0;
     if (user.isPro === undefined) user.isPro = false;
     
     const now = new Date();
@@ -451,6 +454,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
         lastUsage.getMonth() !== now.getMonth() || 
         lastUsage.getFullYear() !== now.getFullYear()) {
         user.dailyPremiumUsage = 0;
+        user.dailyMessageCount = 0;
         user.lastUsageDate = now;
     }
     
@@ -478,7 +482,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
         username: user.username || undefined,
         hasDiarySetup: !!user.diaryPasswordHash,
         isPro: user.isPro,
-        credits: user.isPro ? 9999 : (10 - (user.dailyPremiumUsage || 0)),
+        credits: user.isPro ? 9999 : Math.max(0, 16 - (user.dailyMessageCount || 0)),
         streak: user.streak,
         avatar: user.avatar,
         wallpaper: user.wallpaper,
@@ -528,7 +532,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
             username: user.username,
             hasDiarySetup: !!user.diaryPasswordHash,
             isPro: user.isPro,
-            credits: user.isPro ? 9999 : (10 - (user.dailyPremiumUsage || 0)),
+            credits: user.isPro ? 9999 : Math.max(0, 16 - (user.dailyMessageCount || 0)),
             streak: user.streak,
             avatar: user.avatar,
             wallpaper: user.wallpaper,
@@ -826,7 +830,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
             username: user.username,
             hasDiarySetup: !!user.diaryPasswordHash,
             isPro: user.isPro,
-            credits: user.isPro ? 9999 : (10 - (user.dailyPremiumUsage || 0)),
+            credits: user.isPro ? 9999 : Math.max(0, 16 - (user.dailyMessageCount || 0)),
             streak: user.streak,
             avatar: user.avatar,
             wallpaper: user.wallpaper,
