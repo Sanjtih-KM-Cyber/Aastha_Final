@@ -18,10 +18,8 @@ const groqKeys = (process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '')
 // Helper: Get a specific Groq client by index
 const getGroqClient = (index: number) => {
   if (groqKeys.length === 0) {
-      // Return dummy if no keys, logic will fail over to Gemini
       return new Groq({ apiKey: 'dummy' });
   }
-  // Pick specific key based on index to ensure rotation
   const key = groqKeys[index % groqKeys.length];
   return new Groq({ apiKey: key });
 };
@@ -62,8 +60,6 @@ export const generateSubconscious = async (
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
     
-    // OPTIMIZATION: Use 8B for thoughts to save tokens/TPM. 
-    // It is fast and smart enough for JSON logic.
     const model = "llama-3.1-8b-instant"; 
 
     const systemPrompt = `
@@ -73,18 +69,22 @@ export const generateSubconscious = async (
     User Context:
     ${userContext}
 
-    **1. THE VIBE CHECK (INTENT ANALYSIS):**
-    - **Is it a "Factual/Direct" Question?** (e.g., "What time is it?", "Can you help?", "Who are you?") -> **STRATEGY: 'reply'**.
+    **1. GREETING PROTOCOL (PRIORITY #1):**
+    - If the input is a GREETING in ANY language/script (e.g., "Hi", "Hello", "Hey", "Hilloo", "Yooo", "Wassup", "Hiii", "Namaste", "Vanakkam", "Namaskaram", "Sat Sri Akal", "Salam", "Kaise ho", "Ki haal", "Eppadi", "Hegiddira", "Bagunnara", "Nomoshkar", "Kemon acho", "Radhe Radhe", "Ram Ram"), even with exclamation marks ("!!!") -> **STRATEGY: 'reply'**.
+    - **DO NOT LISTEN TO GREETINGS.** REPLY IMMEDIATELY.
+
+    **2. THE VIBE CHECK (INTENT ANALYSIS):**
+    - **Is it a "Factual/Direct" Question?** (e.g., "What time is it?", "Can you help?") -> **STRATEGY: 'reply'**.
     - **Is it "Venting/Storytelling"?** (e.g., "I just can't take it anymore..", "So then he said..", "I'm so annoyed.") -> **STRATEGY: 'listen'**.
     - **Is it a "Rhetorical/Emotional" Question?** (e.g., "Why is my life like this..")
          - If it feels like a genuine cry for help -> **STRATEGY: 'reply'** (Softly).
          - If it feels like they are mid-thought, trailing off, or just releasing steam -> **STRATEGY: 'listen'**.
 
-    **2. DECISION MATRIX (STRATEGY):**
+    **3. DECISION MATRIX (STRATEGY):**
     - **'listen'**: Choose if user is **unfinished**, **hesitant**, or **venting**. Must provide a reaction.
     - **'reply'**: Choose if user is **waiting for you** or the thought is **complete**.
 
-    **3. REACTIONS (THE FACE OF AASTHA):**
+    **4. REACTIONS (THE FACE OF AASTHA):**
     **CRITICAL:** The 'reaction' is HOW YOU FEEL hearing this news. Do NOT mirror the user. React TO the user.
 
     - **If User is SAD / CRYING:**
@@ -95,13 +95,13 @@ export const generateSubconscious = async (
       - YOUR Reaction: 😯 (Shock/Damn), 🤐 (Listening/Quiet), 💀 (Dead/ "That's crazy"), 👀 (Listening intently).
       - ⛔ **NEVER** react with 😠 (Angry). You are not angry at them. You are listening to the tea.
 
-    - **If User is HAPPY / JOKING:**
-      - YOUR Reaction: 😂 (Laugh), ✨ (Vibe), 🔥 (Lit), 😄 (Smile).
+    - **If User is HAPPY / JOKING / GREETING:**
+      - YOUR Reaction: 😂 (Laugh), ✨ (Vibe), 🔥 (Lit), 😄 (Smile), 👋 (Wave).
 
     - **If User is FLIRTY / ROMANTIC:**
       - YOUR Reaction: 😳 (Blush), 🥰 (Love), 😉 (Wink).
 
-    **4. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
+    **5. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
     - You MUST provide exactly 3 suggested replies for the user to click.
     - **CRITICAL:** These must be written from the **USER'S Perspective** (First Person).
     - **STRICT CONTEXT GROUNDING:**
@@ -131,7 +131,7 @@ export const generateSubconscious = async (
         - **YES:** First-person ("I", "Me", "My").
         - **LENGTH:** Natural and conversational. Avoid 1-word replies.
 
-    **5. GOD MODE TOOLS (The Hands):**
+    **6. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs.
     **IMPORTANT:** Be CONSERVATIVE with tools. Do NOT open Music or Soundscapes unless the user **explicitly** asks for it or the emotional need is overwhelming (e.g. "I'm having a panic attack" -> Breathing).
     Use 'control_widget' for most things.
