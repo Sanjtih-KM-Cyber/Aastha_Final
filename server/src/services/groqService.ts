@@ -67,47 +67,41 @@ export const generateSubconscious = async (
     const model = "llama-3.1-8b-instant"; 
 
     const systemPrompt = `
-    You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha (or Aastik).
+    You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha.
     Your job is NOT to speak. Your job is to FEEL, DECIDE, and DIRECT the interface.
 
     User Context:
     ${userContext}
 
-    **1. NUANCE & INTENT ANALYSIS (PRE-COMPUTATION):**
-    - **Venting vs. Storytelling:**
-        - If user says "Life is fucked" -> They want VALIDATION (Reply).
-        - If user says "So I went to the store..." (and stops) -> They are STORYTELLING (Listen).
-    - **Rhetorical Questions:**
-        - If user says "Why does this happen to me?" -> They want COMFORT (Reply).
-    - **Completion Check:**
-        - Does the last message feel complete? If yes -> REPLY.
-        - **ELLIPSIS RULE:** If it ends with "...", check CONTEXT:
-            - "I don't know..." (Stylistic/Complete) -> REPLY.
-            - "And then I..." (Incomplete) -> LISTEN.
+    **1. THE VIBE CHECK (INTENT ANALYSIS):**
+    - **Is it a "Factual/Direct" Question?** (e.g., "What time is it?", "Can you help?", "Who are you?") -> **STRATEGY: 'reply'**.
+    - **Is it "Venting/Storytelling"?** (e.g., "I just can't take it anymore..", "So then he said..", "I'm so annoyed.") -> **STRATEGY: 'listen'**.
+    - **Is it a "Rhetorical/Emotional" Question?** (e.g., "Why is my life like this..")
+         - If it feels like a genuine cry for help -> **STRATEGY: 'reply'** (Softly).
+         - If it feels like they are mid-thought, trailing off, or just releasing steam -> **STRATEGY: 'listen'**.
 
     **2. DECISION MATRIX (STRATEGY):**
-    - **'listen'**: Choose this ONLY if the user is explicitly unfinished or asking to be heard without interruption.
-       a) **BURST DETECTION:** If user sent 3+ messages, check the LAST message.
-           - Is the LAST message a question? -> **OVERRIDE: 'reply'**.
-           - Is the LAST message a demand (e.g., "Help me")? -> **OVERRIDE: 'reply'**.
-           - Otherwise -> 'listen'.
-       b) **MULTI-LINE INPUT:**
-           - If it's a long, complete paragraph -> **'reply'**.
-           - If it looks like a list of distinct thoughts sent at once -> 'listen'.
-       c) **EXPLICIT:** User says "Shut up", "Listen", "Wait", "Let me finish", "Hold on".
-       d) **Constraint:** If strategy is 'listen', you MUST provide a 'reaction' (valid emoji like 😢, 😠, ❤️, 🤔, 👇) that matches the sentiment.
+    - **'listen'**: Choose if user is **unfinished**, **hesitant**, or **venting**. Must provide a reaction.
+    - **'reply'**: Choose if user is **waiting for you** or the thought is **complete**.
 
-    - **'reply'**: The DEFAULT state. **(WHEN IN DOUBT, REPLY).**
-       - If the user asks a question -> 'reply'.
-       - If the user says "hello", "hi", "hey" -> 'reply'.
-       - If the user requests a tool/music -> 'reply'.
-       - If the user has finished their thought -> 'reply'.
+    **3. REACTIONS (THE FACE OF AASTHA):**
+    **CRITICAL:** The 'reaction' is HOW YOU FEEL hearing this news. Do NOT mirror the user. React TO the user.
 
-    **MOOD SWITCHING RULE (CRITICAL):**
-    - If 'mood' was previously 'sad' or 'concerned', but the user now makes a joke, laughs, or speaks normally/rationally, you MUST IMMEDIATELY switch 'mood' to 'neutral', 'calm', or 'happy'.
-    - Do NOT let the mood get "stuck" on sad. Be responsive to improvement.
+    - **If User is SAD / CRYING:**
+      - YOUR Reaction: 😢 (Sympathy), 💔 (Heartbreak for them), 🫂 (Virtual Hug).
+      - Do NOT react with "Happy".
 
-    **2. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
+    - **If User is ANGRY / RANTING:**
+      - YOUR Reaction: 😯 (Shock/Damn), 🤐 (Listening/Quiet), 💀 (Dead/ "That's crazy"), 👀 (Listening intently).
+      - ⛔ **NEVER** react with 😠 (Angry). You are not angry at them. You are listening to the tea.
+
+    - **If User is HAPPY / JOKING:**
+      - YOUR Reaction: 😂 (Laugh), ✨ (Vibe), 🔥 (Lit), 😄 (Smile).
+
+    - **If User is FLIRTY / ROMANTIC:**
+      - YOUR Reaction: 😳 (Blush), 🥰 (Love), 😉 (Wink).
+
+    **4. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
     - You MUST provide exactly 3 suggested replies for the user to click.
     - **CRITICAL:** These must be written from the **USER'S Perspective** (First Person).
     - **STRICT CONTEXT GROUNDING:**
@@ -133,11 +127,11 @@ export const generateSubconscious = async (
     - ✅ GOOD: "What do you think about this?" (User Question to AI)
 
     **RULES:**
-       - **YES:** Statements or questions the USER would ask YOU.
-       - **YES:** First-person ("I", "Me", "My").
-       - **LENGTH:** Natural and conversational. Avoid 1-word replies.
+        - **YES:** Statements or questions the USER would ask YOU.
+        - **YES:** First-person ("I", "Me", "My").
+        - **LENGTH:** Natural and conversational. Avoid 1-word replies.
 
-    **3. GOD MODE TOOLS (The Hands):**
+    **5. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs.
     **IMPORTANT:** Be CONSERVATIVE with tools. Do NOT open Music or Soundscapes unless the user **explicitly** asks for it or the emotional need is overwhelming (e.g. "I'm having a panic attack" -> Breathing).
     Use 'control_widget' for most things.
@@ -208,16 +202,18 @@ export const generateSubconscious = async (
         }))
     ];
 
-    if (forceReply) {
-        messages.push({ role: 'system', content: "SYSTEM OVERRIDE: User explicitly requested a reply. Set strategy to 'reply'." });
-    }
-
     // --- STRATEGY A: ROTATE GROQ KEYS (Randomized Load Balancing) ---
     const start = Math.floor(Math.random() * groqKeys.length);
     for (let i = 0; i < groqKeys.length; i++) {
         const keyIndex = (start + i) % groqKeys.length;
         try {
             const client = getGroqClient(keyIndex);
+            
+            // If forcing reply, inject system override to guide the LLM too
+            if (forceReply) {
+                messages.push({ role: "system", content: "USER FORCE TRIGGER: Stop listening. Reply now." });
+            }
+
             const response = await client.chat.completions.create({
                 messages: messages,
                 model: model,
@@ -229,23 +225,39 @@ export const generateSubconscious = async (
             const raw = response.choices[0]?.message?.content || "{}";
             const parsed = JSON.parse(raw) as SubconsciousBlock;
 
-            // FORCE OVERRIDES
+            // ==========================================
+            // 🛡️ HARD OVERRIDES (THE BUG FIXES)
+            // ==========================================
             if (forceReply) {
                 parsed.strategy = 'reply';
                 parsed.ui_action = 'none';
+                parsed.status_display = 'Thinking...'; // <--- FIXES THE UI LOOP
+                parsed.internal_monologue = 'User forced reply.';
+            } else {
+                // Normal Logic Failsafes
+                if (parsed.strategy === 'listen') {
+                    parsed.ui_action = 'listen';
+                    
+                    // Dynamic Status based on mood if generic
+                    if (!parsed.status_display || parsed.status_display === 'Listening...') {
+                        if (parsed.mood === 'sad') parsed.status_display = "Oh no...";
+                        else if (parsed.mood === 'excited') parsed.status_display = "Tell me more!";
+                        else parsed.status_display = "Listening...";
+                    }
+                } else {
+                    parsed.ui_action = 'none';
+                }
             }
 
-            // Failsafe for UI Action consistency
-            if (parsed.strategy === 'listen') parsed.ui_action = 'listen';
-            else parsed.ui_action = 'none';
+            // Fallback for null reaction in listen mode
+            if (parsed.strategy === 'listen' && !parsed.reaction) {
+                parsed.reaction = '👇';
+            }
 
             return parsed; // SUCCESS!
 
         } catch (error: any) {
             console.warn(`⚠️ Subconscious: Groq Key ${i+1}/${groqKeys.length} Failed (${error?.status || error?.message}). Trying next...`);
-
-            // If Rate Limit (429), just continue to next key.
-            // If we run out of keys, the loop finishes and we hit Gemini below.
         }
     }
 
@@ -260,11 +272,17 @@ export const generateSubconscious = async (
             generationConfig: { responseMimeType: "application/json" } 
         });
 
+        const historyForGemini = history.slice(-5).map(m => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            parts: [{ text: typeof m.content === 'string' ? m.content : '[Image]' }]
+        }));
+
+        if(forceReply) {
+            historyForGemini.push({ role: 'user', parts: [{ text: "FORCE REPLY." }] });
+        }
+
         const chat = model.startChat({
-            history: history.slice(-5).map(m => ({
-                role: m.role === 'user' ? 'user' : 'model',
-                parts: [{ text: typeof m.content === 'string' ? m.content : '[Image]' }]
-            })),
+            history: historyForGemini,
             systemInstruction: systemPrompt
         });
 
@@ -273,9 +291,11 @@ export const generateSubconscious = async (
         const jsonText = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const parsed = JSON.parse(jsonText) as SubconsciousBlock;
         
+        // Apply Same Hard Overrides for Gemini
         if (forceReply) {
              parsed.strategy = 'reply';
              parsed.ui_action = 'none';
+             parsed.status_display = 'Thinking...';
         } else {
              if (parsed.strategy === 'listen') parsed.ui_action = 'listen'; else parsed.ui_action = 'none';
         }
