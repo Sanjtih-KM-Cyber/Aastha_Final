@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
-import { SOUND_URLS } from '../../constants'; // IMPORTED CONSTANT
+import { SOUND_URLS } from '../../constants';
 import { backgroundService } from '../../services/backgroundService';
 import { 
   Volume2, 
@@ -23,11 +23,10 @@ interface SoundscapeProps {
   zIndex?: number;
   onFocus?: () => void;
   preset?: string; 
-  volume?: number; // Added volume prop
+  volume?: number; 
   persistenceKey?: string;
 }
 
-// Updated SOUNDS array to use Vercel Blob URLs
 const SOUNDS = [
   { id: 'rain', label: 'Rain', color: '#60A5FA', path: SOUND_URLS.rain },
   { id: 'forest', label: 'Forest', color: '#4ADE80', path: SOUND_URLS.forest },
@@ -80,8 +79,23 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
     return audioRefs.current[id];
   };
 
-  // Sync Volumes & Playback Effect
+  // ✅ FIXED: Single Authoritative Effect for Playback & Sync
   useEffect(() => {
+    // 1. If closed, force everything to stop and disable background mode
+    if (!isOpen) {
+        Object.values(audioRefs.current).forEach(audio => {
+            if (!audio.paused) {
+                audio.pause();
+                audio.currentTime = 0; // Optional: Reset to start
+            }
+        });
+        backgroundService.disable('soundscape');
+        return; // STOP HERE
+    }
+
+    // 2. Normal Playback Logic (Only runs if isOpen is true)
+    let hasActiveAudio = false;
+
     Object.keys(audioRefs.current).forEach(id => {
       const audio = audioRefs.current[id];
       if (!audio) return;
@@ -101,6 +115,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
       audio.volume = Math.max(0, Math.min(1, targetVol));
 
       if ((isLooping || isPreviewing)) {
+        hasActiveAudio = true;
         if (audio.paused) {
             audio.play().catch(e => {
                 if (isPreviewing) setPreviewId(null);
@@ -114,15 +129,15 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
       }
     });
 
-    // Background Mode Logic
-    const isPlaying = Object.keys(activeLoops).length > 0 || !!previewId;
-    if (isPlaying && masterVolume > 0) {
+    // 3. Background Mode Logic
+    if (hasActiveAudio && masterVolume > 0) {
         const names = Object.keys(activeLoops).map(id => SOUNDS.find(s => s.id === id)?.label).join(', ');
         backgroundService.enable('soundscape', 'Soundscape Active 🌿', names || 'Playing ambient sounds...');
     } else {
         backgroundService.disable('soundscape');
     }
-  }, [activeLoops, masterVolume, previewId]);
+    
+  }, [activeLoops, masterVolume, previewId, isOpen]); // ✅ ADDED isOpen dependency
 
   // PERSISTENCE: Load state on mount
   useEffect(() => {
@@ -146,30 +161,25 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
       localStorage.setItem('soundscape_state', JSON.stringify(state));
   }, [activeLoops, masterVolume]);
 
-  // Auto-configure from preset and volume (Overrides persistence if preset provided)
+  // Auto-configure from preset and volume
   useEffect(() => {
       if (isOpen) {
           if (preset) {
               if (preset === 'random') {
-                  // Generate random mix
                   const newActive: Record<string, number> = {};
-                  // Pick 2-3 random sounds
                   const available = SOUNDS.filter(s => !erroredSounds.has(s.id));
                   const count = 2 + Math.floor(Math.random() * 2);
                   for (let i = 0; i < count; i++) {
                       const rand = available[Math.floor(Math.random() * available.length)];
                       if (rand && !newActive[rand.id]) {
-                          newActive[rand.id] = 0.3 + Math.random() * 0.5; // Random volume 0.3-0.8
+                          newActive[rand.id] = 0.3 + Math.random() * 0.5;
                           getAudio(rand.id);
                       }
                   }
                   setActiveLoops(newActive);
               } else {
-                  // Parse specific string: "rain:0.8,fire:0.2"
                   const parts = preset.split(',');
                   const newActive: Record<string, number> = {};
-
-                  // Clear existing? No, maybe merge or clear. Clear is safer for "setting a scene".
                   setActiveLoops({});
 
                   parts.forEach(part => {
@@ -191,17 +201,14 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
               setMasterVolume(Math.max(0, Math.min(1, volume)));
           }
       }
-  }, [isOpen, preset, volume]); // Added volume dependency
+  }, [isOpen, preset, volume]);
 
-  // Cleanup on unmount or close
+  // ✅ Clean up preview when closing (Logic simplified)
   useEffect(() => {
     if (!isOpen) {
-        Object.values(audioRefs.current).forEach(a => a.pause());
         setPreviewId(null);
     }
   }, [isOpen]);
-
-  // ... (Rest of component methods like toggleLoop, updateTrackVolume, handlePreview remain standard) ...
 
   const toggleLoop = (id: string) => {
     if (erroredSounds.has(id)) return;
