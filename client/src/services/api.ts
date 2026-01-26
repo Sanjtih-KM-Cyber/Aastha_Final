@@ -40,8 +40,7 @@ api.interceptors.request.use(
           // D. ATTACH THE TOKEN TO THE HEADER
           config.headers.Authorization = `Bearer ${userData.token}`;
           
-          // Debugging log (Remove this after it works)
-          // console.log("Attaching token to request:", userData.token.substring(0, 10) + "...");
+          // 🔒 SECURED: Log removed for security
         }
       } catch (error) {
         console.error("Error parsing user info for token", error);
