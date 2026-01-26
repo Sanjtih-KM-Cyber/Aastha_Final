@@ -399,7 +399,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           if (Array.isArray(res.data) && res.data.length > 0) {
               const newTrack = {
                   ...res.data[0],
-                  uuid: generateUUID()
+                  uuid: generateUUID() 
               };
 
               if (queue.length > 0) {
@@ -504,7 +504,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               languages: langsToSend,
               moods: moodsToSend,
               genres: genresToSend,
-              year: overrideYear,
+              year: overrideYear, 
               specific_songs: specificSongs,
               duration: targetDuration
           });
