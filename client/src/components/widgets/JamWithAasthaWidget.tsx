@@ -15,12 +15,8 @@ import { backgroundService } from '../../services/backgroundService';
 import { Stepper, MobileQueueItem, DesktopQueueItem, Track } from './JamComponents';
 
 // ✅ IMPORT CONSTANTS
-import { 
-    LANGUAGES, 
-    MOOD_TAGS, 
-    GENRES, 
-} from '../../constants';
 import { LoopMode } from '../../types';
+import { LANGUAGES, MOOD_TAGS, GENRES } from './jamConstants';
 
 declare global {
   interface Window {
