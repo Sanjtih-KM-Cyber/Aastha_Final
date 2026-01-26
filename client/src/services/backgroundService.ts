@@ -76,6 +76,15 @@ class BackgroundService {
   }
 }
 
-// Singleton Instance - Export as Default to avoid named export hoisting issues
-const backgroundService = new BackgroundService();
-export default backgroundService;
+// LAZY SINGLETON
+// We do NOT export the instance directly. We export a getter.
+// This prevents 'b' (the instance) from being accessed before initialization in circular scenarios.
+
+let instance: BackgroundService | null = null;
+
+export const getBackgroundService = (): BackgroundService => {
+    if (!instance) {
+        instance = new BackgroundService();
+    }
+    return instance;
+};

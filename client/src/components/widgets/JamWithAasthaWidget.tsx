@@ -9,7 +9,7 @@ import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
-import backgroundService from '../../services/backgroundService';
+import { getBackgroundService } from '../../services/backgroundService';
 
 declare global {
   interface Window {
@@ -420,7 +420,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
       // Enable Background Mode
       const currentTrack = queue[currentIndex];
-      backgroundService.enable(
+      getBackgroundService().enable(
           'jam',
           "Jam with Aastha 🎵",
           currentTrack ? `${currentTrack.title} - ${currentTrack.artist}` : "Playing Music..."
@@ -429,7 +429,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
     } else if (event.data === 2) { // Paused
       setIsPlaying(false);
       stopProgressLoop();
-      backgroundService.disable('jam');
+      getBackgroundService().disable('jam');
     } else if (event.data === 0) { // Ended
       handleTrackEnd();
     }
