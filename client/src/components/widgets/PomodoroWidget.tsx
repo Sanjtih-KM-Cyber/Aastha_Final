@@ -187,9 +187,51 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
   }, [timeLeft, isActive, mode, currentMessage, isOpen]);
 
 
-  // GOD MODE: Apply AI Instructions
+  // GOD MODE: Apply AI Instructions (Full Control)
   useEffect(() => {
       if (isOpen && initialParams) {
+          // 1. Handle explicit commands (Start, Stop, Pause, Resume, Reset)
+          // The 'action' param takes precedence over simple state updates
+          const action = (initialParams as any).action;
+
+          if (action) {
+              if (action === 'stop' || action === 'pause') {
+                  if (isActive) {
+                      setIsActive(false);
+                      setTargetEndTime(null);
+                      backgroundService.disable('pomodoro');
+                  }
+                  return; // Exit early
+              }
+
+              if (action === 'resume' || action === 'start') {
+                  if (!isActive) {
+                      const now = Date.now();
+                      const end = now + (timeLeft * 1000);
+                      setTargetEndTime(end);
+                      setIsActive(true);
+                      backgroundService.enable(
+                          'pomodoro',
+                          mode === 'focus' ? "Focus Mode Active 🧠" : "Break Time 🍃",
+                          "Resuming..."
+                      );
+                  }
+                  return; // Exit early
+              }
+
+              if (action === 'reset') {
+                   setIsActive(false);
+                   const duration = mode === 'focus' ? focusDuration : breakDuration;
+                   setTimeLeft(duration * 60);
+                   setLastMilestone(0);
+                   setCurrentMessage("");
+                   setTargetEndTime(null);
+                   backgroundService.disable('pomodoro');
+                   return; // Exit early
+              }
+          }
+
+          // 2. Handle Configuration Updates (Mode/Duration)
           let shouldReset = false;
           if (initialParams.focusDuration && initialParams.focusDuration !== focusDuration) {
              setFocusDuration(initialParams.focusDuration);
@@ -205,6 +247,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
               shouldReset = true;
           }
 
+          // Auto-start if duration/mode changed significantly
           if (shouldReset) {
               const duration = (initialParams.mode || mode) === 'focus'
                  ? (initialParams.focusDuration || focusDuration)

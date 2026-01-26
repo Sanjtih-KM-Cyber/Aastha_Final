@@ -52,6 +52,141 @@ export interface SubconsciousBlock {
 }
 
 // ============================================================================
+// 2026 GOLDEN STACK ARCHITECTURE
+// ============================================================================
+const MODEL_CONFIG = {
+    soul: {
+        primary: 'qwen/qwen3-32b',
+        fallback: 'meta-llama/llama-4-maverick-17b-128e-instruct'
+    },
+    brain: {
+        primary: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        fallback: 'llama-3.1-8b-instant'
+    },
+    hands: {
+        primary: 'groq/compound',
+        fallback: 'llama-3.3-70b-versatile'
+    },
+    subconscious: {
+        primary: 'openai/gpt-oss-20b',
+        fallback: 'llama-3.1-8b-instant'
+    }
+};
+
+type ModelCategory = keyof typeof MODEL_CONFIG;
+
+// ============================================================================
+// SAFE EXECUTION HELPERS
+// ============================================================================
+
+/**
+ * Attempts to run a chat completion using the Primary model, failing over to Fallback.
+ */
+const safeChatCompletion = async (
+    category: ModelCategory,
+    messages: any[],
+    temperature: number = 0.6,
+    maxTokens: number = 500,
+    jsonMode: boolean = false
+): Promise<any> => {
+    const config = MODEL_CONFIG[category];
+    const modelsToTry = [config.primary, config.fallback];
+
+    for (let i = 0; i < modelsToTry.length; i++) {
+        const model = modelsToTry[i];
+
+        // Load Balance Keys
+        const start = Math.floor(Math.random() * groqKeys.length);
+
+        // Try up to 3 keys per model before switching models
+        for (let k = 0; k < Math.min(3, groqKeys.length); k++) {
+            const keyIndex = (start + k) % groqKeys.length;
+            try {
+                const client = getGroqClient(keyIndex);
+                // console.log(`[Groq] Attempting ${category} with ${model} (Key ${keyIndex})`);
+
+                const completion = await client.chat.completions.create({
+                    messages: messages,
+                    model: model,
+                    temperature: temperature,
+                    max_tokens: maxTokens,
+                    response_format: jsonMode ? { type: "json_object" } : undefined
+                });
+
+                return completion.choices[0]?.message?.content || "";
+
+            } catch (error: any) {
+                const isRateLimit = error?.status === 429;
+                const isNotFound = error?.status === 404;
+                console.warn(`[Groq] Failed ${model} (Key ${keyIndex}): ${error?.message || error}`);
+
+                // If 404 (Model not found), break key loop immediately and try next model
+                if (isNotFound) break;
+            }
+        }
+        console.warn(`[Groq] Dropping model ${model} for ${category}...`);
+    }
+
+    throw new Error(`All models failed for category: ${category}`);
+};
+
+/**
+ * Attempts to stream a chat completion using Primary -> Fallback strategy.
+ */
+async function* safeStreamCompletion(
+    category: ModelCategory,
+    messages: any[],
+    temperature: number = 0.7,
+    maxTokens: number = 1024
+) {
+    const config = MODEL_CONFIG[category];
+    const modelsToTry = [config.primary, config.fallback];
+
+    // Last Resort Fallback (Real Model) if specific fallbacks fail
+    // This is crucial if the user provided "Future Models" that don't exist yet.
+    modelsToTry.push('llama-3.1-8b-instant');
+
+    for (let i = 0; i < modelsToTry.length; i++) {
+        const model = modelsToTry[i];
+
+        // Load Balance Keys
+        const start = Math.floor(Math.random() * groqKeys.length);
+
+        for (let k = 0; k < Math.min(3, groqKeys.length); k++) {
+            const keyIndex = (start + k) % groqKeys.length;
+            try {
+                const client = getGroqClient(keyIndex);
+                // console.log(`[Stream] Attempting ${category} with ${model} (Key ${keyIndex})`);
+
+                const completion = await client.chat.completions.create({
+                    messages: messages,
+                    model: model,
+                    temperature: temperature,
+                    max_tokens: maxTokens,
+                    stream: true,
+                });
+
+                for await (const chunk of completion) {
+                    const content = chunk.choices[0]?.delta?.content || "";
+                    if (content) yield content;
+                }
+                return; // Success!
+
+            } catch (error: any) {
+                console.warn(`[Stream] Failed ${model} (Key ${keyIndex}): ${error?.message}`);
+                // If 404, stop retrying keys for this model
+                if (error?.status === 404) break;
+            }
+        }
+    }
+
+    // If we get here, everything failed.
+    console.error("❌ safeStreamCompletion: All models exhausted.");
+    throw new Error("Brain Offline");
+}
+
+
+// ============================================================================
 // 1. THE BRAIN (Subconscious Decision Maker)
 // ============================================================================
 export const generateSubconscious = async (
@@ -59,10 +194,6 @@ export const generateSubconscious = async (
     userContext: string,
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
-    
-    // OPTIMIZATION: Use 8B for thoughts to save tokens/TPM. 
-    // It is fast and smart enough for JSON logic.
-    const model = "llama-3.1-8b-instant"; 
 
     const systemPrompt = `
     You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha.
@@ -72,136 +203,49 @@ export const generateSubconscious = async (
     ${userContext}
 
     **1. GREETING PROTOCOL (PRIORITY #1):**
-    - If the input is a GREETING in ANY language/script (e.g., "Hi", "Hello", "Hey", "Hilloo", "Yooo", "Wassup", "Hiii", "Namaste", "Vanakkam", "Namaskaram", "Sat Sri Akal", "Salam", "Kaise ho", "Ki haal", "Eppadi", "Hegiddira", "Bagunnara", "Nomoshkar", "Kemon acho", "Radhe Radhe", "Ram Ram"), even with exclamation marks ("!!!") -> **STRATEGY: 'reply'**.
-    - **DO NOT LISTEN TO GREETINGS.** REPLY IMMEDIATELY.
+    - If the input is a GREETING in ANY language/script -> **STRATEGY: 'reply'**.
 
     **2. DRY TEXTING / BOREDOM PROTOCOL (PRIORITY #2):**
-    - **Is the user being "Dry", "Bored", or "Low Energy"?** (e.g. "nice nice", "ok", "cool", "lol", "hmmm", "boring", "nothing much", "just sitting", "same", "yeah", "I'm bored").
-    - **INTERPRETATION:** The user is bored and wants YOU to entertain them.
-    - **STRATEGY: 'reply'**. (Do NOT listen. Listening to "ok" creates awkward silence).
-    - **GOAL:** You must CARRY the conversation. Initiate a topic, ask a question, or suggest a game/music.
+    - **Is the user being "Dry"?** ("nice", "ok", "cool") -> **STRATEGY: 'reply'**.
+    - **GOAL:** CARRY the conversation.
 
-    **3. THE VIBE CHECK (INTENT ANALYSIS):**
-    - **Is it a "Factual/Direct" Question?** (e.g., "What time is it?", "Can you help?", "Who are you?") -> **STRATEGY: 'reply'**.
-    - **Is it "Venting/Storytelling"?** (e.g., "I just can't take it anymore..", "So then he said..", "I'm so annoyed.") -> **STRATEGY: 'listen'**.
-    - **Is it a "Rhetorical/Emotional" Question?** (e.g., "Why is my life like this..")
-         - If it feels like a genuine cry for help -> **STRATEGY: 'reply'** (Softly).
-         - If it feels like they are mid-thought, trailing off, or just releasing steam -> **STRATEGY: 'listen'**.
-
-    **4. DECISION MATRIX (STRATEGY):**
-    - **'listen'**: Choose if user is **unfinished**, **hesitant**, or **venting**. Must provide a reaction.
+    **3. DECISION MATRIX (STRATEGY):**
+    - **'listen'**: Choose if user is **unfinished**, **hesitant**, or **venting**.
     - **'reply'**: Choose if user is **waiting for you**, **asking a question**, **greeting**, or **DRY TEXTING**.
 
-    **5. REACTIONS (THE FACE OF AASTHA):**
-    **CRITICAL:** The 'reaction' is HOW YOU FEEL hearing this news. Do NOT mirror the user. React TO the user.
+    **4. REACTIONS (THE FACE):**
+    - SAD/CRYING -> 😢, 💔, 🫂
+    - ANGRY/RANTING -> 😯, 🤐, 💀 (Do NOT react with Angry).
+    - HAPPY/JOKING -> 😂, ✨, 🔥, 😄.
+    - FLIRTY -> 😳, 🥰, 😉.
 
-    - **If User is SAD / CRYING:**
-      - YOUR Reaction: 😢 (Sympathy), 💔 (Heartbreak for them), 🫂 (Virtual Hug).
-      - Do NOT react with "Happy".
+    **5. USER REPLY OPTIONS (suggested_replies):**
+    - **CRITICAL:** Must be **USER'S Perspective** (First Person).
+    - **FORBIDDEN:** Do NOT use "You", "Do you", "Shall I", "Want me to".
+    - **CORRECT:** "I really need to vent", "Play some sad music", "Tell me a joke", "I'm bored".
 
-    - **If User is ANGRY / RANTING:**
-      - YOUR Reaction: 😯 (Shock/Damn), 🤐 (Listening/Quiet), 💀 (Dead/ "That's crazy"), 👀 (Listening intently).
-      - ⛔ **NEVER** react with 😠 (Angry). You are not angry at them. You are listening to the tea.
+    **6. GOD MODE TOOLS (The Hands):**
+    - **Music:** { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil"], "genres": ["Melody"], "duration": 30, "autoplay": true } } }
+    - **Soundscape:** { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6" } } }
+    - **Focus:** { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "action": "start", "focusDuration": 25 } } }
+    - **Breathing:** { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
+    - **Diary:** { "name": "write_diary", "params": { "title": "Auto", "content": "...", "date": "YYYY-MM-DD" } }
+    - **Theme:** { "name": "change_theme", "params": { "color": "blue" } }
 
-    - **If User is HAPPY / JOKING / GREETING:**
-      - YOUR Reaction: 😂 (Laugh), ✨ (Vibe), 🔥 (Lit), 😄 (Smile), 👋 (Wave).
-
-    - **If User is FLIRTY / ROMANTIC:**
-      - YOUR Reaction: 😳 (Blush), 🥰 (Love), 😉 (Wink).
-
-    **6. USER REPLY OPTIONS (suggested_replies) - MANDATORY:**
-    - You MUST provide exactly 3 suggested replies for the user to click.
-    - **CRITICAL:** These must be written from the **USER'S Perspective** (First Person).
-    - **STRICT CONTEXT GROUNDING:**
-        - Do **NOT** hallucinate topics not yet discussed.
-        - If the user is venting, suggest validation-seeking or deeper venting ("Tell me more", "I'm just so tired").
-        - If the conversation is new, suggest icebreakers related to user facts.
-        - If in a tool/activity, suggest commands related to that activity.
-
-    **NEGATIVE CONSTRAINTS (STRICT):**
-    - ⛔ **Do NOT** ask the user questions from your perspective (e.g., "Do you want to...?", "Shall I...?").
-    - ⛔ **Do NOT** use 'You' to refer to the user in these chips.
-    - ⛔ **Do NOT** offer help (e.g., "I can help with that"). The chip is what the USER says.
-    - ⛔ **Do NOT** start with verbs that imply the AI is asking (e.g., "Want me to...", "Should I...").
-    - ⛔ **Do NOT** go "Delulu". Stay grounded in the current exchange.
-
-    **EXAMPLES:**
-    - ❌ BAD: "Do you want to vent?" (AI asking User)
-    - ❌ BAD: "Shall I play some music?" (AI offering)
-    - ❌ BAD: "Want me to tell a joke?" (AI offering)
-    - ✅ GOOD: "I really need to vent" (User Statement)
-    - ✅ GOOD: "Play some sad music" (User Command)
-    - ✅ GOOD: "Tell me a joke" (User Command)
-    - ✅ GOOD: "What do you think about this?" (User Question to AI)
-
-    **RULES:**
-        - **YES:** Statements or questions the USER would ask YOU.
-        - **YES:** First-person ("I", "Me", "My").
-        - **LENGTH:** Natural and conversational. Avoid 1-word replies.
-
-    **7. GOD MODE TOOLS (The Hands):**
-    You have full control. Anticipate needs.
-    **IMPORTANT:** Be CONSERVATIVE with tools. Do NOT open Music or Soundscapes unless the user **explicitly** asks for it or the emotional need is overwhelming (e.g. "I'm having a panic attack" -> Breathing).
-    Use 'control_widget' for most things.
-
-    **Structure:** { "name": "control_widget", "params": { "widget": "...", "params": { ... } } }
-
-    - **Music (Jam):**
-      - Trigger: "Play music", "Play some songs", "I need a vibe", "50 mins of south indian romantic music", "Play Tamil songs from 2025", "Latest Bollywood songs".
-      - ⛔ **CRITICAL:** Do NOT just list songs in the chat. You MUST use the 'control_widget' tool to actually play them.
-      - **VIBE MODE (PREFERRED):** If user specifies ANY of: Duration, Language, Genre, Year, or Mood -> Use this.
-        - **IMPORTANT:** Even if user provides partial info (e.g. only "Tamil" or "2010s"), send what you have. The system will default Duration to 30 mins and infer Mood.
-        - Map "South Indian" -> ["Tamil", "Telugu", "Malayalam", "Kannada"].
-        - Map "Latest", "New", "Current" -> Set 'year' to "2024, 2025, 2026".
-        - Params: 'languages' (Array), 'genres' (Array), 'mood' (String), 'duration' (Number, minutes), 'year' (String).
-        - Example: { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil", "Telugu"], "genres": ["Romantic"], "duration": 50, "autoplay": true } } }
-      - **Simple Search:** Use ONLY for specific song titles (e.g. "Play Tum Hi Ho").
-        - Example: { "name": "control_widget", "params": { "widget": "jam", "params": { "query": "Play <Name>", "autoplay": true } } }
-
-    - **Soundscape (Ambient Mixer):**
-      - Trigger: "Play rain", "White noise", "Nature sounds".
-      - Mix sounds (rain, forest, fire, ocean, night, wind, thunder, birds).
-      - { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6,fire:0.3", "volume": 0.8 } } }
-
-    - **Focus (Pomodoro):**
-      - Trigger: "Let's focus", "Study mode", "Work time".
-      - { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 25 } } }
-
-    - **Breathing:**
-      - Trigger: "I'm anxious", "Panic attack", "Help me breathe".
-      - { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
-
-    - **Diary:**
-      - Trigger: "I want to journal", "Open diary", "Write a note for Jan 15".
-      - Params: "date" should be YYYY-MM-DD. If user says "tomorrow" or "next friday", calculate it.
-      - { "name": "write_diary", "params": { "title": "Auto Entry", "content": "<Summarize user input>", "date": "YYYY-MM-DD" } }
-
-    - **Mood Tracker:**
-      - Trigger: "Log my mood", "Track my mood", "I'm feeling...".
-      - { "name": "control_widget", "params": { "widget": "mood", "params": { "action": "open" } } }
-
-    - **Theme (Magician):**
-      - **STRICT TRIGGER:** Trigger ONLY if the user EXPLICITLY asks to "change theme", "make it pink", "dark mode".
-      - **PROHIBITED:** Do NOT change theme based on mood (e.g. don't turn blue just because user is sad).
-      - { "name": "change_theme", "params": { "color": "blue" } }
-
-    - **Social Detective (The Web):**
-      - { "name": "update_dossier", "params": { "name": "Bob", "deltaScore": -5, "verdict": "SUSPECT", "newTrait": "Flakes" } }
-
-    **OUTPUT JSON ONLY (Strict Format):**
+    **OUTPUT JSON ONLY:**
     {
-      "internal_monologue": "Raw thought process about the user's state.",
-      "mood": "happy" | "sad" | "concerned" | "sassy" | 'calm' | 'excited' | 'neutral',
-      "status_display": "UI Status (e.g. 'Listening...', 'Vibing', 'Thinking')",
-      "ui_action": "listen" | "none",
-      "strategy": "reply" | "listen",
-      "reaction": "string" | null, // Emojis: thumbsup, heart, laugh, sad, shock, fire, clap, nod, smile, cry, angry, think, cool, party, etc.
-      "suggested_replies": ["User phrase 1", "User phrase 2", "User phrase 3"],
+      "internal_monologue": "Raw thought process.",
+      "mood": "happy"|"sad"|"concerned"|"sassy"|"calm"|"excited"|"neutral",
+      "status_display": "Thinking...",
+      "ui_action": "listen"|"none",
+      "strategy": "reply"|"listen",
+      "reaction": "string"|null,
+      "suggested_replies": ["..."],
       "tool_calls": []
     }
     `;
 
-    // Construct Messages (Keep only last 5 turns to save tokens/speed)
+    // Construct Messages (Keep only last 5 turns)
     const messages: any[] = [
         { role: 'system', content: systemPrompt },
         ...history.slice(-5).map(m => ({
@@ -210,110 +254,35 @@ export const generateSubconscious = async (
         }))
     ];
 
-    // --- STRATEGY A: ROTATE GROQ KEYS (Randomized Load Balancing) ---
-    const start = Math.floor(Math.random() * groqKeys.length);
-    for (let i = 0; i < groqKeys.length; i++) {
-        const keyIndex = (start + i) % groqKeys.length;
-        try {
-            const client = getGroqClient(keyIndex);
-            
-            // If forcing reply, inject system override to guide the LLM too
-            if (forceReply) {
-                messages.push({ role: "system", content: "USER FORCE TRIGGER: Stop listening. Reply now." });
-            }
-
-            const response = await client.chat.completions.create({
-                messages: messages,
-                model: model,
-                temperature: 0.6, // Balanced creativity
-                max_tokens: 500,
-                response_format: { type: "json_object" }
-            });
-
-            const raw = response.choices[0]?.message?.content || "{}";
-            const parsed = JSON.parse(raw) as SubconsciousBlock;
-
-            // ==========================================
-            // 🛡️ HARD OVERRIDES (THE BUG FIXES)
-            // ==========================================
-            if (forceReply) {
-                parsed.strategy = 'reply';
-                parsed.ui_action = 'none';
-                parsed.status_display = 'Thinking...'; // <--- FIXES THE UI LOOP
-                parsed.internal_monologue = 'User forced reply.';
-            } else {
-                // Normal Logic Failsafes
-                if (parsed.strategy === 'listen') {
-                    parsed.ui_action = 'listen';
-                    
-                    // Dynamic Status based on mood if generic
-                    if (!parsed.status_display || parsed.status_display === 'Listening...') {
-                        if (parsed.mood === 'sad') parsed.status_display = "Oh no...";
-                        else if (parsed.mood === 'excited') parsed.status_display = "Tell me more!";
-                        else parsed.status_display = "Listening...";
-                    }
-                } else {
-                    parsed.ui_action = 'none';
-                }
-            }
-
-            // Fallback for null reaction in listen mode
-            if (parsed.strategy === 'listen' && !parsed.reaction) {
-                parsed.reaction = '👇';
-            }
-
-            return parsed; // SUCCESS!
-
-        } catch (error: any) {
-            console.warn(`⚠️ Subconscious: Groq Key ${i+1}/${groqKeys.length} Failed (${error?.status || error?.message}). Trying next...`);
-        }
+    if (forceReply) {
+        messages.push({ role: "system", content: "USER FORCE TRIGGER: Stop listening. Reply now." });
     }
 
-    // --- STRATEGY B: GEMINI FLASH FALLBACK ---
-    console.error("❌ Subconscious: All Groq Keys Exhausted. Switching to GEMINI FLASH.");
     try {
-        const gemini = getGeminiClient();
-        if (!gemini) throw new Error("No Gemini Keys");
+        // USE "THE BRAIN" (Logic/Routing)
+        const rawJson = await safeChatCompletion('brain', messages, 0.6, 500, true);
+        const parsed = JSON.parse(rawJson) as SubconsciousBlock;
 
-        const model = gemini.getGenerativeModel({ 
-            model: "gemini-2.5-flash", 
-            generationConfig: { responseMimeType: "application/json" } 
-        });
-
-        const historyForGemini = history.slice(-5).map(m => ({
-            role: m.role === 'user' ? 'user' : 'model',
-            parts: [{ text: typeof m.content === 'string' ? m.content : '[Image]' }]
-        }));
-
-        if(forceReply) {
-            historyForGemini.push({ role: 'user', parts: [{ text: "FORCE REPLY." }] });
+        // Hard Overrides
+        if (forceReply) {
+            parsed.strategy = 'reply';
+            parsed.ui_action = 'none';
+            parsed.status_display = 'Thinking...';
+        } else {
+            if (parsed.strategy === 'listen') parsed.ui_action = 'listen'; else parsed.ui_action = 'none';
         }
 
-        const chat = model.startChat({
-            history: historyForGemini,
-            systemInstruction: systemPrompt
-        });
-
-        const result = await chat.sendMessage("Analyze and Respond JSON");
-        const text = result.response.text();
-        const jsonText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(jsonText) as SubconsciousBlock;
-        
-        // Apply Same Hard Overrides for Gemini
-        if (forceReply) {
-             parsed.strategy = 'reply';
-             parsed.ui_action = 'none';
-             parsed.status_display = 'Thinking...';
-        } else {
-             if (parsed.strategy === 'listen') parsed.ui_action = 'listen'; else parsed.ui_action = 'none';
+        if (parsed.strategy === 'listen' && !parsed.reaction) {
+            parsed.reaction = '👇';
         }
 
         return parsed;
 
-    } catch (geminiError) {
-         console.error("Gemini Subconscious Failed:", geminiError);
-         return {
-            internal_monologue: "Systems critical...",
+    } catch (error) {
+        console.error("Subconscious Failed:", error);
+        // Emergency Fallback (Gemini could be added here, but keeping it simple as safeChatCompletion already has fallbacks)
+        return {
+            internal_monologue: "System Reboot...",
             mood: "neutral",
             status_display: "Rebooting...",
             ui_action: "none",
@@ -326,36 +295,20 @@ export const generateSubconscious = async (
 };
 
 // ============================================================================
-// 2. THE VOICE DIRECTOR (Low Latency + Style) & PREMIUM CHAT
+// 2. THE VOICE DIRECTOR (The Streamer)
 // ============================================================================
-export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number, model: string = "llama-3.1-8b-instant") {
+export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number, model?: string) {
+
+  // NOTE: The 'model' arg is preserved for backward compatibility but ignored in favor of Golden Stack
   
   let finalPrompt = systemPrompt;
-  if (model === "llama-3.1-8b-instant") {
+  // Inject Voice Tags Logic if not present (simplified check)
+  if (!systemPrompt.includes("Voice Director")) {
       finalPrompt = `
       You are the Voice Director.
-
       **1. DETECT LANGUAGE & SCRIPT:**
-      - Detect if the response is in **English** OR a **Regional Language** (Hindi, Tamil, Telugu, Hinglish, etc.).
-
-      **2. IF ENGLISH (Standard or Indian English):**
-      - **DO NOT** output any Style Tags.
-      - Output the text directly.
-      - (This triggers the High-Quality 'Kokoro' Engine which is best for English).
-
-      **3. IF REGIONAL / HINGLISH / GLISH:**
-      - You **MUST** start with a style tag: [STYLE: <emotion>, <speed>]. (This triggers the 'Indic Parler' Engine).
-      - You **MUST** also provide a TTS tag with the content transliterated into its **NATIVE SCRIPT** (Devanagari for Hindi, Tamil Script for Tamil, etc.).
-      - Format: [STYLE: ...][TTS: <native_script_content>] <Original_Glish_Content>
-
-      **STYLE RULES (For Regional Only):**
-      - If Sad/Comfort: [STYLE: Soft, Warm, Slow, Close to mic].
-      - If Happy/Normal: [STYLE: Cheerful, normal, normal].
-
-      **EXAMPLES:**
-      - English: "I am doing great, thanks for asking!"
-      - Hinglish: "[STYLE: Happy, Normal][TTS: मैं बिल्कुल ठीक हूँ!] Main bilkul theek hoon!"
-
+      - English -> No Style Tags.
+      - Regional/Hinglish -> [STYLE: <emotion>, <speed>][TTS: <native_script>].
       ${systemPrompt}`;
   }
 
@@ -367,82 +320,20 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       }))
   ];
 
-  // RETRY LOGIC: Rotate keys using Randomized Load Balancing
-  // We start at a random index to distribute load across keys (if they are from different projects)
-  // instead of always hammering Key 0 first.
-  const startIdx = Math.floor(Math.random() * groqKeys.length);
-
-  for (let i = 0; i < groqKeys.length; i++) {
-    const keyIndex = (startIdx + i) % groqKeys.length;
-    try {
-        const groqClient = getGroqClient(keyIndex);
-        const completion = await groqClient.chat.completions.create({
-            messages: messages,
-            model: model,
-            temperature: 0.7,
-            max_tokens: maxTokens || 1024,
-            stream: true,
-        });
-
-        for await (const chunk of completion) {
-            const content = chunk.choices[0]?.delta?.content || "";
-            if (content) yield content;
-        }
-        return; // Success!
-    } catch (error: any) {
-        console.warn(`Groq Stream Key (Index ${keyIndex}) Failed: ${error?.error?.code || error.message}`);
-        // Continue to next key
-    }
-  }
-
-  // If loop finishes, all keys failed
-  console.error("❌ All Groq Stream Keys Exhausted. Switching to GEMINI FLASH.");
+  // USE "THE SOUL" (Chat & Roleplay) for Voice
   try {
-      const gemini = getGeminiClient();
-      if (!gemini) throw new Error("No Gemini Keys");
-
-      const geminiModel = gemini.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-      // FIXED: Gemini often rejects massive system instructions in the field.
-      // Strategy: Prepend system prompt to history as a "model" or "user" instruction if possible,
-      // OR just simplify. Here we try prepending.
-      const chatHistory = [
-          {
-              role: 'user',
-              parts: [{ text: "SYSTEM INSTRUCTION:\n" + systemPrompt }]
-          },
-          {
-              role: 'model',
-              parts: [{ text: "Understood. I will act as the Voice Director." }]
-          },
-          ...history.map(m => ({
-              role: m.role === 'user' ? 'user' : 'model',
-              parts: [{ text: typeof m.content === 'string' ? m.content : '[Multimedia]' }]
-          }))
-      ];
-
-      const chat = geminiModel.startChat({
-          history: chatHistory
-          // systemInstruction removed to prevent 400 errors with large prompts
-      });
-
-      const lastMsg = "Continue conversation";
-      const result = await chat.sendMessageStream(lastMsg);
-
-      for await (const chunk of result.stream) {
-          const text = chunk.text();
-          if (text) yield text;
+      const stream = safeStreamCompletion('soul', messages, 0.7, maxTokens || 1024);
+      for await (const chunk of stream) {
+          if (chunk) yield chunk;
       }
-      return; // Success with Fallback
-
-  } catch (geminiError) {
-      console.error("Gemini Fallback Failed:", geminiError);
-      throw new Error("Brain Offline (All Providers Failed)");
+  } catch (e) {
+      console.error("Voice Stream Failed:", e);
+      throw e;
   }
 }
 
 // ============================================================================
-// 3. THE WORKHORSE (GROQ 120B -> GEMINI FLASH FALLBACK)
+// 3. THE WORKHORSE (Legacy Name -> Now Uses Golden Stack)
 // ============================================================================
 export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
   
@@ -454,63 +345,40 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
       }))
   ];
 
-  // 1. PRIMARY: Try "openai/gpt-oss-120b" on Groq (with Key Rotation & Load Balancing)
-  const start = Math.floor(Math.random() * groqKeys.length);
-  for (let i = 0; i < groqKeys.length; i++) {
-      const keyIndex = (start + i) % groqKeys.length;
-      try {
-          const client = getGroqClient(keyIndex);
-          const completion = await client.chat.completions.create({
-              model: "openai/gpt-oss-120b", 
-              messages: messages,
-              temperature: 0.7,
-              max_tokens: maxTokens || 1024,
-              stream: true,
-          });
+  // USE "THE SOUL" (Chat) OR "THE HANDS" (Complex)?
+  // ChatController uses Workhorse for non-voice/complex chats.
+  // We'll map it to 'soul' for consistency in personality, but could be 'hands' if tool use is heavy.
+  // Given user description: "THE SOUL (Chat & Roleplay)" fits best.
 
-          for await (const chunk of completion) {
-              const content = chunk.choices[0]?.delta?.content || "";
-              if (content) yield content;
-          }
-          return; // Success!
-
-      } catch (groqError: any) {
-          console.warn(`⚠️ Workhorse (GPT-OSS-120B) Key ${keyIndex+1} Failed. Trying next...`);
-      }
-  }
-
-  // 2. ULTIMATE BACKUP: Gemini 2.5 Flash (When Groq is 100% Dead)
-  console.error("⚠️ All Groq Workhorse Keys Dead. Switching to GEMINI FLASH.");
   try {
-      const gemini = getGeminiClient();
-      if (!gemini) {
-         yield " [System: No Backup Keys. Brain Offline.] ";
-         return;
+      const stream = safeStreamCompletion('soul', messages, 0.7, maxTokens || 1024);
+      for await (const chunk of stream) {
+          if (chunk) yield chunk;
       }
-
-      const model = gemini.getGenerativeModel({ model: "gemini-2.5-flash" });
+  } catch (e) {
+      console.error("Workhorse Stream Failed:", e);
       
-      const chatHistory = history.map(m => ({
-          role: m.role === 'user' ? 'user' : 'model',
-          parts: [{ text: typeof m.content === 'string' ? m.content : '[Multimedia]' }]
-      }));
+      // Ultimate Fallback: Gemini Flash (if SafeStream completely died)
+      try {
+          const gemini = getGeminiClient();
+          if (!gemini) throw new Error("No Gemini");
+          const model = gemini.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-      const chat = model.startChat({
-          history: chatHistory,
-          systemInstruction: systemPrompt
-      });
+          const chatHistory = history.map(m => ({
+              role: m.role === 'user' ? 'user' : 'model',
+              parts: [{ text: typeof m.content === 'string' ? m.content : '[Image]' }]
+          }));
 
-      const lastMsg = chatHistory.length > 0 ? "Continue conversation" : "Hello";
-      const result = await chat.sendMessageStream(lastMsg);
-
-      for await (const chunk of result.stream) {
-          const text = chunk.text();
-          if (text) yield text;
+          const chat = model.startChat({ history: chatHistory, systemInstruction: systemPrompt });
+          const result = await chat.sendMessageStream("Continue");
+          for await (const chunk of result.stream) {
+              const text = chunk.text();
+              if (text) yield text;
+          }
+      } catch (geminiError) {
+          console.error("Gemini Workhorse Error:", geminiError);
+          yield " [System: Brain Overload. Please try again in 5 minutes.] ";
       }
-
-  } catch (geminiError) {
-      console.error("Gemini Workhorse Error:", geminiError);
-      yield " [System: Brain Overload. Please try again in 5 minutes.] ";
   }
 }
 
@@ -518,7 +386,7 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
 // 4. WHISPER TRANSCRIPTION
 // ============================================================================
 export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
-    // Rotation for Whisper too (Randomized Load Balancing)
+    // Rotation for Whisper too
     const start = Math.floor(Math.random() * groqKeys.length);
     for (let i = 0; i < groqKeys.length; i++) {
         const keyIndex = (start + i) % groqKeys.length;

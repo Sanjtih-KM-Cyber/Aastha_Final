@@ -70,12 +70,47 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
       localStorage.setItem('breathing_mode', activeMode);
   }, [activeMode]);
 
-  // Handle AI Pre-selection (Updated for flexibility)
+  // Handle AI Pre-selection & Control (Full God Mode)
   useEffect(() => {
-    if (initialMode && isOpen) {
-        // Normalize input: lowercase, trim
+    if (isOpen) {
+        // 1. Handle Explicit Actions (start, stop, reset) via initialMode overloading or new props
+        // Since initialMode is a string, we check if it contains commands or is a JSON string
+        // But the cleanest way is if 'initialMode' comes in as an object from the parent,
+        // OR we parse specific command strings.
+        // Assuming current architecture passes 'initialMode' as string from 'widgetConfigs.breathing?.mode'
+        // If we want FULL control, we need to handle 'action' too.
+        // Let's check 'initialMode' for action keywords if simpler,
+        // OR rely on the parent component passing an object cast to string?
+        // No, in Sanctuary.tsx: initialMode={widgetConfigs.breathing?.mode}
+        // We should probably rely on 'initialParams' pattern like Pomodoro if we could change props,
+        // but 'BreathingWidgetProps' has 'initialMode?: string'.
+        // Let's parse 'initialMode' strictly.
+
+        // However, if the AI sends { widget: 'breathing', params: { action: 'stop' } }
+        // The Sanctuary wrapper passes `initialMode` from `config.mode`.
+        // So the AI must send { widget: 'breathing', params: { mode: 'stop' } } for this to work without prop changes.
+        // Let's support that!
+
+        if (!initialMode) return;
+
         const term = initialMode.toLowerCase().trim();
 
+        // COMMANDS
+        if (term === 'stop' || term === 'pause') {
+            setIsActive(false);
+            return;
+        }
+        if (term === 'reset') {
+            setIsActive(false);
+            setPhaseIndex(0);
+            return;
+        }
+        if (term === 'start' || term === 'resume') {
+            setIsActive(true);
+            return;
+        }
+
+        // MODE SELECTION (Auto-Start)
         // 1. Direct Match (e.g., 'box', 'relax')
         const directMatch = Object.keys(MODES).find(k => k.toLowerCase() === term);
         if (directMatch) {

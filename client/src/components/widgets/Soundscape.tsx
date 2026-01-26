@@ -169,7 +169,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
         backgroundService.disable('soundscape');
     };
 
-  }, [activeLoops, masterVolume, previewId, isOpen]);
+  }, [activeLoops, masterVolume, previewId, isOpen]); 
 
   // PERSISTENCE: Load state on mount
   useEffect(() => {
