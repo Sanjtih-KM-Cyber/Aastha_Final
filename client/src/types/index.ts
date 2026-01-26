@@ -46,3 +46,5 @@ export enum SectionVibe {
   BORED = 'bored',
   NEUTRAL = 'neutral'
 }
+
+export type LoopMode = 'off' | 'all' | 'one' | 'custom';
