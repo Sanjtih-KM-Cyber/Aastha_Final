@@ -1,3 +1,5 @@
+// client/src/components/widgets/JamWithAasthaWidget.tsx
+
 import React, { useState, useRef, useEffect } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { 
@@ -11,6 +13,14 @@ import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { backgroundService } from '../../services/backgroundService';
 import { Stepper, MobileQueueItem, DesktopQueueItem, Track } from './JamComponents';
+
+// ✅ IMPORT CONSTANTS (Fixes ReferenceError / Circular Dep)
+import { 
+    LANGUAGES, 
+    MOOD_TAGS, 
+    GENRES, 
+    LoopMode // Import the type
+} from '../../constants';
 
 declare global {
   interface Window {
@@ -28,12 +38,6 @@ interface JamWidgetProps {
   persistenceKey?: string;
 }
 
-type LoopMode = 'off' | 'all' | 'one' | 'custom';
-
-const LANGUAGES = ["English", "Hindi", "Tamil", "Telugu", "Punjabi", "Malayalam", "Kannada", "Bengali", "Marathi"];
-const MOOD_TAGS = ["Happy", "Sad", "Calm", "Energetic", "Romantic", "Focus", "Melancholy", "Party", "Lo-Fi"];
-const GENRES = ["Lo-Fi", "Hip-Hop", "Pop", "Retro", "90s", "Modern", "Indie", "R&B", "Jazz", "Classical", "Rock", "Bollywood", "Acoustic", "EDM", "Ambient"];
-
 // --- Helper to Generate UUID ---
 const generateUUID = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -42,8 +46,6 @@ const generateUUID = () => {
     });
 };
 
-// --- FIX: Component Moved OUTSIDE to prevent ReferenceError ---
-// It now accepts props instead of using variables from the parent closure
 interface MinimizedPlayerProps {
     isPlaying: boolean;
     track: Track | undefined;
@@ -98,6 +100,11 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const [isPlaying, setIsPlaying] = useState(false);
   const [queue, setQueue] = useState<Track[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Loop Engine State
+  const [loopMode, setLoopMode] = useState<LoopMode>('off');
+  const [loopTarget, setLoopTarget] = useState(2);
+  const [currentLoopCount, setCurrentLoopCount] = useState(1);
 
   // Persistence: Load on Mount
   useEffect(() => {
@@ -198,11 +205,6 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [targetDuration, setTargetDuration] = useState<number>(30); // minutes
   
-  // Loop Engine State
-  const [loopMode, setLoopMode] = useState<LoopMode>('off');
-  const [loopTarget, setLoopTarget] = useState(2);
-  const [currentLoopCount, setCurrentLoopCount] = useState(1);
-
   // Volume State
   const [volume, setVolume] = useState(100);
   const [showVolume, setShowVolume] = useState(false);
