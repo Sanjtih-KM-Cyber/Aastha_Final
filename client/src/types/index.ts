@@ -16,6 +16,7 @@ export interface User {
   persona?: 'aastha' | 'aarav'; // NEW
   encryptionSalt?: string; // NEW: For secure key derivation (replaces email for new users)
   isOnboardingComplete?: boolean;
+  masterKey?: string; // Added masterKey for soft login
 }
 
 export interface AuthState {
@@ -46,3 +47,6 @@ export enum SectionVibe {
   BORED = 'bored',
   NEUTRAL = 'neutral'
 }
+
+// Moved from constants.ts to prevent circular dependency issues
+export type LoopMode = 'off' | 'all' | 'one' | 'custom';

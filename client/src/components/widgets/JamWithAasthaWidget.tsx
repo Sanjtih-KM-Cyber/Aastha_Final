@@ -14,13 +14,13 @@ import api from '../../services/api';
 import { backgroundService } from '../../services/backgroundService';
 import { Stepper, MobileQueueItem, DesktopQueueItem, Track } from './JamComponents';
 
-// ✅ IMPORT CONSTANTS (Fixes ReferenceError / Circular Dep)
+// ✅ IMPORT CONSTANTS
 import { 
     LANGUAGES, 
     MOOD_TAGS, 
     GENRES, 
-    LoopMode // Import the type
 } from '../../constants';
+import { LoopMode } from '../../types';
 
 declare global {
   interface Window {
