@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
-import { SOUND_URLS } from '../../constants';
+import { SOUND_URLS } from '../../constants'; 
 import { backgroundService } from '../../services/backgroundService';
 import { 
   Volume2, 
@@ -79,18 +79,13 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
     return audioRefs.current[id];
   };
 
-  // ✅ FIXED: Single Authoritative Effect for Playback & Sync
+  // ✅ FIXED: Sync Volumes & Playback Effect with isOpen check
   useEffect(() => {
-    // 1. If closed, force everything to stop and disable background mode
+    // 1. If widget is closed, FORCE STOP everything.
     if (!isOpen) {
-        Object.values(audioRefs.current).forEach(audio => {
-            if (!audio.paused) {
-                audio.pause();
-                audio.currentTime = 0; // Optional: Reset to start
-            }
-        });
+        Object.values(audioRefs.current).forEach(a => a.pause());
         backgroundService.disable('soundscape');
-        return; // STOP HERE
+        return; 
     }
 
     // 2. Normal Playback Logic (Only runs if isOpen is true)
@@ -136,8 +131,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
     } else {
         backgroundService.disable('soundscape');
     }
-    
-  }, [activeLoops, masterVolume, previewId, isOpen]); // ✅ ADDED isOpen dependency
+  }, [activeLoops, masterVolume, previewId, isOpen]); // ✅ Added isOpen dependency
 
   // PERSISTENCE: Load state on mount
   useEffect(() => {
@@ -203,7 +197,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
       }
   }, [isOpen, preset, volume]);
 
-  // ✅ Clean up preview when closing (Logic simplified)
+  // Cleanup on unmount or close (Redundant safety, but good to keep)
   useEffect(() => {
     if (!isOpen) {
         setPreviewId(null);
