@@ -255,6 +255,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
     }
   }, []);
 
+  // ✅ FIXED: Explicit cleanup to stop background service when Closed
   useEffect(() => {
     if (isOpen) {
        const checkYT = setInterval(() => {
@@ -263,12 +264,19 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                initPlayer();
            }
        }, 500);
+       
        return () => {
            clearInterval(checkYT);
            if (playerRef.current) {
-               playerRef.current.destroy();
+               try {
+                   playerRef.current.destroy();
+               } catch (e) { console.error("Error destroying YT player", e); }
                playerRef.current = null;
            }
+           
+           // CRITICAL: Stop background service and reset playing state when widget closes
+           setIsPlaying(false);
+           backgroundService.disable('jam');
        };
     }
   }, [isOpen]);
