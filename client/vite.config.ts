@@ -11,8 +11,8 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
       },
       build: {
-        // ✅ ADDED: This enables the debugger to see real file names instead of "b"
-        sourcemap: true, 
+        // 🔒 SECURED: Disable source maps in production so code is hidden
+        sourcemap: false, 
         rollupOptions: {
             output: {
                 manualChunks: {
