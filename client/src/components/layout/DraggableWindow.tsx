@@ -54,6 +54,9 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // DRAG CONSTRAINTS REF
+  const constraintsRef = useRef<HTMLDivElement>(null);
+
   // Resize State
   const [isResizing, setIsResizing] = useState(false);
   const resizeStartRef = useRef<{x: number, y: number, w: number, h: number} | null>(null);
@@ -206,10 +209,17 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
 
   return (
     <>
+      {/* Invisible Constraints Container */}
+      {!isMobile && isOpen && (
+          <div ref={constraintsRef} className="fixed inset-0 pointer-events-none z-0" style={{ left: 0, top: 0, right: 0, bottom: 0 }} />
+      )}
+
       <AnimatePresence>
       {isOpen && (
         <motion.div
           ref={containerRef}
+          dragConstraints={constraintsRef}
+          dragElastic={0} // No rubber band effect
           initial={isLiteMode ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
           animate={{
             opacity: 1, 

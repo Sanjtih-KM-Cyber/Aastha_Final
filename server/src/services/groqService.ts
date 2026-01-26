@@ -220,8 +220,9 @@ export const generateSubconscious = async (
     - FLIRTY -> 😳, 🥰, 😉.
 
     **5. USER REPLY OPTIONS (suggested_replies):**
-    - Must be **USER'S Perspective** (First Person).
-    - Ex: "I really need to vent", "Play some sad music", "Tell me a joke".
+    - **CRITICAL:** Must be **USER'S Perspective** (First Person).
+    - **FORBIDDEN:** Do NOT use "You", "Do you", "Shall I", "Want me to".
+    - **CORRECT:** "I really need to vent", "Play some sad music", "Tell me a joke", "I'm bored".
 
     **6. GOD MODE TOOLS (The Hands):**
     - **Music:** { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil"], "genres": ["Melody"], "duration": 30, "autoplay": true } } }
