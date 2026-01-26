@@ -1,2 +1,12 @@
 User-agent: *
-Disallow: /
+# ✅ ALLOW: Let Google index your Marketing/Landing page
+Allow: /$
+Allow: /assets/
+Allow: /logo.png
+Allow: /manifest.json
+
+# 🔒 BLOCK: Keep bots out of private user areas
+Disallow: /sanctuary
+Disallow: /diary
+Disallow: /profile
+Disallow: /api
