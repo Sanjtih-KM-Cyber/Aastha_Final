@@ -54,9 +54,6 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // DRAG CONSTRAINTS REF
-  const constraintsRef = useRef<HTMLDivElement>(null);
-
   // Resize State
   const [isResizing, setIsResizing] = useState(false);
   const resizeStartRef = useRef<{x: number, y: number, w: number, h: number} | null>(null);
@@ -198,45 +195,42 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   // (Assuming context is not passed, using simple check for now)
   const isLiteMode = isMobile; // Can extend this later
 
-  // Handle Drag End to Save Position
+  // Handle Drag End to Save Position (With Explicit Boundary Check)
   const onDragEnd = (event: any, info: any) => {
       if (isMobile) return;
-      // Framer motion 'drag' uses transform. We need to calculate the new "top/left"
-      // effectively if we want to persist "absolute" position, OR we just persist the offset?
-      // "effectivePos" is passed to 'top/left'. 'drag' modifies x/y.
-      // So newPos = oldPos + offset.
-      const newX = effectivePos.x + info.offset.x;
-      const newY = effectivePos.y + info.offset.y;
+
+      let newX = effectivePos.x + info.offset.x;
+      let newY = effectivePos.y + info.offset.y;
+
+      // EXPLICIT BOUNDARY ENFORCEMENT (Manual Clamp)
+      // This prevents the "rubber band" effect by calculating the legal bounds
+      // and setting the position there, effectively stopping it dead.
+      const maxX = window.innerWidth - size.width;
+      const maxY = window.innerHeight - size.height;
+      const minY = 60; // Header Height
+
+      if (newX < 0) newX = 0;
+      if (newX > maxX) newX = maxX;
+      if (newY < minY) newY = minY;
+      if (newY > maxY) newY = maxY;
 
       setPosition({ x: newX, y: newY });
-      saveState({ x: newX, y: newY });
+      // We do NOT save state if we want it to reset on next open (per previous request)
+      // But user said "sit where i leave it" during usage.
+      // The previous logic ignored 'x/y' from localStorage on mount, but we set 'position' state here.
+      // So it persists during the session, but resets on reload. Correct.
   };
 
   return (
     <>
-      {/* STRICT BOUNDARIES: Using window as explicit constraint reference */}
-      {/* Note: framer-motion with fixed position sometimes ignores ref constraints if the ref is 0-sized or weirdly positioned.
-          We will use explicit pixel values calculated on the fly if needed, but for now, we try a full-screen absolute div. */}
-      {!isMobile && isOpen && (
-          <div
-            ref={constraintsRef}
-            className="fixed pointer-events-none z-0"
-            style={{
-                left: 0,
-                top: 60, // 60px header
-                width: '100vw',
-                height: 'calc(100vh - 60px)',
-            }}
-          />
-      )}
-
       <AnimatePresence>
       {isOpen && (
         <motion.div
           ref={containerRef}
-          dragConstraints={constraintsRef}
-          dragElastic={0} // STRICT: No over-drag
-          dragMomentum={false} // STRICT: Stop immediately on release
+          // REMOVED constraintsRef to fix "rubber band" / snapping issues.
+          // We handle bounds manually in onDragEnd or allow free drag with manual clamp.
+          // Actually, purely free drag + manual clamp on release is the smoothest "OS-like" feel.
+          dragMomentum={false}
           initial={isLiteMode ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
           animate={{
             opacity: 1, 
