@@ -10,8 +10,14 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
       },
+      // 🔒 SECURITY HARDENING
+      esbuild: {
+        // ✅ AUTO-REMOVE LOGS: This strips all console.log/debug statements from the production build.
+        // Prevents accidental token leaks in the console.
+        drop: mode === 'production' ? ['console', 'debugger'] : [],
+      },
       build: {
-        // 🔒 SECURED: Disable source maps in production so code is hidden
+        // ✅ HIDE CODE: Disable source maps so hackers can't read your original TS files in the browser.
         sourcemap: false, 
         rollupOptions: {
             output: {
