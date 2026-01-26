@@ -42,6 +42,53 @@ const generateUUID = () => {
     });
 };
 
+// --- FIX: Component Moved Outside to prevent ReferenceError ---
+interface JamMinimizedPlayerProps {
+    isPlaying: boolean;
+    track: Track | undefined;
+    onPlayPause: (e: React.MouseEvent) => void;
+    onNext: (e: React.MouseEvent) => void;
+    onPrev: (e: React.MouseEvent) => void;
+}
+
+const JamMinimizedPlayer: React.FC<JamMinimizedPlayerProps> = ({ isPlaying, track, onPlayPause, onNext, onPrev }) => (
+    <div className="flex items-center gap-3 w-full max-w-full">
+        {/* Prev */}
+        <button
+            onClick={onPrev}
+            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center shrink-0"
+        >
+            <SkipBack size={14} className="text-white/70" />
+        </button>
+
+        {/* Play/Pause */}
+        <button
+            onClick={onPlayPause}
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center shrink-0"
+        >
+            {isPlaying ? <Pause size={14} className="text-white" /> : <Play size={14} className="text-white ml-0.5" />}
+        </button>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+            <span className="text-xs font-bold text-white truncate leading-tight">
+                {track?.title || "No Track"}
+            </span>
+            <span className="text-xs text-white/50 truncate leading-tight">
+                {track?.artist || "Aastha's Jam"}
+            </span>
+        </div>
+
+        {/* Next */}
+        <button
+            onClick={onNext}
+            className="p-1 text-white/30 hover:text-white shrink-0"
+        >
+            <SkipForward size={16} />
+        </button>
+    </div>
+);
+
 export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose, zIndex, onFocus, initialParams, persistenceKey }) => {
   const { currentTheme } = useTheme();
   const { setPreventAutoLock } = useAuth();
@@ -546,50 +593,6 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
   const currentTrackData = queue[currentIndex];
 
-  // --- MINIMIZED CONTENT COMPONENT ---
-  const MinimizedContent = () => (
-      <div className="flex items-center gap-3 w-full max-w-full">
-          {/* Prev */}
-          <button
-                onClick={(e) => { e.stopPropagation(); playPrev(); }}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center shrink-0"
-          >
-              <SkipBack size={14} className="text-white/70"/>
-          </button>
-
-          {/* Play/Pause */}
-          <button
-                onClick={(e) => {
-                    e.stopPropagation();
-                    if (!playerRef.current) return;
-                    if (isPlaying) playerRef.current.pauseVideo();
-                    else playerRef.current.playVideo();
-                }}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center shrink-0"
-          >
-              {isPlaying ? <Pause size={14} className="text-white"/> : <Play size={14} className="text-white ml-0.5"/>}
-          </button>
-
-          {/* Info */}
-          <div className="flex-1 min-w-0 flex flex-col justify-center">
-              <span className="text-xs font-bold text-white truncate leading-tight">
-                  {currentTrackData?.title || "No Track"}
-              </span>
-              <span className="text-xs text-white/50 truncate leading-tight">
-                  {currentTrackData?.artist || "Aastha's Jam"}
-              </span>
-          </div>
-
-          {/* Next */}
-          <button
-                onClick={(e) => { e.stopPropagation(); playNext(); }}
-                className="p-1 text-white/30 hover:text-white shrink-0"
-          >
-              <SkipForward size={16} />
-          </button>
-      </div>
-  );
-
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
       const check = () => setIsMobile(window.innerWidth < 768);
@@ -604,7 +607,20 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       zIndex={zIndex || 10} onFocus={onFocus || (() => {})}
       icon={Music}
       color="#8B5CF6"
-      minimizedContent={<MinimizedContent />}
+      minimizedContent={
+          <JamMinimizedPlayer 
+             isPlaying={isPlaying} 
+             track={currentTrackData}
+             onPlayPause={(e) => {
+                e.stopPropagation();
+                if (!playerRef.current) return;
+                if (isPlaying) playerRef.current.pauseVideo();
+                else playerRef.current.playVideo();
+             }}
+             onNext={(e) => { e.stopPropagation(); playNext(); }}
+             onPrev={(e) => { e.stopPropagation(); playPrev(); }}
+          />
+      }
       persistenceKey={persistenceKey}
     >
       <div className="flex flex-col h-full w-full font-sans select-none relative">
