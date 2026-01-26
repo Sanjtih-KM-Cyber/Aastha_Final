@@ -79,7 +79,38 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
     return audioRefs.current[id];
   };
 
-  // ✅ FIXED: Sync Volumes & Playback Effect with isOpen check
+  // ✅ FIXED: Media Session Support for Lock Screen Controls
+  useEffect(() => {
+    if (isOpen && Object.keys(activeLoops).length > 0 && 'mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: "Ambient Soundscape",
+            artist: "Aastha",
+            artwork: [
+                { src: 'https://i.imgur.com/8QZ9X9r.png', sizes: '512x512', type: 'image/png' } // Placeholder or app icon
+            ]
+        });
+
+        // Handler Wrapper to ensure state access
+        const handleStop = () => {
+            onClose(); // Close widget on stop
+        };
+
+        navigator.mediaSession.setActionHandler('play', () => { /* No-op, already playing */ });
+        navigator.mediaSession.setActionHandler('pause', handleStop); // Map Pause to Stop/Close
+        navigator.mediaSession.setActionHandler('stop', handleStop);
+        navigator.mediaSession.setActionHandler('previoustrack', null);
+        navigator.mediaSession.setActionHandler('nexttrack', null);
+
+        return () => {
+            // Cleanup handlers
+            navigator.mediaSession.setActionHandler('play', null);
+            navigator.mediaSession.setActionHandler('pause', null);
+            navigator.mediaSession.setActionHandler('stop', null);
+        };
+    }
+  }, [isOpen, activeLoops, onClose]);
+
+  // ✅ FIXED: Sync Volumes & Playback Effect with isOpen check AND Cleanup
   useEffect(() => {
     // 1. If widget is closed, FORCE STOP everything.
     if (!isOpen) {
@@ -131,18 +162,14 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
     } else {
         backgroundService.disable('soundscape');
     }
-  }, [activeLoops, masterVolume, previewId, isOpen]);
 
-  // CLEANUP: Stop audio on Unmount
-  useEffect(() => {
-      return () => {
-          Object.values(audioRefs.current).forEach(a => {
-              a.pause();
-              a.currentTime = 0;
-          });
-          backgroundService.disable('soundscape');
-      };
-  }, []);
+    // ✅ CLEANUP: Stop audio when component unmounts
+    return () => {
+        Object.values(audioRefs.current).forEach(a => a.pause());
+        backgroundService.disable('soundscape');
+    };
+
+  }, [activeLoops, masterVolume, previewId, isOpen]); 
 
   // PERSISTENCE: Load state on mount
   useEffect(() => {

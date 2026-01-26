@@ -47,9 +47,6 @@ export const LANGUAGES = [
 export const MOOD_TAGS = ["Happy", "Sad", "Calm", "Energetic", "Romantic", "Focus", "Melancholy", "Party", "Lo-Fi"];
 export const GENRES = ["Lo-Fi", "Hip-Hop", "Pop", "Retro", "90s", "Modern", "Indie", "R&B", "Jazz", "Classical", "Rock", "Bollywood", "Acoustic", "EDM", "Ambient"];
 
-// ✅ ADDED: Type Definition for Loop Mode
-export type LoopMode = 'off' | 'all' | 'one' | 'custom';
-
 // --- AUTH EVENTS ---
 export const AUTH_UNAUTHORIZED_EVENT = 'auth:unauthorized';
 

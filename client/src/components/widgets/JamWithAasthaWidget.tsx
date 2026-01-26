@@ -1,6 +1,6 @@
 // client/src/components/widgets/JamWithAasthaWidget.tsx
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { 
   Play, Pause, SkipForward, SkipBack, Repeat, Search, 
@@ -18,9 +18,9 @@ import { Stepper, MobileQueueItem, DesktopQueueItem, Track } from './JamComponen
 import { 
     LANGUAGES, 
     MOOD_TAGS, 
-    GENRES, 
-    LoopMode // Import the type
+    GENRES
 } from '../../constants';
+import { LoopMode } from '../../types';
 
 declare global {
   interface Window {
@@ -400,10 +400,11 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       }
   };
 
-  const triggerNextTrack = (nextIndex: number) => {
+  // Define playPrev/Next as useCallback for stability in effects
+  const triggerNextTrack = useCallback((nextIndex: number) => {
       setCurrentIndex(nextIndex);
       loadAndPlay(queue[nextIndex]);
-  };
+  }, [queue]);
 
   const loadAndPlay = (track: Track) => {
       if (playerRef.current && playerRef.current.loadVideoById) {
@@ -413,20 +414,20 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       }
   };
 
-  const playNext = () => {
+  const playNext = useCallback(() => {
       if (queue.length === 0) return;
       const nextIndex = (currentIndex + 1) % queue.length;
       triggerNextTrack(nextIndex);
       setCurrentLoopCount(1); 
-  };
+  }, [queue, currentIndex, triggerNextTrack]);
 
-  const playPrev = () => {
+  const playPrev = useCallback(() => {
       if (queue.length === 0) return;
       const prevIndex = (currentIndex - 1 + queue.length) % queue.length;
       setCurrentIndex(prevIndex);
       loadAndPlay(queue[prevIndex]);
       setCurrentLoopCount(1);
-  };
+  }, [queue, currentIndex]);
 
   const startProgressLoop = () => {
     if (progressInterval.current) clearInterval(progressInterval.current);
@@ -440,6 +441,48 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const stopProgressLoop = () => {
     if (progressInterval.current) clearInterval(progressInterval.current);
   };
+
+  // ✅ FIXED: Media Session Metadata
+  useEffect(() => {
+      if ('mediaSession' in navigator && queue.length > 0) {
+          const track = queue[currentIndex];
+          navigator.mediaSession.metadata = new MediaMetadata({
+              title: track.title,
+              artist: track.artist,
+              artwork: [
+                  { src: track.thumbnail || 'https://i.imgur.com/8QZ9X9r.png', sizes: '512x512', type: 'image/png' }
+              ]
+          });
+      }
+  }, [queue, currentIndex]);
+
+  // ✅ FIXED: Media Session Handlers (Notification Controls)
+  useEffect(() => {
+      if ('mediaSession' in navigator) {
+          const handleStop = () => {
+              if (playerRef.current && playerRef.current.pauseVideo) playerRef.current.pauseVideo();
+              onClose(); // Stop means "Close Widget" / "Clear Notification"
+          };
+
+          navigator.mediaSession.setActionHandler('play', () => {
+              if (playerRef.current && playerRef.current.playVideo) playerRef.current.playVideo();
+          });
+          navigator.mediaSession.setActionHandler('pause', () => {
+              if (playerRef.current && playerRef.current.pauseVideo) playerRef.current.pauseVideo();
+          });
+          navigator.mediaSession.setActionHandler('previoustrack', playPrev);
+          navigator.mediaSession.setActionHandler('nexttrack', playNext);
+          navigator.mediaSession.setActionHandler('stop', handleStop);
+
+          return () => {
+             navigator.mediaSession.setActionHandler('play', null);
+             navigator.mediaSession.setActionHandler('pause', null);
+             navigator.mediaSession.setActionHandler('previoustrack', null);
+             navigator.mediaSession.setActionHandler('nexttrack', null);
+             navigator.mediaSession.setActionHandler('stop', null);
+          };
+      }
+  }, [playPrev, playNext, onClose]);
 
   // --- Handlers ---
 
