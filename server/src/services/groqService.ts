@@ -454,14 +454,14 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
       }))
   ];
 
-  // 1. PRIMARY: Try "openai/gpt-oss-120b" on Groq (with Key Rotation & Load Balancing)
+  // 1. PRIMARY: Try "llama-3.3-70b-versatile" on Groq (Much Faster than 120B)
   const start = Math.floor(Math.random() * groqKeys.length);
   for (let i = 0; i < groqKeys.length; i++) {
       const keyIndex = (start + i) % groqKeys.length;
       try {
           const client = getGroqClient(keyIndex);
           const completion = await client.chat.completions.create({
-              model: "openai/gpt-oss-120b", 
+              model: "llama-3.3-70b-versatile",
               messages: messages,
               temperature: 0.7,
               max_tokens: maxTokens || 1024,
@@ -475,7 +475,7 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
           return; // Success!
 
       } catch (groqError: any) {
-          console.warn(`⚠️ Workhorse (GPT-OSS-120B) Key ${keyIndex+1} Failed. Trying next...`);
+          console.warn(`⚠️ Workhorse (Llama 70B) Key ${keyIndex+1} Failed. Trying next...`);
       }
   }
 

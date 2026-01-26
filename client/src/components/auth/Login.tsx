@@ -301,8 +301,8 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
         )}
 
         <div className={`relative z-10 max-w-lg p-12 rounded-3xl border border-white/5 bg-white/5 ${!isLowPowerMode ? 'backdrop-blur-sm' : ''}`}>
-          <div className="w-16 h-16 bg-gradient-to-br from-violet-50 to-indigo-600 rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-violet-500/20">
-            {mode === 'verify-otp' || mode === 'forgot-otp' ? <Shield size={32} className="text-white"/> : <img src="/logo.png" alt="Logo" className="w-10 h-10 object-contain drop-shadow-md" />}
+          <div className="w-16 h-16 bg-gradient-to-br from-violet-50 to-indigo-600 rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-violet-500/20 overflow-hidden">
+            {mode === 'verify-otp' || mode === 'forgot-otp' ? <Shield size={32} className="text-white"/> : <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />}
           </div>
           <h2 className="text-5xl font-bold mb-6 leading-tight font-serif">
             {mode === 'login' && "Return to\nSanctuary."}
@@ -332,8 +332,8 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
         <div className="w-full max-w-md">
           <FadeIn direction="up">
             <div className="flex justify-center lg:hidden mb-6">
-               <div className="w-16 h-16 bg-gradient-to-br from-violet-50 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-violet-500/20">
-                  <img src="/logo.png" alt="Logo" className="w-10 h-10 object-contain drop-shadow-md" />
+               <div className="w-16 h-16 bg-gradient-to-br from-violet-50 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-violet-500/20 overflow-hidden">
+                  <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
                </div>
             </div>
             <div className="mb-8 text-center lg:text-left">

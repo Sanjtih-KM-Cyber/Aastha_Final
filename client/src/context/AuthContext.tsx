@@ -225,17 +225,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 encryptionKey: activeKey
             });
         }
-      } catch (error) {
+      } catch (error: any) {
         if (isMounted) {
-            // ✅ Cleanup if check fails
-            localStorage.removeItem('userInfo');
-            sessionStorage.removeItem('userInfo');
-            setState({
-                user: null,
-                isAuthenticated: false,
-                isLoading: false, 
-                encryptionKey: null
-            });
+            // ONLY logout on explicit Unauthorized (401) or Forbidden (403)
+            // If it's a network error (status undefined) or Server Error (5xx), STAY LOGGED IN (Offline Mode)
+            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+                 localStorage.removeItem('userInfo');
+                 sessionStorage.removeItem('userInfo');
+                 setState({
+                    user: null,
+                    isAuthenticated: false,
+                    isLoading: false,
+                    encryptionKey: null
+                 });
+            } else {
+                 console.warn("Auth Check Failed (Network/Server). Staying logged in offline.", error);
+
+                 // Fallback: If we have a stored token, assume it's valid for now
+                 let localUser = null;
+                 let localKey = null;
+                 try {
+                     const stored = localStorage.getItem('userInfo');
+                     if (stored) {
+                         localUser = JSON.parse(stored);
+                         localKey = localUser.masterKey;
+                     }
+                 } catch(e) {}
+
+                 if (localUser) {
+                      setState({
+                          user: localUser,
+                          isAuthenticated: true, // Allow access (Offline Mode)
+                          isLoading: false,
+                          encryptionKey: localKey
+                      });
+                 } else {
+                      // No local data? Then we must logout.
+                      localStorage.removeItem('userInfo');
+                      sessionStorage.removeItem('userInfo');
+                      setState({
+                          user: null,
+                          isAuthenticated: false,
+                          isLoading: false,
+                          encryptionKey: null
+                      });
+                 }
+            }
         }
       }
     };

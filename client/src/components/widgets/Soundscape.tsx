@@ -131,7 +131,18 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
     } else {
         backgroundService.disable('soundscape');
     }
-  }, [activeLoops, masterVolume, previewId, isOpen]); // ✅ Added isOpen dependency
+  }, [activeLoops, masterVolume, previewId, isOpen]);
+
+  // CLEANUP: Stop audio on Unmount
+  useEffect(() => {
+      return () => {
+          Object.values(audioRefs.current).forEach(a => {
+              a.pause();
+              a.currentTime = 0;
+          });
+          backgroundService.disable('soundscape');
+      };
+  }, []);
 
   // PERSISTENCE: Load state on mount
   useEffect(() => {
