@@ -69,7 +69,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             if (saved) {
                 const parsed = JSON.parse(saved);
                 if (parsed.width && parsed.height) setSize({ width: parsed.width, height: parsed.height });
-                if (parsed.x !== undefined && parsed.y !== undefined) setPosition({ x: parsed.x, y: parsed.y });
+                // Enforce Center-Left opening by IGNORING saved x/y
+                // if (parsed.x !== undefined && parsed.y !== undefined) setPosition({ x: parsed.x, y: parsed.y });
                 if (parsed.isMinimized !== undefined) setIsMinimized(parsed.isMinimized);
             }
         } catch (e) {
@@ -101,11 +102,15 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
 
-      // Calculate center for desktop
+      // Calculate "Center Left" for desktop
       if (!mobile) {
-         const cx = (window.innerWidth - initialWidth) / 2;
          const cy = (window.innerHeight - initialHeight) / 2;
-         setCenterPos({ x: Math.max(20, cx), y: Math.max(20, cy) });
+         // Set X to 100px from left (or just enough to clear sidebar if any, but 100 is safe "Center Left")
+         // Assuming Sidebar is ~280px-320px based on ChatView pl-80 (320px).
+         // Let's position it at x=350 to be just right of sidebar, or truly "Center Left" of the remaining space?
+         // User said "Centre Left". Let's assume standard "Left-ish Center".
+         // 360px is a good safe zone if sidebar is active.
+         setCenterPos({ x: 360, y: Math.max(60, cy) });
       }
     };
 
@@ -209,16 +214,18 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
 
   return (
     <>
-      {/* Invisible Constraints Container with Top Boundary */}
+      {/* STRICT BOUNDARIES: Using window as explicit constraint reference */}
+      {/* Note: framer-motion with fixed position sometimes ignores ref constraints if the ref is 0-sized or weirdly positioned.
+          We will use explicit pixel values calculated on the fly if needed, but for now, we try a full-screen absolute div. */}
       {!isMobile && isOpen && (
           <div
             ref={constraintsRef}
-            className="fixed inset-0 pointer-events-none z-0"
+            className="fixed pointer-events-none z-0"
             style={{
                 left: 0,
-                top: '60px', // Boundary below header
-                right: 0,
-                bottom: 0
+                top: 60, // 60px header
+                width: '100vw',
+                height: 'calc(100vh - 60px)',
             }}
           />
       )}
@@ -228,7 +235,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
         <motion.div
           ref={containerRef}
           dragConstraints={constraintsRef}
-          dragElastic={0} // No rubber band effect
+          dragElastic={0} // STRICT: No over-drag
+          dragMomentum={false} // STRICT: Stop immediately on release
           initial={isLiteMode ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
           animate={{
             opacity: 1, 
