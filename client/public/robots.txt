@@ -1,3 +1,2 @@
 User-agent: *
-Allow: /
-Sitemap: https://aasthaai.site/sitemap.xml
+Disallow: /
