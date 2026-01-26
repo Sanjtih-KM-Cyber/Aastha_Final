@@ -26,17 +26,18 @@ class BackgroundService {
       await BackgroundMode.setSettings({
         title,
         text: body,
-        silent: false,
+        silent: true, // Set to true to avoid sound/vibration on start (optional)
         hidden: false,
-        allowClose: false,
+        allowClose: false, // ✅ CRITICAL: Makes notification sticky (cannot be swiped)
         color: '1c1c1e',
       });
 
       await BackgroundMode.enable();
 
+      // Optimize battery settings if needed
       const battery = await BackgroundMode.checkBatteryOptimizations();
       if (!battery.disabled) {
-          // Optional
+          // You could request to disable optimizations here if needed
       }
 
     } catch (error) {
@@ -62,9 +63,13 @@ class BackgroundService {
     if (!Capacitor.isNativePlatform() || this.activeReasons.size === 0) return;
 
     try {
+      // ✅ CRITICAL FIX: Re-apply 'allowClose: false' on every update
+      // Otherwise, the update might reset it to true (dismissible).
       await BackgroundMode.setSettings({
         title,
-        text: body
+        text: body,
+        allowClose: false, // Keep it sticky
+        silent: true // Keep it silent (no vibration every second)
       });
     } catch (error) {
       console.error('BackgroundService update notification error:', error);
@@ -76,5 +81,5 @@ class BackgroundService {
   }
 }
 
-// Singleton Instance - Export as Named Export to prevent Vite build issues
+// Singleton Instance
 export const backgroundService = new BackgroundService();
