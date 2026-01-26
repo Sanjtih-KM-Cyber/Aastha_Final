@@ -6,7 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
-import backgroundService from '../../services/backgroundService';
+import { getBackgroundService } from '../../services/backgroundService';
 
 interface PomodoroWidgetProps {
   isOpen: boolean;
@@ -165,7 +165,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
        // Use currentMessage or a default one
        const body = currentMessage || (mode === 'focus' ? "Stay in the flow. 🌊" : "Recharge your energy. 🍃");
 
-       backgroundService.updateNotification(title, body);
+       getBackgroundService().updateNotification(title, body);
     }
   }, [timeLeft, isActive, mode, currentMessage]);
 
@@ -262,7 +262,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
           setCurrentMessage("Break over. Ready to focus? 🚀");
           setIsActive(false);
           setTargetEndTime(null);
-          backgroundService.disable('pomodoro'); // Stop background mode
+          getBackgroundService().disable('pomodoro'); // Stop background mode
       }
     }
     return () => clearInterval(interval);
@@ -299,7 +299,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
         const end = now + (timeLeft * 1000);
         setTargetEndTime(end);
         setIsActive(true);
-        backgroundService.enable(
+        getBackgroundService().enable(
             'pomodoro',
             mode === 'focus' ? "Focus Mode Active 🧠" : "Break Time 🍃",
             "Starting..."
@@ -308,7 +308,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
         // Pause
         setTargetEndTime(null);
         setIsActive(false);
-        backgroundService.disable('pomodoro');
+        getBackgroundService().disable('pomodoro');
     }
   };
   
@@ -318,7 +318,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
     setLastMilestone(0);
     setCurrentMessage("");
     setTargetEndTime(null);
-    backgroundService.disable('pomodoro');
+    getBackgroundService().disable('pomodoro');
   };
 
   const handleSaveSettings = () => {
