@@ -1,3 +1,5 @@
+// client/src/constants.ts
+
 export const SECURITY_QUESTIONS = [
   "What song instantly resets your vibe?",
   "Which place feels like your safe corner?",
@@ -34,9 +36,19 @@ export const ACCENT_COLORS = {
 
 export const POSITIVE_EMOJIS = ['✨', '🌿', '💪', '💜', '🔥', '🚀', '🌈', '☀️', '🌻', '🧘‍♀️'];
 
+// ✅ MERGED: Comprehensive list including regional languages
 export const LANGUAGES = [
-  "English", "Hindi", "Hinglish", "Spanish", "French", "German", "Japanese", "Mandarin"
+  "English", "Hindi", "Hinglish", "Tamil", "Telugu", 
+  "Punjabi", "Malayalam", "Kannada", "Bengali", "Marathi",
+  "Spanish", "French", "German", "Japanese", "Mandarin"
 ];
+
+// ✅ MOVED: Music Widget Constants (Prevents Circular Deps)
+export const MOOD_TAGS = ["Happy", "Sad", "Calm", "Energetic", "Romantic", "Focus", "Melancholy", "Party", "Lo-Fi"];
+export const GENRES = ["Lo-Fi", "Hip-Hop", "Pop", "Retro", "90s", "Modern", "Indie", "R&B", "Jazz", "Classical", "Rock", "Bollywood", "Acoustic", "EDM", "Ambient"];
+
+// ✅ ADDED: Type Definition for Loop Mode
+export type LoopMode = 'off' | 'all' | 'one' | 'custom';
 
 // --- AUTH EVENTS ---
 export const AUTH_UNAUTHORIZED_EVENT = 'auth:unauthorized';
