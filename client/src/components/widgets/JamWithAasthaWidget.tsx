@@ -9,7 +9,7 @@ import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
-import { backgroundService } from '../../services/backgroundService';
+import backgroundService from '../../services/backgroundService';
 
 declare global {
   interface Window {

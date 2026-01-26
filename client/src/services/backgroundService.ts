@@ -8,9 +8,6 @@ class BackgroundService {
     if (!Capacitor.isNativePlatform()) return;
 
     try {
-      // Check permissions
-      // We might need to request them.
-      // The plugin should handle basic setup, but let's be safe.
       const permissions = await BackgroundMode.checkNotificationsPermission();
       if (permissions.display !== 'granted') {
         await BackgroundMode.requestNotificationsPermission();
@@ -20,12 +17,6 @@ class BackgroundService {
     }
   }
 
-  /**
-   * Enables background mode.
-   * @param reason - Unique key for the feature requesting background mode (e.g., 'pomodoro', 'music')
-   * @param title - Notification title
-   * @param body - Notification body
-   */
   async enable(reason: string, title: string = 'Aastha is active', body: string = 'Keeping your session alive...') {
     if (!Capacitor.isNativePlatform()) return;
 
@@ -43,10 +34,9 @@ class BackgroundService {
 
       await BackgroundMode.enable();
 
-      // Disable battery optimizations to ensure it keeps running
       const battery = await BackgroundMode.checkBatteryOptimizations();
       if (!battery.disabled) {
-          // Optional: Request if critical
+          // Optional
       }
 
     } catch (error) {
@@ -54,10 +44,6 @@ class BackgroundService {
     }
   }
 
-  /**
-   * Disables background mode for a specific feature.
-   * Only actually disables the native plugin if no other features are using it.
-   */
   async disable(reason: string) {
     if (!Capacitor.isNativePlatform()) return;
 
@@ -73,9 +59,6 @@ class BackgroundService {
   }
 
   async updateNotification(title: string, body: string) {
-    // We only update if active.
-    // NOTE: This updates the shared notification. If multiple services are active,
-    // the last one to call this wins. This is acceptable for now.
     if (!Capacitor.isNativePlatform() || this.activeReasons.size === 0) return;
 
     try {
@@ -93,4 +76,6 @@ class BackgroundService {
   }
 }
 
-export const backgroundService = new BackgroundService();
+// Singleton Instance - Export as Default to avoid named export hoisting issues
+const backgroundService = new BackgroundService();
+export default backgroundService;
