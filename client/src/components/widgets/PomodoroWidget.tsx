@@ -90,6 +90,16 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
       return () => setPreventAutoLock('pomodoro-widget', false);
   }, [isActive, setPreventAutoLock]);
 
+  // ✅ FIXED: Force Stop when Closed (User clicks X)
+  // This ensures the background service is KILLED if you close the widget explicitly.
+  useEffect(() => {
+      if (!isOpen && isActive) {
+          setIsActive(false);
+          setTargetEndTime(null);
+          backgroundService.disable('pomodoro');
+      }
+  }, [isOpen]); 
+
   // --- PERSISTENCE: LOAD ---
   useEffect(() => {
       const saved = localStorage.getItem('pomodoro_state');
@@ -108,6 +118,12 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
                       setTimeLeft(remaining);
                       setIsActive(true);
                       setTargetEndTime(parsed.targetEndTime);
+                      // Resume background service if it was active
+                      backgroundService.enable(
+                          'pomodoro', 
+                          parsed.mode === 'focus' ? "Focus Mode Active 🧠" : "Break Time 🍃",
+                          "Resuming session..."
+                      );
                   } else {
                       // Timer finished while away
                       setTimeLeft(0);
@@ -160,14 +176,15 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
 
   // Update Background Notification periodically
   useEffect(() => {
-    if (isActive && timeLeft > 0) {
+    // ✅ ADDED CHECK: Only update if widget is actually OPEN and ACTIVE
+    if (isOpen && isActive && timeLeft > 0) {
        const title = mode === 'focus' ? `Focusing: ${formatTime(timeLeft)}` : `Break: ${formatTime(timeLeft)}`;
        // Use currentMessage or a default one
        const body = currentMessage || (mode === 'focus' ? "Stay in the flow. 🌊" : "Recharge your energy. 🍃");
 
        backgroundService.updateNotification(title, body);
     }
-  }, [timeLeft, isActive, mode, currentMessage]);
+  }, [timeLeft, isActive, mode, currentMessage, isOpen]);
 
 
   // GOD MODE: Apply AI Instructions
@@ -196,12 +213,15 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
               // Only reset if duration changed significantly or user asked for it
               if (Math.abs(timeLeft - duration * 60) > 10) {
                   setTimeLeft(duration * 60);
-                  // Don't auto-start here unless explicit?
-                  // Logic says: setIsActive(true) in original code.
-                  // We should also set targetEndTime
                   const newTarget = Date.now() + (duration * 60 * 1000);
                   setTargetEndTime(newTarget);
                   setIsActive(true);
+                  // Enable background immediately for AI
+                  backgroundService.enable(
+                      'pomodoro',
+                      mode === 'focus' ? "Focus Mode Active 🧠" : "Break Time 🍃",
+                      "AI Started Session"
+                  );
               }
           }
       }
@@ -209,7 +229,8 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
-    if (isActive && timeLeft > 0) {
+    // ✅ ADDED CHECK: Only tick if Open AND Active
+    if (isOpen && isActive && timeLeft > 0) {
       interval = setInterval(() => {
         setTimeLeft((prev) => {
            // Self-correction using targetEndTime if available
@@ -228,11 +249,11 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
            return newVal;
         });
       }, 1000);
-    } else if (timeLeft <= 0 && isActive) { // changed === 0 to <= 0 for safety
+    } else if (timeLeft <= 0 && isActive) { 
       // Timer Finished Logic
       audioRef.current?.play().catch(e => console.log(e));
 
-      // Schedule a distinct "Finished" notification since background mode might be silent or generic
+      // Schedule a distinct "Finished" notification
       LocalNotifications.schedule({
         notifications: [{
             id: 3001,
@@ -266,7 +287,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
       }
     }
     return () => clearInterval(interval);
-  }, [isActive, timeLeft, mode, focusDuration, breakDuration, targetEndTime]);
+  }, [isActive, timeLeft, mode, focusDuration, breakDuration, targetEndTime, isOpen]); // Added isOpen dependency
 
   const checkMilestones = (currentSeconds: number) => {
     if (totalTime === 0) return; 
