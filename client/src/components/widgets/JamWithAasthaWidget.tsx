@@ -230,6 +230,38 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       stateRef.current = { loopMode, loopTarget, currentLoopCount, currentIndex, queue };
   }, [loopMode, loopTarget, currentLoopCount, currentIndex, queue]);
 
+  // --- MEDIA NOTIFICATIONS (Native Lock Screen) ---
+  useEffect(() => {
+    if ('mediaSession' in navigator && currentTrackData && isOpen) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: currentTrackData.title,
+            artist: currentTrackData.artist,
+            artwork: [
+                { src: currentTrackData.thumbnail || 'https://via.placeholder.com/512', sizes: '512x512', type: 'image/jpeg' }
+            ]
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => {
+             if(playerRef.current && !isPlaying) playerRef.current.playVideo();
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+             if(playerRef.current && isPlaying) playerRef.current.pauseVideo();
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+             playNext();
+        });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+             playPrev();
+        });
+        navigator.mediaSession.setActionHandler('stop', () => {
+             setIsPlaying(false);
+             onClose();
+        });
+    } else if ('mediaSession' in navigator && (!currentTrackData || !isOpen)) {
+        navigator.mediaSession.metadata = null;
+    }
+  }, [currentTrackData, isOpen, isPlaying, playNext, playPrev, onClose]);
+
   const playerRef = useRef<any>(null);
   const progressInterval = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -381,21 +413,16 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               setCurrentLoopCount(1);
           }
       } else {
-          // Loop Mode Off (Normal) - Auto-Remove Played Track
-          // Remove the finished track (current one)
-          const newQueue = [...queue];
-          newQueue.splice(currentIndex, 1);
-
-          setQueue(newQueue);
-
-          if (newQueue.length > 0) {
-              const nextIdx = currentIndex >= newQueue.length ? 0 : currentIndex;
-              setCurrentIndex(nextIdx);
-              loadAndPlay(newQueue[nextIdx]);
-              setCurrentLoopCount(1);
+          // Loop Mode Off (Normal)
+          if (currentIndex < queue.length - 1) {
+              // Play Next
+              triggerNextTrack(currentIndex + 1);
           } else {
+              // Last track finished -> Clear Queue & Stop (User Req: "remove all at once")
+              setQueue([]);
               setIsPlaying(false);
               setCurrentIndex(0);
+              backgroundService.disable('jam');
           }
       }
   };

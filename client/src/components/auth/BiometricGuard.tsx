@@ -105,44 +105,58 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
 
     if (isLoading || !hasCheckedInitial) return <LoadingFallback />;
 
-    if (isLocked) {
-        return (
-            <div className="fixed inset-0 z-50 bg-midnight flex flex-col items-center justify-center text-white">
-                <div className="w-20 h-20 rounded-full bg-violet-600/20 flex items-center justify-center animate-pulse mb-6">
-                    <span className="text-4xl">🔒</span>
-                </div>
-                <h2 className="text-2xl font-bold mb-2">Sanctuary Locked</h2>
-                <p className="text-white/50 mb-8">Authentication required</p>
-
-                <div className="flex flex-col gap-3">
-                    <button
-                        onClick={async () => {
-                            const success = await promptBiometrics();
-                            setIsLocked(!success);
-                        }}
-                        className="px-8 py-3 bg-violet-600 rounded-full font-bold hover:bg-violet-700 transition-colors"
-                    >
-                        Try Again
-                    </button>
-
-                    {/* Fallback for "Disaster" scenarios where sensor fails */}
-                    <button
-                        onClick={async () => {
-                            setIsLoggingOut(true); // Immediate block to prevent race-condition unlock
-                            // Emergency bypass: Disable the broken biometric setting AND logout
-                            await toggleBiometrics(false);
-                            localStorage.removeItem('userInfo');
-                            // Force a hard reload to clear any stuck native plugin state
-                            window.location.replace('/login');
-                        }}
-                        className="text-sm text-white/40 hover:text-white underline mt-4"
-                    >
-                        {isLoggingOut ? "Securing..." : "Use Password (Logout)"}
-                    </button>
-                </div>
+    return (
+        <>
+            {/*
+                ISSUE FIX: BACKGROUND AUDIO
+                We keep the children mounted (using hidden visibility) so that
+                background processes (Audio, YouTube, Timers) continue running.
+            */}
+            <div style={{
+                visibility: isLocked ? 'hidden' : 'visible',
+                width: '100%',
+                height: '100%'
+            }}>
+                {children}
             </div>
-        );
-    }
 
-    return <>{children}</>;
+            {/* Lock Screen Overlay */}
+            {isLocked && (
+                <div className="fixed inset-0 z-[9999] bg-midnight flex flex-col items-center justify-center text-white">
+                    <div className="w-20 h-20 rounded-full bg-violet-600/20 flex items-center justify-center animate-pulse mb-6">
+                        <span className="text-4xl">🔒</span>
+                    </div>
+                    <h2 className="text-2xl font-bold mb-2">Sanctuary Locked</h2>
+                    <p className="text-white/50 mb-8">Authentication required</p>
+
+                    <div className="flex flex-col gap-3">
+                        <button
+                            onClick={async () => {
+                                const success = await promptBiometrics();
+                                setIsLocked(!success);
+                            }}
+                            className="px-8 py-3 bg-violet-600 rounded-full font-bold hover:bg-violet-700 transition-colors"
+                        >
+                            Try Again
+                        </button>
+
+                        {/* Fallback for "Disaster" scenarios where sensor fails */}
+                        <button
+                            onClick={async () => {
+                                setIsLoggingOut(true); // Immediate block to prevent race-condition unlock
+                                // Emergency bypass: Disable the broken biometric setting AND logout
+                                await toggleBiometrics(false);
+                                localStorage.removeItem('userInfo');
+                                // Force a hard reload to clear any stuck native plugin state
+                                window.location.replace('/login');
+                            }}
+                            className="text-sm text-white/40 hover:text-white underline mt-4"
+                        >
+                            {isLoggingOut ? "Securing..." : "Use Password (Logout)"}
+                        </button>
+                    </div>
+                </div>
+            )}
+        </>
+    );
 };

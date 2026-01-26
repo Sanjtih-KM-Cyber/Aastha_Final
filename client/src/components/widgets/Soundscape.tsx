@@ -197,12 +197,52 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
       }
   }, [isOpen, preset, volume]);
 
-  // Cleanup on unmount or close (Redundant safety, but good to keep)
+  // Cleanup on unmount (FIX: Ensure audio stops when component is removed)
+  useEffect(() => {
+      // Return cleanup function
+      return () => {
+          Object.values(audioRefs.current).forEach(audio => {
+              if (audio) {
+                  audio.pause();
+                  audio.currentTime = 0;
+              }
+          });
+          backgroundService.disable('soundscape');
+      };
+  }, []);
+
+  // Sync state on close
   useEffect(() => {
     if (!isOpen) {
         setPreviewId(null);
     }
   }, [isOpen]);
+
+  // --- MEDIA NOTIFICATIONS (Native Lock Screen) ---
+  useEffect(() => {
+      if ('mediaSession' in navigator && activeCount > 0 && isOpen) {
+          navigator.mediaSession.metadata = new MediaMetadata({
+              title: "Ambient Soundscape",
+              artist: "Aastha",
+              album: "Wellness Hub",
+              artwork: [
+                  { src: 'https://images.unsplash.com/photo-1518176258769-f227c798150e?q=80&w=2670&auto=format&fit=crop', sizes: '512x512', type: 'image/jpeg' }
+              ]
+          });
+
+          navigator.mediaSession.setActionHandler('play', () => { /* No-op, already playing */ });
+          navigator.mediaSession.setActionHandler('pause', () => {
+              // Pause action = Close/Stop
+              onClose();
+          });
+          navigator.mediaSession.setActionHandler('stop', () => {
+              onClose();
+          });
+      } else if ('mediaSession' in navigator && (activeCount === 0 || !isOpen)) {
+           // Clear metadata if stopped
+           navigator.mediaSession.metadata = null;
+      }
+  }, [activeCount, isOpen, onClose]);
 
   const toggleLoop = (id: string) => {
     if (erroredSounds.has(id)) return;

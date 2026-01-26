@@ -225,9 +225,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 encryptionKey: activeKey
             });
         }
-      } catch (error) {
+      } catch (error: any) {
         if (isMounted) {
-            // ✅ Cleanup if check fails
+            // Check for 401 Unauthorized (Explicit Token Rejection)
+            const isUnauthorized = error.response && error.response.status === 401;
+
+            // Retreive local data for soft login if network fails
+            let storedInfo = localStorage.getItem('userInfo');
+            if (storedInfo && !isUnauthorized) {
+                try {
+                    const localUser = JSON.parse(storedInfo);
+                    if (localUser && localUser.id) {
+                        console.warn("Network check failed, using local user data (Soft Login)", error);
+
+                        // Hydrate state from local storage
+                        let activeKey = state.encryptionKey;
+                        if (localUser.masterKey) activeKey = localUser.masterKey;
+
+                        setState({
+                            user: localUser,
+                            isAuthenticated: true,
+                            isLoading: false,
+                            encryptionKey: activeKey
+                        });
+                        return; // Exit success
+                    }
+                } catch (e) {
+                    console.error("Failed to parse local user info", e);
+                }
+            }
+
+            // If 401 OR no local data, then clear everything
             localStorage.removeItem('userInfo');
             sessionStorage.removeItem('userInfo');
             setState({
