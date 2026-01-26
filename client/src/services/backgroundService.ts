@@ -76,15 +76,5 @@ class BackgroundService {
   }
 }
 
-// LAZY SINGLETON
-// We do NOT export the instance directly. We export a getter.
-// This prevents 'b' (the instance) from being accessed before initialization in circular scenarios.
-
-let instance: BackgroundService | null = null;
-
-export const getBackgroundService = (): BackgroundService => {
-    if (!instance) {
-        instance = new BackgroundService();
-    }
-    return instance;
-};
+// Singleton Instance - Export as Named Export to prevent Vite build issues
+export const backgroundService = new BackgroundService();
