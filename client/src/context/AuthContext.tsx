@@ -128,8 +128,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
       };
 
-      // Run immediately on mount/auth-change to catch "closed app" scenario
-      checkInactivity();
+      // ✅ FIX: REMOVED immediate checkInactivity() call here.
+      // This prevents the "Logout Loop" when resuming the app after 5 mins.
+      // We rely on the interval to check eventually, or BiometricGuard to handle the immediate "Lock Screen".
 
       const activityInterval = setInterval(checkInactivity, 5000); // Check every 5s
 
