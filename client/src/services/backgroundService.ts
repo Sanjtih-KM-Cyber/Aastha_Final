@@ -26,18 +26,17 @@ class BackgroundService {
       await BackgroundMode.setSettings({
         title,
         text: body,
-        silent: true, // Set to true to avoid sound/vibration on start (optional)
+        silent: false,
         hidden: false,
-        allowClose: false, // ✅ CRITICAL: Makes notification sticky (cannot be swiped)
+        allowClose: false, // ✅ Critical: Makes it "Sticky"
         color: '1c1c1e',
       });
 
       await BackgroundMode.enable();
 
-      // Optimize battery settings if needed
       const battery = await BackgroundMode.checkBatteryOptimizations();
       if (!battery.disabled) {
-          // You could request to disable optimizations here if needed
+          // Optional: Request to disable optimizations
       }
 
     } catch (error) {
@@ -63,13 +62,13 @@ class BackgroundService {
     if (!Capacitor.isNativePlatform() || this.activeReasons.size === 0) return;
 
     try {
-      // ✅ CRITICAL FIX: Re-apply 'allowClose: false' on every update
-      // Otherwise, the update might reset it to true (dismissible).
+      // ✅ FIX: Re-apply 'allowClose: false' on every update.
+      // Without this, updating the text resets the notification to be dismissible.
       await BackgroundMode.setSettings({
         title,
         text: body,
-        allowClose: false, // Keep it sticky
-        silent: true // Keep it silent (no vibration every second)
+        allowClose: false, 
+        silent: true 
       });
     } catch (error) {
       console.error('BackgroundService update notification error:', error);
@@ -81,5 +80,4 @@ class BackgroundService {
   }
 }
 
-// Singleton Instance
 export const backgroundService = new BackgroundService();
