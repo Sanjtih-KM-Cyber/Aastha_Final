@@ -11,6 +11,8 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
       },
       build: {
+        // ✅ ADDED: This enables the debugger to see real file names instead of "b"
+        sourcemap: true, 
         rollupOptions: {
             output: {
                 manualChunks: {
@@ -65,7 +67,7 @@ export default defineConfig(({ mode }) => {
                   cacheName: 'google-fonts-cache',
                   expiration: {
                     maxEntries: 10,
-                    maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
+                    maxAgeSeconds: 60 * 60 * 24 * 365
                   },
                   cacheableResponse: {
                     statuses: [0, 200]
@@ -87,4 +89,3 @@ export default defineConfig(({ mode }) => {
       }
     };
 });
-// Force rebuild Mon Dec  1 20:29:30 UTC 2025
