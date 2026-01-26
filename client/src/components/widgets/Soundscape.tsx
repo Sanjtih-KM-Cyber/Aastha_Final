@@ -3,7 +3,7 @@ import { DraggableWindow } from '../layout/DraggableWindow';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import { SOUND_URLS } from '../../constants'; // IMPORTED CONSTANT
-import { backgroundService } from '../../services/backgroundService';
+import backgroundService from '../../services/backgroundService';
 import { 
   Volume2, 
   VolumeX,

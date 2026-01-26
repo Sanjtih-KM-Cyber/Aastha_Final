@@ -15,7 +15,7 @@ import { Toaster } from 'react-hot-toast';
 import { App as CapacitorApp } from '@capacitor/app';
 import { scheduleGhostNotifications, clearGhostNotifications } from './services/offlineGhostService';
 import { userService } from './services/userService';
-import { backgroundService } from './services/backgroundService';
+import backgroundService from './services/backgroundService';
 
 // Lazy Load Pages
 // Note: We use the default export from the new Landing.tsx

@@ -6,7 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
-import { backgroundService } from '../../services/backgroundService';
+import backgroundService from '../../services/backgroundService';
 
 interface PomodoroWidgetProps {
   isOpen: boolean;
