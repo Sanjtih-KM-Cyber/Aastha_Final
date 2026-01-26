@@ -69,7 +69,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             if (saved) {
                 const parsed = JSON.parse(saved);
                 if (parsed.width && parsed.height) setSize({ width: parsed.width, height: parsed.height });
-                if (parsed.x !== undefined && parsed.y !== undefined) setPosition({ x: parsed.x, y: parsed.y });
+                // FIX: Always open at center, do not restore previous position
+                // if (parsed.x !== undefined && parsed.y !== undefined) setPosition({ x: parsed.x, y: parsed.y });
                 if (parsed.isMinimized !== undefined) setIsMinimized(parsed.isMinimized);
             }
         } catch (e) {
@@ -85,8 +86,9 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           const current = {
               width: size.width,
               height: size.height,
-              x: position?.x ?? (defaultPosition?.x || centerPos.x),
-              y: position?.y ?? (defaultPosition?.y || centerPos.y),
+              // FIX: Do not persist position (always center on open)
+              // x: position?.x ?? (defaultPosition?.x || centerPos.x),
+              // y: position?.y ?? (defaultPosition?.y || centerPos.y),
               isMinimized: isMinimized,
               ...updates
           };
@@ -209,9 +211,18 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
 
   return (
     <>
-      {/* Invisible Constraints Container */}
+      {/* Invisible Constraints Container with Top Boundary */}
       {!isMobile && isOpen && (
-          <div ref={constraintsRef} className="fixed inset-0 pointer-events-none z-0" style={{ left: 0, top: 0, right: 0, bottom: 0 }} />
+          <div
+            ref={constraintsRef}
+            className="fixed inset-0 pointer-events-none z-0"
+            style={{
+                left: 0,
+                top: '60px', // Boundary below header
+                right: 0,
+                bottom: 0
+            }}
+          />
       )}
 
       <AnimatePresence>
