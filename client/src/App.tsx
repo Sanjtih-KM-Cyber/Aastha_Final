@@ -15,7 +15,7 @@ import { Toaster } from 'react-hot-toast';
 import { App as CapacitorApp } from '@capacitor/app';
 import { scheduleGhostNotifications, clearGhostNotifications } from './services/offlineGhostService';
 import { userService } from './services/userService';
-import { getBackgroundService } from './services/backgroundService';
+import { backgroundService } from './services/backgroundService';
 
 // Lazy Load Pages
 // Note: We use the default export from the new Landing.tsx
@@ -116,7 +116,7 @@ const App: React.FC = () => {
               await clearGhostNotifications().catch(() => {});
               userService.syncOfflineMoods().catch(() => {});
               userService.syncOfflineDiary().catch(() => {});
-              getBackgroundService().init().catch(e => console.warn("Background init failed", e));
+              backgroundService.init().catch(e => console.warn("Background init failed", e));
 
               // 3. Web Online Listener (Fallback for non-Capacitor)
               window.addEventListener('online', () => {
