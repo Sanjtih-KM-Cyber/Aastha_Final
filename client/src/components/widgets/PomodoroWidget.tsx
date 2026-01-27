@@ -178,11 +178,14 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
   useEffect(() => {
     // ✅ ADDED CHECK: Only update if widget is actually OPEN and ACTIVE
     if (isOpen && isActive && timeLeft > 0) {
-       const title = mode === 'focus' ? `Focusing: ${formatTime(timeLeft)}` : `Break: ${formatTime(timeLeft)}`;
+       const title = mode === 'focus' ? `Focusing` : `Break`; // Short title
+       const timeStr = formatTime(timeLeft);
        // Use currentMessage or a default one
-       const body = currentMessage || (mode === 'focus' ? "Stay in the flow. 🌊" : "Recharge your energy. 🍃");
+       const msg = currentMessage || (mode === 'focus' ? "Stay in the flow" : "Recharge");
 
-       backgroundService.updateNotification(title, body);
+       const body = `${timeStr} - ${msg}`;
+
+       backgroundService.updateReason('pomodoro', title, body);
     }
   }, [timeLeft, isActive, mode, currentMessage, isOpen]);
 
