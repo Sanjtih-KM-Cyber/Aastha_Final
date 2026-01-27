@@ -283,8 +283,9 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
   const initPlayer = () => {
     if (playerRef.current) return;
+    // ✅ FIXED: Use 1x1 dimensions to prevent aggressive background pausing on mobile WebViews
     playerRef.current = new window.YT.Player('jam-player-frame', {
-        height: '0', width: '0',
+        height: '1', width: '1',
         playerVars: { 'playsinline': 1, 'controls': 0, 'disablekb': 1, 'fs': 0, 'iv_load_policy': 3, 'autoplay': 1 },
         events: {
             'onReady': onPlayerReady,

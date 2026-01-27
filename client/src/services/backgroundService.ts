@@ -2,7 +2,8 @@ import { Capacitor } from '@capacitor/core';
 import { BackgroundMode } from '@anuradev/capacitor-background-mode';
 
 class BackgroundService {
-  private activeReasons = new Set<string>();
+  // Store reason -> "Title: Body" or just custom object to reconstruct message
+  private reasons = new Map<string, { title: string, body: string }>();
 
   constructor() {
     console.log("[BackgroundService] Instance created");
@@ -26,36 +27,97 @@ class BackgroundService {
     }
   }
 
-  async enable(reason: string, title: string = 'Aastha is active', body: string = 'Keeping your session alive...') {
+  private generateNotificationContent() {
+      // Prioritize content: Pomodoro takes precedence for "Title" usually, or merge them.
+      // Logic:
+      // Title: "Aastha Active" (Generic) or specific if single.
+      // Body: "Focus: 20m | Jam: LoFi Beats"
+
+      const items = Array.from(this.reasons.values());
+
+      if (items.length === 0) return { title: 'Aastha', body: 'Background service active' };
+
+      if (items.length === 1) {
+          return items[0];
+      }
+
+      // Multiple reasons -> Merge
+      // Title: Combine Titles or use generic? Let's use generic to avoid clutter.
+      // Body: Combine Bodies.
+
+      // Let's try to be smart.
+      // If Pomodoro is active, Title = "Focus Session".
+      // If Jam is active, Title = "Music Playing".
+      // Combined: "Focus & Music"
+
+      const uniqueTitles = Array.from(new Set(items.map(i => i.title)));
+      const title = uniqueTitles.join(' & ');
+      const body = items.map(i => i.body).join(' • ');
+
+      return { title, body };
+  }
+
+  private async refreshNotification(silent = true) {
+      if (!Capacitor.isNativePlatform()) return;
+      if (this.reasons.size === 0) return;
+
+      const content = this.generateNotificationContent();
+
+      try {
+          await BackgroundMode.setSettings({
+              title: content.title,
+              text: content.body,
+              silent: silent,
+              hidden: false,
+              allowClose: false,
+              color: '1c1c1e',
+          });
+      } catch (e) {
+          console.error("[BackgroundService] Failed to refresh notification", e);
+      }
+  }
+
+  /**
+   * Enable background mode for a specific feature.
+   * @param reason Unique ID (e.g., 'pomodoro', 'jam')
+   * @param title Notification Title (e.g., 'Focus Timer')
+   * @param body Notification Body (e.g., '25:00 remaining')
+   */
+  async enable(reason: string, title: string = 'Aastha Active', body: string = 'Running...') {
     if (!Capacitor.isNativePlatform()) return;
 
+    console.log(`[BackgroundService] Enable called for: ${reason}`);
+    this.reasons.set(reason, { title, body });
+
+    // If already active, just update text (silent)
+    // If first time, enable (not silent to ensure it appears?) -> typically silent is better to avoid "Ding" every time track changes.
+    // The very first time, the OS handles the appearance.
+
+    const isFirst = (this.reasons.size === 1);
+
     try {
-      console.log(`[BackgroundService] Enable called for: ${reason}`);
-      this.activeReasons.add(reason);
+        const content = this.generateNotificationContent();
 
-      // Common settings for all modes
-      await BackgroundMode.setSettings({
-        title,
-        text: body,
-        silent: false, // We want sound/vibration for initial notification potentially, or at least visibility
-        hidden: false,
-        allowClose: false, // Sticky
-        color: '1c1c1e',
-      });
+        await BackgroundMode.setSettings({
+            title: content.title,
+            text: content.body,
+            silent: !isFirst, // Only sound/vibrate on first activation if needed, but usually better silent always for updates
+            hidden: false,
+            allowClose: false,
+            color: '1c1c1e'
+        });
 
-      await BackgroundMode.enable();
+        await BackgroundMode.enable();
 
-      // Check battery optimizations (optional but recommended)
-      try {
-          const battery = await BackgroundMode.checkBatteryOptimizations();
-          if (!battery.disabled) {
-              console.log("[BackgroundService] Battery optimizations are enabled, might affect background performance.");
-              // We could request to disable, but it might be annoying to prompt every time.
-              // await BackgroundMode.requestDisableBatteryOptimizations();
-          }
-      } catch (battErr) {
-          console.warn("[BackgroundService] Battery check failed", battErr);
-      }
+        // Battery check on first enable
+        if (isFirst) {
+             try {
+                const battery = await BackgroundMode.checkBatteryOptimizations();
+                if (!battery.disabled) {
+                    console.log("[BackgroundService] Battery optimizations enabled.");
+                }
+             } catch (e) {}
+        }
 
     } catch (error) {
       console.error('[BackgroundService] enable error:', error);
@@ -67,39 +129,40 @@ class BackgroundService {
 
     try {
       console.log(`[BackgroundService] Disable called for: ${reason}`);
-      this.activeReasons.delete(reason);
+      const existed = this.reasons.delete(reason);
 
-      if (this.activeReasons.size === 0) {
-          console.log("[BackgroundService] No active reasons, disabling background mode");
+      if (this.reasons.size === 0) {
+          console.log("[BackgroundService] No active reasons, disabling.");
           await BackgroundMode.disable();
-      } else {
-          console.log(`[BackgroundService] Remaining reasons: ${Array.from(this.activeReasons).join(', ')}`);
+      } else if (existed) {
+          // Update notification to remove the disabled item text
+          await this.refreshNotification(true);
       }
     } catch (error) {
       console.error('[BackgroundService] disable error:', error);
     }
   }
 
+  /**
+   * Update the status text for a specific feature without re-enabling.
+   */
+  async updateReason(reason: string, title: string, body: string) {
+      if (!Capacitor.isNativePlatform()) return;
+      if (!this.reasons.has(reason)) return; // Don't update if not active
+
+      this.reasons.set(reason, { title, body });
+      await this.refreshNotification(true);
+  }
+
+  // Deprecated: kept for backward compat if needed, but redirects to 'general'
   async updateNotification(title: string, body: string) {
-    if (!Capacitor.isNativePlatform()) return;
-
-    // Safety check: Only update if we are actually tracking reasons
-    if (this.activeReasons.size === 0) return;
-
-    try {
-      await BackgroundMode.setSettings({
-        title,
-        text: body,
-        allowClose: false, // Maintain stickiness
-        silent: true // Silent updates to avoid spamming sound
-      });
-    } catch (error) {
-      console.error('[BackgroundService] update notification error:', error);
-    }
+    console.warn("[BackgroundService] updateNotification is deprecated. Use updateReason.");
+    // We don't know which reason this is for, so we can't safely update.
+    // Ideally, we force migration.
   }
 
   isActive() {
-    return this.activeReasons.size > 0;
+    return this.reasons.size > 0;
   }
 }
 
