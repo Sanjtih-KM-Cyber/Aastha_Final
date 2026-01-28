@@ -109,12 +109,23 @@ class BackgroundService {
 
         await BackgroundMode.enable();
 
+        // CRITICAL: Disable WebView optimizations to keep YouTube/Audio alive
+        try {
+             // @ts-ignore - method might be missing in types but present in plugin
+             if (BackgroundMode.disableWebViewOptimizations) {
+                 // @ts-ignore
+                 await BackgroundMode.disableWebViewOptimizations();
+             }
+        } catch (e) { console.warn("disableWebViewOptimizations failed", e); }
+
         // Battery check on first enable
         if (isFirst) {
              try {
                 const battery = await BackgroundMode.checkBatteryOptimizations();
                 if (!battery.disabled) {
                     console.log("[BackgroundService] Battery optimizations enabled.");
+                    // @ts-ignore
+                    if (BackgroundMode.disableBatteryOptimizations) await BackgroundMode.disableBatteryOptimizations();
                 }
              } catch (e) {}
         }

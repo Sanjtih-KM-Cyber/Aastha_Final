@@ -16,6 +16,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { scheduleGhostNotifications, clearGhostNotifications } from './services/offlineGhostService';
 import { userService } from './services/userService';
 import { backgroundService } from './services/backgroundService';
+import { notificationService } from './services/notificationService';
 
 // Lazy Load Pages
 // Note: We use the default export from the new Landing.tsx
@@ -117,6 +118,9 @@ const App: React.FC = () => {
               userService.syncOfflineMoods().catch(() => {});
               userService.syncOfflineDiary().catch(() => {});
               backgroundService.init().catch(e => console.warn("Background init failed", e));
+
+              // Explicitly request notification permissions on mount (Android 13+)
+              notificationService.requestPermission().catch(e => console.warn("Notification permission failed", e));
 
               // 3. Web Online Listener (Fallback for non-Capacitor)
               window.addEventListener('online', () => {

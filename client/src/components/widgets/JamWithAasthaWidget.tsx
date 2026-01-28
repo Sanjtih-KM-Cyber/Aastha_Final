@@ -342,7 +342,8 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
     } else if (event.data === 2) { // Paused
       setIsPlaying(false);
       stopProgressLoop();
-      backgroundService.disable('jam');
+      // Keep service alive but update status so user can resume from background
+      backgroundService.updateReason('jam', "Jam Paused ⏸️", "Open to resume");
     } else if (event.data === 0) { // Ended
       handleTrackEnd();
     }

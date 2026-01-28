@@ -52,28 +52,32 @@ export interface SubconsciousBlock {
 }
 
 // ============================================================================
-// 2026 GOLDEN STACK ARCHITECTURE
+// 2026 GOLDEN STACK ARCHITECTURE (SPEED + QUALITY OPTIMIZED)
 // ============================================================================
-const MODEL_CONFIG = {
-    soul: {
+const MODELS = {
+    // THE SOUL: High EQ, Qwen 3 32B (Primary)
+    chat: {
         primary: 'qwen/qwen3-32b',
         fallback: 'meta-llama/llama-4-maverick-17b-128e-instruct'
     },
-    brain: {
-        primary: 'meta-llama/llama-4-scout-17b-16e-instruct',
-        fallback: 'llama-3.1-8b-instant'
+    // THE BRAIN: Reverted to 8B for INSTANT UI switching (Latency Critical)
+    logic: {
+        primary: 'llama-3.1-8b-instant',
+        fallback: 'meta-llama/llama-4-scout-17b-16e-instruct'
     },
-    hands: {
+    // THE HANDS: Real tool use
+    tools: {
         primary: 'groq/compound',
         fallback: 'llama-3.3-70b-versatile'
     },
-    subconscious: {
+    // THE SUBCONSCIOUS: Background tasks (Fastest)
+    fast: {
         primary: 'openai/gpt-oss-20b',
         fallback: 'llama-3.1-8b-instant'
     }
 };
 
-type ModelCategory = keyof typeof MODEL_CONFIG;
+type ModelCategory = keyof typeof MODELS;
 
 // ============================================================================
 // SAFE EXECUTION HELPERS
@@ -89,7 +93,7 @@ const safeChatCompletion = async (
     maxTokens: number = 500,
     jsonMode: boolean = false
 ): Promise<any> => {
-    const config = MODEL_CONFIG[category];
+    const config = MODELS[category];
     const modelsToTry = [config.primary, config.fallback];
 
     for (let i = 0; i < modelsToTry.length; i++) {
@@ -103,20 +107,26 @@ const safeChatCompletion = async (
             const keyIndex = (start + k) % groqKeys.length;
             try {
                 const client = getGroqClient(keyIndex);
-                // console.log(`[Groq] Attempting ${category} with ${model} (Key ${keyIndex})`);
 
-                const completion = await client.chat.completions.create({
+                // OPTIMIZATION: Disable thinking for Qwen models to speed up response
+                const isQwen = model.includes('qwen');
+                const params: any = {
                     messages: messages,
                     model: model,
                     temperature: temperature,
                     max_tokens: maxTokens,
                     response_format: jsonMode ? { type: "json_object" } : undefined
-                });
+                };
+
+                if (isQwen) {
+                    params.reasoning_format = "none";
+                }
+
+                const completion = await client.chat.completions.create(params);
 
                 return completion.choices[0]?.message?.content || "";
 
             } catch (error: any) {
-                const isRateLimit = error?.status === 429;
                 const isNotFound = error?.status === 404;
                 console.warn(`[Groq] Failed ${model} (Key ${keyIndex}): ${error?.message || error}`);
 
@@ -139,11 +149,10 @@ async function* safeStreamCompletion(
     temperature: number = 0.7,
     maxTokens: number = 1024
 ) {
-    const config = MODEL_CONFIG[category];
+    const config = MODELS[category];
     const modelsToTry = [config.primary, config.fallback];
 
     // Last Resort Fallback (Real Model) if specific fallbacks fail
-    // This is crucial if the user provided "Future Models" that don't exist yet.
     modelsToTry.push('llama-3.1-8b-instant');
 
     for (let i = 0; i < modelsToTry.length; i++) {
@@ -156,15 +165,22 @@ async function* safeStreamCompletion(
             const keyIndex = (start + k) % groqKeys.length;
             try {
                 const client = getGroqClient(keyIndex);
-                // console.log(`[Stream] Attempting ${category} with ${model} (Key ${keyIndex})`);
 
-                const completion = await client.chat.completions.create({
+                // OPTIMIZATION: Disable thinking for Qwen/Chat models
+                const isQwen = model.includes('qwen');
+                const params: any = {
                     messages: messages,
                     model: model,
                     temperature: temperature,
                     max_tokens: maxTokens,
                     stream: true,
-                });
+                };
+
+                if (isQwen) {
+                    params.reasoning_format = "none";
+                }
+
+                const completion = await client.chat.completions.create(params);
 
                 for await (const chunk of completion) {
                     const content = chunk.choices[0]?.delta?.content || "";
@@ -220,12 +236,13 @@ export const generateSubconscious = async (
     - FLIRTY -> 😳, 🥰, 😉.
 
     **5. USER REPLY OPTIONS (suggested_replies):**
-    - **CRITICAL:** Must be **USER'S Perspective** (First Person).
-    - **FORBIDDEN:** Do NOT use "You", "Do you", "Shall I", "Want me to".
-    - **CORRECT:** "I really need to vent", "Play some sad music", "Tell me a joke", "I'm bored".
+    - **CRITICAL:** MUST be written from the **USER'S PERSPECTIVE** (1st Person).
+    - **Bad (AI asking User):** "Do you want to talk?", "How can I help?", "Shall I play music?"
+    - **Good (User answering AI):** "I need to vent", "Play some sad music", "I'm feeling lonely", "Tell me a joke".
+    - **Rule:** These are chips the USER will click to say to YOU.
 
     **6. GOD MODE TOOLS (The Hands):**
-    - **Music:** { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil"], "genres": ["Melody"], "duration": 30, "autoplay": true } } }
+    - **Music:** { "name": "control_widget", "params": { "widget": "jam", "params": { "query": "Tamil melody hits 2024", "autoplay": true } } }
     - **Soundscape:** { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6" } } }
     - **Focus:** { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "action": "start", "focusDuration": 25 } } }
     - **Breathing:** { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
@@ -259,8 +276,8 @@ export const generateSubconscious = async (
     }
 
     try {
-        // USE "THE BRAIN" (Logic/Routing)
-        const rawJson = await safeChatCompletion('brain', messages, 0.6, 500, true);
+        // USE "THE BRAIN" (Logic/Routing) - Primary: llama-3.1-8b-instant
+        const rawJson = await safeChatCompletion('logic', messages, 0.6, 500, true);
         const parsed = JSON.parse(rawJson) as SubconsciousBlock;
 
         // Hard Overrides
@@ -280,7 +297,6 @@ export const generateSubconscious = async (
 
     } catch (error) {
         console.error("Subconscious Failed:", error);
-        // Emergency Fallback (Gemini could be added here, but keeping it simple as safeChatCompletion already has fallbacks)
         return {
             internal_monologue: "System Reboot...",
             mood: "neutral",
@@ -299,8 +315,6 @@ export const generateSubconscious = async (
 // ============================================================================
 export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number, model?: string) {
 
-  // NOTE: The 'model' arg is preserved for backward compatibility but ignored in favor of Golden Stack
-  
   let finalPrompt = systemPrompt;
   // Inject Voice Tags Logic if not present (simplified check)
   if (!systemPrompt.includes("Voice Director")) {
@@ -320,9 +334,9 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       }))
   ];
 
-  // USE "THE SOUL" (Chat & Roleplay) for Voice
+  // USE "THE SOUL" (Chat & Roleplay) for Voice - Primary: qwen3-32b
   try {
-      const stream = safeStreamCompletion('soul', messages, 0.7, maxTokens || 1024);
+      const stream = safeStreamCompletion('chat', messages, 0.7, maxTokens || 1024);
       for await (const chunk of stream) {
           if (chunk) yield chunk;
       }
@@ -345,13 +359,9 @@ export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: str
       }))
   ];
 
-  // USE "THE SOUL" (Chat) OR "THE HANDS" (Complex)?
-  // ChatController uses Workhorse for non-voice/complex chats.
-  // We'll map it to 'soul' for consistency in personality, but could be 'hands' if tool use is heavy.
-  // Given user description: "THE SOUL (Chat & Roleplay)" fits best.
-
+  // USE "THE SOUL" (Chat) - Primary: qwen3-32b
   try {
-      const stream = safeStreamCompletion('soul', messages, 0.7, maxTokens || 1024);
+      const stream = safeStreamCompletion('chat', messages, 0.7, maxTokens || 1024);
       for await (const chunk of stream) {
           if (chunk) yield chunk;
       }

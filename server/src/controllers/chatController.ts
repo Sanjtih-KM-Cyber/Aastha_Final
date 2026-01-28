@@ -561,7 +561,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     }
 
     // Force Audio if Mood is High Emotion
-    const isEmotional = ['sad', 'crying'].includes(subconscious.mood || ''); // Reduced emotional trigger to avoid random voice notes
+    const isEmotional = ['sad', 'crying', 'angry', 'concerned'].includes(subconscious.mood || '');
     const hasVoiceQuota = (user.dailyVoiceCount || 0) < 2;
 
     // Explicit User Intent (e.g. "Send voice note", "Speak to me")
@@ -570,7 +570,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // Only generate audio if:
     // 1. Voice Mode is ACTIVE (isVoiceMode)
     // 2. OR User explicitly asked for it
-    // 3. OR Mood is deeply emotional (Sad/Crying only)
+    // 3. OR Mood is deeply emotional (Sad/Crying/Angry/Concerned)
     const shouldGenerateAudio = ((isVoiceMode || explicitVoiceIntent || isEmotional) && (isPro || hasVoiceQuota)) && fullTextResponse.trim().length > 0;
     let savedAudioUrl: string | undefined;
 

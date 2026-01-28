@@ -58,6 +58,7 @@ export const generateSubconscious = async (
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
     const client = getGroqClient();
+    // THE BRAIN: Reverted to 8B for INSTANT UI switching (Latency Critical)
     const model = "llama-3.1-8b-instant"; 
 
     const systemPrompt = `
@@ -76,16 +77,17 @@ export const generateSubconscious = async (
     - **Override:** If 'forceReply' is TRUE -> Always **'reply'**.
 
     **2. SMART CHIPS (suggested_replies):**
-    - Generate 3 chips strictly from the **USER'S PERSPECTIVE** (1st Person).
-    - **Bad:** "How are you?", "Do you want to talk?", "Tell me more." (AI asking User)
-    - **Good:** "I'm exhausted", "That makes sense", "Let's distract me." (User answering AI)
+    - **CRITICAL:** MUST be written from the **USER'S PERSPECTIVE** (1st Person).
+    - **Bad (AI asking User):** "Do you want to talk?", "How can I help?", "Shall I play music?"
+    - **Good (User answering AI):** "I need to vent", "Play some sad music", "I'm feeling lonely", "Tell me a joke".
+    - **Rule:** These are chips the USER will click to say to YOU.
 
     **3. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs.
     - **Music (Jam):**
       - If user asks for specific song/podcast: { "widget": "jam", "params": { "query": "Play <Song Name> <Artist>", "autoplay": true } }
-      - If user says "Play music" (General): { "widget": "jam", "params": { "mood": "chill", "genre": "lofi", "autoplay": true } }
-      - If user specifies language/year: { "widget": "jam", "params": { "language": "Hindi", "year": "2024", "autoplay": true } }
+      - If user says "Play music" (General): { "widget": "jam", "params": { "languages": ["Tamil"], "genres": ["Melody"], "duration": 30, "autoplay": true } }
+      - If user specifies language/year: { "widget": "jam", "params": { "languages": ["Hindi"], "year": "2024", "autoplay": true } }
 
     - **Soundscape (ASMR DJ):**
       - Mix sounds for specific vibes. Always vary the mix slightly.
@@ -165,7 +167,7 @@ export const generateSubconscious = async (
             ui_action: "none",
             strategy: "reply",
             reaction: null,
-            suggested_replies: ["I'm still here", "Continue", "What happened?"],
+            suggested_replies: ["I'm here", "Wait", "Reload"],
             tool_calls: []
         };
     }
@@ -173,7 +175,8 @@ export const generateSubconscious = async (
 
 // --- 4. THE VOICE STREAMER (Fallback) ---
 export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
-  const model = "llama-3.1-8b-instant";
+  // THE SOUL: High EQ, Qwen 3 32B (Primary)
+  const model = "qwen/qwen3-32b";
   
   // Format history for Groq (Text Only)
   const messages: any[] = [
@@ -196,6 +199,9 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
             temperature: 0.7,
             max_tokens: maxTokens || 1024,
             stream: true,
+            // OPTIMIZATION: Disable thinking for Qwen models
+            // @ts-ignore
+            reasoning_format: "none"
         });
 
         for await (const chunk of completion) {
