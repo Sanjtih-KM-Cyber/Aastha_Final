@@ -39,7 +39,7 @@ export interface ChatMessage {
 
 export interface SubconsciousBlock {
     internal_monologue: string;
-    mood: 'happy' | 'sad' | 'concerned' | 'sassy' | 'calm' | 'excited' | 'neutral';
+    mood: 'happy' | 'sad' | 'concerned' | 'sassy' | 'calm' | 'excited' | 'neutral' | 'angry';
     status_display: string;
     ui_action: 'none' | 'listen';
     strategy: 'reply' | 'listen';
@@ -60,7 +60,7 @@ const MODEL_CONFIG = {
         fallback: 'meta-llama/llama-4-maverick-17b-128e-instruct'
     },
     brain: {
-        primary: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        primary: 'llama-3.1-8b-instant',
         fallback: 'llama-3.1-8b-instant'
     },
     hands: {
@@ -221,8 +221,8 @@ export const generateSubconscious = async (
 
     **5. USER REPLY OPTIONS (suggested_replies):**
     - **CRITICAL:** Must be **USER'S Perspective** (First Person).
-    - **FORBIDDEN:** Do NOT use "You", "Do you", "Shall I", "Want me to".
-    - **CORRECT:** "I really need to vent", "Play some sad music", "Tell me a joke", "I'm bored".
+    - **Bad:** "I can help you", "Try this", "Do you want to talk?". (AI asking User)
+    - **Good:** "I feel anxious", "Play some music", "Tell me more". (User answering AI)
 
     **6. GOD MODE TOOLS (The Hands):**
     - **Music:** { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil"], "genres": ["Melody"], "duration": 30, "autoplay": true } } }
@@ -235,7 +235,7 @@ export const generateSubconscious = async (
     **OUTPUT JSON ONLY:**
     {
       "internal_monologue": "Raw thought process.",
-      "mood": "happy"|"sad"|"concerned"|"sassy"|"calm"|"excited"|"neutral",
+      "mood": "happy"|"sad"|"concerned"|"sassy"|"calm"|"excited"|"neutral"|"angry",
       "status_display": "Thinking...",
       "ui_action": "listen"|"none",
       "strategy": "reply"|"listen",
@@ -306,7 +306,8 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
   if (!systemPrompt.includes("Voice Director")) {
       finalPrompt = `
       You are the Voice Director.
-      **1. DETECT LANGUAGE & SCRIPT:**
+      **1. NO THINKING:** Do not output internal monologue or thoughts. Reply directly.
+      **2. DETECT LANGUAGE & SCRIPT:**
       - English -> No Style Tags.
       - Regional/Hinglish -> [STYLE: <emotion>, <speed>][TTS: <native_script>].
       ${systemPrompt}`;
