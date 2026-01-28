@@ -242,16 +242,41 @@ export const generateSubconscious = async (
     - **Rule:** These are chips the USER will click to say to YOU.
 
     **6. GOD MODE TOOLS (The Hands):**
-    - **Music:** { "name": "control_widget", "params": { "widget": "jam", "params": { "query": "Tamil melody hits 2024", "autoplay": true } } }
-    - **Soundscape:** { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6" } } }
-    - **Focus:** { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "action": "start", "focusDuration": 25 } } }
-    - **Breathing:** { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
-    - **Diary:** { "name": "write_diary", "params": { "title": "Auto", "content": "...", "date": "YYYY-MM-DD" } }
-    - **Theme:** { "name": "change_theme", "params": { "color": "blue" } }
+    - **Music (Jam):**
+      - If user asks for specific song/podcast: { "name": "control_widget", "params": { "widget": "jam", "params": { "query": "Play <Song Name> <Artist>", "autoplay": true } } }
+      - If user says "Play music" (General): { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil"], "genres": ["Melody"], "duration": 30, "autoplay": true } } }
+      - If user specifies language/year: { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Hindi"], "year": "2024", "autoplay": true } } }
 
-    **OUTPUT JSON ONLY:**
+    - **Soundscape (ASMR DJ):**
+      - Mix sounds for specific vibes. Always vary the mix slightly.
+      - Params: { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6,fire:0.3,thunder:0.1", "volume": 0.8 } } }
+      - For "Work": "cafe:0.7,rain:0.3"
+      - For "Sleep": "night:0.6,wind:0.2"
+
+    - **Focus (Pomodoro):**
+      - If user wants to work/study: { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 25, "breakDuration": 5 } } }
+      - If user specifies time ("Work for 50 mins"): { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "mode": "focus", "focusDuration": 50 } } }
+
+    - **Breathing:**
+      - Anxiety/Stress -> { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Grounding" } } }
+      - Sleep/Insomnia -> { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } } (4-7-8)
+      - Focus/Energy -> { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Box" } } }
+
+    - **Diary:**
+      - If user says "Note this down" or "Dear Diary": { "name": "write_diary", "params": { "action": "write", "title": "Auto Entry", "content": "<Summarize user input>" } }
+
+    - **Theme:**
+      - { "name": "change_theme", "params": { "color": "blue" } }
+
+    - **Social Detective (The Web):**
+      - If the user mentions a specific person (friend/ex/family) and reveals something new about them:
+      - Call 'update_dossier' -> { "name": "update_dossier", "params": { "name": "Bob", "deltaScore": -5, "verdict": "SUSPECT", "newTrait": "Flakes last minute" } }
+      - deltaScore: Negative for bad actions, Positive for good.
+      - Verdict: Set if clear pattern emerges (TOXIC/KEEPER/SUSPECT/NPC).
+
+    **OUTPUT JSON ONLY (Strict Format):**
     {
-      "internal_monologue": "Raw thought process.",
+      "internal_monologue": "Raw thought process about the user's state.",
       "mood": "happy"|"sad"|"concerned"|"sassy"|"calm"|"excited"|"neutral",
       "status_display": "Thinking...",
       "ui_action": "listen"|"none",
