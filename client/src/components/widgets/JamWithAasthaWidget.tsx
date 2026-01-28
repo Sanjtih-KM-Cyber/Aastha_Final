@@ -225,9 +225,11 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   
   // Ref to track latest state for YouTube Event Listener (Closure Fix)
   const stateRef = useRef({ loopMode, loopTarget, currentLoopCount, currentIndex, queue });
+  const queueRef = useRef(queue); // Separate ref for Queue to ensure safe appending
 
   useEffect(() => {
       stateRef.current = { loopMode, loopTarget, currentLoopCount, currentIndex, queue };
+      queueRef.current = queue;
   }, [loopMode, loopTarget, currentLoopCount, currentIndex, queue]);
 
   const playerRef = useRef<any>(null);
@@ -503,7 +505,8 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                   uuid: generateUUID()
               };
 
-              if (queue.length > 0) {
+              // Use Ref to check length safely during async calls/stale closures
+              if (queueRef.current.length > 0) {
                   setQueue(prev => [...prev, newTrack]);
               } else {
                   setQueue([newTrack]);

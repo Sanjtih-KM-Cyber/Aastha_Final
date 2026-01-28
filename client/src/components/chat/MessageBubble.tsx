@@ -129,9 +129,8 @@ const extractProposals = (text: string) => {
     // Also remove markdown json blocks if they leaked
     cleanText = cleanText.replace(/```json[\s\S]*?```/g, '').trim();
 
-    // FIXED REGEX: Matches params with single OR double quotes
-    // capturing groups: 1=tool, 2=quote_char, 3=params_content, 4=reason
-    const proposalRegex = /<proposal tool="([^"]+)" params=(['"])([\s\S]*?)\2 reason="([^"]+)" \/>/g;
+    // FIXED REGEX: Matches params with single OR double quotes, flexible spacing
+    const proposalRegex = /<proposal\s+tool="([^"]+)"\s+params=(['"])([\s\S]*?)\2\s+reason="([^"]+)"\s*\/>/g;
     const proposals = [];
     let match;
 
