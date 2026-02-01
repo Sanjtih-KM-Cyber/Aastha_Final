@@ -1,6 +1,7 @@
 import { Person } from '../models/Person';
 import Groq from 'groq-sdk'; // Use Groq
 import Chat from '../models/Chat';
+import { decrypt } from '../utils/serverEncryption';
 
 // Reuse existing key logic or just pull from env
 const getGroqClient = () => {
@@ -25,11 +26,11 @@ export const detectiveService = {
             });
             // Sort by time descending (newest first) for context limit, then reverse for prompt
             flatMessages.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-            const recentMessages = flatMessages.slice(0, 50);
+            const recentMessages = flatMessages.slice(0, 20); // Reduced from 50 to 20 to prevent 413 Rate Limit
 
             if (!recentMessages || recentMessages.length === 0) return { status: 'no_history' };
 
-            const textLog = recentMessages.reverse().map((m: any) => `${m.role}: ${m.content}`).join('\n');
+            const textLog = recentMessages.reverse().map((m: any) => `${m.role}: ${decrypt(m.content)}`).join('\n');
 
             const prompt = `
             You are a Social Detective. Analyze the following chat history.

@@ -3,6 +3,7 @@ import User from '../models/User';
 import Diary from '../models/Diary';
 import { sendGhostEmail } from './emailService';
 import { generateGhostEmailContent } from './geminiService';
+import { decrypt } from '../utils/serverEncryption';
 import dotenv from 'dotenv';
 // import { sendPushNotification } from './notificationService'; // Placeholder for Firebase
 
@@ -38,7 +39,21 @@ export const init = () => {
 
             for (const user of inactiveUsers) {
                 try {
-                    console.log(`[GhostService] Ghosting user: ${user._id} (${user.email})`);
+                    let email = user.email;
+                    if (!email && user.emailEncrypted) {
+                        try {
+                            email = decrypt(user.emailEncrypted);
+                        } catch (e) {
+                            console.error(`[GhostService] Failed to decrypt email for user ${user._id}`);
+                        }
+                    }
+
+                    if (!email) {
+                        console.warn(`[GhostService] Skipping user ${user._id}: No valid email found.`);
+                        continue;
+                    }
+
+                    console.log(`[GhostService] Ghosting user: ${user._id} (${email})`);
 
                     // 1. Get Keywords from latest diary entry
                     const latestEntry = await Diary.findOne({ user: user._id }).sort({ createdAt: -1 });
@@ -67,7 +82,7 @@ export const init = () => {
                     // 4. Send Email
                     // @ts-ignore: TS thinks persona is only 'aastha' because of default but it can be 'aarav'/'aastik'
                     const senderName = (user.persona === 'aarav' || user.persona === 'aastik') ? 'Aastik' : 'Aastha';
-                    const sent = await sendGhostEmail(user.email!, user.name, emailBody, senderName);
+                    const sent = await sendGhostEmail(email, user.name, emailBody, senderName);
 
                     /*
                     // --- FUTURE FIREBASE INTEGRATION STUB ---
