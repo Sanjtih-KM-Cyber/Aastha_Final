@@ -66,8 +66,11 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             if (saved) {
                 const parsed = JSON.parse(saved);
                 if (parsed.width && parsed.height) setSize({ width: parsed.width, height: parsed.height });
-                // Enforce Center-Left opening by IGNORING saved x/y
-                // if (parsed.x !== undefined && parsed.y !== undefined) setPosition({ x: parsed.x, y: parsed.y });
+                // Enforce Center-Left opening by IGNORING saved x/y unless we decide to respect "sit where left"
+                // The new requirement is "sit where I leave it", so we SHOULD respect saved position if valid.
+                if (parsed.x !== undefined && parsed.y !== undefined) {
+                     setPosition({ x: parsed.x, y: parsed.y });
+                }
                 if (parsed.isMinimized !== undefined) setIsMinimized(parsed.isMinimized);
             }
         } catch (e) {
@@ -102,11 +105,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
       // Calculate "Center Left" for desktop
       if (!mobile) {
          const cy = (window.innerHeight - initialHeight) / 2;
-         // Set X to 100px from left (or just enough to clear sidebar if any, but 100 is safe "Center Left")
-         // Assuming Sidebar is ~280px-320px based on ChatView pl-80 (320px).
-         // Let's position it at x=350 to be just right of sidebar, or truly "Center Left" of the remaining space?
-         // User said "Centre Left". Let's assume standard "Left-ish Center".
-         // 360px is a good safe zone if sidebar is active.
+         // Set X to 360px (Sidebar width + padding)
          setCenterPos({ x: 360, y: Math.max(60, cy) });
       }
     };
@@ -164,12 +163,6 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   const handleClose = (e: React.MouseEvent) => {
     e.stopPropagation();
     onClose();
-    // Don't save "closed" state here, parent handles open/close.
-    // But we should probably reset minimized state for next open?
-    // Actually, user might want it to re-open minimized?
-    // Let's assume on close we DON'T reset persistence, so it remembers preference.
-    // BUT we do animate out.
-    // NOTE: If we want "reset on close", we'd clear storage. But goal is persistence.
   };
 
   const toggleMinimize = (e: React.MouseEvent) => {
@@ -206,8 +199,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
       // This prevents the "rubber band" effect by calculating the legal bounds
       // and setting the position there, effectively stopping it dead.
       const maxX = window.innerWidth - size.width;
-      const maxY = window.innerHeight - size.height;
-      const minY = 60; // Header Height
+      const maxY = window.innerHeight - (isMinimized ? 48 : size.height);
+      const minY = 60; // Header Height (Search Bar Barrier)
 
       if (newX < 0) newX = 0;
       if (newX > maxX) newX = maxX;
@@ -215,10 +208,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
       if (newY > maxY) newY = maxY;
 
       setPosition({ x: newX, y: newY });
-      // We do NOT save state if we want it to reset on next open (per previous request)
-      // But user said "sit where i leave it" during usage.
-      // The previous logic ignored 'x/y' from localStorage on mount, but we set 'position' state here.
-      // So it persists during the session, but resets on reload. Correct.
+      saveState({ x: newX, y: newY }); // PERSIST THE POSITION
   };
 
   return (
@@ -237,6 +227,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             scale: 1, 
             width: isMobile ? '100%' : (isMinimized ? 250 : size.width),
             height: currentHeight,
+            // Use top/left for positioning to ensure it STAYS where placed
             top: isMobile ? 0 : effectivePos.y,
             left: isMobile ? 0 : effectivePos.x,
             // We set x/y to 0 because we update 'top/left' onDragEnd.
@@ -258,7 +249,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           }
           drag={!isMobile && !isResizing}
           dragControls={dragControls}
-          dragMomentum={false}
+          dragMomentum={false} // Disable momentum to prevent drifting
+          dragElastic={0} // Disable elasticity (rubber band) completely
           dragListener={false}
           onDragEnd={onDragEnd} // SAVE POSITION
           onPointerDownCapture={onFocus}

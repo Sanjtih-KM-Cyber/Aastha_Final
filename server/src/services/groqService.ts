@@ -56,8 +56,8 @@ export interface SubconsciousBlock {
 // ============================================================================
 const MODEL_CONFIG = {
     soul: {
-        primary: 'qwen/qwen3-32b',
-        fallback: 'meta-llama/llama-4-maverick-17b-128e-instruct'
+        primary: 'qwen-2.5-32b-instruct', // UPDATED: Standard Groq ID
+        fallback: 'llama-3.1-70b-versatile'
     },
     brain: {
         primary: 'llama-3.1-8b-instant',
@@ -166,10 +166,53 @@ async function* safeStreamCompletion(
                     stream: true,
                 });
 
+                let buffer = "";
+                let thinkingEnded = false;
+
                 for await (const chunk of completion) {
-                    const content = chunk.choices[0]?.delta?.content || "";
-                    if (content) yield content;
+                    let content = chunk.choices[0]?.delta?.content || "";
+
+                    if (content) {
+                        // FILTER: Aggressively strip <think> tags if they leak
+                        // If we are in the "Thinking" phase (start of message)
+                        if (!thinkingEnded) {
+                            buffer += content;
+
+                            // Check if we have a closing tag yet
+                            if (buffer.includes('</think>')) {
+                                // Strip the whole thought block
+                                buffer = buffer.replace(/<think>[\s\S]*?<\/think>/g, '').trimStart();
+                                thinkingEnded = true; // Done with thinking
+                                if (buffer) yield buffer; // Yield remaining content
+                                buffer = ""; // Clear buffer
+                            } else if (buffer.includes('<think>')) {
+                                // We are inside a thought, DO NOT YIELD anything yet.
+                                // Just wait for more chunks.
+                            } else {
+                                // No thought tag found so far.
+                                // BUT be careful: <think> might come in pieces like "<" "th" "ink>".
+                                // If buffer length is small, maybe wait?
+                                // If buffer is getting long (e.g. > 20 chars) and no <think>, safe to yield.
+                                if (buffer.length > 50) {
+                                    yield buffer;
+                                    buffer = "";
+                                    thinkingEnded = true; // Assume no thinking if not started by now
+                                }
+                            }
+                        } else {
+                             // Thinking phase over, yield freely
+                             // Check for stray tags just in case
+                             content = content.replace(/<think>[\s\S]*?<\/think>/g, '');
+                             if (content) yield content;
+                        }
+                    }
                 }
+
+                // Yield any remaining buffer if it wasn't a thought
+                if (buffer && !buffer.includes('<think>')) {
+                    yield buffer;
+                }
+
                 return; // Success!
 
             } catch (error: any) {
@@ -219,10 +262,20 @@ export const generateSubconscious = async (
     - HAPPY/JOKING -> 😂, ✨, 🔥, 😄.
     - FLIRTY -> 😳, 🥰, 😉.
 
-    **5. USER REPLY OPTIONS (suggested_replies):**
-    - **CRITICAL:** Must be **USER'S Perspective** (First Person).
-    - **Bad:** "I can help you", "Try this", "Do you want to talk?". (AI asking User)
-    - **Good:** "I feel anxious", "Play some music", "Tell me more". (User answering AI)
+    **5. SUGGESTION CHIPS (suggested_replies):**
+    - **STRICT RULE:** These must be phrases the **USER** would say to the AI.
+    - **PERSPECTIVE:** First Person (I, Me, My).
+    - **BANNED:** Do NOT use "You", "Try", "How about". Do NOT ask questions.
+    - **GOOD EXAMPLES:**
+      - "I feel lonely"
+      - "Play a sad song"
+      - "Tell me a joke"
+      - "What do you think?"
+      - "That's interesting"
+    - **BAD EXAMPLES (NEVER USE):**
+      - "How are you feeling?" (AI asking User)
+      - "Try breathing exercises" (AI suggesting)
+      - "I can help with that" (AI speaking)
 
     **6. GOD MODE TOOLS (The Hands):**
     - **Music:** { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil"], "genres": ["Melody"], "duration": 30, "autoplay": true } } }
@@ -306,7 +359,7 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
   if (!systemPrompt.includes("Voice Director")) {
       finalPrompt = `
       You are the Voice Director.
-      **1. NO THINKING:** Do not output internal monologue or thoughts. Reply directly.
+      **1. STRICT NO THINKING POLICY:** Do NOT output any internal monologue, <think> tags, or reasoning. Just REPLY.
       **2. DETECT LANGUAGE & SCRIPT:**
       - English -> No Style Tags.
       - Regional/Hinglish -> [STYLE: <emotion>, <speed>][TTS: <native_script>].
