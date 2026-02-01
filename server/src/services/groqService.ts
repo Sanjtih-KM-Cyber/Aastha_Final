@@ -61,7 +61,7 @@ const MODEL_CONFIG = {
     },
     brain: {
         primary: 'llama-3.1-8b-instant',
-        fallback: 'llama-3.1-8b-instant'
+        fallback: 'meta-llama/llama-4-scout-17b-16e-instruct'
     },
     hands: {
         primary: 'groq/compound',

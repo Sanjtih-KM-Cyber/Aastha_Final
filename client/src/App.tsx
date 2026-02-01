@@ -13,6 +13,7 @@ import { BiometricGuard } from './components/auth/BiometricGuard';
 import { ErrorBoundary } from './components/ErrorBoundary'; // Import ErrorBoundary
 import { Toaster } from 'react-hot-toast';
 import { App as CapacitorApp } from '@capacitor/app';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { scheduleGhostNotifications, clearGhostNotifications } from './services/offlineGhostService';
 import { userService } from './services/userService';
 import { backgroundService } from './services/backgroundService';
@@ -118,7 +119,24 @@ const App: React.FC = () => {
               userService.syncOfflineDiary().catch(() => {});
               backgroundService.init().catch(e => console.warn("Background init failed", e));
 
-              // 3. Web Online Listener (Fallback for non-Capacitor)
+              // 3. Notification Setup (Channels & Permissions)
+              try {
+                  await LocalNotifications.requestPermissions();
+                  await LocalNotifications.createChannel({
+                      id: 'pop_notifications',
+                      name: 'Aastha Alerts',
+                      description: 'Notifications for Timers and Music',
+                      importance: 5,
+                      visibility: 1,
+                      vibration: true,
+                      sound: 'default'
+                  });
+                  console.log('✅ Notification channel created');
+              } catch (e) {
+                  console.error('❌ Error creating channel:', e);
+              }
+
+              // 4. Web Online Listener (Fallback for non-Capacitor)
               window.addEventListener('online', () => {
                   userService.syncOfflineMoods().catch(() => {});
                   userService.syncOfflineDiary().catch(() => {});

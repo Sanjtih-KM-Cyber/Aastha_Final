@@ -306,7 +306,8 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
             title: mode === 'focus' ? "Session Complete! 🎉" : "Break Over! 🚀",
             body: mode === 'focus' ? "Great work. Time to recharge." : "Ready to focus again?",
             schedule: { at: new Date() },
-            sound: 'res_bell.mp3'
+            channelId: 'pop_notifications',
+            sound: undefined // Use channel default
         }]
       }).catch(console.error);
       
@@ -358,9 +359,12 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
     }
   };
 
-  const toggleTimer = (e: React.MouseEvent) => {
+  const toggleTimer = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Stop propagation for Minimized button
     if (!isActive) {
+        // Request permissions first
+        await LocalNotifications.requestPermissions();
+
         // Start
         const now = Date.now();
         const end = now + (timeLeft * 1000);
