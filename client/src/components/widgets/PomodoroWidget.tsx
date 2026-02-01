@@ -193,21 +193,67 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
   // GOD MODE: Apply AI Instructions (Full Control)
   useEffect(() => {
       if (isOpen && initialParams) {
-          // 1. Handle explicit commands (Start, Stop, Pause, Resume, Reset)
-          // The 'action' param takes precedence over simple state updates
           const action = (initialParams as any).action;
 
-          if (action) {
+          // --- 1. CONFIGURATION UPDATES ---
+          // Determine if we need to change settings and reset the timer
+          let configChanged = false;
+
+          if (initialParams.focusDuration && initialParams.focusDuration !== focusDuration) {
+             setFocusDuration(initialParams.focusDuration);
+             configChanged = true;
+          }
+          if (initialParams.breakDuration && initialParams.breakDuration !== breakDuration) {
+             setBreakDuration(initialParams.breakDuration);
+             configChanged = true;
+          }
+          if (initialParams.mode) {
+              setMode(initialParams.mode);
+              configChanged = true;
+          }
+
+          // If Configuration Changed -> Hard Reset & Update State
+          if (configChanged) {
+              const nextMode = initialParams.mode || mode;
+              const nextDuration = nextMode === 'focus'
+                 ? (initialParams.focusDuration || focusDuration)
+                 : (initialParams.breakDuration || breakDuration);
+
+              // Only reset if duration is significantly different (avoids jitter)
+              if (Math.abs(timeLeft - nextDuration * 60) > 10) {
+                  setTimeLeft(nextDuration * 60);
+
+                  // Auto-Start unless explicitly stopped/paused/reset
+                  const isExplicitHalt = action === 'stop' || action === 'pause' || action === 'reset';
+
+                  if (!isExplicitHalt) {
+                      const newTarget = Date.now() + (nextDuration * 60 * 1000);
+                      setTargetEndTime(newTarget);
+                      setIsActive(true);
+                      backgroundService.enable(
+                          'pomodoro',
+                          nextMode === 'focus' ? "Focus Mode Active 🧠" : "Break Time 🍃",
+                          "AI Started Session"
+                      );
+                  } else {
+                      // Ensure it's stopped if explicit halt
+                      setIsActive(false);
+                      setTargetEndTime(null);
+                      backgroundService.disable('pomodoro');
+                  }
+              }
+          }
+
+          // --- 2. EXPLICIT ACTIONS (Only if Config didn't already handle the transition) ---
+          // If we just did a hard reset above, we don't need to 'start' again.
+          if (action && !configChanged) {
               if (action === 'stop' || action === 'pause') {
                   if (isActive) {
                       setIsActive(false);
                       setTargetEndTime(null);
                       backgroundService.disable('pomodoro');
                   }
-                  return; // Exit early
-              }
-
-              if (action === 'resume' || action === 'start') {
+              } else if (action === 'resume' || action === 'start') {
                   if (!isActive) {
                       const now = Date.now();
                       const end = now + (timeLeft * 1000);
@@ -219,55 +265,16 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
                           "Resuming..."
                       );
                   }
-                  return; // Exit early
-              }
-
-              if (action === 'reset') {
+              } else if (action === 'reset') {
                    setIsActive(false);
-                   const duration = mode === 'focus' ? focusDuration : breakDuration;
+                   const duration = (initialParams.mode || mode) === 'focus'
+                        ? (initialParams.focusDuration || focusDuration)
+                        : (initialParams.breakDuration || breakDuration);
                    setTimeLeft(duration * 60);
                    setLastMilestone(0);
                    setCurrentMessage("");
                    setTargetEndTime(null);
                    backgroundService.disable('pomodoro');
-                   return; // Exit early
-              }
-          }
-
-          // 2. Handle Configuration Updates (Mode/Duration)
-          let shouldReset = false;
-          if (initialParams.focusDuration && initialParams.focusDuration !== focusDuration) {
-             setFocusDuration(initialParams.focusDuration);
-             shouldReset = true;
-          }
-          if (initialParams.breakDuration && initialParams.breakDuration !== breakDuration) {
-             setBreakDuration(initialParams.breakDuration);
-             shouldReset = true;
-          }
-
-          if (initialParams.mode) {
-              setMode(initialParams.mode);
-              shouldReset = true;
-          }
-
-          // Auto-start if duration/mode changed significantly
-          if (shouldReset) {
-              const duration = (initialParams.mode || mode) === 'focus'
-                 ? (initialParams.focusDuration || focusDuration)
-                 : (initialParams.breakDuration || breakDuration);
-
-              // Only reset if duration changed significantly or user asked for it
-              if (Math.abs(timeLeft - duration * 60) > 10) {
-                  setTimeLeft(duration * 60);
-                  const newTarget = Date.now() + (duration * 60 * 1000);
-                  setTargetEndTime(newTarget);
-                  setIsActive(true);
-                  // Enable background immediately for AI
-                  backgroundService.enable(
-                      'pomodoro',
-                      mode === 'focus' ? "Focus Mode Active 🧠" : "Break Time 🍃",
-                      "AI Started Session"
-                  );
               }
           }
       }
