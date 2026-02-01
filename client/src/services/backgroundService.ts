@@ -68,7 +68,8 @@ class BackgroundService {
               title: content.title,
               text: content.body,
               silent: silent,
-              hidden: false,
+              hidden: false, // Vital for background survival
+              bigText: true,  // Helps Android identify as media
               allowClose: false,
               color: '1c1c1e',
           });

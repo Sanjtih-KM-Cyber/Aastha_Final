@@ -1,18 +1,13 @@
 import Groq from 'groq-sdk';
 
 // --- 1. BROWSER-SAFE ENVIRONMENT SETUP ---
-// We remove 'dotenv' because browsers can't read .env files directly.
-// We use a helper to read Vite's environment variables safely.
-
 const getEnvVar = (key: string) => {
-  // Vite uses import.meta.env
   if (typeof import.meta !== 'undefined' && import.meta.env) {
     return import.meta.env[key] || '';
   }
   return '';
 };
 
-// Rotate keys to prevent rate limits
 const groqKeys = (getEnvVar('VITE_GROQ_API_KEYS') || getEnvVar('VITE_GROQ_API_KEY') || '')
   .split(',')
   .map(key => key.trim())
@@ -22,13 +17,13 @@ if (groqKeys.length === 0) {
   console.warn("Warning: No VITE_GROQ_API_KEYS found. Check Vercel Env Vars.");
 }
 
-const getGroqClient = () => {
-  const randomKey = groqKeys.length > 0 
-    ? groqKeys[Math.floor(Math.random() * groqKeys.length)] 
+// Helper: Get a specific Groq client by index
+const getGroqClient = (index: number) => {
+  const key = groqKeys.length > 0
+    ? groqKeys[index % groqKeys.length]
     : 'dummy_key_missing';
   
-  // 'dangerouslyAllowBrowser: true' is REQUIRED for client-side usage
-  return new Groq({ apiKey: randomKey, dangerouslyAllowBrowser: true });
+  return new Groq({ apiKey: key, dangerouslyAllowBrowser: true });
 };
 
 // --- 2. TYPES ---
@@ -46,9 +41,139 @@ export interface SubconsciousBlock {
     reaction: string | null;
     suggested_replies: string[];
     tool_calls?: {
-        name: 'write_diary' | 'read_diary' | 'control_widget' | 'update_dossier'; // Added update_dossier
+        name: 'write_diary' | 'read_diary' | 'control_widget' | 'update_dossier' | 'change_theme';
         params: any;
     }[];
+}
+
+// ============================================================================
+// 2026 GOLDEN STACK ARCHITECTURE (Ported from Server)
+// ============================================================================
+const MODEL_CONFIG = {
+    soul: {
+        primary: 'qwen/qwen3-32b',
+        fallback: 'meta-llama/llama-4-maverick-17b-128e-instruct'
+    },
+    brain: {
+        primary: 'llama-3.1-8b-instant',
+        fallback: 'meta-llama/llama-4-scout-17b-16e-instruct'
+    },
+    hands: {
+        primary: 'groq/compound',
+        fallback: 'llama-3.3-70b-versatile'
+    },
+    subconscious: {
+        primary: 'openai/gpt-oss-20b',
+        fallback: 'llama-3.1-8b-instant'
+    }
+};
+
+type ModelCategory = keyof typeof MODEL_CONFIG;
+
+// ============================================================================
+// SAFE EXECUTION HELPERS
+// ============================================================================
+
+/**
+ * Attempts to run a chat completion using the Primary model, failing over to Fallback.
+ */
+const safeChatCompletion = async (
+    category: ModelCategory,
+    messages: any[],
+    temperature: number = 0.6,
+    maxTokens: number = 500,
+    jsonMode: boolean = false
+): Promise<any> => {
+    const config = MODEL_CONFIG[category];
+    const modelsToTry = [config.primary, config.fallback];
+
+    for (let i = 0; i < modelsToTry.length; i++) {
+        const model = modelsToTry[i];
+
+        // Load Balance Keys
+        const start = Math.floor(Math.random() * groqKeys.length);
+
+        // Try up to 3 keys per model before switching models
+        for (let k = 0; k < Math.min(3, groqKeys.length); k++) {
+            const keyIndex = (start + k) % groqKeys.length;
+            try {
+                const client = getGroqClient(keyIndex);
+
+                const completion = await client.chat.completions.create({
+                    messages: messages,
+                    model: model,
+                    temperature: temperature,
+                    max_tokens: maxTokens,
+                    response_format: jsonMode ? { type: "json_object" } : undefined
+                });
+
+                return completion.choices[0]?.message?.content || "";
+
+            } catch (error: any) {
+                const isNotFound = error?.status === 404;
+                console.warn(`[Groq Client] Failed ${model} (Key ${keyIndex}): ${error?.message || error}`);
+
+                // If 404 (Model not found), break key loop immediately and try next model
+                if (isNotFound) break;
+            }
+        }
+        console.warn(`[Groq Client] Dropping model ${model} for ${category}...`);
+    }
+
+    throw new Error(`All models failed for category: ${category}`);
+};
+
+/**
+ * Attempts to stream a chat completion using Primary -> Fallback strategy.
+ */
+async function* safeStreamCompletion(
+    category: ModelCategory,
+    messages: any[],
+    temperature: number = 0.7,
+    maxTokens: number = 1024
+) {
+    const config = MODEL_CONFIG[category];
+    const modelsToTry = [config.primary, config.fallback];
+
+    // Last Resort Fallback
+    modelsToTry.push('llama-3.1-8b-instant');
+
+    for (let i = 0; i < modelsToTry.length; i++) {
+        const model = modelsToTry[i];
+
+        // Load Balance Keys
+        const start = Math.floor(Math.random() * groqKeys.length);
+
+        for (let k = 0; k < Math.min(3, groqKeys.length); k++) {
+            const keyIndex = (start + k) % groqKeys.length;
+            try {
+                const client = getGroqClient(keyIndex);
+
+                const completion = await client.chat.completions.create({
+                    messages: messages,
+                    model: model,
+                    temperature: temperature,
+                    max_tokens: maxTokens,
+                    stream: true,
+                });
+
+                for await (const chunk of completion) {
+                    const content = chunk.choices[0]?.delta?.content || "";
+                    if (content) yield content;
+                }
+                return; // Success!
+
+            } catch (error: any) {
+                console.warn(`[Stream Client] Failed ${model} (Key ${keyIndex}): ${error?.message}`);
+                // If 404, stop retrying keys for this model
+                if (error?.status === 404) break;
+            }
+        }
+    }
+
+    // If we get here, everything failed.
+    console.error("❌ safeStreamCompletion: All models exhausted.");
+    throw new Error("Brain Offline");
 }
 
 // --- 3. THE BRAIN (Subconscious Decision Maker) ---
@@ -57,8 +182,6 @@ export const generateSubconscious = async (
     userContext: string,
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
-    const client = getGroqClient();
-    const model = "llama-3.1-8b-instant"; 
 
     const systemPrompt = `
     You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha (or Aastik).
@@ -138,16 +261,8 @@ export const generateSubconscious = async (
     }
 
     try {
-        const response = await client.chat.completions.create({
-            messages: messages,
-            model: model,
-            temperature: 0.6,
-            max_tokens: 500,
-            response_format: { type: "json_object" }
-        });
-
-        const raw = response.choices[0]?.message?.content || "{}";
-        const parsed = JSON.parse(raw) as SubconsciousBlock;
+        const rawJson = await safeChatCompletion('brain', messages, 0.6, 500, true);
+        const parsed = JSON.parse(rawJson) as SubconsciousBlock;
 
         // Failsafe for UI Action consistency
         if (parsed.strategy === 'listen') parsed.ui_action = 'listen';
@@ -171,9 +286,8 @@ export const generateSubconscious = async (
     }
 };
 
-// --- 4. THE VOICE STREAMER (Fallback) ---
+// --- 4. THE VOICE STREAMER (Client Fallback) ---
 export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
-  const model = "llama-3.1-8b-instant";
   
   // Format history for Groq (Text Only)
   const messages: any[] = [
@@ -184,36 +298,13 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
       }))
   ];
 
-  let attempt = 0;
-  const maxRetries = 3;
-
-  while (attempt < maxRetries) {
-    try {
-        const groqClient = getGroqClient();
-        const completion = await groqClient.chat.completions.create({
-            messages: messages,
-            model: model,
-            temperature: 0.7,
-            max_tokens: maxTokens || 1024,
-            stream: true,
-        });
-
-        for await (const chunk of completion) {
-            const content = chunk.choices[0]?.delta?.content || "";
-            if (content) yield content;
-        }
-        return; // Success, exit loop
-    } catch (error: any) {
-        console.error(`Groq Stream Error (Attempt ${attempt + 1}):`, error);
-        attempt++;
-
-        // If last attempt failed, throw error (don't yield garbage text)
-        if (attempt >= maxRetries) {
-             throw new Error("Weak connection. Please try again.");
-        }
-
-        // Short backoff before retry
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-    }
+  try {
+      const stream = safeStreamCompletion('soul', messages, 0.7, maxTokens || 1024);
+      for await (const chunk of stream) {
+          if (chunk) yield chunk;
+      }
+  } catch (e) {
+      console.error("Client Voice Stream Failed:", e);
+      throw e;
   }
 }
