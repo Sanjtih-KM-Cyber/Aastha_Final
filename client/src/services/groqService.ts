@@ -39,7 +39,7 @@ export interface ChatMessage {
 
 export interface SubconsciousBlock {
     internal_monologue: string;
-    mood: 'happy' | 'sad' | 'concerned' | 'sassy' | 'calm' | 'excited' | 'neutral';
+    mood: 'happy' | 'sad' | 'concerned' | 'sassy' | 'calm' | 'excited' | 'neutral' | 'angry';
     status_display: string;
     ui_action: 'none' | 'listen';
     strategy: 'reply' | 'listen';
@@ -77,8 +77,8 @@ export const generateSubconscious = async (
 
     **2. SMART CHIPS (suggested_replies):**
     - Generate 3 chips strictly from the **USER'S PERSPECTIVE** (1st Person).
-    - **Bad:** "How are you?", "Do you want to talk?", "Tell me more." (AI asking User)
-    - **Good:** "I'm exhausted", "That makes sense", "Let's distract me." (User answering AI)
+    - **Bad:** "I can help you", "Try this", "Do you want to talk?". (AI asking User)
+    - **Good:** "I feel anxious", "Play some music", "Tell me more". (User answering AI)
 
     **3. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs.
@@ -114,7 +114,7 @@ export const generateSubconscious = async (
     **OUTPUT JSON ONLY (Strict Format):**
     {
       "internal_monologue": "Raw thought process about the user's state.",
-      "mood": "happy" | "sad" | "concerned" | "sassy" | "calm" | "excited" | "neutral",
+      "mood": "happy" | "sad" | "concerned" | "sassy" | "calm" | "excited" | "neutral" | "angry",
       "status_display": "UI Status (e.g. 'Listening...', 'Vibing', 'Thinking')",
       "ui_action": "listen" | "none",
       "strategy": "reply" | "listen",
