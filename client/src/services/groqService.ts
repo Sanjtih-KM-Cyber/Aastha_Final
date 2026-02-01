@@ -58,6 +58,7 @@ export const generateSubconscious = async (
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
     const client = getGroqClient();
+    // LOGIC/BRAIN: REVERT to Llama 3.1 8B Instant for Speed
     const model = "llama-3.1-8b-instant"; 
 
     const systemPrompt = `
@@ -76,9 +77,10 @@ export const generateSubconscious = async (
     - **Override:** If 'forceReply' is TRUE -> Always **'reply'**.
 
     **2. SMART CHIPS (suggested_replies):**
-    - Generate 3 chips strictly from the **USER'S PERSPECTIVE** (1st Person).
-    - **Bad:** "I can help you", "Try this", "Do you want to talk?". (AI asking User)
-    - **Good:** "I feel anxious", "Play some music", "Tell me more". (User answering AI)
+    - **STRICT RULE:** These must be from the **USER'S PERSPECTIVE** (1st Person).
+    - **NEVER use:** "I can help you", "Try this", "Do you want to talk?", "Here is a suggestion".
+    - **ALWAYS use:** "I feel anxious", "Play some music", "Tell me more", "I'm lonely", "That's funny".
+    - These are buttons the USER will click to reply to YOU.
 
     **3. GOD MODE TOOLS (The Hands):**
     You have full control. Anticipate needs.
@@ -173,11 +175,23 @@ export const generateSubconscious = async (
 
 // --- 4. THE VOICE STREAMER (Fallback) ---
 export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
-  const model = "llama-3.1-8b-instant";
+  // CHAT/SOUL: Use Qwen 32B for Personality, but DISABLE THINKING
+  const model = "qwen-2.5-32b-instruct";
   
   // Format history for Groq (Text Only)
+  // Inject "NO THINKING" instruction
+  const strictSystemPrompt = `
+  ${systemPrompt}
+
+  **IMPORTANT SYSTEM INSTRUCTION:**
+  1. You are running in "Instant Mode".
+  2. **DO NOT** output any internal thought process, reasoning, or <think> tags.
+  3. Start your response IMMEDIATELY with the spoken/text reply.
+  4. Latency is critical.
+  `;
+
   const messages: any[] = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: strictSystemPrompt },
       ...history.map(m => ({ 
           role: m.role, 
           content: typeof m.content === 'string' ? m.content : (m.content as any[]).find(c => c.type === 'text')?.text || "" 
@@ -198,10 +212,45 @@ export async function* streamGroq(history: ChatMessage[], systemPrompt: string, 
             stream: true,
         });
 
+        let thinkingEnded = false;
+        let buffer = "";
+
         for await (const chunk of completion) {
-            const content = chunk.choices[0]?.delta?.content || "";
-            if (content) yield content;
+            let content = chunk.choices[0]?.delta?.content || "";
+
+            if (content) {
+                // FILTER: Aggressively strip <think> tags if they leak
+                if (!thinkingEnded) {
+                    buffer += content;
+
+                    if (buffer.includes('</think>')) {
+                        buffer = buffer.replace(/<think>[\s\S]*?<\/think>/g, '').trimStart();
+                        thinkingEnded = true;
+                        if (buffer) yield buffer;
+                        buffer = "";
+                    } else if (buffer.includes('<think>')) {
+                        // Wait for end of thought
+                    } else {
+                         // Safety: If buffer gets too long without tags, assume no thought
+                         if (buffer.length > 50) {
+                             yield buffer;
+                             buffer = "";
+                             thinkingEnded = true;
+                         }
+                    }
+                } else {
+                    // Just in case tags appear later
+                    content = content.replace(/<think>[\s\S]*?<\/think>/g, '');
+                    if (content) yield content;
+                }
+            }
         }
+
+        // Flush remaining buffer
+        if (buffer && !buffer.includes('<think>')) {
+            yield buffer;
+        }
+
         return; // Success, exit loop
     } catch (error: any) {
         console.error(`Groq Stream Error (Attempt ${attempt + 1}):`, error);

@@ -96,50 +96,53 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const { currentTheme } = useTheme();
   const { setPreventAutoLock } = useAuth();
   
+  // --- STATE INITIALIZATION (LAZY LOAD FROM LOCAL STORAGE) ---
+  // Fixes race condition where initialParams would overwrite empty queue before useEffect load
+  const [queue, setQueue] = useState<Track[]>(() => {
+      try {
+          const saved = localStorage.getItem('jam_queue');
+          if (saved) {
+              const parsed = JSON.parse(saved);
+              if (Array.isArray(parsed)) {
+                  return parsed.map((t: any) => ({ ...t, uuid: t.uuid || generateUUID() }));
+              }
+          }
+      } catch(e) { console.error("Failed to load queue init", e); }
+      return [];
+  });
+
+  const [currentIndex, setCurrentIndex] = useState(() => {
+      const saved = localStorage.getItem('jam_index');
+      return saved ? parseInt(saved, 10) || 0 : 0;
+  });
+
+  const [loopMode, setLoopMode] = useState<LoopMode>(() => {
+      try {
+          const saved = localStorage.getItem('jam_state');
+          if (saved) {
+              const parsed = JSON.parse(saved);
+              return parsed.loopMode || 'off';
+          }
+      } catch(e) {}
+      return 'off';
+  });
+
+  const [loopTarget, setLoopTarget] = useState(() => {
+      try {
+          const saved = localStorage.getItem('jam_state');
+          if (saved) {
+              const parsed = JSON.parse(saved);
+              return parsed.loopTarget || 2;
+          }
+      } catch(e) {}
+      return 2;
+  });
+
   // Audio State
   const [isPlaying, setIsPlaying] = useState(false);
-  const [queue, setQueue] = useState<Track[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  // Loop Engine State
-  const [loopMode, setLoopMode] = useState<LoopMode>('off');
-  const [loopTarget, setLoopTarget] = useState(2);
   const [currentLoopCount, setCurrentLoopCount] = useState(1);
 
-  // Persistence: Load on Mount
-  useEffect(() => {
-    const savedQ = localStorage.getItem('jam_queue');
-    const savedIdx = localStorage.getItem('jam_index');
-    const savedState = localStorage.getItem('jam_state');
-
-    if (savedQ) {
-        try {
-            const parsed = JSON.parse(savedQ);
-            if (Array.isArray(parsed)) {
-                // MIGRATION: Ensure all loaded tracks have UUIDs
-                const hydrated = parsed.map((t: any) => ({
-                    ...t,
-                    uuid: t.uuid || generateUUID()
-                }));
-                setQueue(hydrated);
-            }
-        } catch(e) { console.error("Failed to load queue", e); }
-    }
-    if (savedIdx) {
-        const idx = parseInt(savedIdx);
-        if (!isNaN(idx)) setCurrentIndex(idx);
-    }
-    if (savedState) {
-        try {
-            const parsed = JSON.parse(savedState);
-            if (parsed.loopMode) setLoopMode(parsed.loopMode);
-            if (parsed.loopTarget) setLoopTarget(parsed.loopTarget);
-            if (parsed.isPlaying !== undefined) setIsPlaying(parsed.isPlaying);
-        } catch (e) { console.error("Failed to load jam state", e); }
-    }
-  }, []);
-
-  // Persistence: Save on Change
+  // Persistence: Save on Change (We don't need Load effect anymore, handled by lazy init)
   useEffect(() => {
       localStorage.setItem('jam_queue', JSON.stringify(queue));
       localStorage.setItem('jam_index', currentIndex.toString());
@@ -502,6 +505,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                   uuid: generateUUID()
               };
 
+              // APPEND LOGIC: Always append if queue exists
               if (queue.length > 0) {
                   setQueue(prev => [...prev, newTrack]);
               } else {
