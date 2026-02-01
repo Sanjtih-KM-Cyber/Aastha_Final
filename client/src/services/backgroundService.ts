@@ -162,6 +162,16 @@ class BackgroundService {
     // Ideally, we force migration.
   }
 
+  async disableWebViewOptimizations() {
+    if (!Capacitor.isNativePlatform()) return;
+    try {
+        console.log("[BackgroundService] Disabling WebView Optimizations");
+        await BackgroundMode.disableWebViewOptimizations();
+    } catch (e) {
+        console.error("[BackgroundService] Failed to disable webview opts", e);
+    }
+  }
+
   isActive() {
     return this.reasons.size > 0;
   }

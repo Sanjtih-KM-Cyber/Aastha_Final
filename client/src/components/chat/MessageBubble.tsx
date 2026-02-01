@@ -137,9 +137,14 @@ const extractProposals = (text: string) => {
 
     while ((match = proposalRegex.exec(cleanText)) !== null) {
         try {
+            let jsonString = match[3];
+            // If the params string was wrapped in single quotes, the internal JSON keys/values might validly use double quotes.
+            // But if the LLM escaped things weirdly, we might need cleanup.
+            // Standard JSON.parse expects double quotes for keys/strings.
+
             proposals.push({
                 tool: match[1],
-                params: JSON.parse(match[3]), // match[3] is the content inside quotes
+                params: JSON.parse(jsonString),
                 reason: match[4]
             });
             // Remove the tag from visible text

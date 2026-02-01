@@ -296,6 +296,9 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   };
 
   const onPlayerReady = (event: any) => {
+      // FORCE Enable Background Execution for WebView
+      backgroundService.disableWebViewOptimizations();
+
       // Set initial volume
       event.target.setVolume(volume);
 
