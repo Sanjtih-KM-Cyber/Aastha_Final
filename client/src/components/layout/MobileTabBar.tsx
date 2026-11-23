@@ -42,6 +42,7 @@ export const MobileTabBar: React.FC<Props> = ({ active, onSelect }) => {
 
   return (
     <nav
+      id="mobile-tab-bar"
       aria-label="Main"
       className="mobile-tab-bar fixed inset-x-0 z-[60] flex justify-center pointer-events-none"
       // --vv-bottom (set by ChatView) keeps the bar on the VISIBLE screen even if Chrome pans the page

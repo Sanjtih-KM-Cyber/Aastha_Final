@@ -361,7 +361,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
      // Component-level mounted flag: survives React StrictMode's double-mount (a per-effect flag made the
      // first run discard its result while the guard skipped the second → spinner forever in dev).
      let slowTimer: ReturnType<typeof setTimeout> | null = null;
-     const greeting = (line: string) => [{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. ${line}`, timestamp: Date.now() }];
+     // First message in an empty chat — a friend's hello, not a help-desk line (first name only)
+     const greeting = (_line?: string) => [{ role: 'assistant', content: `Hey ${String(user?.name || '').split(' ')[0] || 'you'} 👋 I’m ${botName}. No pressure to say anything big — how’s your day going?`, timestamp: Date.now() }];
 
      const cached = chatCache.load((user as any)?._id);
      if (cached) {
@@ -1468,6 +1469,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
                  {/* HEADPHONE ICON */}
                  <button
+                    id="voice-mode-btn" aria-label="Voice call"
                     onClick={() => toggleVoiceMode()}
                     disabled={isStandardMode && !user?.isPro}
                     className={`shrink-0 w-10 h-10 rounded-full border border-white/10 flex items-center justify-center transition-all shadow-lg  ${isVoiceMode ? 'bg-red-500 text-white hover:bg-red-600' : (isStandardMode && !user?.isPro ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white')}`}

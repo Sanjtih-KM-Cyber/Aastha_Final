@@ -103,6 +103,7 @@
 49l. [ ] React to Aastha's reply and don't type for 15 s → she follows up once about the reaction. Leave a reply on seen ~45 s → one easy follow-up. Start typing → nothing comes.
 49m. [ ] Set closeness to Bestie (Settings → Connection) → within a couple of messages she tells you your nickname; "Another one", "Choose my own" and "Don't use a nickname" work.
 49n. [ ] Forgot password → set a new one → the sign-in form is already filled; tap Enter Sanctuary. Diary → forgot diary password → after reset the unlock box is filled.
+49o. [ ] New account on the **phone**: tour = welcome → message box → animated gestures → bottom tabs → headphones → done; the card never covers what it points at; "Skip tour" works. On **PC**: welcome → sidebar → message box → headphones → Settings → done, each card next to its target.
 49. [ ] Settings → Data & Privacy → Export: name, date of birth, city, avatar come out readable.
 
 ## 16. Crash reporting (only if `SENTRY_DSN` / `VITE_SENTRY_DSN` are set)

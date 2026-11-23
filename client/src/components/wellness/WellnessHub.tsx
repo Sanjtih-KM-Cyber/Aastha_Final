@@ -269,7 +269,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto custom-scrollbar">
+        <nav id="sidebar-toolkit" className="flex-1 px-3 py-2 space-y-1 overflow-y-auto custom-scrollbar">
           {!isCollapsed && <p className="px-4 pt-1 pb-2 text-sm font-medium tracking-wide text-md-primary">Toolkit</p>}
 
           {WIDGETS.map((widget) => {
@@ -302,6 +302,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
         <div className="p-3 mt-auto space-y-2">
           {!isCollapsed ? (
              <button
+                id="sidebar-settings"
                 onClick={onOpenSettings}
                 className="w-full rounded-[20px] p-2.5 flex items-center gap-3 bg-md-surface-container-high/80 hover:bg-md-surface-container-highest transition-colors text-left"
              >
@@ -326,7 +327,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                 <Icons.settings size={20} className="text-md-on-surface-variant shrink-0" />
              </button>
           ) : (
-              <button onClick={onOpenSettings} aria-label="Settings" title="Settings"
+              <button id="sidebar-settings" onClick={onOpenSettings} aria-label="Settings" title="Settings"
                 className="w-full h-12 flex items-center justify-center rounded-full text-md-on-surface-variant hover:bg-md-on-surface/[0.08] hover:text-md-on-surface transition-colors">
                   <Icons.settings size={22} />
               </button>

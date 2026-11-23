@@ -31,101 +31,32 @@ const MemoBreathing = memo(BreathingWidget);
 const MemoMood = memo(MoodTracker);
 const MemoWeb = memo(TheWebWidget); // New Name
 
-const DESKTOP_TOUR_STEPS: TourStep[] = [
-  {
-    targetId: 'chat-input-area',
-    title: 'Say Hello!',
-    content: 'This is where the magic happens. Talk to Aastha (or Aastik) about anything—your crush, your boss, or that weird dream you had. No judgment, ever.',
-    position: 'top'
-  },
-  {
-    targetId: 'nav-diary',
-    title: 'Secret Vault',
-    content: 'Your digital diary. It’s encrypted, password-protected, and locked tighter than Fort Knox. Your secrets are safe here.',
-    position: 'right'
-  },
-  {
-    targetId: 'nav-mood',
-    title: 'Emotional Weather',
-    content: 'Feeling sunny or stormy? Log your mood here. It helps us understand you better (and maybe cheer you up).',
-    position: 'right'
-  },
-  {
-    targetId: 'nav-breathing',
-    title: 'Chill Pill',
-    content: 'Anxious? Stressed? Just need a moment? Tap here for guided breathing exercises that actually work.',
-    position: 'right'
-  },
-  {
-    targetId: 'nav-jam',
-    title: 'Jam Station',
-    content: 'Queue up your favorite lo-fi beats or hype tracks from YouTube. Listening together is our love language.',
-    position: 'right'
-  },
-  {
-    targetId: 'nav-soundscape',
-    title: 'Vibe Creator',
-    content: 'Turn your room into a rainforest, a cafe, or a thunderstorm. Perfect for focus or just zoning out.',
-    position: 'right'
-  },
-  {
-    targetId: 'nav-pomodoro',
-    title: 'Focus Mode',
-    content: 'Got work to do? Use the Pomodoro timer to crush your tasks without burning out.',
-    position: 'right'
-  },
-  {
-    targetId: 'chat-input-area',
-    title: 'It’s Magic (Literally)',
-    content: 'Want to change the vibe? Just tell me! Try saying "Change theme to pink" or "Make it dark". I’m a genie, basically.',
-    position: 'top'
-  },
-  {
-    targetId: 'voice-mode-btn',
-    title: 'No Typing Needed',
-    content: 'Tired of typing? Tap the headset to talk to me in real-time. It’s like a phone call, but way less awkward.',
-    position: 'bottom'
-  },
-  {
-    targetId: 'center-screen',
-    title: 'You’re All Set!',
-    content: 'That’s the tour! Thanks for logging in. Your sanctuary awaits—go explore and make yourself at home.',
-    position: 'bottom'
-  }
-];
-
-const MOBILE_TOUR_STEPS: TourStep[] = [
-  {
-    targetId: 'mobile-menu-btn',
-    title: 'The Everything Button',
-    content: 'Tap here to find all your cool tools: Diary, Music, Breathing, and more. It’s like a wellness Swiss Army knife.',
-    position: 'bottom'
-  },
-  {
-    targetId: 'chat-search-bar',
-    title: 'Time Machine',
-    content: 'Looking for that advice I gave you last week? Search your entire conversation history right here.',
-    position: 'bottom'
-  },
-  {
-    targetId: 'chat-input-area',
-    title: 'Your Space',
-    content: 'Chat with me here. You can type, use voice dictation, or even upload pics from your gallery to show me your world.',
-    position: 'top'
-  },
-  {
-    targetId: 'voice-mode-btn',
-    title: 'Let’s Talk',
-    content: 'Tap the headset for a real voice convo. Perfect for late-night vents or morning pep talks.',
-    position: 'top'
-  },
-  {
-    targetId: 'center-screen',
-    title: 'You’re Ready!',
-    content: 'Thanks for being here. This is your safe space now. Enjoy the vibes!',
-    position: 'bottom'
-  }
-];
+/**
+ * First-run tour — different on phone and desktop because the app is different there:
+ * phone = bottom tabs + gestures; desktop = sidebar toolkit with draggable windows + hover actions.
+ * Targets are real element ids (chat-input-area, mobile-tab-bar, voice-mode-btn, sidebar-toolkit, sidebar-settings).
+ */
+const buildTourSteps = (bot: string, firstName: string, phone: boolean): TourStep[] => {
+  const hi = firstName ? `Hi ${firstName}, I’m ${bot}` : `Hi, I’m ${bot}`;
+  const welcome: TourStep = { art: 'welcome', title: hi, content: `Think of me as the friend who’s always around — to listen, joke about nothing, or help you think something through. Want a quick look around? It takes 30 seconds.` };
+  const done: TourStep = { art: 'done', title: 'You’re all set', content: `This is your space. Say hi whenever you’re ready — I’ll be right here.` };
+  if (phone) return [
+    welcome,
+    { targetId: 'chat-input-area', title: 'Talk your way', content: `Type, tap the mic for a voice note, or share a photo. Write in any language — I’ll follow you.` },
+    { art: 'gestures', title: 'Little gestures', content: 'Swipe a message to the right to reply, tap it to copy, and press and hold one of mine to react.' },
+    { targetId: 'mobile-tab-bar', art: 'tabs', title: 'Everything is one tap away', content: 'Diary is your locked journal, Mood tracks how you feel, Relax has breathing, music and sounds, and Me is where you make the app yours.' },
+    { targetId: 'voice-mode-btn', title: 'Rather talk?', content: 'Tap the headphones for a real voice conversation — made for late-night vents and long walks.' },
+    done,
+  ];
+  return [
+    welcome,
+    { targetId: 'sidebar-toolkit', position: 'right', title: 'Your toolkit', content: 'Diary, Mood, The Web, Breathing, Music, Sounds and Focus open as windows. Drag them anywhere, resize them, or minimise them while we chat.' },
+    { targetId: 'chat-input-area', position: 'top', title: 'Talk your way', content: 'Type and press Enter, record a voice note with the mic, or drop in a photo. Hover any message to reply, copy or react.' },
+    { targetId: 'voice-mode-btn', position: 'bottom', art: 'voice', title: 'Rather talk?', content: 'Click the headphones for a real voice conversation.' },
+    { targetId: 'sidebar-settings', position: 'right', art: 'personalise', title: 'Make it yours', content: 'Pick any colour from the wheel, change the fonts, choose Mac or Windows window buttons, and decide how close we are.' },
+    done,
+  ];
+};
 
 export const Sanctuary: React.FC = () => {
   const { emit, subscribe } = useSync();
@@ -310,7 +241,8 @@ export const Sanctuary: React.FC = () => {
 
       <OnboardingTour
          isOpen={showTour}
-         steps={isMobile ? MOBILE_TOUR_STEPS : DESKTOP_TOUR_STEPS}
+         steps={buildTourSteps(user?.persona === 'aarav' ? 'Aastik' : 'Aastha', String(user?.name || '').split(' ')[0], isMobile)}
+         botName={user?.persona === 'aarav' ? 'Aastik' : 'Aastha'}
          onComplete={handleTourComplete}
          onSkip={handleTourComplete}
       />
