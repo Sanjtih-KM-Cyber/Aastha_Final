@@ -52,7 +52,7 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
       let needsSave = false;
 
       // 1. Daily Reset Logic (The Reset)
-      // Rolling 24 h quota window (utils/dailyReset.ts) — writes at most once per window (plus on subscription expiry).
+      // Rolling 24 h quota window (utils/dailyReset.ts), writes at most once per window (plus on subscription expiry).
       if (applyDailyReset(user, now)) needsSave = true;
 
       // The app sends its device time zone on every request → streak, check-ins, "today" follow the user's clock

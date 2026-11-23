@@ -3,7 +3,7 @@
  * strips the tag and we resolve it here to one safe-rated GIF.
  *
  * Off unless a key is set: GIPHY_API_KEY (rating=pg) or TENOR_API_KEY (contentfilter=high).
- * Only the 2–5 word search phrase is sent to the provider — never the user's message or any user data.
+ * Only the 2–5 word search phrase is sent to the provider, never the user's message or any user data.
  */
 export interface Gif {
   url: string;      // animated GIF / WebP to display
@@ -85,4 +85,4 @@ export const searchGif = async (raw: string): Promise<Gif | null> => {
 };
 
 export const GIF_PROMPT_LINE =
-  '- GIF / meme reaction: end the message with [GIF: <2–4 word search, e.g. "happy dance", "facepalm", "mind blown">]. Only in light, playful moments (jokes, celebrations, banter) — at most once every few messages, never when they are sad, anxious, upset or talking about something serious.';
+  '- GIF / meme reaction: end the message with [GIF: <2–4 word search, e.g. "happy dance", "facepalm", "mind blown">]. Only in light, playful moments (jokes, celebrations, banter), at most once every few messages, never when they are sad, anxious, upset or talking about something serious.';

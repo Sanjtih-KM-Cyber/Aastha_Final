@@ -217,7 +217,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
   };
 
   const openedByPress = useRef(false);
-  // React bubbles events from PORTALS (the reaction bar) up to this bubble — a tap that closes the bar must not
+  // React bubbles events from PORTALS (the reaction bar) up to this bubble, a tap that closes the bar must not
   // start a gesture here. Interactive bits inside the bubble (links, buttons, players) keep their own taps.
   const fromThisBubble = (e: React.SyntheticEvent) => (e.currentTarget as Node).contains(e.target as Node);
   const onControl = (e: React.SyntheticEvent) => !!(e.target as HTMLElement).closest?.('a,button,audio,video,input,textarea,[role="button"]');
@@ -461,7 +461,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
             }
           `}
           style={{
-             // Tonal layers (no blur per bubble — 50 blurs would lag phones). The user's bubble is a lit
+             // Tonal layers (no blur per bubble, 50 blurs would lag phones). The user's bubble is a lit
              // primary-container gradient; Aastha's is a translucent surface so the chat background breathes
              // through. A 1px top highlight gives both the same glassy edge as the bars.
              ...(isUser
@@ -530,7 +530,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
                 ))}
                 </div>
                 ) : (
-                  // Bold, italics, lists etc. rendered properly — no raw ** or _ (utils/miniMarkdown.tsx)
+                  // Bold, italics, lists etc. rendered properly, no raw ** or _ (utils/miniMarkdown.tsx)
                   <MiniMarkdown text={visibleContent} streaming={isStreaming} className="font-normal" />
                 )
             )
@@ -619,7 +619,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
           )}
         </AnimatePresence>
 
-        {/* Your reaction on Aastha's message (7.4) — tap to change or remove */}
+        {/* Your reaction on Aastha's message (7.4), tap to change or remove */}
         {!isUser && myReaction && (
           <button
             type="button"
@@ -710,7 +710,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
 
 /**
  * Memoized (ROADMAP P2): while a reply streams, only the streaming bubble re-renders instead of all ~50.
- * Callback props are intentionally ignored in the comparison — they're recreated every render but
+ * Callback props are intentionally ignored in the comparison, they're recreated every render but
  * behave identically for the same message content.
  */
 const DATA_PROPS: (keyof MessageBubbleProps)[] = [

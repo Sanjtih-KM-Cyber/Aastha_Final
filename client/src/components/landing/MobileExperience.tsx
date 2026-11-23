@@ -3,7 +3,7 @@ import { FadeIn } from './FadeIn';
 import { Icons, IconTile, Tone } from '../../design/icons';
 
 const moments: { icon: React.FC<any>; tone: Tone; title: string; desc: string }[] = [
-  { icon: Icons.mood, tone: 'tertiary', title: 'Morning check-in', desc: 'Log how you feel in one tap — or write a line in your diary.' },
+  { icon: Icons.mood, tone: 'tertiary', title: 'Morning check-in', desc: 'Log how you feel in one tap, or write a line in your diary.' },
   { icon: Icons.focus, tone: 'primary', title: 'Instant focus', desc: 'One-tap focus timer with rain or café sounds in the background.' },
   { icon: Icons.relax, tone: 'secondary', title: 'Wind down', desc: 'Breathing, ambient sounds and a friend to talk the day out with.' },
 ];
@@ -13,7 +13,7 @@ export const MobileExperience: React.FC = () => (
     <div className="max-w-xl mx-auto px-4">
       <FadeIn className="mb-8 px-1">
         <h2 className="font-serif text-4xl text-md-on-surface leading-tight">Peace in your <span className="italic text-md-primary">pocket.</span></h2>
-        <p className="mt-3 text-md-on-surface-variant text-lg">For the moments in between — quick check-ins, instant calm, deep focus.</p>
+        <p className="mt-3 text-md-on-surface-variant text-lg">For the moments in between, quick check-ins, instant calm, deep focus.</p>
       </FadeIn>
       <div className="rounded-[28px] bg-md-surface-container divide-y divide-md-outline-variant/30 overflow-hidden">
         {moments.map((m, i) => (

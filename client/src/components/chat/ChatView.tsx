@@ -100,7 +100,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // --- STATE ---
   const [isInitializing, setIsInitializing] = useState(true);
-  // Crisis/concern support banner (server sends {type:'safety'}) — S9
+  // Crisis/concern support banner (server sends {type:'safety'}), S9
   const [safetyInfo, setSafetyInfo] = useState<SafetyInfo | null>(null);
   const [connectionStatus, setConnectionStatus] = useState('Connecting...');
   const hasAttemptedInit = useRef(false);
@@ -362,8 +362,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
      // Component-level mounted flag: survives React StrictMode's double-mount (a per-effect flag made the
      // first run discard its result while the guard skipped the second → spinner forever in dev).
      let slowTimer: ReturnType<typeof setTimeout> | null = null;
-     // First message in an empty chat — a friend's hello, not a help-desk line (first name only)
-     const greeting = (_line?: string) => [{ role: 'assistant', content: `Hey ${String(user?.name || '').split(' ')[0] || 'you'} 👋 I’m ${botName}. No pressure to say anything big — how’s your day going?`, timestamp: Date.now() }];
+     // First message in an empty chat, a friend's hello, not a help-desk line (first name only)
+     const greeting = (_line?: string) => [{ role: 'assistant', content: `Hey ${String(user?.name || '').split(' ')[0] || 'you'} 👋 I’m ${botName}. No pressure to say anything big, how’s your day going?`, timestamp: Date.now() }];
 
      const cached = chatCache.load((user as any)?._id);
      if (cached) {
@@ -373,7 +373,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
      } else {
          setIsInitializing(true);
          setConnectionStatus(`Connecting to ${botName}...`);
-         // Render free tier can take ~a minute to wake — tell the user instead of spinning silently.
+         // Render free tier can take ~a minute to wake, tell the user instead of spinning silently.
          slowTimer = setTimeout(() => {
              if (mountedRef.current) setConnectionStatus(`Waking ${botName} up… this can take up to a minute after a quiet spell ☕`);
          }, 4000);
@@ -412,7 +412,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   useEffect(() => {
       let lastResumeSync = 0;
       const listener = App.addListener('appStateChange', async ({ isActive }) => {
-          // On the web this fires on every focus/visibility change — throttle to once per 30 s.
+          // On the web this fires on every focus/visibility change, throttle to once per 30 s.
           if (isActive && user && Date.now() - lastResumeSync > 30_000) {
               lastResumeSync = Date.now();
               // Silent refresh of history when app comes to foreground
@@ -427,7 +427,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // --- PHONE: PIN THE CHAT + TAB BAR TO THE *VISIBLE* SCREEN ---
   // Android Chrome can leave the page panned/scrolled (keyboard, address bar, edge-to-edge), so the layout
-  // viewport and what you actually see drift apart — the header (in the chat) and the tab bar (fixed to the bottom)
+  // viewport and what you actually see drift apart, the header (in the chat) and the tab bar (fixed to the bottom)
   // then can't both be on screen. We pin BOTH to the visual viewport on every change:
   //   chat container → top = visual top, height = visual height
   //   tab bar        → bottom = gap below the visual viewport (CSS var --vv-bottom, read by MobileTabBar)
@@ -818,7 +818,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
               const cleanContent = processMagicTags(raw);
               setMessages(prev => {
                   const index = prev.findIndex(m => m.id === tempBotId);
-                  if (index === -1) return prev; // replaced by a sync broadcast — don't duplicate
+                  if (index === -1) return prev; // replaced by a sync broadcast, don't duplicate
                   const newArr = [...prev];
                   newArr[index] = { ...newArr[index], content: cleanContent };
                   return newArr;
@@ -850,8 +850,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
               if (data.type === 'suggestions' && Array.isArray(data.items)) { setSuggestedChips(data.items.slice(0, 3).map(String)); setChipsDismissed(false); }
               if (data.type === 'clone_paused') {
                   toast(data.reason === 'safety'
-                      ? `I've paused the imitation — ${botName} is here with you now.`
-                      : `That's today's ${data.limit} imitation replies — ${botName} is replying instead.`,
+                      ? `I've paused the imitation, ${botName} is here with you now.`
+                      : `That's today's ${data.limit} imitation replies, ${botName} is replying instead.`,
                       { icon: data.reason === 'safety' ? '💜' : '⏳', style: { borderRadius: '12px', background: '#1f1b2e', color: '#fff' }, duration: 5000 });
               }
               if (data.type === 'bond' && data.name) {
@@ -946,7 +946,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
               setError(err?.message || `${botName} is unreachable.`);
           },
           onAbort: () => console.log("Generation stopped by user."),
-          // Always runs (done, error or stop) — the header can't stay on "Typing…" any more (7.1)
+          // Always runs (done, error or stop), the header can't stay on "Typing…" any more (7.1)
           onSettled: ({ superseded }) => {
               if (superseded) return;
               setIsTyping(false);
@@ -1085,7 +1085,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   useEffect(() => () => cancelNudge(), []);
 
   const reactTo = async (msgId: string | undefined, emoji: string | null) => {
-      if (!msgId || !/^[0-9a-f]{24}$/i.test(msgId)) { toast('One sec — still saving that message…', { icon: '⏳' }); return; }
+      if (!msgId || !/^[0-9a-f]{24}$/i.test(msgId)) { toast('One sec, still saving that message…', { icon: '⏳' }); return; }
       let previous: string | null | undefined;
       setMessages(prev => prev.map(m => { if (m.id !== msgId) return m; previous = m.myReaction; return { ...m, myReaction: emoji }; }));
       try {
@@ -1317,7 +1317,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
               </div>
           ) : (
               <>
-                {/* Phone: soft colour "aura" from the user's own palette — gives the liquid glass something to
+                {/* Phone: soft colour "aura" from the user's own palette, gives the liquid glass something to
                     refract (glass over a flat colour just looks grey). Static gradients: no GPU cost. */}
                 <div className="md:hidden w-full h-full" style={{ background: `
                   radial-gradient(70% 42% at 88% 6%, rgb(var(--md-primary) / 0.26), transparent 72%),
@@ -1345,7 +1345,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           )}
       </AnimatePresence>
 
-      {/* CLONE MODE BANNER — always clear that replies are an AI imitation */}
+      {/* CLONE MODE BANNER, always clear that replies are an AI imitation */}
       {isCloneMode && (
          <div className={`z-30 flex justify-center px-3 ${isMobile ? 'mt-2' : 'mt-1'}`}>
              <div className="flex items-center gap-2 pl-3 pr-1 py-1 rounded-full bg-md-tertiary-container text-md-on-tertiary-container text-xs shadow-md">
@@ -1398,7 +1398,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         onPointerMove={isMobile ? specular : undefined}
         className={`shrink-0 z-30 pointer-events-auto ${isMobile
           ? 'glass glass-clear glass-specular absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+0.5rem)] rounded-[28px] px-2 py-0.5'
-          // PC: floats over the messages too (no bar, no hard edge) — messages fade out as they reach it (mask below)
+          // PC: floats over the messages too (no bar, no hard edge), messages fade out as they reach it (mask below)
           : 'absolute top-0 left-[var(--sidebar-space,20rem)] right-0 transition-[left] duration-300 pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-2 pt-6 bg-none'}`}>
         <div className="flex items-center gap-3 h-14 justify-between relative">
              <div className="shrink-0 flex items-center z-20">
@@ -1522,7 +1522,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         {safetyInfo && <SafetyBanner info={safetyInfo} botName={botName} onDismiss={() => setSafetyInfo(null)} />}
       </AnimatePresence>
       <AnimatePresence>{error && (
-        // wrapper centres it — framer-motion's y animation would overwrite a -translate-x-1/2 transform
+        // wrapper centres it, framer-motion's y animation would overwrite a -translate-x-1/2 transform
         <div className="absolute inset-x-0 top-24 z-40 flex justify-center px-3 pointer-events-none">
           <motion.div role="alert" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="pointer-events-auto bg-md-error/15 border border-md-error/30 px-4 py-2 rounded-full flex items-center gap-3 text-md-error text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>
         </div>
@@ -1587,7 +1587,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     exit={{ opacity: 0, height: 0 }}
                     className="overflow-x-auto scrollbar-hide flex items-center gap-2 mb-2 px-1"
                 >
-                    {/* Dismiss — first, so it never sits on top of a chip's text */}
+                    {/* Dismiss, first, so it never sits on top of a chip's text */}
                     <button type="button" onClick={() => { setSuggestedChips([]); setChipsDismissed(true); }} aria-label="Hide suggestions"
                         className="glass glass-clear shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-md-on-surface-variant hover:text-md-on-surface">
                         <X size={13} />

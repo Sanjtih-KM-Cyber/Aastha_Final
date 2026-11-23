@@ -9,7 +9,7 @@ const BIOMETRIC_ENABLED_KEY = 'biometric_enabled'; // "Lock Aastha" on a phone (
 let lastSuccessTime = 0;
 let inFlight: Promise<boolean> | null = null; // ONE system prompt at a time, app-wide
 // The "enabled" preference is SHARED live between every component using this hook. Before, each copy read it once
-// at mount — so turning the lock on in Settings left the lock screen thinking fingerprint was off (password only).
+// at mount, so turning the lock on in Settings left the lock screen thinking fingerprint was off (password only).
 const prefListeners = new Set<(v: boolean) => void>();
 
 export type BiometricKind = 'fingerprint' | 'face' | 'biometric';

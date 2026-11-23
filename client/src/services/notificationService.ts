@@ -27,7 +27,7 @@ export const notificationService = {
         await scheduleOne({
             id: NOTIF_IDS.DAILY_EVENING,
             title: "How was your day? 🌙",
-            body: "No pressure — if you feel like talking it out, I'm here.",
+            body: "No pressure, if you feel like talking it out, I'm here.",
             every: { hour: 21, minute: 0 },
         });
         await scheduleOne({

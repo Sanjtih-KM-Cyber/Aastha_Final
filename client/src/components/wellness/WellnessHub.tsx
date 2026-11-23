@@ -116,7 +116,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
   };
 
   // Tell the chat how much room the sidebar takes (left margin 12 + width + 28 gap) so the chat stays centred in
-  // the remaining space — collapsed it is 80 px wide, not 280 (the chat used to keep a fixed 320 px gap).
+  // the remaining space, collapsed it is 80 px wide, not 280 (the chat used to keep a fixed 320 px gap).
   useEffect(() => {
     document.documentElement.style.setProperty('--sidebar-space', `${12 + (isCollapsed ? 80 : 280) + 28}px`);
     return () => { document.documentElement.style.removeProperty('--sidebar-space'); };

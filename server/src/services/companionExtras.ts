@@ -3,7 +3,7 @@
  *  - suggestReplies   → reply chips written in the USER's voice, generated from the companion's actual reply
  *  - makeNickname     → a unique nickname at Bestie level, from their name / what they shared
  *  - nudge prompt     → one short follow-up when they reacted (or left the companion on seen) and went quiet
- * Every call is time-boxed and fails soft (no chips / no nickname / no nudge) — never blocks the chat.
+ * Every call is time-boxed and fails soft (no chips / no nickname / no nudge), never blocks the chat.
  */
 import { completeChat } from './llm';
 
@@ -92,7 +92,7 @@ export const nicknamePromptLine = (nickname: string | undefined, announced: bool
   nickname
     ? `Your nickname for them is "${nickname}"${announced
         ? ''
-        : ` — you just came up with it because you're besties now. Tell them about it once, playfully and in your own words, in this reply`
+        : `you just came up with it because you're besties now. Tell them about it once, playfully and in your own words, in this reply`
       }. Use it now and then (not every message), and not when they're upset or talking about something serious.${persona === 'aastik' ? '' : ''}`
     : '';
 
@@ -101,5 +101,5 @@ export type NudgeReason = 'reaction' | 'seen';
 
 export const nudgeInstruction = (reason: NudgeReason, reaction?: string | null) =>
   reason === 'reaction' && reaction
-    ? `They reacted ${reaction} to your last message, then went quiet. Send ONE short follow-up text (one line, at most ~15 words) that responds to that reaction the way a close friend would: playful if it's a laugh, curious if it's surprise, and softer — checking whether something you said landed wrong — if it's an eye-roll, a blank face or a sad one. Don't repeat or summarise your last message. No greeting.`
+    ? `They reacted ${reaction} to your last message, then went quiet. Send ONE short follow-up text (one line, at most ~15 words) that responds to that reaction the way a close friend would: playful if it's a laugh, curious if it's surprise, and softer, checking whether something you said landed wrong, if it's an eye-roll, a blank face or a sad one. Don't repeat or summarise your last message. No greeting.`
     : `They read your last message but haven't replied for a bit. Send ONE short, easy follow-up (one line, at most ~12 words): a lighter way back into the chat or an easy out. Never guilt them, never sound needy, don't repeat your question word for word. No greeting.`;

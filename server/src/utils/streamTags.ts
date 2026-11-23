@@ -11,7 +11,7 @@ export const createVoiceTagExtractor = () => {
   const captured: Record<string, string> = {};
 
   const couldBeTagStart = (s: string) => {
-    // s starts with "[" — is it (or could it still become) "[STYLE:" / "[TTS:"?
+    // s starts with "["is it (or could it still become) "[STYLE:" / "[TTS:"?
     const body = s.slice(1).toUpperCase();
     return TAGS.some((t) => {
       const head = `${t}:`;

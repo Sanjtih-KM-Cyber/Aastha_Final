@@ -9,7 +9,7 @@ import { decrypt } from '../utils/serverEncryption';
 
 // --- Helper: Internal YouTube Search ---
 // Defined ONCE here and used below
-// One cached YouTube lookup per song title (services/youtubeSearch.ts — A11)
+// One cached YouTube lookup per song title (services/youtubeSearch.ts, A11)
 const searchYouTubeInternal = async (query: string) => {
     const [first] = await searchYouTube(`${query} audio`, { max: 1 });
     return first || null;
@@ -98,7 +98,7 @@ export const generateVibePlaylist = async (req: AuthRequest, res: Response) => {
 
         // 3. Search YouTube
         // Uses the searchYouTubeInternal defined at the top of the file
-        // Cap at 10 songs per playlist — each uncached title costs 100 YouTube quota units
+        // Cap at 10 songs per playlist, each uncached title costs 100 YouTube quota units
         const searchPromises = (songTitles || []).slice(0, 10).map(title => searchYouTubeInternal(title));
         const results = await Promise.all(searchPromises);
         let tracks = results.filter(t => t !== null);

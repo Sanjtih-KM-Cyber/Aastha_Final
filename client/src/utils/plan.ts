@@ -1,6 +1,6 @@
 /**
  * The credits pill in the chat header (7.1). It used to say "16 Premium" on the Free plan.
- * Free = 16 messages per rolling 24 h (the window starts with the first message — server clock only);
+ * Free = 16 messages per rolling 24 h (the window starts with the first message, server clock only);
  * after that replies continue in Eco mode until the refill time (`quotaResetsAt` from the server).
  */
 export const FREE_DAILY_MESSAGES = 16;

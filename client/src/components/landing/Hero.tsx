@@ -7,7 +7,7 @@ interface HeroProps {
   onLogin: () => void;
 }
 
-/** Hero — Material You: big Fraunces headline, tonal "app preview" card, glass chips. */
+/** Hero, Material You: big Fraunces headline, tonal "app preview" card, glass chips. */
 export const Hero: React.FC<HeroProps> = ({ onLogin }) => {
   const scrollToPrivacy = () => document.getElementById('faq-section')?.scrollIntoView({ behavior: 'smooth' });
 
@@ -32,7 +32,7 @@ export const Hero: React.FC<HeroProps> = ({ onLogin }) => {
 
           <FadeIn delay={300} direction="up">
             <p className="mt-6 text-lg md:text-xl text-md-on-surface-variant max-w-xl mx-auto lg:mx-0 leading-relaxed">
-              Aastha is an AI companion for students and working people — talk it out, journal, track your mood,
+              Aastha is an AI companion for students and working people, talk it out, journal, track your mood,
               breathe, focus. It remembers what matters to you and checks in gently.
             </p>
           </FadeIn>
@@ -48,11 +48,11 @@ export const Hero: React.FC<HeroProps> = ({ onLogin }) => {
                 <ShieldCheck size={20} className="text-md-primary" /> How your data is handled
               </button>
             </div>
-            <p className="mt-4 text-xs text-md-on-surface-variant">Free to start · Not a therapist — in crisis call Tele-MANAS 14416</p>
+            <p className="mt-4 text-xs text-md-on-surface-variant">Free to start · Not a therapist, in crisis call Tele-MANAS 14416</p>
           </FadeIn>
         </div>
 
-        {/* App preview — tonal card with a glass composer, like the real chat */}
+        {/* App preview, tonal card with a glass composer, like the real chat */}
         <FadeIn delay={300} direction="up" className="hidden sm:block">
           <div className="relative mx-auto max-w-md rounded-[36px] bg-md-surface-container-low border border-md-outline-variant/30 p-5 shadow-2xl">
             <div className="flex items-center gap-3 mb-5">
@@ -64,7 +64,7 @@ export const Hero: React.FC<HeroProps> = ({ onLogin }) => {
             </div>
             <div className="space-y-3">
               <div className="ml-auto w-fit max-w-[80%] rounded-[22px] rounded-br-md bg-md-primary-container text-md-on-primary-container px-4 py-2.5 text-sm">exams next week and I can't focus 😩</div>
-              <div className="w-fit max-w-[85%] rounded-[22px] rounded-bl-md bg-md-surface-container-high text-md-on-surface px-4 py-2.5 text-sm">That pre-exam slump is so real. Want to try one tiny 25-minute round together? No pressure — just one.</div>
+              <div className="w-fit max-w-[85%] rounded-[22px] rounded-bl-md bg-md-surface-container-high text-md-on-surface px-4 py-2.5 text-sm">That pre-exam slump is so real. Want to try one tiny 25-minute round together? No pressure, just one.</div>
               <div className="flex gap-2">
                 <span className="h-8 px-3 rounded-[8px] bg-md-secondary-container text-md-on-secondary-container text-xs font-medium inline-flex items-center gap-1.5"><Icons.focus size={16} /> Start focus</span>
                 <span className="h-8 px-3 rounded-[8px] border border-md-outline-variant text-md-on-surface-variant text-xs font-medium inline-flex items-center gap-1.5"><Icons.sounds size={16} /> Rain sounds</span>

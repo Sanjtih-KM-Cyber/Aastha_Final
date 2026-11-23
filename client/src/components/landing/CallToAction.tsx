@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import { FadeIn } from './FadeIn';
 
 /**
- * "Enter your sanctuary" — a person (seen from behind, hoodie + headphones, deliberately gender-neutral)
+ * "Enter your sanctuary", a person (seen from behind, hoodie + headphones, deliberately gender-neutral)
  * stands before a doorway. When the scene scrolls into view the door swings open, light spills out and they
  * walk in. Works on phones (no hover needed), replays on hover/tap, respects reduced motion.
  * All colours come from the Material You tokens, so it follows the user's theme (and light mode).
@@ -50,7 +50,7 @@ export const DoorScene: React.FC<{ open: boolean }> = ({ open }) => (
       </g>
     </g>
 
-    {/* the person — back view, hoodie + headphones, no gendered features */}
+    {/* the person, back view, hoodie + headphones, no gendered features */}
     <g className="ds-person">
       <g className="ds-bob">
         {/* legs + shoes */}

@@ -1,14 +1,14 @@
 /**
- * Offline queue with backoff (7.1 — "diary sync retry storm").
+ * Offline queue with backoff (7.1, "diary sync retry storm").
  *
  * Before: every failed autosave (every 5 s while typing) appended ANOTHER copy to the queue, and every
- * focus/visibility change re-posted the whole queue — so one 429 turned into hundreds of 429s.
+ * focus/visibility change re-posted the whole queue, so one 429 turned into hundreds of 429s.
  * Now:
  *  - only network errors, 5xx and 429 are queued; other 4xx are real rejections → dropped, not retried
- *  - one entry per key (diary: per day) — the newest version replaces older ones
+ *  - one entry per key (diary: per day), the newest version replaces older ones
  *  - one sync at a time; exponential backoff (30 s → 30 min) persisted across reloads, Retry-After honoured
  *  - a sync stops at the first retryable failure instead of hammering the rest of the queue
- *  - sync runs on app start, reconnect ('online') and app resume — never in a loop
+ *  - sync runs on app start, reconnect ('online') and app resume, never in a loop
  */
 
 export interface QueueItem<T> { key: string; payload: T; queuedAt: number }

@@ -1,6 +1,6 @@
 /**
  * One-shot migration: copy every legacy `Chat.messages[]` into the `Message` collection.
- * Optional — the API also migrates each user lazily on their first chat/history request.
+ * Optional, the API also migrates each user lazily on their first chat/history request.
  * Safe to re-run (already-migrated chats are skipped; legacy docs are left intact as backup).
  *
  * Usage (from server/):  npx ts-node src/scripts/migrateChats.ts

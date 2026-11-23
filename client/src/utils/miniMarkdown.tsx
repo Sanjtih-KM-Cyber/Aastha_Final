@@ -5,7 +5,7 @@ import React from 'react';
  * - Builds React elements only (no innerHTML) → no XSS. Links: https only, opened safely.
  * - Supports: ***bold italic***, **bold**, __bold__, *italic*, _italic_, ~~strike~~, `code`,
  *   [text](https://…), # headings, - / * / • bullet lists, 1. / 1) numbered lists, > quotes.
- * - No regex lookbehind (unsupported on iOS < 16.4 — it would crash the whole chat).
+ * - No regex lookbehind (unsupported on iOS < 16.4, it would crash the whole chat).
  * - While streaming, a dangling unclosed marker (e.g. "**bol") is hidden instead of shown raw.
  * - `stripMarkdown()` gives plain text (search, TTS, previews).
  */

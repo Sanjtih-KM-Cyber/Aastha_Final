@@ -216,7 +216,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       } else if (result === 'denied') {
           alert("Notifications are blocked for this site. Allow them in your browser's site settings and try again.");
       } else if (result === 'not-configured') {
-          alert("Notifications aren't available yet — please try again later.");
+          alert("Notifications aren't available yet, please try again later.");
       } else {
           alert("Couldn't turn on notifications. Please try again.");
       }
@@ -231,7 +231,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       }
       if (isBiometricAvailable) {
           const ok = await promptBiometrics();
-          if (!ok) { toast.error('Couldn’t verify — the lock is still off'); return; }
+          if (!ok) { toast.error('Couldn’t verify, the lock is still off'); return; }
           await toggleBiometrics(true);
       }
       updateLock({ ...lock, enabled: true });
@@ -375,7 +375,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                           razorpay_order_id: response.razorpay_order_id,
                           razorpay_payment_id: response.razorpay_payment_id,
                           razorpay_signature: response.razorpay_signature
-                          // Plan is determined server-side from the Razorpay order — never sent by the client.
+                          // Plan is determined server-side from the Razorpay order, never sent by the client.
                       });
 
                       if (verifyRes.data.success) {
@@ -425,7 +425,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   const activeMeta = tabs.find(t => t.id === activeTab);
   const windowControls = useWindowControls();
   const chooseWindowControls = (v: WindowControls) => {
-    saveWindowControls(v, updateUser).catch(() => toast.error('Saved on this device — will sync when you are back online'));
+    saveWindowControls(v, updateUser).catch(() => toast.error('Saved on this device, will sync when you are back online'));
   };
   const fonts = useAppFontChoice();
   // Colour wheel: live preview while dragging (one theme update per frame), saved on release
@@ -440,7 +440,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   };
   useEffect(() => { if (activeTab === 'appearance') loadAllFonts(); }, [activeTab]); // each name previews in its own face
   const chooseFont = (change: { appFont?: string; headingFont?: string }) => {
-    saveAppFonts(change, updateUser).catch(() => toast.error('Saved on this device — will sync when you are back online'));
+    saveAppFonts(change, updateUser).catch(() => toast.error('Saved on this device, will sync when you are back online'));
   };
   const voicePassActive = !!(user?.voicePassExpiresAt && new Date(user.voicePassExpiresAt) > new Date());
   const renderContent = () => (
@@ -451,7 +451,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                 <section>
                   <SectionTitle>Theme colour</SectionTitle>
                   <Card>
-                    <p className="text-xs text-md-on-surface-variant mb-4">The whole app re-colours from one seed — Material You.</p>
+                    <p className="text-xs text-md-on-surface-variant mb-4">The whole app re-colours from one seed, Material You.</p>
                     <div className="flex flex-wrap gap-3">
                       {(['lotus', 'aurora', 'sunset', 'ocean', 'midnight'] as const).map((themeId) => {
                         const swatch: Record<string, string> = { lotus: '#8B7CF6', aurora: '#2dd4bf', sunset: '#fb7185', ocean: '#38bdf8', midnight: '#a78bfa' };
@@ -481,7 +481,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                         <ColorWheel value={isCustomColour ? currentTheme.primaryColor : (hexDraft || '#8b7cf6')} onChange={previewColour} size={isMobile ? 210 : 190} />
                         <div className="flex-1 w-full space-y-3">
                           <p className="text-sm text-md-on-surface">Drag around the wheel</p>
-                          <p className="text-xs text-md-on-surface-variant leading-relaxed">Around = colour, towards the middle = softer. The whole Sanctuary re-colours as you go — your home and sign-in pages stay the same.</p>
+                          <p className="text-xs text-md-on-surface-variant leading-relaxed">Around = colour, towards the middle = softer. The whole Sanctuary re-colours as you go, your home and sign-in pages stay the same.</p>
                           <label className="flex items-center gap-2">
                             <span className="text-xs text-md-on-surface-variant w-8">Hex</span>
                             <input value={hexDraft} onChange={(e) => { const v = e.target.value.trim(); setHexDraft(v); if (/^#[0-9a-f]{6}$/i.test(v)) setTheme(v.toLowerCase()); }}
@@ -548,7 +548,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                       );
                     })}
                   </div>
-                  <p className="text-[11px] text-md-on-surface-variant mt-2 px-1">Only inside your Sanctuary — the home and sign-in pages keep Aastha's look. Synced to your phone and the web.</p>
+                  <p className="text-[11px] text-md-on-surface-variant mt-2 px-1">Only inside your Sanctuary, the home and sign-in pages keep Aastha's look. Synced to your phone and the web.</p>
                 </section>
                 <section>
                   <SectionTitle>Window buttons</SectionTitle>
@@ -582,13 +582,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                       );
                     })}
                   </div>
-                  <p className="text-[11px] text-md-on-surface-variant mt-2 px-1">Saved to your account — your phone and the web stay the same.</p>
+                  <p className="text-[11px] text-md-on-surface-variant mt-2 px-1">Saved to your account, your phone and the web stay the same.</p>
                 </section>
                 <section>
                   <SectionTitle>Performance</SectionTitle>
                   <ListGroup>
                     <ListItem icon={<Zap size={18} />} title="Lite mode"
-                      subtitle={isLowPowerMode ? 'On — blur and animations off for speed and battery.' : 'Off — full glass effects. Turns on by itself on slower phones.'}
+                      subtitle={isLowPowerMode ? 'On, blur and animations off for speed and battery.' : 'Off, full glass effects. Turns on by itself on slower phones.'}
                       trailing={<Switch checked={isLowPowerMode} onChange={(v) => setLowPowerMode(v)} label="Lite mode" />} />
                   </ListGroup>
                 </section>
@@ -697,7 +697,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                             <p className="text-md-on-surface font-medium">Lock Aastha</p>
                             <p className="text-xs text-md-on-surface-variant mt-0.5">
                               {isBiometricAvailable
-                                ? `Unlock with your ${biometricKind === 'face' ? 'face' : biometricKind === 'fingerprint' ? 'fingerprint' : 'fingerprint or face'} — your phone's PIN and your password work too.`
+                                ? `Unlock with your ${biometricKind === 'face' ? 'face' : biometricKind === 'fingerprint' ? 'fingerprint' : 'fingerprint or face'}, your phone's PIN and your password work too.`
                                 : 'Unlock with your account password.'}
                             </p>
                           </div>
@@ -736,7 +736,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                   <section>
                       <SectionTitle>Diary password</SectionTitle>
                       <Card>
-                          <p className="text-sm text-md-on-surface-variant mb-4">Change it any time — your entries stay as they are.</p>
+                          <p className="text-sm text-md-on-surface-variant mb-4">Change it any time, your entries stay as they are.</p>
                           <div className="space-y-3">
                               <input type="password" value={oldDiaryPassword} onChange={e => setOldDiaryPassword(e.target.value)} placeholder="Current password" className={fieldClass} />
                               <input type="password" value={newDiaryPassword} onChange={e => setNewDiaryPassword(e.target.value)} placeholder="New password" className={fieldClass} />
@@ -778,7 +778,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                           <h3 className="text-md-on-surface text-lg font-semibold">Pro</h3>
                           <p className="mt-1 text-md-on-surface"><span className="text-3xl font-semibold">₹49</span> <span className="text-sm text-md-on-surface-variant line-through">₹199</span> <span className="text-sm text-md-on-surface-variant">/ month</span></p>
                           <ul className="mt-4 space-y-2.5">
-                            {[{ i: <Zap size={16} />, t: 'Unlimited chat on the best models' }, { i: <ImageIcon size={16} />, t: 'Send photos — Aastha can see them' }, { i: <Headphones size={16} />, t: 'Voice mode and voice notes' }].map((f, k) => (
+                            {[{ i: <Zap size={16} />, t: 'Unlimited chat on the best models' }, { i: <ImageIcon size={16} />, t: 'Send photos, Aastha can see them' }, { i: <Headphones size={16} />, t: 'Voice mode and voice notes' }].map((f, k) => (
                               <li key={k} className="flex items-center gap-3 text-sm text-md-on-surface"><span className="w-7 h-7 rounded-full bg-md-primary/15 text-md-primary flex items-center justify-center">{f.i}</span>{f.t}</li>
                             ))}
                           </ul>

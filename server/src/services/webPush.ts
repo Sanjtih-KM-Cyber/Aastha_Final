@@ -1,5 +1,5 @@
 /**
- * Web Push for browser / installed-PWA users — no Firebase needed (VAPID keys only). ROADMAP M4 (web part).
+ * Web Push for browser / installed-PWA users, no Firebase needed (VAPID keys only). ROADMAP M4 (web part).
  * The native Android app still needs FCM (Firebase) for server push; it uses local notifications meanwhile.
  *
  * Setup (once):  npx web-push generate-vapid-keys

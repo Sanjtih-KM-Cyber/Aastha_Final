@@ -2,7 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 /**
  * One document per chat message (replaces the single growing `Chat.messages[]` array,
- * which would eventually hit MongoDB's 16 MB document limit — ROADMAP R4).
+ * which would eventually hit MongoDB's 16 MB document limit, ROADMAP R4).
  * `content` is encrypted with serverEncryption.encrypt().
  */
 export interface IMessageDoc extends Document {

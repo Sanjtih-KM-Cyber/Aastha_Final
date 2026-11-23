@@ -122,7 +122,7 @@ const check = (name: string, cond: boolean, extra: any = '') => {
   for (const m of ['hii', 'kya haal hai', 'bas thak gayi yaar 😩', 'office mein bohot kaam']) await run(await User.findById(u2._id), { message: m });
   const n3 = await run(await User.findById(u2._id), { message: 'aur tum?' });
   const fresh = await User.findById(u2._id).lean();
-  check('E2E normal: voice tags never reach the client', n3.text === 'haan yaar, sab theek hoga ' && !n3.text.includes('[TTS'), n3.text);
+  check('E2E normal: voice tags never reach the client', n3.text.trim() === 'haan yaar, sab theek hoga' && !n3.text.includes('[TTS'), n3.text);
   check('E2E normal: style profile learned + saved', fresh.styleProfile?.samples === 5 && fresh.styleProfile.hinglish > 0.3, fresh.styleProfile);
   check('E2E normal: bond points saved', fresh.bond?.points > 0, fresh.bond);
   check('E2E normal: prompt has language, region and style lines', lastPrompt.includes('Hinglish') && lastPrompt.includes('Pune') && lastPrompt.includes('Their texting style'), lastPrompt.slice(0, 50));

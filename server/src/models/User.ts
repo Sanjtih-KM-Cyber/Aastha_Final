@@ -3,7 +3,7 @@ import { ensureEncrypted, decrypt, isEncrypted } from '../utils/serverEncryption
 
 /**
  * Transparent encryption for profile PII: assigning `user.name = 'Riya'` stores ciphertext, reading `user.name`
- * gives 'Riya'. `.lean()` reads bypass getters — wrap those in decrypt() (it is a no-op on plaintext).
+ * gives 'Riya'. `.lean()` reads bypass getters, wrap those in decrypt() (it is a no-op on plaintext).
  * Existing plaintext rows are encrypted by services/keyRotation.ts.
  */
 const encString = { set: ensureEncrypted, get: (v: any) => (typeof v === 'string' ? decrypt(v) : v) };
@@ -66,9 +66,9 @@ export interface ICloneMode {
   isActive: boolean; // Master Toggle (requires valid consent + style)
   isPersonaActive: boolean; // Text Mimicry Toggle
   isVoiceActive: boolean; // Voice Cloning Toggle (requires a voice sample)
-  targetPersona: string; // LEGACY (unused) — replaced by styleNotes
+  targetPersona: string; // LEGACY (unused), replaced by styleNotes
   styleNotes?: string;   // encrypted JSON of style notes derived from a screenshot (screenshot itself is NOT stored)
-  voiceSample: string; // encrypted data URL of the voice sample (biometric data — select:false)
+  voiceSample: string; // encrypted data URL of the voice sample (biometric data, select:false)
   consent?: ICloneConsent;
   usageCount: number; // replies in the current rolling 24 h quota window (utils/dailyReset.ts)
   lastActive: Date;
@@ -181,7 +181,7 @@ export interface IUser extends Document {
   thinkingMode?: boolean;     // "think deeper" toggle
   gifsEnabled?: boolean;      // GIF / meme reactions in chat (services/gifSearch)
   pushSubscriptions?: { endpoint: string; keys: { p256dh: string; auth: string }; userAgent?: string; createdAt?: Date }[]; // Web Push (services/webPush.ts)
-  // "Aastha reaches out first" (services/reachOut.ts) — follow-up text is encrypted
+  // "Aastha reaches out first" (services/reachOut.ts), follow-up text is encrypted
   followUps?: { _id?: any; text: string; dueDate: Date; status: 'pending' | 'asked' | 'sent' | 'dismissed'; createdAt?: Date }[];
   reachOut?: { enabled?: boolean; lastSentAt?: Date | null; lastCrisisAt?: Date | null };
   safetyIntroSeenAt?: Date; // "How Aastha keeps you safe" card (7.5)
@@ -192,7 +192,7 @@ export interface IUser extends Document {
   appFont?: string;     // Sanctuary text font id (client/src/design/fonts.ts), synced across devices
   headingFont?: string; // Sanctuary heading font id
   legalConsent?: { termsVersion: string; privacyVersion: string; acceptedAt: Date }; // src/legal.ts
-  timeZone?: string;        // device IANA zone, e.g. "Asia/Kolkata" (utils/timeZone.ts) — check-ins use local time
+  timeZone?: string;        // device IANA zone, e.g. "Asia/Kolkata" (utils/timeZone.ts), check-ins use local time
   dailyMessageCount: number;
   dailyVoiceCount: number; // <--- NEW: Daily Voice Note Limit for Free Users
   isListeningModeActive: boolean; // <--- NEW: Persistent STFU Mode

@@ -42,7 +42,7 @@ const mockRes = () => {
 
   // ---------------- tone rules in the prompt ----------------
   const prompt = buildCompanionPrompt({ persona: 'aastha', userName: 'Sanjith', userMood: 'neutral', facts: [], timeContext: 'evening', voiceAvailable: true, nicknameLine: 'Your nickname for them is "Sanju-bhai".' });
-  check('prompt bans assistant filler + emoji stacking, handles "cringe" without apologising', /Sound like a person/.test(prompt) && /I'm all ears/.test(prompt) && /don't apologise/i.test(prompt) && /none or one per message/.test(prompt));
+  check('prompt: texting guide with examples, bans filler + em dashes, length follows the moment, never apologise for "cringe"', /# How you text/.test(prompt) && /I'm all ears/.test(prompt) && /Never apologise/.test(prompt) && /never more than one/.test(prompt) && /Length follows the moment/.test(prompt) && /my dad passed away/.test(prompt) && !prompt.includes('—'));
   check('nickname line reaches the prompt', prompt.includes('Sanju-bhai'));
 
   // ---------------- reply chips: user's voice ----------------

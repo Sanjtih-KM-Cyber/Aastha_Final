@@ -1,5 +1,5 @@
 /**
- * Diary "forgot password" — reworked.
+ * Diary "forgot password", reworked.
  *
  * Diary entries are encrypted with the account's master key (unlocked by the ACCOUNT password at login)
  * and again at rest with the server key. The diary password is only a lock in front of them, so a reset
@@ -71,7 +71,7 @@ const verify = async (user: any, method: Method, secret: string): Promise<{ stat
 const clearResetState = (userId: any) =>
   User.updateOne({ _id: userId }, { $set: { 'diaryReset.attempts': 0 }, $unset: { 'diaryReset.codeHash': 1, 'diaryReset.expires': 1, 'diaryReset.lockedUntil': 1 } });
 
-// GET /api/users/diary/reset-options — what the user can verify with
+// GET /api/users/diary/reset-options, what the user can verify with
 export const getDiaryResetOptions = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
   const user: any = await User.findById(req.user._id);
@@ -85,7 +85,7 @@ export const getDiaryResetOptions = async (req: AuthRequest, res: Response) => {
   });
 };
 
-// POST /api/users/diary/reset-code — emails a 6-digit code
+// POST /api/users/diary/reset-code, emails a 6-digit code
 export const sendDiaryResetCode = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
   const user: any = await User.findById(req.user._id);
@@ -104,7 +104,7 @@ export const sendDiaryResetCode = async (req: AuthRequest, res: Response) => {
 
 const validNewPassword = (p: any) => typeof p === 'string' && p.length >= MIN_DIARY_PASSWORD && p.length <= 128;
 
-// POST /api/users/diary/reset-password { method, secret, newPassword } — entries are KEPT
+// POST /api/users/diary/reset-password { method, secret, newPassword }, entries are KEPT
 export const resetDiaryPassword = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
   const { method, secret, newPassword } = (req as any).body || {};
@@ -121,7 +121,7 @@ export const resetDiaryPassword = async (req: AuthRequest, res: Response) => {
   (res as any).json({ success: true, entriesKept: entries, message: 'Diary password changed. All your entries are still there.' });
 };
 
-// POST /api/users/diary/start-fresh { method, secret, newPassword } — deliberate, verified wipe
+// POST /api/users/diary/start-fresh { method, secret, newPassword }, deliberate, verified wipe
 export const startFreshDiary = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
   const { method, secret, newPassword } = (req as any).body || {};

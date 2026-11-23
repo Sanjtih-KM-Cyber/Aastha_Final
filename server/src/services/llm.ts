@@ -34,7 +34,7 @@ const list = (v: string | undefined, fallback: string[]) =>
 
 /** Ordered model chains. Override per deploy without code changes. */
 export const MODEL_CHAINS: Record<Task, string[]> = {
-  // Warm, coherent conversation. No 8B models — they hallucinate too much for a companion.
+  // Warm, coherent conversation. No 8B models, they hallucinate too much for a companion.
   chat: list(process.env.AI_CHAT_MODELS, [
     'llama-3.3-70b-versatile',
     'qwen/qwen3-32b',
@@ -106,7 +106,7 @@ export const classifyError = (err: any): 'rate_limit' | 'model_gone' | 'server' 
   if (status === 404 || msg.includes('decommissioned') || msg.includes('does not exist') || msg.includes('model_not_found'))
     return 'model_gone';
   if (status === undefined || status >= 500) return 'server';
-  return 'client'; // 400/401/403/413 — retrying the same request elsewhere may still help (e.g. other key)
+  return 'client'; // 400/401/403/413, retrying the same request elsewhere may still help (e.g. other key)
 };
 
 const recordFailure = (keyIdx: number, model: string, err: any) => {
@@ -341,7 +341,7 @@ export class LlmUnavailableError extends Error {
 
 /**
  * Streams a reply. Tries providers until one produces the first chunk; after that it never
- * switches (a mid-stream failure just ends the stream — partial text is kept, not duplicated).
+ * switches (a mid-stream failure just ends the stream, partial text is kept, not duplicated).
  */
 export async function* streamChat(
   messages: LlmMessage[],
@@ -369,12 +369,12 @@ export async function* streamChat(
         yield tail;
       }
       if (started) return;
-      // Empty completion — treat like a soft failure and try the next candidate
+      // Empty completion, treat like a soft failure and try the next candidate
       console.warn(`[LLM] ${a.model} returned an empty stream; trying next.`);
     } catch (err) {
       recordFailure(a.keyIdx, a.model, err);
       if (started) {
-        console.warn('[LLM] Stream broke after partial output — ending without retry to avoid duplicate text.');
+        console.warn('[LLM] Stream broke after partial output, ending without retry to avoid duplicate text.');
         return;
       }
     }

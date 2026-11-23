@@ -12,10 +12,10 @@ import {
 } from '../../security/appLock';
 
 /**
- * APP LOCK (phone + web) — one controller, one lock screen.
+ * APP LOCK (phone + web), one controller, one lock screen.
  *  - Locks on a cold start, when you come back after the chosen grace period, after idling, or via "Lock now".
  *  - Phone: tap the fingerprint button → fingerprint / face (5 tries in ONE system sheet + the phone's PIN as fallback).
- *    The sheet never opens by itself. Web: account password only (no biometrics on the website — owner decision).
+ *    The sheet never opens by itself. Web: account password only (no biometrics on the website, owner decision).
  *  - The app stays MOUNTED under the lock screen (your chat, music and widgets don't reset when you unlock).
  *  - Double-prompt fix: the system sheet closing fires a "resume" on some phones; resumes during a prompt and for
  *    1.5 s after it are ignored, and only one system prompt can exist at a time (hooks/useBiometrics.ts).
@@ -37,7 +37,7 @@ export const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch { /* ignore */ }
     return loadLockSettings().enabled && !fresh;
   });
-  // consume the "just signed in" flag AFTER mounting (initialisers can run twice in dev — StrictMode)
+  // consume the "just signed in" flag AFTER mounting (initialisers can run twice in dev, StrictMode)
   useEffect(() => { const t = setTimeout(() => { try { sessionStorage.removeItem('aastha_fresh_sign_in'); } catch { /* ignore */ } }, 0); return () => clearTimeout(t); }, []);
   const prompting = useRef(false);
   const ignoreUntil = useRef(0);
@@ -82,12 +82,12 @@ export const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({ childr
       const ok = await bio.promptBiometrics();
       if (ok) unlocked();
     } finally {
-      ignoreUntil.current = Date.now() + 1500; // the sheet closing may fire pause/resume — not a real "leave"
+      ignoreUntil.current = Date.now() + 1500; // the sheet closing may fire pause/resume, not a real "leave"
       prompting.current = false;
     }
   }, [useBio, bio, unlocked]);
 
-  // Owner decision: the system fingerprint sheet NEVER opens by itself — the lock screen shows first and the sheet
+  // Owner decision: the system fingerprint sheet NEVER opens by itself, the lock screen shows first and the sheet
   // only appears when you tap the fingerprint button (cold start, coming back from the background, idle, Lock now).
 
   // Leave / come back
@@ -171,7 +171,7 @@ const LockScreen: React.FC<{
       setPassword('');
       onUnlocked();
     } catch (err: any) {
-      setError(err?.response?.status === 429 ? 'Too many tries — wait a few minutes, or sign out and back in.' : 'That password didn’t match.');
+      setError(err?.response?.status === 429 ? 'Too many tries, wait a few minutes, or sign out and back in.' : 'That password didn’t match.');
     } finally { setBusy(false); }
   };
 

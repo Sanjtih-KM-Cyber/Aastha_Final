@@ -201,7 +201,7 @@ export const searchVideos = async (req: AuthRequest, res: Response) => {
 
     if (!q) return (res as any).json([]);
 
-    // Cached + quota-protected (services/youtubeSearch.ts — A11)
+    // Cached + quota-protected (services/youtubeSearch.ts, A11)
     const videos = await searchYouTube(String(q), { max: 15, musicOnly: true });
 
     (res as any).json(videos);
@@ -250,7 +250,7 @@ export const updateMugshot = async (req: AuthRequest, res: Response) => {
         }
         if (!mongoose.isValidObjectId(personId)) return (res as any).status(400).json({ message: 'Invalid person' });
 
-        // Stored encrypted (third-party photo) — S7
+        // Stored encrypted (third-party photo), S7
         const person = await detectiveService.setMugshot(req.user._id, personId, image);
 
         if (!person) return (res as any).status(404).json({ message: 'Person not found' });
@@ -263,7 +263,7 @@ export const updateMugshot = async (req: AuthRequest, res: Response) => {
 };
 
 
-// PUT /api/data/web/:id { role?, roleLabel?, vibe? } — the user corrects the AI's classification
+// PUT /api/data/web/:id { role?, roleLabel?, vibe? }, the user corrects the AI's classification
 export const updatePersonClassification = async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });

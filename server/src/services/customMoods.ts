@@ -1,5 +1,5 @@
 /**
- * Custom mood types (owner request 2026-11-23): users add their own moods to the Mood tracker —
+ * Custom mood types (owner request 2026-11-23): users add their own moods to the Mood tracker
  * a name (encrypted: it can be personal, e.g. "missing home"), one emoji and a level 1–10
  * (1 = very heavy, 10 = great; the level feeds the weekly average/insight like built-in moods).
  */

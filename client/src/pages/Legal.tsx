@@ -5,7 +5,7 @@ import { usePublicTheme } from '../hooks/usePublicTheme';
 import { PRIVACY, TERMS, LegalSection } from '../legal/content';
 import { LEGAL } from '../legal/legalInfo';
 
-/** Public Privacy Policy / Terms page — Material You content, glass top bar, light/dark toggle. */
+/** Public Privacy Policy / Terms page, Material You content, glass top bar, light/dark toggle. */
 const LegalPage: React.FC<{ kind: 'privacy' | 'terms' }> = ({ kind }) => {
   const navigate = useNavigate();
   const theme = usePublicTheme();

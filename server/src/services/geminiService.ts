@@ -76,15 +76,15 @@ export const generateGhostEmailContent = async (context: IGhostContext): Promise
     const isAastik = context.persona === 'aastik' || context.persona === 'aarav';
     const senderName = isAastik ? 'Aastik' : 'Aastha';
     const voice = isAastik
-        ? 'a steady, low-key, loyal friend — calm and warm, a little dry humour'
-        : 'a warm, grounded friend — gentle and a little playful';
+        ? 'a steady, low-key, loyal friend, calm and warm, a little dry humour'
+        : 'a warm, grounded friend, gentle and a little playful';
 
     // A gentle, no-pressure check-in (ROADMAP A10). Never guilt, never "needy", never imply they owe a reply.
     const prompt = `Write a short check-in message from ${senderName} (${voice}) to ${context.name}, who hasn't opened the app for a day or two.
 ${context.openLoop ? `They mentioned this was coming up: "${context.openLoop}". You may ask how it went.` : ''}
 ${!context.openLoop && context.keywords && context.keywords !== 'life' ? `Last time they were thinking about: "${context.keywords}". You may reference it lightly.` : ''}
 Rules: 1–2 sentences. Plain text, no subject line. No guilt, no "I missed you so much", no drama, no questions about why they were away.
-Make it clear there's no pressure to reply — you're just around if they want to talk.`;
+Make it clear there's no pressure to reply, you're just around if they want to talk.`;
 
     try {
         const text = await completeChat([{ role: 'user', content: prompt }], { task: 'chat', temperature: 0.8, maxTokens: 120 });
@@ -92,13 +92,13 @@ Make it clear there's no pressure to reply — you're just around if they want t
     } catch (error) {
         console.error("[Ghost] Email generation error:", error);
         return isAastik
-            ? "Hey, just checking in. No pressure — I'm around whenever you feel like talking."
-            : "Hey you, just thinking of you. No need to reply — I'm here whenever you want to talk 💜";
+            ? "Hey, just checking in. No pressure, I'm around whenever you feel like talking."
+            : "Hey you, just thinking of you. No need to reply, I'm here whenever you want to talk 💜";
     }
 };
 
 // ==========================================
-// 5. AI HELPERS — all via services/llm.ts (failover, cooldowns, no direct Gemini calls)
+// 5. AI HELPERS, all via services/llm.ts (failover, cooldowns, no direct Gemini calls)
 // ==========================================
 const ask = (prompt: string, opts: { json?: boolean; maxTokens?: number; temperature?: number } = {}) =>
     completeChat([{ role: 'user', content: prompt }], { task: 'chat', temperature: opts.temperature ?? 0.5, maxTokens: opts.maxTokens ?? 600, json: opts.json });

@@ -1,5 +1,5 @@
 /**
- * "The Web" — a map of people in the user's life, built ONLY when the user taps "scan" (explicit opt-in).
+ * "The Web", a map of people in the user's life, built ONLY when the user taps "scan" (explicit opt-in).
  *
  * Privacy (ROADMAP S7): these are third parties who never signed up, so name / alias / notes / photo
  * are encrypted at rest and looked up via a blind index (keyed hash). Legacy plaintext rows are
@@ -89,7 +89,7 @@ const migrateLegacy = async (doc: any) => {
   try {
     await Person.updateOne({ _id: doc._id }, { $set: update });
   } catch (e: any) {
-    // A duplicate blind index means the same person exists twice (old case-sensitive data) — keep the first.
+    // A duplicate blind index means the same person exists twice (old case-sensitive data), keep the first.
     if (e?.code === 11000) await Person.deleteOne({ _id: doc._id });
     else throw e;
   }
@@ -138,9 +138,9 @@ Only include facts the user actually said. Do not guess.
 For each person:
 - name: as the user refers to them
 - alias: a short, kind, descriptive nickname based on how the user talks about them (e.g. "The Planner")
-- role: who they are to the user — exactly one of: ${ROLES.join(', ')}. Use "other" only if nothing fits.
+- role: who they are to the user, exactly one of: ${ROLES.join(', ')}. Use "other" only if nothing fits.
 - roleLabel: only when role is "other", a 1–3 word label (e.g. "dance teacher", "landlord")
-- vibe: how this relationship feels to the user from what they said — exactly one of: ${VIBES.join(', ')}.
+- vibe: how this relationship feels to the user from what they said, exactly one of: ${VIBES.join(', ')}.
   supportive = reliably there for them; warm = positive; neutral; mixed = good and bad; complicated = tension or confusion;
   draining = leaves them hurt/tired; distant = drifting apart; unsure = not enough to tell. Describe the relationship, never insult the person.
 - score: relationship closeness from -100 (very negative) to 100 (very positive), 0 = neutral

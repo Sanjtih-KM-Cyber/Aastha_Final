@@ -3,7 +3,7 @@ import React, { useCallback, useEffect } from 'react';
 /**
  * Liquid Glass support pieces (Phase 5).
  *
- * <LiquidGlassDefs/> — mount once. Provides the SVG displacement filter used by `.glass-refract`
+ * <LiquidGlassDefs/>mount once. Provides the SVG displacement filter used by `.glass-refract`
  * and flags `html.refract-ok` on engines that support SVG filters in backdrop-filter (Chromium /
  * Android WebView). Safari/iOS and Firefox simply keep the plain frosted blur.
  */

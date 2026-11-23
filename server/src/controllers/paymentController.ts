@@ -19,7 +19,7 @@ const getRazorpay = (): Razorpay | null => {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
-// PLAN CATALOGUE — single source of truth for prices and durations.
+// PLAN CATALOGUE, single source of truth for prices and durations.
 // The plan a user receives is derived from the Razorpay ORDER (created by us),
 // never from anything the client sends at verification time.
 // ---------------------------------------------------------------------------
@@ -127,7 +127,7 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
       return (res as any).status(400).json({ success: false, message: 'Payment not completed.' });
     }
 
-    // 4. Claim the payment atomically — a payment/order can only ever be redeemed once (any account).
+    // 4. Claim the payment atomically, a payment/order can only ever be redeemed once (any account).
     const alreadyUsed = await User.exists({
       $or: [{ 'paymentHistory.paymentId': razorpay_payment_id }, { 'paymentHistory.orderId': razorpay_order_id }],
     });

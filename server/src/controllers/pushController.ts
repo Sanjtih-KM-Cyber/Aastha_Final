@@ -27,12 +27,12 @@ export const unsubscribePush = async (req: AuthRequest, res: Response) => {
   (res as any).json({ success: true });
 };
 
-// POST /api/users/push/test — lets the user confirm notifications work on this device
+// POST /api/users/push/test, lets the user confirm notifications work on this device
 export const testPush = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
   const sent = await sendToUser(req.user._id.toString(), {
     title: 'Notifications are on 🌸',
-    body: "This is how I'll check in — gently, and not too often.",
+    body: "This is how I'll check in, gently, and not too often.",
     tag: 'aastha-test',
   });
   (res as any).json({ success: sent > 0, delivered: sent });

@@ -82,7 +82,7 @@ const AppRoutes = () => {
           }
         />
 
-        {/* Legal (public — linked from sign-up, footer and Settings) */}
+        {/* Legal (public, linked from sign-up, footer and Settings) */}
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/terms" element={<TermsPage />} />
 

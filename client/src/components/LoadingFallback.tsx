@@ -1,6 +1,6 @@
 import React from 'react';
 
-/** App loading screen — logo tile + M3 circular progress in the seed colour. */
+/** App loading screen, logo tile + M3 circular progress in the seed colour. */
 export const LoadingFallback: React.FC = () => (
   <div className="h-[100dvh] w-full flex flex-col items-center justify-center bg-md-surface text-md-on-surface z-50" role="status" aria-live="polite">
     <div className="relative w-20 h-20 mb-6">

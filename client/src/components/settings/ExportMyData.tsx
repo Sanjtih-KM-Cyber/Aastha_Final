@@ -35,7 +35,7 @@ export const ExportMyData: React.FC = () => {
       const stamp = new Date().toISOString().slice(0, 10);
       const how = await saveTextFile(`aastha-export-${stamp}.json`, JSON.stringify(full, null, 2));
       const locked = full.diary.filter((d: any) => d.locked).length;
-      setMsg(`${how === 'shared' ? 'Ready — pick where to save it.' : 'Downloaded.'} ${full.chats?.length || 0} messages, ${full.diary.length} diary entries${locked ? ` (${locked} still locked — open your diary once, then export again)` : ''}, ${full.moods?.length || 0} moods.`);
+      setMsg(`${how === 'shared' ? 'Ready, pick where to save it.' : 'Downloaded.'} ${full.chats?.length || 0} messages, ${full.diary.length} diary entries${locked ? ` (${locked} still locked, open your diary once, then export again)` : ''}, ${full.moods?.length || 0} moods.`);
     } catch (e: any) {
       setMsg(e?.response?.data?.message || 'Export failed. Please try again.');
     } finally {
@@ -48,7 +48,7 @@ export const ExportMyData: React.FC = () => {
       <h4 className="text-sm font-semibold text-md-on-surface">Export my data</h4>
       <p className="text-xs text-md-on-surface-variant mt-1 leading-relaxed">
         One file with everything we store about you: chats, diary, moods, what Aastha remembers, The Web and your settings.
-        It's readable (JSON) and not encrypted — keep it somewhere safe.
+        It's readable (JSON) and not encrypted, keep it somewhere safe.
       </p>
       <button
         onClick={run}

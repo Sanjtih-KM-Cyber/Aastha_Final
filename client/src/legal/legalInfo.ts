@@ -1,6 +1,6 @@
 /**
  * ONE place for the details the Privacy Policy and Terms need.
- * ⚠️ OWNER: fill every value in [square brackets] before launch — unfilled values are shown highlighted on
+ * ⚠️ OWNER: fill every value in [square brackets] before launch, unfilled values are shown highlighted on
  * the pages. Have a lawyer review the documents (they are written to match what the app actually does).
  * When you change the documents materially, bump the versions here AND in server/src/legal.ts
  * → every user is asked to accept again.

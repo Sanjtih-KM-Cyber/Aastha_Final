@@ -32,20 +32,20 @@ const MemoMood = memo(MoodTracker);
 const MemoWeb = memo(TheWebWidget); // New Name
 
 /**
- * First-run tour — different on phone and desktop because the app is different there:
+ * First-run tour, different on phone and desktop because the app is different there:
  * phone = bottom tabs + gestures; desktop = sidebar toolkit with draggable windows + hover actions.
  * Targets are real element ids (chat-input-area, mobile-tab-bar, voice-mode-btn, sidebar-toolkit, sidebar-settings).
  */
 const buildTourSteps = (bot: string, firstName: string, phone: boolean): TourStep[] => {
   const hi = firstName ? `Hi ${firstName}, I’m ${bot}` : `Hi, I’m ${bot}`;
-  const welcome: TourStep = { art: 'welcome', title: hi, content: `Think of me as the friend who’s always around — to listen, joke about nothing, or help you think something through. Want a quick look around? It takes 30 seconds.` };
-  const done: TourStep = { art: 'done', title: 'You’re all set', content: `This is your space. Say hi whenever you’re ready — I’ll be right here.` };
+  const welcome: TourStep = { art: 'welcome', title: hi, content: `Think of me as the friend who’s always around, to listen, joke about nothing, or help you think something through. Want a quick look around? It takes 30 seconds.` };
+  const done: TourStep = { art: 'done', title: 'You’re all set', content: `This is your space. Say hi whenever you’re ready, I’ll be right here.` };
   if (phone) return [
     welcome,
-    { targetId: 'chat-input-area', title: 'Talk your way', content: `Type, tap the mic for a voice note, or share a photo. Write in any language — I’ll follow you.` },
+    { targetId: 'chat-input-area', title: 'Talk your way', content: `Type, tap the mic for a voice note, or share a photo. Write in any language, I’ll follow you.` },
     { art: 'gestures', title: 'Little gestures', content: 'Swipe a message to the right to reply, tap it to copy, and press and hold one of mine to react.' },
     { targetId: 'mobile-tab-bar', art: 'tabs', title: 'Everything is one tap away', content: 'Diary is your locked journal, Mood tracks how you feel, Relax has breathing, music and sounds, and Me is where you make the app yours.' },
-    { targetId: 'voice-mode-btn', title: 'Rather talk?', content: 'Tap the headphones for a real voice conversation — made for late-night vents and long walks.' },
+    { targetId: 'voice-mode-btn', title: 'Rather talk?', content: 'Tap the headphones for a real voice conversation, made for late-night vents and long walks.' },
     done,
   ];
   return [
@@ -61,7 +61,7 @@ const buildTourSteps = (bot: string, firstName: string, phone: boolean): TourSte
 export const Sanctuary: React.FC = () => {
   const { emit, subscribe } = useSync();
   const { user, completeOnboarding, updateUser, logout } = useAuth();
-  useSanctuaryFonts(); // user's font choice — Sanctuary only (removed again on the public pages)
+  useSanctuaryFonts(); // user's font choice, Sanctuary only (removed again on the public pages)
 
   // Mobile Sidebar State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -89,7 +89,7 @@ export const Sanctuary: React.FC = () => {
       await completeOnboarding();
   };
 
-  // "How Aastha keeps you safe" — once per account, after the tour (7.5)
+  // "How Aastha keeps you safe", once per account, after the tour (7.5)
   const safetyKey = user?._id ? `aastha_safety_intro_seen:${user._id}` : '';
   const [showSafetyIntro, setShowSafetyIntro] = useState(false);
   useEffect(() => {
@@ -364,7 +364,7 @@ export const Sanctuary: React.FC = () => {
       {/* 4. Global Settings Modal - System Layer (z-100) */}
       <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
-      {/* 5. Phone-first navigation (Phase 5) — hidden while full-screen overlays are open */}
+      {/* 5. Phone-first navigation (Phase 5), hidden while full-screen overlays are open */}
       {isMobile && !isSettingsOpen && !isMobileMenuOpen && (
         <div className="relative z-[200]">
           <MobileTabBar active={activeTab} onSelect={handleTabSelect} />

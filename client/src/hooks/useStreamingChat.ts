@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef } from 'react';
 import { createSseParser } from '../utils/sseParser';
 
 /**
- * Transport for the chat reply stream (split out of ChatView — ROADMAP 7.2 / P5).
+ * Transport for the chat reply stream (split out of ChatView, ROADMAP 7.2 / P5).
  * Owns: fetch + abort, SSE parsing, ≤50 ms render batching (P2), and a guaranteed `onSettled`
- * (so the header can never stay on "Typing…" after a reply ends, fails or is stopped — 7.1).
+ * (so the header can never stay on "Typing…" after a reply ends, fails or is stopped, 7.1).
  * ChatView decides what each event means.
  */
 export class StreamHttpError extends Error {

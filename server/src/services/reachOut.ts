@@ -2,14 +2,14 @@
  * "Aastha reaches out first" (ROADMAP 7.4).
  *
  * Memory marks dated things the user mentioned ("exam on Friday") as follow-ups. The day after, Aastha
- * gently checks in — in chat if they're around, otherwise one notification.
+ * gently checks in, in chat if they're around, otherwise one notification.
  * Everything runs on the USER'S OWN local time (`user.timeZone`, sent by the app; India until we know it).
  * Caps (all enforced here, server-side):
  *  - at most 1 check-in per local day, at most 1 per follow-up
  *  - quiet hours 21:00–10:00 local time (notifications are only sent 10:00–21:00)
  *  - never within 48 h of a crisis message (a crisis day and the day after are left alone)
  *  - off switch: user.reachOut.enabled === false → nothing is sent or scheduled
- *  - not while they're already active (last visit < 3 h) — then Aastha just asks in chat
+ *  - not while they're already active (last visit < 3 h), then Aastha just asks in chat
  * Follow-up text is user-derived and encrypted at rest; the check-in copy is a fixed, gentle template
  * (no LLM, no guilt, no "where have you been").
  */
@@ -26,7 +26,7 @@ export const CRISIS_COOLDOWN_MS = 48 * 3_600_000;
 export const ACTIVE_RECENTLY_MS = 3 * 3_600_000;
 export const QUIET_START_HOUR = 21;      // local time
 export const QUIET_END_HOUR = 10;        // local time
-export const CHECK_IN_HOUR = 10;         // local time — scheduled notifications fire at 10:00 the day after
+export const CHECK_IN_HOUR = 10;         // local time, scheduled notifications fire at 10:00 the day after
 
 /** Kept for callers that only need India time (daily quota reset etc.). */
 export const istDayKey = (d: Date | number) => dayKeyIn(d, DEFAULT_TZ);
@@ -84,7 +84,7 @@ export const followUpPromptLine = (list: FollowUpDoc[], now = new Date(), tz: st
   const items = followUpsAroundNow(list, now, zone).slice(0, 2);
   if (!items.length) return '';
   const what = items.map((f) => `${f.text} (${whenWord(f, now, zone)})`).join('; ');
-  return `Something they told you about is happening around now: ${what}. If it fits naturally, ask how it went/is going — once, lightly, no pressure. Skip it if they're upset about something else.`;
+  return `Something they told you about is happening around now: ${what}. If it fits naturally, ask how it went/is going, once, lightly, no pressure. Skip it if they're upset about something else.`;
 };
 
 export interface ReachOutState { enabled?: boolean; lastSentAt?: Date | null; lastCrisisAt?: Date | null }
@@ -107,7 +107,7 @@ export const dueForCheckIn = (list: FollowUpDoc[], now = new Date(), tz: string 
 };
 
 export const checkInText = (firstName: string, event: string) =>
-  `Hey ${firstName || 'you'} 🙂 how did ${/^(the|your|my|their|his|her) /i.test(event) ? event : `the ${event}`} go? No pressure to reply — just thinking of you.`;
+  `Hey ${firstName || 'you'} 🙂 how did ${/^(the|your|my|their|his|her) /i.test(event) ? event : `the ${event}`} go? No pressure to reply, just thinking of you.`;
 
 const decryptList = (list: any[]): FollowUpDoc[] => (list || []).map((f) => ({ ...(f.toObject ? f.toObject() : f), text: decrypt(f.text || '') }));
 const encryptList = (list: FollowUpDoc[]) => list.map((f) => ({ ...f, text: encrypt(f.text) }));

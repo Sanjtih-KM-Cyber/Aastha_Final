@@ -1,10 +1,10 @@
 /**
- * App lock settings + decisions (pure — unit-tested in tests/appLock.test.ts).
+ * App lock settings + decisions (pure, unit-tested in tests/appLock.test.ts).
  *
  * One lock system for phone and web (components/auth/BiometricGuard.tsx):
  *  - unlock with fingerprint / face / the phone's PIN (native) or the account password (web, or as a fallback)
  *  - locks on cold start, when you come back after being away for `afterMs`, and after being idle in the app
- *    for max(afterMs, 1 min) — idle lock is paused while music / a focus timer keeps the app "busy"
+ *    for max(afterMs, 1 min), idle lock is paused while music / a focus timer keeps the app "busy"
  * Replaces the old pair (biometric guard + "auto-lock" that LOGGED YOU OUT after inactivity).
  */
 export interface LockSettings {
@@ -62,7 +62,7 @@ export const saveLockSettings = (s: LockSettings, storage: Pick<Storage, 'setIte
 export const shouldLockOnReturn = (s: LockSettings, hiddenAt: number | null, now: number) =>
   s.enabled && hiddenAt !== null && now - hiddenAt >= s.afterMs;
 
-/** Idle inside the app — never shorter than a minute (so "Immediately" doesn't lock you while reading). */
+/** Idle inside the app, never shorter than a minute (so "Immediately" doesn't lock you while reading). */
 export const idleLimitMs = (s: LockSettings) => Math.max(s.afterMs, 60_000);
 export const shouldLockForIdle = (s: LockSettings, lastActivity: number, now: number, busy: boolean) =>
   s.enabled && !busy && now - lastActivity >= idleLimitMs(s);

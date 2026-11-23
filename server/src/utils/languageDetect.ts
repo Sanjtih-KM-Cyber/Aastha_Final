@@ -2,7 +2,7 @@
  * Lightweight, deterministic language + script detection for style mirroring (no API calls).
  * Covers every major Indian script, Arabic/Urdu script, and romanised Indian languages written in
  * English letters (Hinglish, Tanglish, Banglish, Manglish, Telugu, Kannada, Marathi, Gujarati, Punjabi).
- * Anything else falls back to "latin" (English / other Latin-script languages — the AI handles those).
+ * Anything else falls back to "latin" (English / other Latin-script languages, the AI handles those).
  */
 
 export type LangCode =

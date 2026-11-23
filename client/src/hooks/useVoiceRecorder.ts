@@ -70,7 +70,7 @@ export const useVoiceRecorder = (onError?: (msg: string) => void) => {
       return true;
     } catch (e: any) {
       release();
-      onError?.(e?.name === 'NotAllowedError' ? 'Microphone access is off — allow it in your phone settings to send voice notes.' : 'Couldn\'t start the microphone.');
+      onError?.(e?.name === 'NotAllowedError' ? 'Microphone access is off, allow it in your phone settings to send voice notes.' : 'Couldn\'t start the microphone.');
       return false;
     }
   }, [isSupported, onError]);

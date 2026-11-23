@@ -1,6 +1,6 @@
 /**
  * Local cache of the most recent chat messages so the chat screen renders instantly
- * (instead of blocking on "Connecting to Aastha…" while the server wakes up — ROADMAP M2).
+ * (instead of blocking on "Connecting to Aastha…" while the server wakes up, ROADMAP M2).
  * Scoped per user and cleared on logout.
  */
 const PREFIX = 'aastha_chat_cache_v1:';
@@ -40,7 +40,7 @@ export const chatCache = {
         .map((m) => ({ id: m.id, role: m.role, content: m.content, timestamp: m.timestamp, voice_note: m.voice_note }));
       if (clean.length > 0) localStorage.setItem(key, JSON.stringify(clean));
     } catch {
-      // Storage full / unavailable — cache is best-effort only.
+      // Storage full / unavailable, cache is best-effort only.
     }
   },
 

@@ -61,7 +61,7 @@ export const AddMoodSheet: React.FC<{
               className="w-14 h-14 shrink-0 rounded-[18px] bg-md-surface-container-highest text-3xl flex items-center justify-center hover:brightness-110">
               {emoji}
             </button>
-            <input value={label} onChange={(e) => setLabel(e.target.value.slice(0, 24))} placeholder="Name it — e.g. Homesick"
+            <input value={label} onChange={(e) => setLabel(e.target.value.slice(0, 24))} placeholder="Name it, e.g. Homesick"
               aria-label="Mood name" className={fieldClass} maxLength={24} />
           </div>
 

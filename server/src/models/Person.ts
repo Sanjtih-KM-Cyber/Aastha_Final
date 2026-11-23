@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 /**
- * "The Web" — people in the user's life (ROADMAP S7).
+ * "The Web", people in the user's life (ROADMAP S7).
  * These are THIRD PARTIES who never signed up, so everything identifying is encrypted at rest:
  *   name, alias, rapSheet[], mugshot  → serverEncryption.encrypt()
  *   nameHash                          → blindIndex(name), used for lookups / uniqueness
@@ -35,7 +35,7 @@ const personSchema = new mongoose.Schema({
     enum: ['KEEPER', 'TOXIC', 'SUSPECT', 'NPC'],
     default: 'NPC'
   },
-  role: {           // who they are to the user — chosen by the AI (services/detectiveService ROLES)
+  role: {           // who they are to the user, chosen by the AI (services/detectiveService ROLES)
     type: String,
     default: 'other'
   },
@@ -43,7 +43,7 @@ const personSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  vibe: {           // how the relationship feels — chosen by the AI (VIBES)
+  vibe: {           // how the relationship feels, chosen by the AI (VIBES)
     type: String,
     default: 'unsure'
   },
@@ -69,7 +69,7 @@ personSchema.index(
   { userId: 1, nameHash: 1 },
   { unique: true, partialFilterExpression: { nameHash: { $exists: true } } }
 );
-// NOTE: the old unique index { userId: 1, name: 1 } may still exist in production — harmless, because
+// NOTE: the old unique index { userId: 1, name: 1 } may still exist in production, harmless, because
 // encrypted names are unique strings. It can be dropped manually once all rows are migrated.
 
 export const Person = mongoose.model('Person', personSchema);

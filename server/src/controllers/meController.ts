@@ -161,7 +161,7 @@ export const removeCustomMood = async (req: AuthRequest, res: Response) => {
 };
 
 // --- Preferences that follow the user across phone + web ---
-/** Font ids — keep in sync with client/src/design/fonts.ts */
+/** Font ids, keep in sync with client/src/design/fonts.ts */
 export const APP_FONTS = ['jakarta', 'inter', 'nunito', 'quicksand', 'outfit', 'dmsans', 'lexend', 'atkinson', 'lora', 'system'];
 export const HEADING_FONTS = ['fraunces', 'playfair', 'lora', 'same'];
 /** Sanctuary colour: a preset (client ThemeContext) or any #rrggbb from the colour wheel. */
@@ -197,7 +197,7 @@ export const updatePreferences = async (req: AuthRequest, res: Response) => {
 };
 
 
-// PUT /api/users/nickname — { action: 'set', value } | { action: 'regenerate' } | { action: 'off' } | { action: 'on' }
+// PUT /api/users/nickname, { action: 'set', value } | { action: 'regenerate' } | { action: 'off' } | { action: 'on' }
 export const updateNickname = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
   const { action, value } = (req as any).body || {};
@@ -213,7 +213,7 @@ export const updateNickname = async (req: AuthRequest, res: Response) => {
   } else if (action === 'regenerate') {
     if (effectiveLevel(user.bond) < 4) return (res as any).status(400).json({ message: 'Nicknames unlock at Bestie.' });
     const nick = await makeNickname({ name: user.name, facts: (user.facts || []).map((f: string) => decrypt(f)), persona: user.persona === 'aarav' || user.persona === 'aastik' ? 'aastik' : 'aastha', avoid: cur.value ? [cur.value] : [] });
-    if (!nick) return (res as any).status(503).json({ message: 'Couldn’t think of one right now — try again in a moment.' });
+    if (!nick) return (res as any).status(503).json({ message: 'Couldn’t think of one right now, try again in a moment.' });
     user.nickname = { value: nick, by: 'aastha', setAt: new Date(), announced: true, off: false };
   } else if (action === 'off' || action === 'on') {
     user.set('nickname.off', action === 'off');
@@ -226,7 +226,7 @@ export const updateNickname = async (req: AuthRequest, res: Response) => {
   (res as any).json({ nickname: { value: n.value || '', by: n.by || 'aastha', off: !!n.off } });
 };
 
-// POST /api/users/verify-password { password } — unlocks the app-lock screen with the account password.
+// POST /api/users/verify-password { password }, unlocks the app-lock screen with the account password.
 // Already signed in (protect), so it only confirms it's still you. 5 wrong tries → 15 min cool-down per account.
 const unlockFails = new Map<string, { n: number; until: number }>();
 export const _resetUnlockLimiter = () => unlockFails.clear();
@@ -241,14 +241,14 @@ export const verifyAccountPassword = async (req: AuthRequest, res: Response) => 
   if (!ok) {
     const n = (f && f.until <= Date.now() && f.n >= 5 ? 0 : f?.n || 0) + 1;
     unlockFails.set(id, { n, until: n >= 5 ? Date.now() + 15 * 60_000 : 0 });
-    // 422, not 401: the app treats 401/403 as "session expired" and signs you out — a typo must not do that
+    // 422, not 401: the app treats 401/403 as "session expired" and signs you out, a typo must not do that
     return (res as any).status(422).json({ message: 'Wrong password' });
   }
   unlockFails.delete(id);
   (res as any).json({ ok: true });
 };
 
-// POST /api/users/legal-consent { accept: true } — records acceptance of the current Terms + Privacy Policy
+// POST /api/users/legal-consent { accept: true }, records acceptance of the current Terms + Privacy Policy
 export const acceptLegal = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
   if ((req as any).body?.accept !== true) return (res as any).status(400).json({ message: 'accept must be true' });

@@ -1,5 +1,5 @@
 /**
- * Aastha icon set — Phosphor "duotone" icons (friendlier and more expressive than plain line icons),
+ * Aastha icon set, Phosphor "duotone" icons (friendlier and more expressive than plain line icons),
  * with a coloured tonal tile per tool. Tiles use Material You containers, so they follow the user's seed colour.
  * Import tool icons from here (not lucide) for navigation, tabs, window title bars and settings.
  */

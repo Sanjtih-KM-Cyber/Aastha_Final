@@ -6,7 +6,7 @@ import { FadeIn } from './FadeIn';
 const faqs = [
   {
     question: 'Is this just for students?',
-    answer: 'No. Aastha is designed for every stage — exam pressure, a first job, a heavy week at work, or just a lonely evening. It adapts to how you talk and what you share.',
+    answer: 'No. Aastha is designed for every stage, exam pressure, a first job, a heavy week at work, or just a lonely evening. It adapts to how you talk and what you share.',
   },
   {
     question: 'Is Aastha a replacement for a therapist?',
@@ -14,11 +14,11 @@ const faqs = [
   },
   {
     question: 'Is my data really private?',
-    answer: 'We’ll be straight with you. Your chats, diary entries and moods are encrypted (AES-256) whenever they’re stored on our servers, and your diary has its own password. To reply to you, your messages are processed by our AI providers — so this is not end-to-end encryption. Data donation is strictly opt-in, and you can export or permanently delete everything from Settings at any time.',
+    answer: 'We’ll be straight with you. Your chats, diary entries and moods are encrypted (AES-256) whenever they’re stored on our servers, and your diary has its own password. To reply to you, your messages are processed by our AI providers, so this is not end-to-end encryption. Data donation is strictly opt-in, and you can export or permanently delete everything from Settings at any time.',
   },
   {
     question: 'How does Aastha help with burnout?',
-    answer: 'It gives you a judgment-free place to decompress, rehearse a difficult conversation, or reset with a focus round, breathing or ambient sound — and it remembers what’s been weighing on you so you don’t have to start over each time.',
+    answer: 'It gives you a judgment-free place to decompress, rehearse a difficult conversation, or reset with a focus round, breathing or ambient sound, and it remembers what’s been weighing on you so you don’t have to start over each time.',
   },
   {
     question: 'What makes Aastha different from a general AI chat?',

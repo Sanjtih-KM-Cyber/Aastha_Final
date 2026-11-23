@@ -24,7 +24,7 @@ type DiaryPayload = { title: string; content: string; tags?: string[]; date?: st
 const OFFLINE_MOOD_KEY = 'offline_mood_queue';
 const OFFLINE_DIARY_KEY = 'offline_diary_queue';
 
-// One queued version per diary day; moods keyed by their timestamp (7.1 — no more retry storm)
+// One queued version per diary day; moods keyed by their timestamp (7.1, no more retry storm)
 const diaryQueue = createOfflineQueue<DiaryPayload>(OFFLINE_DIARY_KEY, {
   send: (p) => api.post('/data/diary', p),
 });
@@ -59,10 +59,10 @@ export const userService = {
   async saveDiaryEntryWithRetry(entry: DiaryPayload): Promise<DiaryEntryDTO> {
       try {
           const res = await api.post('/data/diary', entry);
-          diaryQueue.remove(diaryKey(entry)); // a newer version made it — drop any queued older one
+          diaryQueue.remove(diaryKey(entry)); // a newer version made it, drop any queued older one
           return res.data;
       } catch (error) {
-          if (!isRetryable(error)) throw error; // real rejection (400/401/403/413) — don't queue it forever
+          if (!isRetryable(error)) throw error; // real rejection (400/401/403/413), don't queue it forever
           console.warn("Diary save failed, keeping it on this device until we can sync");
           diaryQueue.enqueue(diaryKey(entry), entry);
           return {

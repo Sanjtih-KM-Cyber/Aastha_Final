@@ -173,7 +173,7 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
     >
       <div className="flex flex-col h-full w-full font-sans px-3 pb-3 gap-3">
 
-         {/* VISUALIZER — tonal stage, breathing orb in the seed colour */}
+         {/* VISUALIZER, tonal stage, breathing orb in the seed colour */}
          <div className="flex-1 min-h-[220px] rounded-[28px] bg-md-surface-container relative flex items-center justify-center overflow-hidden">
              <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-md-primary/10 to-transparent" />
 
@@ -227,7 +227,7 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
              </div>
          </div>
 
-         {/* MODE PICKER — M3 filter chips */}
+         {/* MODE PICKER, M3 filter chips */}
          <div className="shrink-0">
            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
              {modeKeys.map((m) => (

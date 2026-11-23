@@ -159,7 +159,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  /** Saved on the account (debounced — the colour wheel fires many changes while dragging) so every device matches. */
+  /** Saved on the account (debounced, the colour wheel fires many changes while dragging) so every device matches. */
   const saveThemeToAccount = (themeId: string) => {
     const value = themeId.startsWith('#') ? normalizeToHex(themeId).toLowerCase() : themeId.toLowerCase();
     if (saveTimer.current) clearTimeout(saveTimer.current);

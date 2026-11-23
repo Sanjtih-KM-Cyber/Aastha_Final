@@ -5,10 +5,10 @@ import { Icons, IconTile, Tone } from '../../design/icons';
 // Every line here must stay TRUE (ROADMAP S8): no "end-to-end", no "therapy", no unverifiable numbers.
 const features: { icon: React.FC<any>; tone: Tone; title: string; desc: string }[] = [
   { icon: Icons.security, tone: 'primary', title: 'Private by design', desc: 'Chats, diary and moods are encrypted on our servers, your diary has its own lock, and you can export or permanently delete everything any time.' },
-  { icon: Icons.chat, tone: 'secondary', title: 'Talks like a friend', desc: 'Remembers what you share, follows how you text, replies in your language — and gently checks in about things you mentioned.' },
+  { icon: Icons.chat, tone: 'secondary', title: 'Talks like a friend', desc: 'Remembers what you share, follows how you text, replies in your language, and gently checks in about things you mentioned.' },
   { icon: Icons.voice, tone: 'tertiary', title: 'Voice notes & calls', desc: 'Send a voice note or talk it out. Aastha can reply with a warm voice when you’d rather listen than read.' },
-  { icon: Icons.mood, tone: 'primary', title: 'Mood over time', desc: 'Log how you feel in a tap — even moods you invent. See your week and one honest pattern, never a diagnosis.' },
-  { icon: Icons.focus, tone: 'secondary', title: 'Focus & calm tools', desc: 'Focus timer, breathing exercises, ambient sounds and music you can play together — all in one place.' },
+  { icon: Icons.mood, tone: 'primary', title: 'Mood over time', desc: 'Log how you feel in a tap, even moods you invent. See your week and one honest pattern, never a diagnosis.' },
+  { icon: Icons.focus, tone: 'secondary', title: 'Focus & calm tools', desc: 'Focus timer, breathing exercises, ambient sounds and music you can play together, all in one place.' },
   { icon: Icons.diary, tone: 'tertiary', title: 'A diary that’s yours', desc: 'Write freely with its own password. Forget it? Reset it safely without losing a single entry.' },
 ];
 

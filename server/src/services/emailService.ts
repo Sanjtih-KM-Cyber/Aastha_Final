@@ -9,7 +9,7 @@ dotenv.config();
 const resend = new Resend(process.env.RESEND_API_KEY || 're_123456789'); 
 
 // ==========================================
-// DESIGN — matches the app (Material You lavender on a deep surface). Email-safe: tables + inline styles only,
+// DESIGN, matches the app (Material You lavender on a deep surface). Email-safe: tables + inline styles only,
 // no web fonts / CSS gradients (Gmail and Outlook strip them). Explicit colours so dark-mode clients don't invert it.
 // ==========================================
 const SITE = 'https://aasthaai.site';
@@ -77,7 +77,7 @@ export const otpEmailHtml = (otp: string, purpose: OtpPurpose = 'verify') => {
         <p style="margin:14px 0 0;font-family:${SANS};font-size:13px;color:${C.faint};text-align:center;">Expires in 10 minutes &nbsp;&middot;&nbsp; Long-press the code to copy it</p>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
           <tr><td style="border-top:1px solid ${C.cardEdge};padding-top:20px;font-family:${SANS};font-size:13px;line-height:1.6;color:${C.muted};">
-            <strong style="color:${C.text};">Didn’t ask for this?</strong> You got this email because ${esc(copy.why)}. If it wasn’t you, just ignore it &mdash; nobody can get in without this code. Never share it: Aastha will never ask you for it.
+            <strong style="color:${C.text};">Didn’t ask for this?</strong> You got this email because ${esc(copy.why)}. If it wasn’t you, just ignore it, nobody can get in without this code. Never share it: Aastha will never ask you for it.
           </td></tr>
         </table>`);
 };

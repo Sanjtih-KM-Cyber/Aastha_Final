@@ -13,9 +13,9 @@ interface Person {
     alias: string;
     relationshipScore: number;
     verdict: 'KEEPER' | 'TOXIC' | 'SUSPECT' | 'NPC';
-    role?: string;       // who they are to you — chosen by the AI (server ROLES), editable
+    role?: string;       // who they are to you, chosen by the AI (server ROLES), editable
     roleLabel?: string;  // custom label when role = 'other'
-    vibe?: Vibe;         // how the relationship feels — chosen by the AI, editable
+    vibe?: Vibe;         // how the relationship feels, chosen by the AI, editable
     userEdited?: boolean;
     rapSheet: string[];
     mugshot?: string;
@@ -311,7 +311,7 @@ export const TheWebWidget: React.FC<TheWebProps> = ({ isOpen, onClose, zIndex, o
                     </button>
                 </div>
 
-                {/* Legend — only the kinds of relationships actually on your board */}
+                {/* Legend, only the kinds of relationships actually on your board */}
                 {people.length > 0 && (
                     <div className="absolute top-3 left-3 z-20 flex flex-col gap-1 rounded-[16px] bg-md-surface-container-high/90 px-3 py-2 max-h-[45%] overflow-y-auto">
                         {VIBE_KEYS.filter(k => people.some(p => vibeOf(p) === k)).map((k) => (
@@ -404,7 +404,7 @@ export const TheWebWidget: React.FC<TheWebProps> = ({ isOpen, onClose, zIndex, o
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-8">
                             <div className="mt-36 text-center">
                                 <p className="text-sm font-medium text-md-on-surface">Your people will appear here</p>
-                                <p className="text-xs text-md-on-surface-variant mt-1">Tap “Scan my chats” — Aastha maps the people you talk about. Private to you.</p>
+                                <p className="text-xs text-md-on-surface-variant mt-1">Tap “Scan my chats”, Aastha maps the people you talk about. Private to you.</p>
                             </div>
                         </div>
                     )}

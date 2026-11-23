@@ -7,7 +7,7 @@ const memStorage = () => {
 };
 const httpErr = (status: number, headers: any = {}) => Object.assign(new Error('x'), { response: { status, headers } });
 
-describe('offline queue (7.1 — diary sync retry storm)', () => {
+describe('offline queue (7.1, diary sync retry storm)', () => {
   it('classifies errors: network/5xx/429 retry, other 4xx do not', () => {
     expect(isRetryable(new Error('Network Error'))).toBe(true);
     expect(isRetryable(httpErr(429))).toBe(true);
@@ -16,7 +16,7 @@ describe('offline queue (7.1 — diary sync retry storm)', () => {
     expect(isRetryable(httpErr(401))).toBe(false);
   });
 
-  it('keeps ONE entry per day (newest wins) — autosave used to add a copy every 5 s', () => {
+  it('keeps ONE entry per day (newest wins), autosave used to add a copy every 5 s', () => {
     const s = memStorage();
     const q = createOfflineQueue<any>('q', { send: async () => {}, storage: s });
     for (let i = 0; i < 50; i++) q.enqueue('2026-11-20', { content: `v${i}` });
@@ -25,7 +25,7 @@ describe('offline queue (7.1 — diary sync retry storm)', () => {
     expect(q.items().find(i => i.key === '2026-11-20')!.payload.content).toBe('v49');
   });
 
-  it('a 429 stops the sync and backs off — no request storm', async () => {
+  it('a 429 stops the sync and backs off, no request storm', async () => {
     const s = memStorage();
     let t = 1_000_000;
     let calls = 0;

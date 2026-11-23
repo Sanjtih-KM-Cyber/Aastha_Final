@@ -41,7 +41,7 @@ process.on('unhandledRejection', (reason) => {
 
 process.on('uncaughtException', (err) => {
     // State may be corrupt after a synchronous throw: log, close gracefully, let Render restart us.
-    console.error('[Process] Uncaught exception — shutting down gracefully:', err);
+    console.error('[Process] Uncaught exception, shutting down gracefully:', err);
     captureError(err, { kind: 'uncaughtException' });
     flushMonitoring().finally(() => shutdown(1));
 });
@@ -235,7 +235,7 @@ function shutdown(code: number) {
 }
 
 process.on('SIGTERM', () => {
-    console.log('[Process] SIGTERM received — closing gracefully.');
+    console.log('[Process] SIGTERM received, closing gracefully.');
     shutdown(0);
 });
 

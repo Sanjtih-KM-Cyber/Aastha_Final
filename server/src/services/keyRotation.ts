@@ -4,10 +4,10 @@ import {
 } from '../utils/serverEncryption';
 
 /**
- * Key rotation sweep — moves EVERYTHING stored onto the current keys, in the background, without downtime.
+ * Key rotation sweep, moves EVERYTHING stored onto the current keys, in the background, without downtime.
  *
  * One pass over every collection (raw driver, batched, resumable after a restart) does three things:
- *   1. re-encrypts every ciphertext not written with the current key (any field, any depth — new fields are
+ *   1. re-encrypts every ciphertext not written with the current key (any field, any depth, new fields are
  *      covered automatically), and upgrades the legacy `iv:tag:data` format to `v2:<kid>:…`;
  *   2. encrypts known plaintext fields left over from older versions (PLAIN_FIELDS below; versioned);
  *   3. recomputes blind indexes (Web names, email lookup hash) when the blind-index key changed.
@@ -81,7 +81,7 @@ const opsForDoc = (coll: string, doc: any, stats: RotationStats): Op[] => {
 
   // 1. re-encrypt (generic)
   if (coll === 'voicenotes') {
-    // audio bytes are stored as Buffer(utf8 of ciphertext) — the generic walker only sees strings
+    // audio bytes are stored as Buffer(utf8 of ciphertext), the generic walker only sees strings
     const buf: Buffer | null = doc.buffer?.buffer ? Buffer.from(doc.buffer.buffer) : (Buffer.isBuffer(doc.buffer) ? doc.buffer : null);
     if (buf) {
       if (doc.encrypted) {
@@ -150,7 +150,7 @@ let running: Promise<RotationStats> | null = null;
 
 const emptyStats = (): RotationStats => ({ scanned: 0, reencrypted: 0, encryptedPlain: 0, reindexed: 0, unreadable: 0, removedPlainEmail: 0 });
 
-/** Run (or resume) the sweep. Safe to call concurrently — the second caller gets the same promise. */
+/** Run (or resume) the sweep. Safe to call concurrently, the second caller gets the same promise. */
 export const runKeyRotation = (opts: { force?: boolean; log?: (m: string) => void } = {}): Promise<RotationStats> => {
   if (running) return running;
   running = (async () => {
@@ -184,7 +184,7 @@ export const runKeyRotation = (opts: { force?: boolean; log?: (m: string) => voi
           try {
             await coll.bulkWrite(ops.map(o => ({ updateOne: o })), { ordered: false });
           } catch (e: any) {
-            // duplicate blind index (two rows that are really the same person) etc. — keep going, log it
+            // duplicate blind index (two rows that are really the same person) etc., keep going, log it
             log(`${name}: ${e?.writeErrors?.length || 1} write(s) skipped (${e?.code || e?.message})`);
           }
         }
@@ -196,7 +196,7 @@ export const runKeyRotation = (opts: { force?: boolean; log?: (m: string) => voi
 
     await stateColl.updateOne({ _id: 'main' as any }, { $set: { done: want, finishedAt: new Date(), lastStats: stats }, $unset: { inProgress: '', progress: '' } });
     log(`sweep finished: ${JSON.stringify(stats)}`);
-    if (stats.unreadable) log(`⚠️ ${stats.unreadable} value(s) could not be opened with any key — an old key is missing from ENCRYPTION_KEYS. Do NOT delete old keys until this is 0.`);
+    if (stats.unreadable) log(`⚠️ ${stats.unreadable} value(s) could not be opened with any key, an old key is missing from ENCRYPTION_KEYS. Do NOT delete old keys until this is 0.`);
     return stats;
   })().finally(() => { running = null; });
   return running;

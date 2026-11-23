@@ -13,7 +13,7 @@ const MESSAGES = {
         "Don't carry it all alone. I'm here.",
         "Whatever it is, we can figure it out together.",
         "Remember to drink some water and rest a bit.",
-        "No agenda — just here if you need a sounding board.",
+        "No agenda, just here if you need a sounding board.",
         "Hope today's been kind to you.",
         "Five quiet minutes can reset a whole day.",
         "Still here. Whenever you're ready.",
@@ -25,7 +25,7 @@ const MESSAGES = {
         "It's okay to not be okay. I'm listening, whenever.",
         "Take a little pause. You've been doing a lot.",
         "A quiet moment can fix a loud day.",
-        "No pressure at all — just saying hi 🌸",
+        "No pressure at all, just saying hi 🌸",
         "You matter. That's the whole message.",
         "Hope you're resting a little today.",
         "Still here. Whenever you're ready.",
@@ -47,7 +47,7 @@ const pick = (list: string[]) => list[Math.floor(Math.random() * list.length)];
 export const scheduleGhostNotifications = async (user: any) => {
     try {
         if (!isNative()) return;
-        // Never prompt from the background — only schedule if the user already allowed notifications.
+        // Never prompt from the background, only schedule if the user already allowed notifications.
         if (!(await hasPermission())) return;
 
         await cancelIds(NOTIF_IDS.GHOST);

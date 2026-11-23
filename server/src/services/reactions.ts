@@ -1,13 +1,13 @@
 /**
  * Reactions on Aastha's messages (ROADMAP 7.4).
  * The user can react to a reply with any emoji (quick bar ❤️ 😂 😮 😢 🙏 👍 + full picker). We keep it on the message and feed the most recent ones back
- * lightly — one prompt line — as a "what landed" signal. Never mentioned to the user unless they bring it up.
+ * lightly, one prompt line, as a "what landed" signal. Never mentioned to the user unless they bring it up.
  */
 import mongoose from 'mongoose';
 import Message from '../models/Message';
 import { decrypt } from '../utils/serverEncryption';
 
-/** Quick-bar emojis (the app also offers a full picker — any single emoji is accepted). */
+/** Quick-bar emojis (the app also offers a full picker, any single emoji is accepted). */
 export const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '🙏', '👍'] as const;
 export type Reaction = string;
 
@@ -52,7 +52,7 @@ export const formatReactionLine = (items: { reaction: string; text: string }[]):
   const usable = items.filter((i) => isAllowedReaction(i.reaction) && i.text.trim()).slice(0, MAX_ITEMS);
   if (!usable.length) return '';
   const parts = usable.map((i) => `they ${meaningOf(i.reaction)} "${snippet(i.text)}"`);
-  return `What has landed with them lately (their reactions to your replies): ${parts.join('; ')}. Lean a little more into what worked — don't mention the reactions unless they do.`;
+  return `What has landed with them lately (their reactions to your replies): ${parts.join('; ')}. Lean a little more into what worked, don't mention the reactions unless they do.`;
 };
 
 export const describeRecentReactions = async (userId: string | mongoose.Types.ObjectId): Promise<string> => {

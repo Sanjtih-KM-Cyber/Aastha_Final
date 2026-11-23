@@ -293,7 +293,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
     >
       <div className="flex flex-col h-full w-full font-sans select-none px-3 pb-3 gap-3">
 
-        {/* MASTER — tonal hero card */}
+        {/* MASTER, tonal hero card */}
         <div className="shrink-0 rounded-[28px] bg-md-primary-container text-md-on-primary-container p-5">
           <div className="flex items-center gap-4">
             <div className="relative shrink-0">
@@ -328,7 +328,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
           </div>
         </div>
 
-        {/* LIBRARY — tiles; tap to add/remove, ear to preview */}
+        {/* LIBRARY, tiles; tap to add/remove, ear to preview */}
         <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
           <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(230px,1fr))]">
             {SOUNDS.map((sound) => {

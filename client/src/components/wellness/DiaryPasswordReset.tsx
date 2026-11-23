@@ -4,7 +4,7 @@ import api from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 
 /**
- * "Forgot diary password?" — reworked (server-verified, entries KEPT).
+ * "Forgot diary password?", reworked (server-verified, entries KEPT).
  * Used in Settings → Security and on the Diary lock screen.
  */
 type Method = 'account_password' | 'security_answer' | 'email_code';
@@ -68,11 +68,11 @@ export const DiaryPasswordReset: React.FC<{ onDone?: (newPassword?: string) => v
         <p className="text-xs text-white/55 mt-1">
           {legacyKey
             ? 'Verify it’s you and choose a new one. Note: this account uses an older diary lock, so entries written before may not open with the new password.'
-            : 'Verify it’s you and choose a new one. Your entries stay exactly as they are — only the lock changes.'}
+            : 'Verify it’s you and choose a new one. Your entries stay exactly as they are, only the lock changes.'}
         </p>
       </div>
 
-      {opts?.lockedUntil && <p className="text-xs text-md-error">Too many attempts — try again later.</p>}
+      {opts?.lockedUntil && <p className="text-xs text-md-error">Too many attempts, try again later.</p>}
 
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Verify with">
         {methods.filter((m) => m.show).map(({ key, label, Icon }) => (
@@ -112,7 +112,7 @@ export const DiaryPasswordReset: React.FC<{ onDone?: (newPassword?: string) => v
 
       <button onClick={() => submit(false)} disabled={!canSubmit || !!busy}
         className="w-full py-3 px-4 rounded-full bg-md-primary text-md-on-primary font-semibold disabled:opacity-40 flex items-center justify-center gap-2 text-sm">
-        {busy === 'reset' ? <Loader2 size={16} className="animate-spin shrink-0" /> : <KeyRound size={16} className="shrink-0" />}<span>Set new password — keep my entries</span>
+        {busy === 'reset' ? <Loader2 size={16} className="animate-spin shrink-0" /> : <KeyRound size={16} className="shrink-0" />}<span>Set new password, keep my entries</span>
       </button>
 
       <div className="pt-1">

@@ -1,6 +1,6 @@
 /**
  * Chat-facing AI helpers. Provider selection, retries, cooldowns and failover live in ./llm.ts.
- * (File name kept for import compatibility — it is no longer Groq-specific.)
+ * (File name kept for import compatibility, it is no longer Groq-specific.)
  */
 import fs from 'fs';
 import os from 'os';
@@ -40,7 +40,7 @@ const VALID_MOODS = ['happy', 'sad', 'concerned', 'sassy', 'calm', 'excited', 'n
 const GREETING = /^(hi+|hey+|hello+|hii+|yo|sup|namaste|namaskar|vanakkam|good\s*(morning|afternoon|evening|night)|gm|gn)\b[\s!.,?🙂😊👋]*$/i;
 
 /**
- * Cheap, deterministic cases where the brain call adds nothing — skipping it saves one LLM call
+ * Cheap, deterministic cases where the brain call adds nothing, skipping it saves one LLM call
  * (and its rate-limit budget) per message (ROADMAP A2). The reply model still chooses tools itself.
  */
 export const canSkipBrain = (message: string | undefined, forceReply: boolean, isVoiceMode: boolean): boolean => {
@@ -152,7 +152,7 @@ export async function* streamReply(
     const task = opts.think && !hasImages ? 'think' : 'chat';
     yield* streamChat(toLlmMessages(history, prompt), {
         task,
-        temperature: task === 'think' ? 0.6 : 0.75,
+        temperature: task === 'think' ? 0.6 : 0.85, // a little more natural variety (less 'assistant-flat')
         maxTokens: opts.maxTokens || (task === 'think' ? 2048 : 1024),
         onReasoning: task === 'think' ? opts.onReasoning : undefined,
     });

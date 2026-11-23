@@ -22,7 +22,7 @@ export const followUpCheckIns = {
       const res = await api.get('/users/reach-out', { params: { tz: deviceTimeZone() } });
       upcoming = res.data?.enabled === false ? [] : (res.data?.upcoming || []);
     } catch {
-      return; // offline / logged out — keep whatever is scheduled
+      return; // offline / logged out, keep whatever is scheduled
     }
     await cancelIds(NOTIF_IDS.FOLLOW_UP);
     if (!upcoming.length || !(await hasPermission())) return;

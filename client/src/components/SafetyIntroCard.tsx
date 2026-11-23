@@ -5,21 +5,21 @@ import { motion } from 'framer-motion';
 
 /**
  * "How Aastha keeps you safe" (ROADMAP 7.5). Shown once after sign-in (and any time from Settings → Data & Privacy).
- * Every sentence must stay true to the code — see PrivacyCenter.tsx and utils/safety.ts on the server.
+ * Every sentence must stay true to the code, see PrivacyCenter.tsx and utils/safety.ts on the server.
  */
 export const SafetyIntroContent: React.FC<{ botName: string }> = ({ botName }) => (
   <div className="space-y-4 text-sm text-md-on-surface-variant leading-relaxed">
     <div className="flex gap-3">
       <ShieldCheck size={20} className="shrink-0 text-md-primary mt-0.5" />
       <p><strong className="text-md-on-surface">Private, but not end-to-end.</strong> Your chats, diary and moods are encrypted when stored.
-        To reply, our server decrypts your message and sends it to an AI provider — so it's private, not secret from the app itself.
+        To reply, our server decrypts your message and sends it to an AI provider, so it's private, not secret from the app itself.
         Your diary also has its own lock, and you can export or delete everything in Settings.</p>
     </div>
     <div className="flex gap-3">
       <LifeBuoy size={20} className="shrink-0 text-md-primary mt-0.5" />
       <p><strong className="text-md-on-surface">If things get really hard.</strong> Every message is checked for signs of crisis before any AI sees it.
-        If it looks serious, {botName} stays with you and shows free helplines — Tele-MANAS <a className="underline" href="tel:14416">14416</a> (24/7),
-        and <a className="underline" href="tel:112">112</a> in an emergency. Nobody is alerted or told — it's just for you.</p>
+        If it looks serious, {botName} stays with you and shows free helplines, Tele-MANAS <a className="underline" href="tel:14416">14416</a> (24/7),
+        and <a className="underline" href="tel:112">112</a> in an emergency. Nobody is alerted or told, it's just for you.</p>
     </div>
     <div className="flex gap-3">
       <HeartHandshake size={20} className="shrink-0 text-md-primary mt-0.5" />

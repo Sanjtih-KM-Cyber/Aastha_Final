@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, Check, Copy, Reply, ShieldCheck } from 'lucide-r
 import { Icons } from '../../design/icons';
 
 /**
- * Onboarding / product tour — Material You content on a soft spotlight (design standards 2026-11).
+ * Onboarding / product tour, Material You content on a soft spotlight (design standards 2026-11).
  *  - PHONE: the card docks to the top or bottom edge (whichever side the highlighted control isn't on), full width.
  *  - DESKTOP: the card is a popover beside the highlighted control (auto side, kept on screen).
  *  - A step without a target (or whose target isn't on screen) is a centred card.
@@ -145,7 +145,7 @@ const Art: React.FC<{ art: TourArt; botName: string }> = ({ art, botName }) => {
           <motion.span className="w-16 h-16 rounded-full bg-md-primary text-md-on-primary flex items-center justify-center" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 16 }}>
             <Check size={30} strokeWidth={2.5} />
           </motion.span>
-          <span className="inline-flex items-center gap-1.5 text-[11px] text-md-on-surface-variant"><ShieldCheck size={13} className="text-md-primary" /> Private by design — {botName} never shares what you say</span>
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-md-on-surface-variant"><ShieldCheck size={13} className="text-md-primary" /> Private by design, {botName} never shares what you say</span>
         </div>
       );
     default: return null;
@@ -250,10 +250,10 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, onComplet
       ) : (
         <motion.div aria-hidden className="absolute inset-0 bg-black/60" initial={{ opacity: 0 }} animate={{ opacity: 1 }} />
       )}
-      {/* clicks outside the card do nothing (no accidental skips) — but the highlighted control is not clickable either */}
+      {/* clicks outside the card do nothing (no accidental skips), but the highlighted control is not clickable either */}
       <div className="absolute inset-0" />
 
-      {/* Positioning lives on a plain wrapper — framer-motion owns `transform` on the animated card, so centring
+      {/* Positioning lives on a plain wrapper, framer-motion owns `transform` on the animated card, so centring
           with translate() there would be overwritten (the card slid off-screen on phones). */}
       <div ref={cardRef} className="absolute" style={cardStyle}>
       <AnimatePresence mode="wait">

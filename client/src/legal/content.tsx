@@ -2,7 +2,7 @@
  * Privacy Policy + Terms of Service text.
  * Written to match what the app ACTUALLY does (see docs/HANDOFF.md "Gotchas" + PrivacyCenter.tsx).
  * If data handling changes, update this file in the same change and bump the versions in legalInfo.ts
- * and server/src/legal.ts. Not legal advice — have a lawyer review before launch.
+ * and server/src/legal.ts. Not legal advice, have a lawyer review before launch.
  */
 import React from 'react';
 import { LEGAL, isPlaceholder } from './legalInfo';
@@ -42,7 +42,7 @@ export const PRIVACY: LegalSection[] = [
     id: 'who', title: '1. Who we are and what this covers', body: (<>
       <P>This Privacy Policy explains how <B>{LEGAL.brand}</B> (“Aastha”, “we”, “us”), operated by <V v={LEGAL.operator} />, collects, uses, shares and protects personal data when you use the Aastha website ({LEGAL.website}), the Aastha mobile app and related services (together, the “Service”).</P>
       <P>For your personal data we are the <B>Data Fiduciary</B> under India’s Digital Personal Data Protection Act, 2023 (“DPDP Act”) and its Rules. We also follow the Information Technology Act, 2000 and the rules made under it. This policy is our notice to you under Section 5 of the DPDP Act.</P>
-      <P>By creating an account you give consent to the processing described here for the purposes described here. You can withdraw consent at any time (Section 11) — withdrawal does not affect processing already done.</P>
+      <P>By creating an account you give consent to the processing described here for the purposes described here. You can withdraw consent at any time (Section 11), withdrawal does not affect processing already done.</P>
     </>),
   },
   {
@@ -61,10 +61,10 @@ export const PRIVACY: LegalSection[] = [
         ['What you write and say', 'Chat messages, diary entries, mood logs (including custom moods you create), reactions to Aastha’s replies, and things you choose to tell Aastha about yourself.'],
         ['Voice', 'Voice notes you record (kept so you can play them back, and transcribed so Aastha can read them), and voice notes Aastha creates for you.'],
         ['Images', 'Photos you choose to send in chat (sent to an AI model to describe them; not kept by us as files), a profile picture and a wallpaper if you set them.'],
-        ['What Aastha learns', 'A short summary and a list of facts you told Aastha (“memory”), dated things you mentioned (e.g. an exam) for gentle check-ins, how you text (length, emoji, language — not the messages themselves), and a closeness level.'],
+        ['What Aastha learns', 'A short summary and a list of facts you told Aastha (“memory”), dated things you mentioned (e.g. an exam) for gentle check-ins, how you text (length, emoji, language, not the messages themselves), and a closeness level.'],
         ['People you mention (“The Web”)', 'Only if you tap “Scan my chats”: names, nicknames, notes, an optional photo, and the role/feeling labels for people you talk about. See section 11.'],
         ['Clone Mode (optional)', 'Your consent record, the name of the person (if it is someone else), style notes derived from a screenshot or exported chat you provide, and an optional voice sample. The screenshot itself and the raw exported chat are not stored.'],
-        ['Payments', 'Razorpay order ID, payment ID, amount, status and date. We never see or store your card, UPI or bank details — Razorpay handles those.'],
+        ['Payments', 'Razorpay order ID, payment ID, amount, status and date. We never see or store your card, UPI or bank details, Razorpay handles those.'],
         ['Device and technical', 'Your device time zone (to keep streaks, check-ins and dates on your local time), notification/push tokens if you enable notifications, app settings, and IP address and request logs kept by our hosting providers for security. Crash reports, if enabled, with message text, emails, numbers and tokens removed.'],
       ]} />
       <P><B>We do not collect</B> your contacts, precise location, advertising IDs, or browsing activity outside Aastha.</P>
@@ -74,14 +74,14 @@ export const PRIVACY: LegalSection[] = [
     id: 'use', title: '4. Why we use it', body: (<>
       <P>We use personal data only for these specific purposes:</P>
       <UL>
-        <li><B>To provide the Service</B> — create and secure your account, generate replies, remember context you shared, store your diary and moods, play voice notes, run widgets.</li>
-        <li><B>To keep you safe</B> — every message is automatically checked for signs of crisis so we can show helpline numbers and respond with care. We do not contact anyone or share this check outside the Service, except where Indian law requires it.</li>
-        <li><B>To personalise</B> — follow your language and texting style, closeness level, and gentle check-ins (you can turn check-ins off).</li>
-        <li><B>Payments</B> — process purchases, prevent fraud and duplicate charges, handle refunds and keep legally required records.</li>
-        <li><B>Communication</B> — verification codes, password-reset codes, important service or policy notices, and (if enabled) notifications.</li>
-        <li><B>Security and abuse prevention</B> — rate limits, detecting misuse, fixing bugs (including privacy-filtered crash reports).</li>
-        <li><B>Improving Aastha</B> — only if you turn on <B>Data donation</B>: short conversation snippets with your name removed and not linked to your account.</li>
-        <li><B>Legal compliance</B> — tax and accounting records, responding to lawful requests, enforcing our Terms.</li>
+        <li><B>To provide the Service</B>create and secure your account, generate replies, remember context you shared, store your diary and moods, play voice notes, run widgets.</li>
+        <li><B>To keep you safe</B>every message is automatically checked for signs of crisis so we can show helpline numbers and respond with care. We do not contact anyone or share this check outside the Service, except where Indian law requires it.</li>
+        <li><B>To personalise</B>follow your language and texting style, closeness level, and gentle check-ins (you can turn check-ins off).</li>
+        <li><B>Payments</B>process purchases, prevent fraud and duplicate charges, handle refunds and keep legally required records.</li>
+        <li><B>Communication</B>verification codes, password-reset codes, important service or policy notices, and (if enabled) notifications.</li>
+        <li><B>Security and abuse prevention</B>rate limits, detecting misuse, fixing bugs (including privacy-filtered crash reports).</li>
+        <li><B>Improving Aastha</B>only if you turn on <B>Data donation</B>: short conversation snippets with your name removed and not linked to your account.</li>
+        <li><B>Legal compliance</B>tax and accounting records, responding to lawful requests, enforcing our Terms.</li>
       </UL>
       <P>We do <B>not</B> use your data for advertising, sell it, or rent it.</P>
     </>),
@@ -89,7 +89,7 @@ export const PRIVACY: LegalSection[] = [
   {
     id: 'ai', title: '5. AI and automated processing', body: (<>
       <P>Aastha’s replies are generated by artificial intelligence. To create them, the relevant part of your conversation, memory summary and settings is sent to an AI provider (section 6). Images you send go to an AI vision model; voice notes are transcribed by an AI speech model; Aastha’s voice notes are generated by our voice server.</P>
-      <P>Automated systems also: check messages for crisis signs; extract facts and dated events you mention; suggest people’s roles in “The Web”; and pick GIFs. None of this produces decisions with legal or similarly significant effects on you. AI can be wrong — you can correct or delete what Aastha has learned (section 9).</P>
+      <P>Automated systems also: check messages for crisis signs; extract facts and dated events you mention; suggest people’s roles in “The Web”; and pick GIFs. None of this produces decisions with legal or similarly significant effects on you. AI can be wrong, you can correct or delete what Aastha has learned (section 9).</P>
     </>),
   },
   {
@@ -97,17 +97,17 @@ export const PRIVACY: LegalSection[] = [
       <P>We share personal data only with service providers (“Data Processors”) who process it on our instructions to run the Service, under contracts or terms that require them to protect it:</P>
       <Table head={['Provider (purpose)', 'What they receive']} rows={[
         ['Groq (AI replies, speech-to-text)', 'Conversation text and context needed for a reply; your voice recordings for transcription.'],
-        ['Google — Gemini API (backup AI, image understanding)', 'Same as above when the main provider is unavailable; images you send.'],
+        ['Google, Gemini API (backup AI, image understanding)', 'Same as above when the main provider is unavailable; images you send.'],
         ['Hugging Face (our voice server)', 'Text to be spoken; your Clone Mode voice sample if you enabled a cloned voice.'],
         ['Razorpay (payments)', 'Order amount and the details you enter on Razorpay’s checkout.'],
         ['Resend (email)', 'Your email address and the message (codes, check-ins, notices).'],
         ['Hosting and database providers (e.g. Render, Vercel, our MongoDB host)', 'All stored data, in encrypted form where described in section 7.'],
-        ['GIPHY / Tenor (GIFs, if enabled)', 'Only a short search phrase such as “happy dance” — never your messages.'],
-        ['Google — YouTube Data API (music search)', 'Only the song or mood search phrase.'],
+        ['GIPHY / Tenor (GIFs, if enabled)', 'Only a short search phrase such as “happy dance”, never your messages.'],
+        ['Google, YouTube Data API (music search)', 'Only the song or mood search phrase.'],
         ['Web push services (browser vendors)', 'An encrypted notification for your device, if you enabled notifications.'],
         ['Sentry (crash reports, if enabled)', 'Technical error details with message text, emails, phone numbers, cookies and tokens removed.'],
       ]} />
-      <P>We may also disclose personal data: (a) when required by law, court order or a lawful request from a government authority; (b) to protect the safety of any person in an emergency, as permitted by law; (c) to enforce our Terms or defend legal claims; (d) to a successor if Aastha is merged, acquired or sold — in that case this policy continues to apply and you will be told.</P>
+      <P>We may also disclose personal data: (a) when required by law, court order or a lawful request from a government authority; (b) to protect the safety of any person in an emergency, as permitted by law; (c) to enforce our Terms or defend legal claims; (d) to a successor if Aastha is merged, acquired or sold, in that case this policy continues to apply and you will be told.</P>
     </>),
   },
   {
@@ -140,12 +140,12 @@ export const PRIVACY: LegalSection[] = [
     id: 'rights', title: '9. Your rights and how to use them', body: (<>
       <P>Under the DPDP Act you have the right to:</P>
       <UL>
-        <li><B>Access</B> a summary of your data and how it is processed — use <B>Settings → Data & Privacy → Export my data</B> for a full copy, or write to us.</li>
-        <li><B>Correct and update</B> your data — edit your profile in Settings; for anything you can’t edit yourself (for example a memory fact), write to us.</li>
-        <li><B>Erase</B> your data — delete diary entries, custom moods and people in the app, or delete your whole account in Settings (subject to section 8).</li>
-        <li><B>Withdraw consent</B> — turn off optional features (check-ins, GIFs, Data donation, Clone Mode, notifications) at any time, or delete your account.</li>
-        <li><B>Grievance redressal</B> — complain to our Grievance Officer (section 14). If you are not satisfied, you may complain to the Data Protection Board of India.</li>
-        <li><B>Nominate</B> a person to exercise your rights if you die or become incapable — write to us with their details.</li>
+        <li><B>Access</B> a summary of your data and how it is processed, use <B>Settings → Data & Privacy → Export my data</B> for a full copy, or write to us.</li>
+        <li><B>Correct and update</B> your data, edit your profile in Settings; for anything you can’t edit yourself (for example a memory fact), write to us.</li>
+        <li><B>Erase</B> your data, delete diary entries, custom moods and people in the app, or delete your whole account in Settings (subject to section 8).</li>
+        <li><B>Withdraw consent</B>turn off optional features (check-ins, GIFs, Data donation, Clone Mode, notifications) at any time, or delete your account.</li>
+        <li><B>Grievance redressal</B>complain to our Grievance Officer (section 14). If you are not satisfied, you may complain to the Data Protection Board of India.</li>
+        <li><B>Nominate</B> a person to exercise your rights if you die or become incapable, write to us with their details.</li>
       </UL>
       <P>We respond to requests without undue delay and within the time limits set by law (we aim for 30 days or sooner). We may need to verify it is really you. We don’t charge for reasonable requests.</P>
     </>),
@@ -163,8 +163,8 @@ export const PRIVACY: LegalSection[] = [
   },
   {
     id: 'storage', title: '12. Cookies and storage on your device', body: (<>
-      <P>We use one essential, secure cookie to keep you signed in. The app also stores data on your device to work properly: your sign-in token, your last 50 chat messages (so the app opens instantly — removed when you log out), settings such as theme and window style, and drafts. We do <B>not</B> use advertising or analytics cookies or third-party trackers.</P>
-      <P>Fonts are bundled with the app (no requests to font services). Some features load content from other services when you use them (YouTube videos, GIFs) — those services apply their own policies.</P>
+      <P>We use one essential, secure cookie to keep you signed in. The app also stores data on your device to work properly: your sign-in token, your last 50 chat messages (so the app opens instantly, removed when you log out), settings such as theme and window style, and drafts. We do <B>not</B> use advertising or analytics cookies or third-party trackers.</P>
+      <P>Fonts are bundled with the app (no requests to font services). Some features load content from other services when you use them (YouTube videos, GIFs), those services apply their own policies.</P>
     </>),
   },
   {
@@ -198,7 +198,7 @@ export const TERMS: LegalSection[] = [
     </UL>),
   },
   {
-    id: 'not-medical', title: '3. What Aastha is — and is not', body: (<>
+    id: 'not-medical', title: '3. What Aastha is, and is not', body: (<>
       <P>Aastha is an <B>AI companion</B> for everyday wellbeing: conversation, journaling, mood tracking and calming tools.</P>
       <UL>
         <li><B>Aastha is not a doctor, therapist, counsellor or emergency service</B>, and does not provide medical, psychological, legal or financial advice, diagnosis or treatment.</li>
@@ -222,7 +222,7 @@ export const TERMS: LegalSection[] = [
         <li>break any law, or host, share or generate content that is unlawful under Indian law, including content listed in Rule 3(1)(b) of the IT (Intermediary Guidelines and Digital Media Ethics Code) Rules, 2021;</li>
         <li>harass, threaten, defame, stalk or abuse anyone, or promote violence, self-harm or suicide to others;</li>
         <li>create or request sexual content involving minors, or any sexually explicit content;</li>
-        <li>impersonate anyone or mislead people about who they are talking to — including using Clone Mode outside the app or without the person’s consent (section 6);</li>
+        <li>impersonate anyone or mislead people about who they are talking to, including using Clone Mode outside the app or without the person’s consent (section 6);</li>
         <li>upload other people’s personal data, images or voices without the right to do so;</li>
         <li>get around usage limits, payments or security (for example with multiple accounts, scripts or automated access), or scrape, copy or resell the Service or its outputs at scale;</li>
         <li>reverse-engineer, attack, overload, or introduce malware into the Service, or probe it for vulnerabilities without our written permission;</li>
@@ -251,8 +251,8 @@ export const TERMS: LegalSection[] = [
     id: 'plans', title: '8. Plans and payments', body: (<>
       <UL>
         <li><B>Free:</B> 16 messages and 2 voice notes per 24 hours, counted from your first message; after that, replies continue in a lighter “Eco” mode. Limits may change with notice in the app.</li>
-        <li><B>Pro — ₹49 for 30 days:</B> unlimited chat on the best models, image understanding and voice mode, for 30 days from purchase. Buying again adds 30 days.</li>
-        <li><B>Voice Pass — ₹19 for 24 hours:</B> unlimited voice calls and voice notes for 24 hours from purchase. Buying again adds 24 hours.</li>
+        <li><B>Pro, ₹49 for 30 days:</B> unlimited chat on the best models, image understanding and voice mode, for 30 days from purchase. Buying again adds 30 days.</li>
+        <li><B>Voice Pass, ₹19 for 24 hours:</B> unlimited voice calls and voice notes for 24 hours from purchase. Buying again adds 24 hours.</li>
         <li>These are <B>one-time payments and do not renew automatically</B>. Prices are in Indian Rupees and include applicable taxes unless shown otherwise.</li>
         <li>Payments are processed by Razorpay under its terms. Your plan starts when the payment is confirmed.</li>
         <li>Fair use applies: we may limit automated, abusive or excessive use that harms the Service for others.</li>
@@ -283,7 +283,7 @@ export const TERMS: LegalSection[] = [
   },
   {
     id: 'ip', title: '12. Our rights', body: (
-      <P>The Service — including the software, design, the Aastha name and logo, and our content — belongs to us or our licensors and is protected by law. We give you a personal, limited, non-exclusive, non-transferable, revocable licence to use the Service for its intended purpose under these Terms. If you send us feedback, we may use it without obligation to you.</P>
+      <P>The Service, including the software, design, the Aastha name and logo, and our content, belongs to us or our licensors and is protected by law. We give you a personal, limited, non-exclusive, non-transferable, revocable licence to use the Service for its intended purpose under these Terms. If you send us feedback, we may use it without obligation to you.</P>
     ),
   },
   {
@@ -312,7 +312,7 @@ export const TERMS: LegalSection[] = [
   {
     id: 'law', title: '17. Governing law and disputes', body: (<>
       <P>These Terms are governed by the laws of India. Before starting any legal proceeding, please contact our Grievance Officer so we can try to resolve the issue informally within 30 days.</P>
-      <P>Subject to that, the courts at <V v={LEGAL.jurisdictionCity} /> have exclusive jurisdiction — but nothing here takes away your right to approach a Consumer Disputes Redressal Commission or any other forum available to you by law.</P>
+      <P>Subject to that, the courts at <V v={LEGAL.jurisdictionCity} /> have exclusive jurisdiction, but nothing here takes away your right to approach a Consumer Disputes Redressal Commission or any other forum available to you by law.</P>
     </>),
   },
   {

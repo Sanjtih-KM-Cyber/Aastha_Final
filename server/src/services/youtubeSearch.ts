@@ -117,7 +117,7 @@ export const searchYouTube = async (
     } catch (err: any) {
       if (isQuotaError(err)) {
         quotaBlockedUntil = nextPacificMidnight();
-        console.warn(`[YouTube] Daily quota exhausted — serving cache only until ${new Date(quotaBlockedUntil).toISOString()}`);
+        console.warn(`[YouTube] Daily quota exhausted, serving cache only until ${new Date(quotaBlockedUntil).toISOString()}`);
       } else {
         console.warn('[YouTube] search failed:', err?.response?.status || err?.message);
       }

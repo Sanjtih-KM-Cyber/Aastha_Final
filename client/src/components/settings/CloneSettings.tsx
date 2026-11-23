@@ -4,7 +4,7 @@ import api from '../../services/api';
 import { parseChatExport, sampleFor, ParsedChat } from '../../utils/chatExport';
 
 /**
- * Clone Mode — consent-first (ROADMAP A12, A13).
+ * Clone Mode, consent-first (ROADMAP A12, A13).
  * Step 1: whose style + explicit statements (server enforces them too).
  * Step 2: screenshot → style notes (screenshot is NOT stored; the learned notes are shown here).
  * Step 3: optional voice sample (encrypted).
@@ -115,12 +115,12 @@ export const CloneSettings: React.FC = () => {
     <section className="space-y-4">
       <h3 className="text-sm font-bold text-md-on-surface-variant/80 uppercase tracking-widest">Clone Mode</h3>
       <p className="text-xs text-md-on-surface-variant -mt-2">
-        Chat with an AI that imitates a texting style — yours, or someone who has said yes. Replies are always labelled as an AI imitation.
+        Chat with an AI that imitates a texting style, yours, or someone who has said yes. Replies are always labelled as an AI imitation.
       </p>
 
       {error && <div role="alert" className="text-sm text-md-error bg-md-error/10 border border-md-error/30 rounded-xl px-3 py-2">{error}</div>}
 
-      {/* STEP 1 — CONSENT */}
+      {/* STEP 1, CONSENT */}
       {showConsentForm ? (
         <div className="p-5 rounded-[20px] bg-md-surface-container border border-md-outline-variant/40 space-y-4">
           <h4 className="text-md-on-surface font-medium flex items-center gap-2"><ShieldCheck size={16} className="text-md-primary" /> Whose style is this?</h4>
@@ -150,12 +150,12 @@ export const CloneSettings: React.FC = () => {
             ))}
           </div>
           {subject === 'other' && (
-            <p className="text-[11px] text-white/45">Please don't use this to imitate someone who hasn't agreed — including an ex or someone who has passed away without their family's blessing.</p>
+            <p className="text-[11px] text-white/45">Please don't use this to imitate someone who hasn't agreed, including an ex or someone who has passed away without their family's blessing.</p>
           )}
           <div className="flex gap-2">
             <button onClick={submitConsent} disabled={!allChecked || (subject === 'other' && !name.trim()) || busy === 'consent'}
               className="flex-1 py-3 rounded-full bg-md-primary text-md-on-primary font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
-              {busy === 'consent' ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} I agree — continue
+              {busy === 'consent' ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} I agree, continue
             </button>
             {status.consent && <button onClick={() => setEditingConsent(false)} className="px-4 rounded-full border border-white/15 text-md-on-surface-variant text-sm">Cancel</button>}
           </div>
@@ -170,10 +170,10 @@ export const CloneSettings: React.FC = () => {
             <button onClick={() => { setEditingConsent(true); setSubject(status.consent!.subject); }} className="text-xs text-md-primary hover:underline shrink-0">Change person</button>
           </div>
 
-          {/* STEP 2 — STYLE */}
+          {/* STEP 2, STYLE */}
           <div className="p-5 rounded-[20px] bg-md-surface-container border border-md-outline-variant/40 space-y-3">
             <h4 className="text-md-on-surface font-medium flex items-center gap-2"><ImageIcon size={16} className="text-md-primary" /> Texting style</h4>
-            <p className="text-xs text-md-on-surface-variant">Upload a chat screenshot with plenty of {status.consent!.subject === 'self' ? 'your messages (right side)' : `${status.consent!.name}'s messages (left side)`}. The screenshot is analysed and then discarded — only the style notes below are kept, encrypted.</p>
+            <p className="text-xs text-md-on-surface-variant">Upload a chat screenshot with plenty of {status.consent!.subject === 'self' ? 'your messages (right side)' : `${status.consent!.name}'s messages (left side)`}. The screenshot is analysed and then discarded, only the style notes below are kept, encrypted.</p>
             {status.style && (
               <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs bg-md-surface-container-high rounded-xl p-3">
                 {([['Tone', status.style.tone], ['Length', status.style.sentenceLength], ['Caps', status.style.capitalisation], ['Emoji', status.style.emoji], ['Punctuation', status.style.punctuation], ['Language', status.style.language]] as const)
@@ -188,10 +188,10 @@ export const CloneSettings: React.FC = () => {
             <input ref={shotRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
               onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) await call('shot', async () => api.post('/users/persona-screenshot', { image: await compressImage(f) })); }} />
 
-            {/* Exported chat — usually teaches the style much better than one screenshot */}
+            {/* Exported chat, usually teaches the style much better than one screenshot */}
             <div className="pt-2 border-t border-md-outline-variant/40 space-y-2">
               <p className="text-xs text-md-on-surface-variant flex items-start gap-1.5"><FileText size={14} className="shrink-0 mt-0.5" />
-                <span>Or use an exported chat — WhatsApp: open the chat → ⋮ → More → <em>Export chat</em> → <em>Without media</em>. Telegram Desktop: Export chat history → JSON.</span>
+                <span>Or use an exported chat, WhatsApp: open the chat → ⋮ → More → <em>Export chat</em> → <em>Without media</em>. Telegram Desktop: Export chat history → JSON.</span>
               </p>
               {!parsed ? (
                 <button onClick={() => exportRef.current?.click()} className="w-full py-2.5 rounded-full border border-white/15 text-white/85 text-sm hover:bg-md-on-surface/[0.06]">Upload exported chat (.txt / .json)</button>
@@ -245,7 +245,7 @@ export const CloneSettings: React.FC = () => {
             </div>
           </div>
 
-          {/* STEP 3 — VOICE (optional) */}
+          {/* STEP 3, VOICE (optional) */}
           <div className="p-5 rounded-[20px] bg-md-surface-container border border-md-outline-variant/40 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <h4 className="text-md-on-surface font-medium flex items-center gap-2"><Mic size={16} className="text-md-primary" /> Voice <span className="text-md-on-surface-variant/80 text-xs font-normal">(optional)</span></h4>

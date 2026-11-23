@@ -39,7 +39,7 @@ Rules:
   people, how they've been feeling lately). Keep existing details unless the user corrected them. Max 120 words.
   Do not add anything that isn't in the messages.
 - follow_ups: upcoming, dated things the USER said they have coming up in the NEW messages (exam, interview, appointment,
-  trip, a friend's wedding, a difficult conversation) — only if the user gave or clearly implied a day ("on Friday",
+  trip, a friend's wedding, a difficult conversation), only if the user gave or clearly implied a day ("on Friday",
   "tomorrow", "next Monday", "on the 12th"). Resolve the date using Today below. "event" is a short noun phrase that reads
   naturally after "how did … go?" (e.g. "your exam", "the interview at Infosys"). No dates in the past, nothing vague
   ("someday", "soon"), nothing about the assistant, nothing related to self-harm. Usually this is an empty list.`;

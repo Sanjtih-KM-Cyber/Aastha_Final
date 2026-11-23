@@ -1,5 +1,5 @@
 /**
- * Aastha UI kit — Material You (content) × Liquid Glass (controls).
+ * Aastha UI kit, Material You (content) × Liquid Glass (controls).
  * Use these instead of hand-rolled bg-white/5 boxes so every screen follows the user's seed colour,
  * light/dark contrast stays checked, and lite mode works automatically.
  * Rule of thumb: Card/ListItem/Button = tonal Material surfaces; GlassBar = floating control layer only.

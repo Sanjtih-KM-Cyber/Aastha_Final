@@ -43,7 +43,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   persistenceKey
 }) => {
   const dragControls = useDragControls();
-  const controlsStyle = useWindowControls(); // 'mac' (traffic lights, left) | 'windows' (– ✕, right) — user setting, synced
+  const controlsStyle = useWindowControls(); // 'mac' (traffic lights, left) | 'windows' (– ✕, right), user setting, synced
   // Drag offset lives in motion values so it is zeroed in the SAME frame top/left are committed.
   // (Animating it back to 0 with a spring is what made windows bounce after you let go.)
   const dragX = useMotionValue(0);

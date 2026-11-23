@@ -25,7 +25,7 @@ import { encryptMasterKey, decryptMasterKey, generateMasterKey } from '../utils/
 
 /** Email lookup hash: KEYED blind index (rotatable via BLIND_INDEX_KEYS). Plain email is never stored. */
 const hashEmail = (email: string) => blindIndex(email.toLowerCase().trim());
-/** Old unkeyed SHA-256 (accounts created before 2026-11-23) — still matched until the rotation sweep rewrites it. */
+/** Old unkeyed SHA-256 (accounts created before 2026-11-23), still matched until the rotation sweep rewrites it. */
 const legacyEmailHash = (email: string) => crypto.createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
 /** Match an email under the current blind key, any older blind key, or the legacy unkeyed hash. */
 const emailHashLookup = (email: string) => ({ $in: [...blindIndexCandidates(email.toLowerCase().trim()), legacyEmailHash(email)] });
@@ -105,7 +105,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     }
     // Adults only (Terms §2, Privacy §10): DPDP Act s.9 needs verifiable parental consent for under-18s
     if (ageOn(dob) < MIN_AGE || dob.getTime() > Date.now()) {
-        (res as any).status(400).json({ message: `Aastha is for adults (${MIN_AGE}+). If you're going through something hard, please reach out to Tele-MANAS on 14416 — it's free and open 24/7.` });
+        (res as any).status(400).json({ message: `Aastha is for adults (${MIN_AGE}+). If you're going through something hard, please reach out to Tele-MANAS on 14416, it's free and open 24/7.` });
         return;
     }
     // Informed consent to the Terms + Privacy Policy is required and recorded (version + time)
@@ -368,7 +368,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           needsSave = true;
       }
 
-      // STREAK on the user's LOCAL calendar (device zone from the X-Time-Zone header) — utils/streak.ts
+      // STREAK on the user's LOCAL calendar (device zone from the X-Time-Zone header), utils/streak.ts
       const now = new Date();
       const loginTz = cleanTimeZone((req as any).query?._tz || (req as any).headers?.['x-time-zone']);
       if (loginTz && (user as any).timeZone !== loginTz) (user as any).timeZone = loginTz;
@@ -622,7 +622,7 @@ export const softDeleteUser = async (req: AuthRequest, res: Response) => {
 
     console.log(`[Nuclear Delete] Wiping data for user ${userId}`);
 
-    // Tax/accounting law: keep the bare transaction records (no name/email/content) — Privacy Policy §8
+    // Tax/accounting law: keep the bare transaction records (no name/email/content), Privacy Policy §8
     const paying: any = await User.findById(userId).select('emailHash paymentHistory').lean();
     if (paying?.paymentHistory?.length) {
         await PaymentArchive.create({

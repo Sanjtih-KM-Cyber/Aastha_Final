@@ -10,7 +10,7 @@ const attachListeners = () => {
   if (listenersAttached) return;
   listenersAttached = true;
 
-  mongoose.connection.on('disconnected', () => console.warn('[MongoDB] Disconnected — driver will retry automatically.'));
+  mongoose.connection.on('disconnected', () => console.warn('[MongoDB] Disconnected, driver will retry automatically.'));
   mongoose.connection.on('reconnected', () => console.log('[MongoDB] Reconnected.'));
   mongoose.connection.on('error', (err) => console.error('[MongoDB] Connection error:', err.message));
 };

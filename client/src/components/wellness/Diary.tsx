@@ -90,7 +90,7 @@ const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string
           <Lock size={32} style={{ color: currentTheme.primaryColor }} />
         </div>
         <h2 className="text-3xl font-serif mb-2">Sanctuary Vault</h2>
-        <p className="text-white/50 text-center mb-8 text-sm">{filled ? 'New diary password set — it’s filled in below. Tap unlock.' : 'Enter your unique diary password to decrypt your diary.'}</p>
+        <p className="text-white/50 text-center mb-8 text-sm">{filled ? 'New diary password set, it’s filled in below. Tap unlock.' : 'Enter your unique diary password to decrypt your diary.'}</p>
         <form onSubmit={handleSubmit} className="w-full relative">
           <div className="relative">
               <input

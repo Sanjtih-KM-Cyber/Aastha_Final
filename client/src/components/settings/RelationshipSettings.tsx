@@ -53,7 +53,7 @@ const LANGUAGES: { value: string; label: string }[] = [
 ];
 
 /**
- * "Your connection" — closeness (bond level), language/region and thinking mode (ROADMAP A6, A9).
+ * "Your connection", closeness (bond level), language/region and thinking mode (ROADMAP A6, A9).
  */
 export const RelationshipSettings: React.FC = () => {
   const { user, updateUser } = useAuth();
@@ -63,7 +63,7 @@ export const RelationshipSettings: React.FC = () => {
   const [saving, setSaving] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [region, setRegion] = useState<string>(u.region || '');
-  // "Aastha reaches out first" (7.4) — stored server-side so every device follows it
+  // "Aastha reaches out first" (7.4), stored server-side so every device follows it
   const [checkIns, setCheckIns] = useState<{ enabled: boolean; pending: number } | null>(null);
   useEffect(() => {
     api.get('/users/reach-out', { params: { tz: deviceTimeZone() } }).then(r => setCheckIns({ enabled: r.data?.enabled !== false, pending: r.data?.pending || 0 })).catch(() => setCheckIns({ enabled: true, pending: 0 }));
@@ -161,7 +161,7 @@ export const RelationshipSettings: React.FC = () => {
           {status('nickname')}
         </div>
         {!atBestie ? (
-          <p className="text-xs text-md-on-surface-variant">Unlocks at <span className="text-md-on-surface">Bestie</span> — {botName} will come up with a nickname that's just yours.</p>
+          <p className="text-xs text-md-on-surface-variant">Unlocks at <span className="text-md-on-surface">Bestie</span>{botName} will come up with a nickname that's just yours.</p>
         ) : nickDraft !== null ? (
           <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); nickAction({ action: 'set', value: nickDraft }); }}>
             <input autoFocus value={nickDraft} maxLength={20} onChange={(e) => setNickDraft(e.target.value)} placeholder="What should they call you?"
@@ -173,8 +173,8 @@ export const RelationshipSettings: React.FC = () => {
           <>
             <p className="text-xs text-md-on-surface-variant mb-3">
               {nick?.value
-                ? <>{botName} calls you <span className="text-md-on-surface font-medium">“{nick.value}”</span>{nick.by === 'user' ? ' (your pick)' : ''}{nick.off ? ' — turned off' : ''}.</>
-                : `${botName} is still thinking of one — it'll show up in chat soon.`}
+                ? <>{botName} calls you <span className="text-md-on-surface font-medium">“{nick.value}”</span>{nick.by === 'user' ? ' (your pick)' : ''}{nick.off ? 'turned off' : ''}.</>
+                : `${botName} is still thinking of one, it'll show up in chat soon.`}
             </p>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => nickAction({ action: 'regenerate' })} className="h-9 px-3.5 rounded-full bg-md-secondary-container text-md-on-secondary-container text-sm font-medium inline-flex items-center gap-1.5"><RefreshCw size={14} /> Another one</button>
@@ -217,7 +217,7 @@ export const RelationshipSettings: React.FC = () => {
             onBlur={() => region !== (u.region || '') && save('region', { region })}
             className="w-full bg-md-surface-container-highest border border-md-outline-variant/40 rounded-xl px-3 py-2.5 text-md-on-surface text-sm placeholder:text-md-on-surface-variant/70 focus:outline-none focus:border-white/30"
           />
-          <p className="text-xs text-md-on-surface-variant/80 mt-2">Helps {botName} use expressions that feel like home — only after you use them first.</p>
+          <p className="text-xs text-md-on-surface-variant/80 mt-2">Helps {botName} use expressions that feel like home, only after you use them first.</p>
         </div>
       </div>
 
@@ -249,7 +249,7 @@ export const RelationshipSettings: React.FC = () => {
           <div>
             <h4 className="text-md-on-surface font-medium">GIFs & memes</h4>
             <p className="text-xs text-md-on-surface-variant mt-1">
-              {botName} can drop a GIF in fun moments — never when you're having a hard time.
+              {botName} can drop a GIF in fun moments, never when you're having a hard time.
             </p>
           </div>
           <button

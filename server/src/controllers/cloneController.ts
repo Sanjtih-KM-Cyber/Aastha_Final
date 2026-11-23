@@ -28,7 +28,7 @@ const status = (user: any) => {
 const loadUser = (id: any, withVoice = false) =>
   User.findById(id).select(withVoice ? '+cloneMode.voiceSample' : '');
 
-// GET /api/users/clone — status + the consent statements to show
+// GET /api/users/clone, status + the consent statements to show
 export const getClone = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
   const user = await loadUser(req.user._id, true);
@@ -67,7 +67,7 @@ export const saveCloneConsent = async (req: AuthRequest, res: Response) => {
   (res as any).json(status(user));
 };
 
-// POST /api/users/persona-screenshot { image } — analysed then discarded; only style notes kept
+// POST /api/users/persona-screenshot { image }, analysed then discarded; only style notes kept
 export const uploadCloneScreenshot = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
   const { image } = (req as any).body || {};
@@ -88,11 +88,11 @@ export const uploadCloneScreenshot = async (req: AuthRequest, res: Response) => 
     (res as any).json(status(user));
   } catch (e: any) {
     console.error('[Clone] screenshot analysis failed:', e?.message);
-    (res as any).status(503).json({ message: 'Analysis is busy right now — please try again in a minute.' });
+    (res as any).status(503).json({ message: 'Analysis is busy right now, please try again in a minute.' });
   }
 };
 
-// POST /api/users/clone/chat-sample { messages: string[] } — from an exported chat, parsed + scrubbed on the device
+// POST /api/users/clone/chat-sample { messages: string[] }, from an exported chat, parsed + scrubbed on the device
 export const uploadCloneChatSample = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
   const user = await loadUser(req.user._id, true);
@@ -108,11 +108,11 @@ export const uploadCloneChatSample = async (req: AuthRequest, res: Response) => 
     (res as any).json({ ...status(user), learnedFrom: messages.length });
   } catch (e: any) {
     console.error('[Clone] chat sample analysis failed:', e?.message);
-    (res as any).status(503).json({ message: 'Analysis is busy right now — please try again in a minute.' });
+    (res as any).status(503).json({ message: 'Analysis is busy right now, please try again in a minute.' });
   }
 };
 
-// POST /api/users/persona-voice { audio } — encrypted at rest
+// POST /api/users/persona-voice { audio }, encrypted at rest
 export const uploadCloneVoice = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
   const { audio } = (req as any).body || {};
@@ -150,7 +150,7 @@ export const updateCloneSettings = async (req: AuthRequest, res: Response) => {
   (res as any).json(status(user));
 };
 
-// DELETE /api/users/clone — wipes consent, style notes and voice sample
+// DELETE /api/users/clone, wipes consent, style notes and voice sample
 export const deleteClone = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
   await User.updateOne(

@@ -22,6 +22,7 @@ import { describeRecentReactions, setReaction, isAllowedReaction } from '../serv
 import { followUpPromptLine, followUpsAroundNow, markFollowUps } from '../services/reachOut';
 import { cleanTimeZone } from '../utils/timeZone';
 import { openQuotaWindow, quotaResetsAt } from '../utils/dailyReset';
+import { createHumanizer, humanize } from '../services/humanize';
 import { suggestReplies, makeNickname, nicknamePromptLine, nudgeInstruction, NudgeReason } from '../services/companionExtras';
 import { effectiveLevel } from '../services/relationship';
 import { PERSONA_VOICE } from '../prompts/companion';
@@ -133,7 +134,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         user.markModified('bond');
         bondLeveledUp = bondUpdate.leveledUp;
     }
-    // BESTIE NICKNAME: first time they're at Bestie, invent one (background — the next reply introduces it)
+    // BESTIE NICKNAME: first time they're at Bestie, invent one (background, the next reply introduces it)
     if (effectiveLevel(user.bond as any) >= 4 && !(user as any).nickname?.value && !(user as any).nickname?.off) {
         const uidForNick = user._id;
         makeNickname({ name: user.name, facts: ((user as any).facts || []).map((f: string) => decrypt(f)), persona: (String(user.persona) === 'aarav' || String(user.persona) === 'aastik') ? 'aastik' : 'aastha' })
@@ -214,7 +215,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     let subconscious: any = {};
 
     if (useClone) {
-        // The imitation just replies — no listening mode, no app tools
+        // The imitation just replies, no listening mode, no app tools
         subconscious = defaultBrain(user.moodStatus);
     } else if (user.isListeningModeActive && !forceReply) {
         // FAST PATH: STAY IN LISTENING MODE
@@ -231,7 +232,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     } else if (risk === 'crisis') {
         subconscious = { ...defaultBrain('concerned'), mood: 'concerned', status_display: 'Here with you...' };
     } else if (canSkipBrain(typeof message === 'string' ? message : '', !!forceReply, !!isVoiceMode) && !(images && images.length)) {
-        // FAST PATH: obvious reply (question / greeting / forced / voice) — saves one LLM call (A2)
+        // FAST PATH: obvious reply (question / greeting / forced / voice), saves one LLM call (A2)
         subconscious = defaultBrain(user.moodStatus);
     } else {
         // NORMAL PATH: ASK BRAIN
@@ -384,25 +385,50 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         ? recentMessages
             .filter(m => m.role === 'user' || (m as any).isClone)
             .map(m => ({ role: m.role as 'user' | 'assistant', content: decrypt(m.content) }))
-        : historyWindow;
+        : historyWindow.map((m) => (m.role === 'assistant' && typeof m.content === 'string' && !useClone
+            // The model copies its own past texts: feed it CLEANED versions of its earlier replies (the stored chat is unchanged)
+            ? { ...m, content: humanize(m.content) } : m));
     const generationHistory: ChatMessage[] = [...baseHistory, { role: 'user', content: newUserMsgContent }];
 
     const sendContent = (text: string) => (res as any).write(`data: ${JSON.stringify({ content: text })}\n\n`);
     if (think) (res as any).write(`data: ${JSON.stringify({ type: 'thinking_start' })}\n\n`);
 
     try {
+        // Texting length: a few words in → a short text out (the prompt asks for it; this is the hard ceiling).
+        // Crisis, think and voice replies keep the full budget.
+        const userWords = typeof newUserMsgContent === 'string' ? newUserMsgContent.trim().split(/\s+/).filter(Boolean).length : 20;
+        const nonLatin = typeof newUserMsgContent === 'string' && /[^\u0000-\u024f\s\p{P}\p{S}]/u.test(newUserMsgContent); // regional script: the TTS copy doubles the text
+        // Only a ceiling against essays in reply to "lol"; LENGTH is decided by the prompt ("follows the moment").
+        // Heavy moments (sad / anxious / lonely / grieving / crisis) get no ceiling at all.
+        const heavy = ['sad', 'crying', 'anxious', 'scared', 'lonely', 'angry', 'concerned', 'stressed', 'overwhelmed', 'hurt', 'grieving']
+            .includes(String(subconscious.mood || '').toLowerCase());
+        const replyBudget = risk !== 'none' || think || isVoiceMode || heavy ? undefined
+            : Math.round((userWords <= 6 ? 320 : userWords <= 30 ? 520 : 900) * (nonLatin ? 2 : 1));
         const stream = streamReply(generationHistory, systemPrompt, {
+            maxTokens: replyBudget,
             voiceTags: risk !== 'crisis' && !useClone,
             think,
             onReasoning: (r) => (res as any).write(`data: ${JSON.stringify({ type: 'reasoning', content: r })}\n\n`),
         });
+        // Humanizer (services/humanize.ts): drops assistant filler, stock openers, extra emojis and em dashes,
+        // sentence by sentence, before anything is shown. Not for crisis replies (never touch those) or Clone Mode
+        // (it imitates a real person's own style).
+        const human = risk === 'none' && !useClone ? createHumanizer() : null;
+        let rawText = '';
         for await (const chunk of stream) {
-            const visible = tagExtractor.push(chunk);
+            const visibleRaw = tagExtractor.push(chunk);
+            if (!visibleRaw) continue;
+            rawText += visibleRaw;
+            const visible = human ? human.push(visibleRaw) : visibleRaw;
             if (!visible) continue;
             fullTextResponse += visible;
             sendContent(visible);
         }
-        const tail = tagExtractor.flush();
+        const tailRaw = tagExtractor.flush();
+        rawText += tailRaw || '';
+        let tail = human ? (human.push(tailRaw || '') + human.flush()) : tailRaw;
+        // every sentence was filler → show the original rather than nothing
+        if (human && !fullTextResponse.trim() && !(tail || '').trim() && rawText.trim()) tail = rawText;
         if (tail) {
             fullTextResponse += tail;
             sendContent(tail);
@@ -558,7 +584,7 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
 
         // GET /api/chat/history?limit=50&before=<ISO timestamp>
         // Returns the newest `limit` messages (older than `before`), oldest → newest.
-        // Only these are decrypted — previously the ENTIRE history was decrypted on every load (R5).
+        // Only these are decrypted, previously the ENTIRE history was decrypted on every load (R5).
         const q = (req as any).query || {};
         const limit = Math.min(Math.max(parseInt(q.limit, 10) || 50, 1), 100);
         const before = typeof q.before === 'string' ? new Date(q.before) : undefined;
@@ -589,7 +615,7 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
     }
 };
 
-/** POST /api/chat/react { messageId, reaction: <any single emoji> | null } — the user's reaction on one of Aastha's replies (7.4). */
+/** POST /api/chat/react { messageId, reaction: <any single emoji> | null }, the user's reaction on one of Aastha's replies (7.4). */
 export const reactToMessage = async (req: AuthRequest, res: Response) => {
     if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
     const { messageId, reaction } = (req as any).body || {};
@@ -608,7 +634,7 @@ export const reactToMessage = async (req: AuthRequest, res: Response) => {
 
 
 // =====================================================================================================
-// FOLLOW-UP NUDGE — they reacted to the last reply (or read it) and went quiet. The app calls this after
+// FOLLOW-UP NUDGE, they reacted to the last reply (or read it) and went quiet. The app calls this after
 // ~15 s (reaction) / ~45 s (seen). At most ONE nudge per reply, 6 per day, never after a recent crisis.
 // Doesn't use the user's message quota (it's the companion talking, not them).
 // =====================================================================================================
@@ -640,11 +666,12 @@ You're texting your friend ${String(user.name || '').split(' ')[0] || 'them'}. W
 ${nudgeInstruction(reason, last.userReaction)}`;
         const text = (await completeChat([{ role: 'system', content: system }, ...history], { task: 'chat', temperature: 0.9, maxTokens: 80 }))
             .replace(/<[^>]+>/g, '').replace(/\[[A-Z]+:[^\]]*\]/g, '').trim().slice(0, 300);
-        if (!text) return (res as any).status(204).end();
+        const cleanText = humanize(text);
+        if (!cleanText) return (res as any).status(204).end();
 
-        const [saved] = await appendMessages(user._id, [{ role: 'assistant', content: encrypt(text), isNudge: true }]);
-        broadcast(String(user._id), 'message', { id: String(saved?._id || ''), content: text, role: 'assistant', timestamp: saved?.timestamp || new Date() });
-        (res as any).json({ id: String(saved?._id || ''), content: text, timestamp: saved?.timestamp || new Date() });
+        const [saved] = await appendMessages(user._id, [{ role: 'assistant', content: encrypt(cleanText), isNudge: true }]);
+        broadcast(String(user._id), 'message', { id: String(saved?._id || ''), content: cleanText, role: 'assistant', timestamp: saved?.timestamp || new Date() });
+        (res as any).json({ id: String(saved?._id || ''), content: cleanText, timestamp: saved?.timestamp || new Date() });
     } catch (e: any) {
         if (!(e instanceof LlmUnavailableError)) console.error('Nudge error:', e?.message || e);
         (res as any).status(204).end();

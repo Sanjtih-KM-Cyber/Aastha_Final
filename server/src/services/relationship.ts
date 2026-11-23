@@ -1,7 +1,7 @@
 /**
  * Relationship engine (ROADMAP A6):
- *  1. Style mirroring — a cheap, deterministic fingerprint of how the user texts, smoothed over time.
- *  2. Bond levels — closeness grows with consistent, genuine conversation and fades slowly when away.
+ *  1. Style mirroring, a cheap, deterministic fingerprint of how the user texts, smoothed over time.
+ *  2. Bond levels, closeness grows with consistent, genuine conversation and fades slowly when away.
  * Pure functions (no DB/LLM) so they're testable; the controller persists the results on the User.
  */
 import { dayKeyIn, tzOrDefault } from '../utils/timeZone';
@@ -25,7 +25,7 @@ export interface StyleProfile {
 
 const EMOJI = /\p{Extended_Pictographic}/gu;
 const HINGLISH = new Set(
-  // NOTE: no English look-alikes ("to", "main", "na", "par") — they'd mislabel English speakers.
+  // NOTE: no English look-alikes ("to", "main", "na", "par"), they'd mislabel English speakers.
   ('yaar yar hai hain kya kyu kyun nahi nahin nai acha accha achha bhai matlab haan kuch bas toh kr kar karna karo kiya mera meri ' +
    'tera teri mujhe tujhe tum aap bohot bahut sach chal chalo arre arey abhi kal aaj thoda thodi sab koi kaise kaisa kaisi kab kahan ' +
    'jaldi pata bilkul ekdum bindaas mast bakwas pagal dost ghar khana neend padhai pareshan mummy papa didi bhaiya ji ' +
@@ -92,19 +92,19 @@ export const describeStyle = (s?: Partial<StyleProfile>): string => {
   if (!s || !s.samples || s.samples < 3) return '';
   const notes: string[] = [];
   const w = s.avgWords || 0;
-  if (w <= 6) notes.push('they send very short messages — keep yours to 1–2 short lines');
-  else if (w <= 15) notes.push('they write short messages — keep yours to 2–3 lines');
-  else if (w >= 40) notes.push('they write long, detailed messages — you can reply in fuller paragraphs');
-  if ((s.lowercase || 0) > 0.7) notes.push('they type in all lowercase — lowercase is fine for you too');
-  if ((s.emojiRate || 0) >= 1) notes.push('they use emojis a lot — use them freely');
-  else if ((s.emojiRate || 0) < 0.15) notes.push('they rarely use emojis — use at most one, often none');
+  if (w <= 6) notes.push('they send very short messages, keep yours to 1–2 short lines');
+  else if (w <= 15) notes.push('they write short messages, keep yours to 2–3 lines');
+  else if (w >= 40) notes.push('they write long, detailed messages, you can reply in fuller paragraphs');
+  if ((s.lowercase || 0) > 0.7) notes.push('they type in all lowercase, lowercase is fine for you too');
+  if ((s.emojiRate || 0) >= 1) notes.push('they use emojis a lot, use them freely');
+  else if ((s.emojiRate || 0) < 0.15) notes.push('they rarely use emojis, use at most one, often none');
   const lang = s.lang as LangCode | undefined;
   if (lang && lang !== 'latin' && LANGUAGE_LABELS[lang] && (s.langShare ?? 0) >= 0.5) {
-    notes.push(`they write in ${LANGUAGE_LABELS[lang]} — reply in the same language and script, the way a friend from there would`);
-  } else if ((s.hinglish || 0) > 0.3) notes.push('they mix Hindi and English — reply in natural Hinglish');
-  if ((s.abbrev || 0) > 0.4) notes.push('they use texting shorthand (idk, lol, u) — casual shorthand is fine');
-  if ((s.swears || 0) > 0.3) notes.push('they swear casually — light swearing is okay when it fits');
-  if ((s.exclaim || 0) > 0.5) notes.push('they’re expressive with "!" — match the energy');
+    notes.push(`they write in ${LANGUAGE_LABELS[lang]}, reply in the same language and script, the way a friend from there would`);
+  } else if ((s.hinglish || 0) > 0.3) notes.push('they mix Hindi and English, reply in natural Hinglish');
+  if ((s.abbrev || 0) > 0.4) notes.push('they use texting shorthand (idk, lol, u), casual shorthand is fine');
+  if ((s.swears || 0) > 0.3) notes.push('they swear casually, light swearing is okay when it fits');
+  if ((s.exclaim || 0) > 0.5) notes.push('they’re expressive with "!", match the energy');
   return notes.length ? `Their texting style: ${notes.join('; ')}.` : '';
 };
 
@@ -185,7 +185,7 @@ export const effectiveLevel = (b?: Partial<BondState>) =>
 
 const TONE_CARDS = [
   // 0 New friend
-  'You only just met. Be warm, kind and a little curious, but polite — no nicknames, no teasing, light on emojis. Let them set the pace; don’t pry.',
+  'You only just met. Be warm, kind and a little curious, but polite, no nicknames, no teasing, light on emojis. Let them set the pace; don’t pry.',
   // 1 Getting to know you
   'You’ve chatted a bit. Be relaxed and friendly, remember what they’ve shared and bring it up naturally. Gentle humour is fine; still no pet names.',
   // 2 Friend
@@ -193,14 +193,14 @@ const TONE_CARDS = [
   // 3 Close friend
   'You’re close. Be openly affectionate in your persona’s way, check in on things they’ve been going through, tease more freely, and be honest even when it’s not what they want to hear.',
   // 4 Bestie
-  'You’re their bestie. Full comfort: playful roasts, nicknames that fit them, "I missed you" when they come back, fierce loyalty — and real honesty when they’re about to do something unwise.',
+  'You’re their bestie. Full comfort: playful roasts, nicknames that fit them, "I missed you" when they come back, fierce loyalty, and real honesty when they’re about to do something unwise.',
 ];
 
 export const bondPromptLine = (b: Partial<BondState> | undefined, leveledUp: boolean) => {
   const lvl = effectiveLevel(b);
   const name = BOND_LEVELS[lvl].name;
   const levelUpNote = leveledUp && (b?.override === null || b?.override === undefined)
-    ? ` You’ve just become closer (${name}) — you may acknowledge it once, lightly and in your own words, if it fits the moment. Don’t make a big deal of it.`
+    ? ` You’ve just become closer (${name}), you may acknowledge it once, lightly and in your own words, if it fits the moment. Don’t make a big deal of it.`
     : '';
   return `Closeness: ${name}. ${TONE_CARDS[lvl]}${levelUpNote}`;
 };

@@ -1,7 +1,7 @@
 /**
  * Mood over time (ROADMAP 7.4): a 7-day view + at most ONE honest insight from data we already store
  * (daily mood scores 1–10 and whether a diary entry exists that day). No diagnoses, no scores about the
- * person — only patterns in their own logs, with minimum sample sizes so we never over-claim.
+ * person, only patterns in their own logs, with minimum sample sizes so we never over-claim.
  */
 import mongoose from 'mongoose';
 import Mood from '../models/Mood';
@@ -14,7 +14,7 @@ export interface MoodInsights { week: (DayMood & { label: string })[]; insight: 
 
 export const MIN_DAYS_PER_GROUP = 3;
 export const MIN_DIFF = 1.0;
-const NOTE = 'Patterns from your own logs — not a diagnosis.';
+const NOTE = 'Patterns from your own logs, not a diagnosis.';
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);
@@ -39,8 +39,8 @@ export const computeInsights = (daily: Map<string, { score: number; mood: string
     const a = avg(journaled), b = avg(notJournaled);
     if (Math.abs(a - b) >= MIN_DIFF) {
       insight = a > b
-        ? `On days you journaled, your mood averaged ${round1(a)}/10 — vs ${round1(b)}/10 on days you didn't. Writing things down seems to help you.`
-        : `Your mood was lower on days you journaled (${round1(a)}/10 vs ${round1(b)}/10). That's common — many people write more on hard days.`;
+        ? `On days you journaled, your mood averaged ${round1(a)}/10, vs ${round1(b)}/10 on days you didn't. Writing things down seems to help you.`
+        : `Your mood was lower on days you journaled (${round1(a)}/10 vs ${round1(b)}/10). That's common, many people write more on hard days.`;
     }
   }
   if (!insight) {

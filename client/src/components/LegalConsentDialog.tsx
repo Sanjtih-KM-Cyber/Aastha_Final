@@ -15,7 +15,7 @@ export const LegalConsentDialog: React.FC<{ onAccepted: () => void; onLogout: ()
   const accept = async () => {
     setBusy(true); setError(null);
     try { await api.post('/users/legal-consent', { accept: true }); onAccepted(); }
-    catch { setError('Could not save — please check your connection and try again.'); }
+    catch { setError('Could not save, please check your connection and try again.'); }
     finally { setBusy(false); }
   };
   return createPortal(
@@ -24,7 +24,7 @@ export const LegalConsentDialog: React.FC<{ onAccepted: () => void; onLogout: ()
         <h2 id="legal-title" className="font-serif text-2xl text-md-on-surface">We’ve updated our Terms and Privacy Policy</h2>
         <p className="mt-3 text-sm text-md-on-surface-variant leading-relaxed">
           They explain in plain words what Aastha is (an AI companion, not a medical service), what we collect, who processes it,
-          how long we keep it, and your rights — including export and deletion.
+          how long we keep it, and your rights, including export and deletion.
         </p>
         <div className="mt-4 flex gap-2">
           <Link to="/privacy" target="_blank" className="h-9 px-4 inline-flex items-center rounded-full bg-md-secondary-container text-md-on-secondary-container text-sm font-medium">Privacy Policy</Link>
@@ -39,7 +39,7 @@ export const LegalConsentDialog: React.FC<{ onAccepted: () => void; onLogout: ()
           className="mt-5 w-full h-12 rounded-full bg-md-primary text-md-on-primary font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
           {busy ? <Loader2 size={18} className="animate-spin" /> : 'Continue'}
         </button>
-        <button onClick={onLogout} className="mt-2 w-full h-11 rounded-full text-md-on-surface-variant text-sm hover:bg-md-on-surface/[0.06]">Not now — log out</button>
+        <button onClick={onLogout} className="mt-2 w-full h-11 rounded-full text-md-on-surface-variant text-sm hover:bg-md-on-surface/[0.06]">Not now, log out</button>
       </div>
     </div>
   , document.body);

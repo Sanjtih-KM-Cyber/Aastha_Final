@@ -1,6 +1,6 @@
 /**
  * Client crash reporting (ROADMAP 7.2). OFF unless VITE_SENTRY_DSN is set at build time (Vercel env / CI).
- * Errors only — no performance tracing, no session replay, no default PII. Every event passes utils/scrub.ts:
+ * Errors only, no performance tracing, no session replay, no default PII. Every event passes utils/scrub.ts:
  * no request bodies, cookies, tokens, emails, phone numbers, console logs or typed input.
  * The SDK is loaded lazily so it costs nothing when the DSN isn't configured.
  */

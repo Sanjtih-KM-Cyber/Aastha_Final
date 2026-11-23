@@ -37,7 +37,7 @@ const main = async () => {
       if (s.pending || s.unreadable) console.log(`  ${name}: ${s.pending} value(s) to update, ${s.unreadable} unreadable (of ${s.scanned} docs)`);
     }
     console.log(pending ? `→ ${pending} value(s) not on the current keys yet (the sweep fixes them; or run keys:rotate).` : '→ everything is on the current keys.');
-    if (unreadable) console.log(`⚠️ ${unreadable} value(s) can't be opened by ANY configured key — an old key is missing. Don't remove keys until this is 0.`);
+    if (unreadable) console.log(`⚠️ ${unreadable} value(s) can't be opened by ANY configured key, an old key is missing. Don't remove keys until this is 0.`);
     else if (!pending) console.log('   Old keys (everything after the first in ENCRYPTION_KEYS / BLIND_INDEX_KEYS) can now be removed.');
     console.log(`last finished sweep: ${(st.state as any)?.finishedAt || 'never'}`);
   }

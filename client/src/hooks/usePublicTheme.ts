@@ -31,7 +31,7 @@ export const usePublicTheme = () => {
     setMode(next);
     window.dispatchEvent(new Event(EVT));
   };
-  // ALWAYS the brand seed — the colour a user picks inside the Sanctuary must not repaint the public pages.
+  // ALWAYS the brand seed, the colour a user picks inside the Sanctuary must not repaint the public pages.
   // (ThemeContext writes the user's palette to :root; these variables override it for this page's subtree.)
   const style = useMemo(() => {
     const tokens = buildMaterialTokens(DEFAULT_SEED, mode !== 'light');

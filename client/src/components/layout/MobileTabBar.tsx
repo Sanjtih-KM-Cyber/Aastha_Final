@@ -55,7 +55,7 @@ export const MobileTabBar: React.FC<Props> = ({ active, onSelect }) => {
       {/* Same look + motion as before (bar shrinks/grows, the highlight pill slides between tabs with a little
           spring), but with plain CSS transitions instead of framer-motion `layout`/`layoutId`: on Android Chrome
           that FLIP animation could get stuck mid-way on this fixed bar and leave it shifted half off the screen
-          (only with animations on — Lite mode never showed it). Positions are computed, not measured. */}
+          (only with animations on, Lite mode never showed it). Positions are computed, not measured. */}
       <div
         onPointerMove={specular}
         onClick={() => compact && setCompact(false)}

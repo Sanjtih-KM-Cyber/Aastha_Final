@@ -1,5 +1,5 @@
 /**
- * Crisis detection v2 (ROADMAP S9). Deterministic first line of defence — runs on EVERY message,
+ * Crisis detection v2 (ROADMAP S9). Deterministic first line of defence, runs on EVERY message,
  * before any LLM, so it can't be skipped by rate limits or model failures.
  *  - 'crisis'  : explicit self-harm / suicidal intent → warm reply + helplines + help banner
  *  - 'concern' : hopelessness / self-loathing → companion is told to check in gently
@@ -49,7 +49,7 @@ export const HELPLINES = [
 ];
 
 export const CRISIS_PROMPT = `
-# SAFETY — this matters more than anything else right now
+# SAFETY, this matters more than anything else right now
 The user may be thinking about hurting themselves or ending their life. Respond as a caring friend:
 - Take it seriously and stay calm and warm. Thank them for telling you. Don't panic, lecture, or change the subject.
 - Ask gently if they're safe right now.
@@ -63,6 +63,6 @@ They sound very low. Slow down, acknowledge it, and gently ask how bad things ha
 /** Used if every AI provider is down while a crisis message comes in. */
 export const CRISIS_FALLBACK_TEXT = `I'm really glad you told me, and I'm here with you. What you're feeling matters, and you don't have to carry it alone.
 
-Please reach someone who can be with you right now — Tele-MANAS on 14416 (free, 24/7) or iCall on 9152987821, or 112 if you're in immediate danger. If there's someone you trust nearby, please let them know too.
+Please reach someone who can be with you right now, Tele-MANAS on 14416 (free, 24/7) or iCall on 9152987821, or 112 if you're in immediate danger. If there's someone you trust nearby, please let them know too.
 
 Are you safe right now?`;

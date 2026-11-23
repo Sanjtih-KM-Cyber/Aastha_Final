@@ -1,5 +1,5 @@
 /**
- * Daily quotas — rolling 24-hour window (owner decision 2026-11-22; replaces the IST-midnight reset of R8).
+ * Daily quotas, rolling 24-hour window (owner decision 2026-11-22; replaces the IST-midnight reset of R8).
  *
  * - The window OPENS with the first counted message (`openQuotaWindow`) and the quotas (16 messages,
  *   2 voice notes, clone replies…) refill exactly 24 h later. Fair for bursts and slow chatters alike.
@@ -9,7 +9,7 @@
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 export const QUOTA_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-/** IST calendar day — still used by the bond engine's "new day" points (services/relationship.ts). */
+/** IST calendar day, still used by the bond engine's "new day" points (services/relationship.ts). */
 export const istDayKey = (d: Date): string => {
   const t = new Date(d.getTime() + IST_OFFSET_MS);
   return `${t.getUTCFullYear()}-${t.getUTCMonth() + 1}-${t.getUTCDate()}`;

@@ -41,7 +41,7 @@ router.post('/create-order', protect, createOrder);
 router.post('/create-voice-order', protect, createVoiceOrder);
 router.post('/verify-payment', protect, verifyPayment);
 
-// Web Push (browser / PWA) — no Firebase needed
+// Web Push (browser / PWA), no Firebase needed
 router.get('/push/key', getPushKey);
 router.post('/push/subscribe', protect, subscribePush);
 router.post('/push/unsubscribe', protect, unsubscribePush);

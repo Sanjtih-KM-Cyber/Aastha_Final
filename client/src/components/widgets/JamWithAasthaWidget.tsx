@@ -778,7 +778,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                       <IconButton size="sm" label="Back to player" onClick={() => setShowQueue(false)}><X size={16}/></IconButton>
                    </div>
                    {queue.length === 0 ? (
-                       <div className="text-md-on-surface-variant text-center py-10 text-sm">Nothing queued yet — search or tap ✨.</div>
+                       <div className="text-md-on-surface-variant text-center py-10 text-sm">Nothing queued yet, search or tap ✨.</div>
                    ) : isMobile ? (
                        <Reorder.Group axis="y" values={queue} onReorder={handleReorder} className="space-y-2">
                            {queue.map((track, idx) => (

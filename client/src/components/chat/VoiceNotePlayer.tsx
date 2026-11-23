@@ -53,7 +53,7 @@ const decodePeaks = async (src: string, signal: AbortSignal) => {
       let sum = 0;
       const from = b * step;
       const to = Math.min(ch.length, from + step);
-      for (let i = from; i < to; i += 16) sum += ch[i] * ch[i]; // sampled RMS — cheap
+      for (let i = from; i < to; i += 16) sum += ch[i] * ch[i]; // sampled RMS, cheap
       raw.push(Math.sqrt(sum / Math.max(1, (to - from) / 16)));
     }
     const max = Math.max(...raw, 1e-6);

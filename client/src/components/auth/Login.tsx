@@ -253,10 +253,10 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
           try {
             const PC = (window as any).PasswordCredential;
             if (PC && navigator.credentials?.store) await navigator.credentials.store(new PC({ id: resetEmail, password: newPassword, name: resetEmail }));
-          } catch { /* not supported / declined — the form is filled anyway */ }
+          } catch { /* not supported / declined, the form is filled anyway */ }
           setNewPassword(''); setResetAnswer('');
           setMode('login');
-          setNotice('Password changed — we filled it in for you. Tap Enter Sanctuary.');
+          setNotice('Password changed, we filled it in for you. Tap Enter Sanctuary.');
       } catch (err: any) {
           setError(err.response?.data?.message || 'Incorrect answer');
       } finally {
@@ -269,7 +269,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
     const newOtp = [...otp];
     if (digits.length > 1) {
       // Android keyboards paste / autofill ("from Messages", clipboard chip) by TYPING the whole code into one box
-      // (no paste event) — spread it across the boxes from here.
+      // (no paste event), spread it across the boxes from here.
       const code = digits.slice(0, 6 - index).split('');
       code.forEach((d, i) => { newOtp[index + i] = d; });
       setOtp(newOtp);
@@ -346,7 +346,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
 
   return (
     <div style={publicTheme.style} className="min-h-[100dvh] bg-md-surface text-md-on-surface flex font-sans relative overflow-hidden">
-      {/* Soft seed-coloured light (static — no blur animation, cheap on phones) */}
+      {/* Soft seed-coloured light (static, no blur animation, cheap on phones) */}
       <div aria-hidden className="pointer-events-none absolute -top-40 -left-40 w-[520px] h-[520px] rounded-full bg-md-primary/20 blur-3xl" />
       <div aria-hidden className="pointer-events-none absolute -bottom-48 -right-32 w-[560px] h-[560px] rounded-full bg-md-tertiary/15 blur-3xl" />
 
@@ -366,7 +366,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
       </div>
 
       <div className="relative z-10 w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 items-center px-4 pt-[calc(env(safe-area-inset-top)+6rem)] pb-10">
-        {/* Hero (desktop) — tonal Material card */}
+        {/* Hero (desktop), tonal Material card */}
         <div className="hidden lg:flex flex-col justify-between rounded-[36px] bg-md-primary-container text-md-on-primary-container p-12 min-h-[560px] relative overflow-hidden">
           <div aria-hidden className="absolute -right-24 -top-24 w-80 h-80 rounded-full bg-md-primary/25" />
           <div aria-hidden className="absolute right-16 bottom-24 w-40 h-40 rounded-[48px] bg-md-tertiary/25 rotate-12" />
@@ -377,7 +377,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
             <h2 className="mt-10 font-serif text-5xl leading-[1.1] whitespace-pre-line">{heroTitle[mode]}</h2>
           </div>
           <p className="relative text-lg leading-relaxed opacity-90 max-w-md">
-            {isCodeStep ? 'Your sanctuary stays yours — we check it’s really you before letting anyone in.' : `“${quote}”`}
+            {isCodeStep ? 'Your sanctuary stays yours, we check it’s really you before letting anyone in.' : `“${quote}”`}
           </p>
         </div>
 
@@ -464,7 +464,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
 
                   <div className="rounded-[20px] bg-md-surface-container p-4">
                     <div className="flex items-center gap-2 mb-1 text-sm font-semibold text-md-on-surface"><BookLock size={16} className="text-md-primary" /> Diary lock</div>
-                    <p className="text-xs text-md-on-surface-variant mb-3">A separate password for your diary. Forgot it later? Reset it in Settings — your entries stay.</p>
+                    <p className="text-xs text-md-on-surface-variant mb-3">A separate password for your diary. Forgot it later? Reset it in Settings, your entries stay.</p>
                     <div className="relative">
                       <input type={showRegDiaryPassword ? 'text' : 'password'} aria-label="Diary password" placeholder="Diary password (different from login)" value={regDiaryPassword} onChange={e => setRegDiaryPassword(e.target.value)} className={`${field} pr-12`} required />
                       <button type="button" aria-label={showRegDiaryPassword ? 'Hide diary password' : 'Show diary password'} onClick={() => setShowRegDiaryPassword(!showRegDiaryPassword)}
@@ -531,7 +531,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                 </form>
               )}
 
-              {/* FORGOT PASSWORD — email */}
+              {/* FORGOT PASSWORD, email */}
               {mode === 'forgot-init' && (
                 <form className="space-y-4" onSubmit={handleForgotInit}>
                   <div><label className={label} htmlFor="f-email">Email</label><input id="f-email" type="email" autoComplete="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} className={field} required /></div>
@@ -540,7 +540,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                 </form>
               )}
 
-              {/* FORGOT PASSWORD — question + new password */}
+              {/* FORGOT PASSWORD, question + new password */}
               {mode === 'forgot-complete' && (
                 <form className="space-y-4" onSubmit={handleForgotComplete}>
                   <div className="rounded-[20px] bg-md-secondary-container text-md-on-secondary-container p-4">

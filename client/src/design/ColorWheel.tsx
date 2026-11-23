@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 
 /**
  * Colour wheel for the Sanctuary seed colour (Settings → Appearance).
- * Angle = hue, distance from the centre = saturation (lightness is fixed — Material You derives the light/dark
+ * Angle = hue, distance from the centre = saturation (lightness is fixed, Material You derives the light/dark
  * tones itself, so only hue + colourfulness matter). Drag or tap; arrow keys nudge the hue (accessibility).
  * `onChange` fires while dragging (cheap: CSS variables only); `onCommit` fires on release.
  */
@@ -63,7 +63,7 @@ export const ColorWheel: React.FC<{ value: string; onChange: (hex: string) => vo
       ref={ref}
       role="slider"
       tabIndex={0}
-      aria-label="Colour wheel — hue"
+      aria-label="Colour wheel, hue"
       aria-valuemin={0} aria-valuemax={359} aria-valuenow={hs.h} aria-valuetext={`hue ${hs.h}°, ${hs.s}% colourful`}
       className="relative rounded-full touch-none select-none cursor-crosshair outline-none focus-visible:ring-2 focus-visible:ring-md-primary focus-visible:ring-offset-2 focus-visible:ring-offset-md-surface-container"
       style={{

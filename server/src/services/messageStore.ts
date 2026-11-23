@@ -23,7 +23,7 @@ const toObjectId = (id: string | mongoose.Types.ObjectId) =>
  * - Leaves the legacy doc's messages untouched as a rollback backup.
  * - On insert failure, releases the claim so it retries next time.
  */
-// Users already checked in this process — skips the DB round-trip on every message.
+// Users already checked in this process, skips the DB round-trip on every message.
 const migratedUsers = new Set<string>();
 // Concurrent first requests share ONE migration instead of the loser reading an empty collection.
 const inFlight = new Map<string, Promise<void>>();
@@ -75,7 +75,7 @@ const migrateLegacyChat = async (uid: mongoose.Types.ObjectId): Promise<void> =>
     await Message.insertMany(docs, { ordered: false });
     console.log(`[MessageStore] Migrated ${docs.length} messages for user ${uid}`);
   } catch (err: any) {
-    // Duplicate keys mean a previous partial run already copied some — that's fine.
+    // Duplicate keys mean a previous partial run already copied some, that's fine.
     if (err?.code === 11000 || err?.writeErrors?.every((e: any) => e.code === 11000)) return;
     console.error(`[MessageStore] Migration failed for user ${uid}, will retry:`, err?.message);
     await Chat.updateOne({ _id: (claimed as any)._id }, { $unset: { migratedAt: 1 } });

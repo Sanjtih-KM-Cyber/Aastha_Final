@@ -12,7 +12,7 @@ dotenv.config();
  *   NEW_SERVER_ENCRYPTION_KEY  legacy, still honoured (added after ENCRYPTION_KEYS)
  *   SERVER_ENCRYPTION_KEY      legacy, still honoured (added last)
  *
- *   BLIND_INDEX_KEYS           comma-separated, NEWEST FIRST — keyed hashes used for lookups (Web names, email).
+ *   BLIND_INDEX_KEYS           comma-separated, NEWEST FIRST, keyed hashes used for lookups (Web names, email).
  *   BLIND_INDEX_KEY            legacy single key. If no blind keys are set, SERVER_ENCRYPTION_KEY /
  *                              NEW_SERVER_ENCRYPTION_KEY is used (the historical default).
  *
@@ -24,7 +24,7 @@ dotenv.config();
  *
  * ── Ciphertext format ────────────────────────────────────────────────────────────────────────────────────
  *   v2:<kid>:<iv>:<tag>:<data>   kid = 8-hex fingerprint of the key (not secret), so decrypt picks the right key
- *   <iv>:<tag>:<data>            legacy (no kid) — every key is tried. Re-written as v2 by the rotation sweep.
+ *   <iv>:<tag>:<data>            legacy (no kid), every key is tried. Re-written as v2 by the rotation sweep.
  */
 
 const ALGORITHM = 'aes-256-gcm';
@@ -108,7 +108,7 @@ const reportFailure = (why: string) => {
     failures++;
     // loud but not spammy: a missing old key shows up immediately in the logs
     if (failures <= 5 || failures % 1000 === 0) {
-        console.error(`[encryption] DECRYPT FAILED (${why}) — is a key missing from ENCRYPTION_KEYS? (${failures} so far)`);
+        console.error(`[encryption] DECRYPT FAILED (${why}), is a key missing from ENCRYPTION_KEYS? (${failures} so far)`);
     }
 };
 export const decryptFailureCount = () => failures;
@@ -164,7 +164,7 @@ export const reencrypt = (text: string): string | null => {
     return encrypt(decryptDetailed(text).text);
 };
 
-/** Encrypt only if not already ciphertext (idempotent — used by Mongoose setters). */
+/** Encrypt only if not already ciphertext (idempotent, used by Mongoose setters). */
 export const ensureEncrypted = (text: any): any => {
     if (text === null || text === undefined || text === '') return text;
     const s = String(text);
@@ -184,7 +184,7 @@ export const blindIndex = (value: string): string => {
     return crypto.createHmac('sha256', k.key).update(normalise(value)).digest('hex');
 };
 
-/** Hashes under EVERY blind key (current first) — query with `$in` so lookups keep working mid-rotation. */
+/** Hashes under EVERY blind key (current first), query with `$in` so lookups keep working mid-rotation. */
 export const blindIndexCandidates = (value: string): string[] => {
     const n = normalise(value);
     return [...new Set(blindKeys().map(k => crypto.createHmac('sha256', k.key).update(n).digest('hex')))];

@@ -13,7 +13,7 @@ export const createSseParser = () => {
       if (!line.startsWith('data: ')) continue;
       const payload = line.slice(6);
       if (payload.trim() === '[DONE]') { out.push({ done: true }); continue; }
-      try { out.push({ done: false, data: JSON.parse(payload) }); } catch { /* partial / malformed — ignore */ }
+      try { out.push({ done: false, data: JSON.parse(payload) }); } catch { /* partial / malformed, ignore */ }
     }
   };
 

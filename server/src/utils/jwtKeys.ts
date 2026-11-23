@@ -20,7 +20,7 @@ export const verifyJwt = (token: string): any => {
     try { return jwt.verify(token, s); }
     catch (e: any) {
       if (!firstErr) firstErr = e;
-      // an expired token is expired whatever the key — don't try the others
+      // an expired token is expired whatever the key, don't try the others
       if (e?.name === 'TokenExpiredError') throw e;
     }
   }

@@ -1,5 +1,5 @@
 /**
- * Material You (Material 3) dynamic colour for Aastha — ROADMAP Phase 5.
+ * Material You (Material 3) dynamic colour for Aastha, ROADMAP Phase 5.
  *
  * One seed colour → a full tonal palette (Google's TonalSpot algorithm, same as Android's Monet).
  * Seed sources (already wired in ThemeContext): the user's wallpaper → the AI "<color>" tag → a preset →
@@ -79,7 +79,7 @@ export const roleHex = (seedHex: string | null | undefined, role: MdRole, dark =
 };
 
 /**
- * Wallpaper → seed colour with Material's own algorithm (quantize + score — what Android's Monet does).
+ * Wallpaper → seed colour with Material's own algorithm (quantize + score, what Android's Monet does).
  * Runs entirely on the device: free, private, no AI call. Returns null if the image can't be read.
  */
 export const seedFromImage = async (src: string): Promise<string | null> => {

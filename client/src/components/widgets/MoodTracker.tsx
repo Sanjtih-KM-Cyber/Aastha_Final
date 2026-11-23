@@ -16,7 +16,7 @@ import { Plus } from 'lucide-react';
 
 type MoodItem = { emoji: string; label: string; score: number; color: string; customId?: string };
 
-/** Server: GET /data/moods/insights — 7-day averages + at most one honest pattern (7.4) */
+/** Server: GET /data/moods/insights, 7-day averages + at most one honest pattern (7.4) */
 interface MoodInsights { week: { day: string; label: string; score: number | null }[]; insight: string | null; daysLogged28: number; note: string }
 
 interface MoodTrackerProps {
@@ -59,7 +59,7 @@ const MOODS = [
 /**
  * Tab content wrapper. MUST live at module level: it used to be defined inside MoodTracker, so every
  * re-render (history/insights/custom moods loading, logging a mood) created a new component type and React
- * tore down + rebuilt the whole tab — the "keeps refreshing" bug and the lag on Trends.
+ * tore down + rebuilt the whole tab, the "keeps refreshing" bug and the lag on Trends.
  */
 const TransitionWrapper: React.FC<{ children: React.ReactNode; className?: string; lite?: boolean }> = ({ children, className, lite }) => {
   if (lite) return <div className={className}>{children}</div>;
@@ -94,7 +94,7 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
       setCustomMoods(prev => [...prev, r.data]);
       setShowAddMood(false);
       setActiveTab('log');
-      toast.success(`${r.data.emoji} ${r.data.label} added — tap it to log`);
+      toast.success(`${r.data.emoji} ${r.data.label} added, tap it to log`);
       return null;
     } catch (e: any) {
       return e?.response?.data?.message || 'Could not save. Please try again.';
@@ -276,7 +276,7 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
     >
       <div className="flex flex-col h-full w-full font-sans px-3 pb-3 gap-3">
 
-        {/* HERO — tonal primary container (content layer) */}
+        {/* HERO, tonal primary container (content layer) */}
         <div className="shrink-0 rounded-[28px] bg-md-primary-container text-md-on-primary-container px-5 py-5 min-h-[148px] flex flex-col justify-center relative overflow-hidden">
           <div aria-hidden className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-md-primary/20" />
           <AnimatePresence mode={isLowPowerMode ? undefined : 'wait'}>
@@ -394,8 +394,8 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
                     </div>
                     <p className="mt-2 text-xs text-md-on-surface leading-relaxed">
                       {insights.insight || (insights.daysLogged28 < 6
-                        ? 'Log your mood on a few more days and a pattern may show up here — no pressure.'
-                        : 'No clear pattern yet — your week looks fairly steady.')}
+                        ? 'Log your mood on a few more days and a pattern may show up here, no pressure.'
+                        : 'No clear pattern yet, your week looks fairly steady.')}
                     </p>
                     <p className="mt-1 text-[10px] text-md-on-surface-variant">{insights.note}</p>
                   </div>

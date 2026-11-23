@@ -7,7 +7,7 @@ interface NavbarProps {
   onToggleTheme?: () => void;
 }
 
-/** Floating Liquid Glass navigation pill (control layer) — same language as the app. */
+/** Floating Liquid Glass navigation pill (control layer), same language as the app. */
 export const Navbar: React.FC<NavbarProps> = ({ onLogin, isLight, onToggleTheme }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -40,7 +40,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onLogin, isLight, onToggleTheme 
           <button
             className="flex items-center gap-2 h-10 pl-1 pr-3 rounded-full hover:bg-md-on-surface/[0.06]"
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            aria-label="Aastha — back to top"
+            aria-label="Aastha, back to top"
           >
             <img src="/logo.png" alt="" className="w-8 h-8 rounded-[10px] object-cover" />
             <span className="font-serif text-xl text-md-on-surface">Aastha</span>

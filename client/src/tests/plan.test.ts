@@ -3,7 +3,7 @@ import { planLabel } from '../utils/plan';
 
 const now = new Date('2026-11-22T10:00:00+05:30');
 
-describe('credits pill label (7.1 — was "16 Premium" on Free)', () => {
+describe('credits pill label (7.1, was "16 Premium" on Free)', () => {
   it('free plan shows messages left today', () => {
     expect(planLabel({}, 16, now)).toMatchObject({ kind: 'free', text: '16 messages left', short: '16 left' });
     expect(planLabel({}, 1, now).text).toBe('1 message left');

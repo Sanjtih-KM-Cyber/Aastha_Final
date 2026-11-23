@@ -105,6 +105,7 @@
 49n. [ ] Forgot password → set a new one → the sign-in form is already filled; tap Enter Sanctuary. Diary → forgot diary password → after reset the unlock box is filled.
 49o. [ ] New account on the **phone**: tour = welcome → message box → animated gestures → bottom tabs → headphones → done; the card never covers what it points at; "Skip tour" works. On **PC**: welcome → sidebar → message box → headphones → Settings → done, each card next to its target.
 49p. [ ] **APK:** Settings → Security → turn on **Lock Aastha** (fingerprint check once). Close and reopen the app (or send it to the background past "Lock after") → the lock screen shows and waits; tap the fingerprint button → ONE fingerprint sheet, unlocks on the first good touch (a smudged touch lets you retry in the same sheet; phone PIN works too). Leave for longer than "Lock after" → locked; quick switch away and back → not locked. Wrong password on the lock screen → "didn't match", you stay signed in. Signing in with your password → no extra lock.
+49q. [ ] Chat like a friend would for 10 messages ("cringe", "idk", "bore ho raha hai", good news, a dry "ok"): short, opinionated replies, no "No pressure 😊 / I'm all ears / Haha, okay, noted!", max one emoji, **no em dashes**. Then share something heavy ("my exam went really badly and I feel like a failure") → a warm, longer, specific reply (not cut off).
 49. [ ] Settings → Data & Privacy → Export: name, date of birth, city, avatar come out readable.
 
 ## 16. Crash reporting (only if `SENTRY_DSN` / `VITE_SENTRY_DSN` are set)
