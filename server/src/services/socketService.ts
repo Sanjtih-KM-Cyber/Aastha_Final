@@ -1,6 +1,8 @@
 import { Server } from 'http';
+import { verifyJwt } from '../utils/jwtKeys';
 import { WebSocketServer, WebSocket } from 'ws';
 import jwt from 'jsonwebtoken';
+import User from '../models/User';
 
 let wss: WebSocketServer | null = null;
 const clients = new Map<string, Set<WebSocket>>();
@@ -18,7 +20,7 @@ export const init = (server: Server) => {
             }
         }, 5000);
 
-        ws.on('message', (message) => {
+        ws.on('message', async (message) => {
             try {
                 const data = JSON.parse(message.toString());
 
@@ -26,11 +28,17 @@ export const init = (server: Server) => {
                 if (!isAuthenticated) {
                     if (data.type === 'AUTH' && data.token && data.userId) {
                         try {
-                            const secret = process.env.JWT_SECRET as string;
-                            const decoded = jwt.verify(data.token, secret) as any;
+                            const decoded = verifyJwt(data.token) as any; // current or previous JWT secret
 
-                            if (decoded.id !== data.userId) {
+                            if (decoded.purpose || decoded.id !== data.userId) {
                                 ws.close(4003, 'Forbidden: ID Mismatch');
+                                return;
+                            }
+
+                            // Same revocation rule as HTTP `protect`
+                            const owner = await User.findById(decoded.id).select('tokenVersion').lean();
+                            if (!owner || (decoded.tv ?? 0) !== ((owner as any).tokenVersion ?? 0)) {
+                                ws.close(4001, 'Invalid Token');
                                 return;
                             }
 

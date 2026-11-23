@@ -1,7 +1,39 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useSync } from './SyncContext';
+import { MotionConfig } from 'framer-motion';
+import { applyMaterialTheme, DEFAULT_SEED, seedFromImage } from '../design/materialTheme';
+
+/** Converts any CSS colour ("blue", "rgb(...)", "#abc") to #rrggbb for the Material seed. */
+const normalizeToHex = (color: string): string => {
+  try {
+    const ctx = document.createElement('canvas').getContext('2d');
+    if (!ctx) return DEFAULT_SEED;
+    ctx.fillStyle = '#000';
+    ctx.fillStyle = color;
+    const v = String(ctx.fillStyle);
+    return /^#[0-9a-f]{6}$/i.test(v) ? v : DEFAULT_SEED;
+  } catch {
+    return DEFAULT_SEED;
+  }
+};
+
+/**
+ * Auto lite mode (P3): small screens, low-memory / low-core devices, Data Saver, or the OS
+ * "reduce motion" preference. The user can still override it in Settings.
+ */
+const detectLowEndDevice = (): boolean => {
+  try {
+    const nav: any = navigator;
+    if (window.innerWidth < 768) return true;
+    if (typeof nav.deviceMemory === 'number' && nav.deviceMemory <= 4) return true;
+    if (typeof nav.hardwareConcurrency === 'number' && nav.hardwareConcurrency <= 4) return true;
+    if (nav.connection?.saveData) return true;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return true;
+  } catch { /* ignore */ }
+  return false;
+};
 
 export interface Theme {
   id: string;
@@ -22,6 +54,7 @@ interface ThemeContextType {
 }
 
 const defaultThemes: Record<string, Theme> = {
+  lotus: { id: 'lotus', name: 'Lotus', primaryColor: '#8B7CF6', accentGlow: 'shadow-violet-500/50', gradient: 'from-violet-400 to-fuchsia-400' },
   aurora: { id: 'aurora', name: 'Aurora', primaryColor: '#2dd4bf', accentGlow: 'shadow-teal-500/50', gradient: 'from-teal-400 to-violet-500' },
   sunset: { id: 'sunset', name: 'Sunset', primaryColor: '#fb7185', accentGlow: 'shadow-rose-500/50', gradient: 'from-orange-400 to-rose-500' },
   ocean: { id: 'ocean', name: 'Ocean', primaryColor: '#38bdf8', accentGlow: 'shadow-sky-500/50', gradient: 'from-cyan-400 to-blue-500' },
@@ -41,8 +74,9 @@ const isValidColor = (color: string | null | undefined): boolean => {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth() as any;
   const { emit } = useSync();
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('user_theme_id');
@@ -54,7 +88,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     
     // Fallback to Aurora if saved data is corrupt
-    return defaultThemes[saved?.toLowerCase() || 'aurora'] || defaultThemes.aurora;
+    return defaultThemes[saved?.toLowerCase() || 'lotus'] || defaultThemes.lotus;
   });
 
   const [wallpaper, setWallpaperState] = useState<string | null>(() => {
@@ -68,9 +102,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (saved !== null) {
           return saved === 'true';
       }
-      // Default to TRUE (Lite Mode) on mobile (< 768px)
-      return window.innerWidth < 768;
+      return detectLowEndDevice();
   });
+
+  // Apply lite mode GLOBALLY (P3): one CSS class turns off every backdrop blur / looping animation,
+  // including the many components that don't read isLowPowerMode themselves.
+  useEffect(() => {
+      document.documentElement.classList.toggle('lite', isLowPowerMode);
+  }, [isLowPowerMode]);
 
   useEffect(() => {
     if (user) {
@@ -95,6 +134,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // ✅ FIX: Ensure CSS variable is never invalid
     const safeColor = isValidColor(currentTheme.primaryColor) ? currentTheme.primaryColor : '#2dd4bf';
     document.documentElement.style.setProperty('--primary-color', safeColor);
+    // Material You: derive the whole tonal palette (surfaces, containers, outlines) from the seed
+    applyMaterialTheme(normalizeToHex(safeColor));
     
     localStorage.setItem('user_theme_id', currentTheme.id);
     if (currentTheme.id === 'custom') {
@@ -114,30 +155,41 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     if (!fromSync && user) {
         emit('THEME_UPDATE', { theme: themeId });
+        saveThemeToAccount(themeId);
     }
   };
+
+  /** Saved on the account (debounced — the colour wheel fires many changes while dragging) so every device matches. */
+  const saveThemeToAccount = (themeId: string) => {
+    const value = themeId.startsWith('#') ? normalizeToHex(themeId).toLowerCase() : themeId.toLowerCase();
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      updateUser?.({ themeColor: value });
+      api.put('/users/preferences', { themeColor: value }).catch(() => { /* stays on this device; retried next change */ });
+    }, 700);
+  };
+
+  // The account's colour wins on sign-in / when changed on another device. An account with none adopts this device's.
+  const accountColor = (user as any)?.themeColor as string | null | undefined;
+  useEffect(() => {
+    if (!user) return;
+    const local = currentTheme.id === 'custom' ? normalizeToHex(currentTheme.primaryColor).toLowerCase() : currentTheme.id;
+    if (!accountColor) { saveThemeToAccount(local); return; }
+    if (accountColor !== local) setTheme(accountColor, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountColor, !!user]);
 
   const setLowPowerMode = (enabled: boolean) => {
       setIsLowPowerMode(enabled);
       localStorage.setItem('lite-mode-enabled', String(enabled));
   };
 
+  // Wallpaper → Material You seed, computed ON THE DEVICE with Material's own algorithm.
+  // (The old server endpoint always returned the same violet, so wallpapers never changed the theme.)
   const extractThemeFromImage = async (base64Image: string) => {
-    if (!user) {
-        fallbackLocalExtraction(base64Image);
-        return;
-    }
-    try {
-      const res = await api.post('/ai/theme', { image: base64Image });
-      const { primaryColor } = res.data || {};
-      if (isValidColor(primaryColor)) {
-        setTheme(primaryColor);
-      } else {
-        fallbackLocalExtraction(base64Image);
-      }
-    } catch (error: any) {
-      fallbackLocalExtraction(base64Image);
-    }
+    const seed = await seedFromImage(base64Image);
+    if (seed && isValidColor(seed)) setTheme(seed);
+    else fallbackLocalExtraction(base64Image);
   };
 
   const fallbackLocalExtraction = (imageSrc: string) => {
@@ -198,7 +250,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const resetTheme = () => {
-    setCurrentTheme(defaultThemes.aurora);
+    setCurrentTheme(defaultThemes.lotus);
     setWallpaperState(null);
     localStorage.removeItem('user_theme_id');
     localStorage.removeItem('user_custom_theme_color');
@@ -208,7 +260,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <ThemeContext.Provider value={{ currentTheme, wallpaper, isLowPowerMode, setTheme, setWallpaper, setLowPowerMode, resetTheme }}>
-      {children}
+      {/* Lite mode: framer-motion skips transform/loop animations; otherwise follow the OS "reduce motion" setting */}
+      <MotionConfig reducedMotion={isLowPowerMode ? 'always' : 'user'}>
+        {children}
+      </MotionConfig>
     </ThemeContext.Provider>
   );
 };

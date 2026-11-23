@@ -107,12 +107,12 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
 
     if (isLocked) {
         return (
-            <div className="fixed inset-0 z-50 bg-midnight flex flex-col items-center justify-center text-white">
-                <div className="w-20 h-20 rounded-full bg-violet-600/20 flex items-center justify-center animate-pulse mb-6">
+            <div className="fixed inset-0 z-50 bg-md-surface flex flex-col items-center justify-center text-md-on-surface px-6">
+                <div className="w-20 h-20 rounded-[28px] bg-md-primary-container text-md-on-primary-container flex items-center justify-center mb-6">
                     <span className="text-4xl">🔒</span>
                 </div>
-                <h2 className="text-2xl font-bold mb-2">Sanctuary Locked</h2>
-                <p className="text-white/50 mb-8">Authentication required</p>
+                <h2 className="font-serif text-3xl mb-2">Sanctuary locked</h2>
+                <p className="text-md-on-surface-variant mb-8">Authentication required</p>
 
                 <div className="flex flex-col gap-3">
                     <button
@@ -120,7 +120,7 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
                             const success = await promptBiometrics();
                             setIsLocked(!success);
                         }}
-                        className="px-8 py-3 bg-violet-600 rounded-full font-bold hover:bg-violet-700 transition-colors"
+                        className="h-12 px-8 bg-md-primary text-md-on-primary rounded-full font-semibold hover:brightness-110 transition"
                     >
                         Try Again
                     </button>
@@ -135,7 +135,7 @@ export const BiometricGuard: React.FC<BiometricGuardProps> = ({ children }) => {
                             // Force a hard reload to clear any stuck native plugin state
                             window.location.replace('/login');
                         }}
-                        className="text-sm text-white/40 hover:text-white underline mt-4"
+                        className="text-sm text-md-on-surface-variant/80 hover:text-md-on-surface underline mt-4"
                     >
                         {isLoggingOut ? "Securing..." : "Use Password (Logout)"}
                     </button>

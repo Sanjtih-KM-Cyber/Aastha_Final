@@ -1,11 +1,15 @@
 import api from './api';
 
+import { createOfflineQueue, isRetryable } from './offlineQueue';
+
 export interface DiaryEntryDTO {
   _id?: string;
   title: string;
   content: string;
   tags?: string[];
   createdAt?: string;
+  entryDate?: string;
+  moodKeywords?: string;
 }
 
 export interface MoodEntryDTO {
@@ -15,62 +19,54 @@ export interface MoodEntryDTO {
   timestamp?: string;
 }
 
+type DiaryPayload = { title: string; content: string; tags?: string[]; date?: string; moodKeywords?: string };
+
 const OFFLINE_MOOD_KEY = 'offline_mood_queue';
 const OFFLINE_DIARY_KEY = 'offline_diary_queue';
+
+// One queued version per diary day; moods keyed by their timestamp (7.1 — no more retry storm)
+const diaryQueue = createOfflineQueue<DiaryPayload>(OFFLINE_DIARY_KEY, {
+  send: (p) => api.post('/data/diary', p),
+});
+const moodQueue = createOfflineQueue<MoodEntryDTO>(OFFLINE_MOOD_KEY, {
+  send: (m) => api.post('/data/moods', { mood: m.mood, score: m.score, timestamp: m.timestamp }),
+  onDrained: () => { try { window.dispatchEvent(new Event('mood-synced')); } catch { /* ignore */ } },
+});
+const diaryKey = (p: DiaryPayload) => (p.date || '').slice(0, 10) || 'undated';
 
 export const userService = {
   // --- Diary ---
   async getDiaryEntries(): Promise<DiaryEntryDTO[]> {
     const res = await api.get('/data/diary');
-    const serverEntries = res.data;
-
-    // MERGE OFFLINE ENTRIES
-    try {
-        const queueRaw = localStorage.getItem(OFFLINE_DIARY_KEY);
-        if (queueRaw) {
-            const queue = JSON.parse(queueRaw);
-            const offlineEntries = queue.map((q: any) => ({
-                _id: q.tempId || `temp-${Date.now()}`,
-                title: q.title,
-                content: q.content,
-                tags: q.tags,
-                createdAt: q.date, // Use date as createdAt for sorting
-                entryDate: q.date
-            }));
-            // Return combined (Server + Offline)
-            return [...serverEntries, ...offlineEntries];
-        }
-    } catch (e) {
-        console.error("Error merging offline diary", e);
-    }
-
-    return serverEntries;
+    const serverEntries: DiaryEntryDTO[] = res.data;
+    // Unsynced local versions win over the server copy of the same day
+    const offline: DiaryEntryDTO[] = diaryQueue.items().map((q) => ({
+      _id: `temp-${q.key}`,
+      title: q.payload.title,
+      content: q.payload.content,
+      tags: q.payload.tags,
+      createdAt: q.payload.date,
+      entryDate: q.payload.date,
+    }));
+    return [...serverEntries, ...offline];
   },
 
-  async saveDiaryEntry(entry: { title: string; content: string; tags?: string[]; date?: string; moodKeywords?: string }): Promise<DiaryEntryDTO> {
+  async saveDiaryEntry(entry: DiaryPayload): Promise<DiaryEntryDTO> {
     const res = await api.post('/data/diary', entry);
     return res.data;
   },
 
-  async saveDiaryEntryWithRetry(entry: { title: string; content: string; tags?: string[]; date?: string; moodKeywords?: string }): Promise<DiaryEntryDTO> {
+  async saveDiaryEntryWithRetry(entry: DiaryPayload): Promise<DiaryEntryDTO> {
       try {
           const res = await api.post('/data/diary', entry);
+          diaryQueue.remove(diaryKey(entry)); // a newer version made it — drop any queued older one
           return res.data;
       } catch (error) {
-          console.warn("API Failed, saving diary offline", error);
-
-          // Create payload for queue
-          const tempId = `temp-${Date.now()}`;
-          const queuePayload = { ...entry, tempId };
-
-          // Save to Queue
-          const currentQueue = JSON.parse(localStorage.getItem(OFFLINE_DIARY_KEY) || '[]');
-          currentQueue.push(queuePayload);
-          localStorage.setItem(OFFLINE_DIARY_KEY, JSON.stringify(currentQueue));
-
-          // Return compatible DTO
+          if (!isRetryable(error)) throw error; // real rejection (400/401/403/413) — don't queue it forever
+          console.warn("Diary save failed, keeping it on this device until we can sync");
+          diaryQueue.enqueue(diaryKey(entry), entry);
           return {
-              _id: tempId,
+              _id: `temp-${diaryKey(entry)}`,
               title: entry.title,
               content: entry.content,
               tags: entry.tags,
@@ -80,31 +76,9 @@ export const userService = {
       }
   },
 
-  async syncOfflineDiary(): Promise<void> {
-      const queueRaw = localStorage.getItem(OFFLINE_DIARY_KEY);
-      if (!queueRaw) return;
-
-      const queue = JSON.parse(queueRaw);
-      if (queue.length === 0) return;
-
-      console.log(`Syncing ${queue.length} offline diary entries...`);
-      const failed: any[] = [];
-
-      for (const item of queue) {
-          try {
-              const { tempId, ...payload } = item;
-              await api.post('/data/diary', payload);
-          } catch (e) {
-              console.error("Sync failed for diary entry", item, e);
-              failed.push(item);
-          }
-      }
-
-      if (failed.length > 0) {
-          localStorage.setItem(OFFLINE_DIARY_KEY, JSON.stringify(failed));
-      } else {
-          localStorage.removeItem(OFFLINE_DIARY_KEY);
-      }
+  /** Safe to call often: single-flight + persisted backoff (30 s → 30 min). */
+  syncOfflineDiary(force = false): Promise<void> {
+      return diaryQueue.sync(force);
   },
 
   // --- Moods ---
@@ -122,70 +96,24 @@ export const userService = {
   // --- Offline Robustness ---
   async saveMoodWithRetry(mood: string, score: number): Promise<MoodEntryDTO> {
       try {
-          // Try Online First
           const res = await api.post('/data/moods', { mood, score });
           return res.data;
       } catch (error) {
-          console.warn("API Failed, saving mood offline", error);
-          // Create a temp object
-          const tempEntry: MoodEntryDTO = {
-              _id: `temp-${Date.now()}`,
-              mood,
-              score,
-              timestamp: new Date().toISOString()
-          };
-
-          // Save to LocalStorage Queue
-          const currentQueue = JSON.parse(localStorage.getItem(OFFLINE_MOOD_KEY) || '[]');
-          currentQueue.push(tempEntry);
-          localStorage.setItem(OFFLINE_MOOD_KEY, JSON.stringify(currentQueue));
-
-          // Return as if successful (Optimistic)
+          if (!isRetryable(error)) throw error;
+          const tempEntry: MoodEntryDTO = { _id: `temp-${Date.now()}`, mood, score, timestamp: new Date().toISOString() };
+          moodQueue.enqueue(tempEntry.timestamp!, tempEntry);
           return tempEntry;
       }
   },
 
-  async syncOfflineMoods(): Promise<void> {
-      const queueRaw = localStorage.getItem(OFFLINE_MOOD_KEY);
-      if (!queueRaw) return;
-
-      const queue: MoodEntryDTO[] = JSON.parse(queueRaw);
-      if (queue.length === 0) return;
-
-      console.log(`Syncing ${queue.length} offline moods...`);
-
-      const failed: MoodEntryDTO[] = [];
-
-      for (const entry of queue) {
-          try {
-              // We discard the temp ID and let server assign new one
-              // We must preserve the timestamp since we updated the backend to support it
-              await api.post('/data/moods', {
-                  mood: entry.mood,
-                  score: entry.score,
-                  timestamp: entry.timestamp
-              });
-          } catch (e) {
-              console.error("Sync failed for entry", entry, e);
-              failed.push(entry); // Keep it in queue
-          }
-      }
-
-      if (failed.length > 0) {
-          localStorage.setItem(OFFLINE_MOOD_KEY, JSON.stringify(failed));
-      } else {
-          localStorage.removeItem(OFFLINE_MOOD_KEY);
-          // SIGNAL UI TO REFRESH
-          window.dispatchEvent(new Event('mood-synced'));
-      }
+  syncOfflineMoods(force = false): Promise<void> {
+      return moodQueue.sync(force);
   },
 
   // Helper to merge Server + Offline for UI
   getCombinedMoodHistory(serverHistory: MoodEntryDTO[]): MoodEntryDTO[] {
-      const queueRaw = localStorage.getItem(OFFLINE_MOOD_KEY);
-      if (!queueRaw) return serverHistory;
-
-      const queue: MoodEntryDTO[] = JSON.parse(queueRaw);
+      const queue: MoodEntryDTO[] = moodQueue.items().map(i => i.payload);
+      if (!queue.length) return serverHistory;
       // Combine and Sort by timestamp
       const combined = [...serverHistory, ...queue];
       combined.sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime());

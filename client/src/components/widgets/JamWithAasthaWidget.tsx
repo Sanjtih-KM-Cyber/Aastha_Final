@@ -5,8 +5,10 @@ import { DraggableWindow } from '../layout/DraggableWindow';
 import { 
   Play, Pause, SkipForward, SkipBack, Repeat, Search, 
   Disc, Sparkles, ListMusic, X, Settings,
-  Music, Volume2, Volume1, VolumeX
+  Music, Volume2, Volume1, VolumeX, Check, Loader2
 } from 'lucide-react';
+import { Icons } from '../../design/icons';
+import { Button, IconButton, Chip } from '../../design/ui';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -653,16 +655,33 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       return () => window.removeEventListener('resize', check);
   }, []);
 
+  const progressNow = isDragging ? dragTime : currentTime;
+  const progressFill = { ['--fill' as any]: `${Math.min(100, (progressNow / (duration || 1)) * 100)}%` } as React.CSSProperties;
+  const volumeFill = { ['--fill' as any]: `${volume}%` } as React.CSSProperties;
+  const handlePlayPause = () => {
+      if (!playerRef.current) return;
+      // FORCE LOAD if the player is "unstarted"/"cued" (state -1 / 5)
+      const state = playerRef.current.getPlayerState ? playerRef.current.getPlayerState() : -1;
+      if (isPlaying) {
+          playerRef.current.pauseVideo();
+      } else if ((state === -1 || state === 5) && queue.length > 0) {
+          playerRef.current.loadVideoById(queue[currentIndex].id);
+          const savedTime = localStorage.getItem('jam_time');
+          if (savedTime) playerRef.current.seekTo(parseFloat(savedTime));
+      } else {
+          playerRef.current.playVideo();
+      }
+  };
+
   return (
-    <DraggableWindow 
-      isOpen={isOpen} onClose={onClose} title="Jam with Aastha"
-      initialWidth={360} initialHeight={620} defaultPosition={{ x: 800, y: 150 }}
+    <DraggableWindow
+      isOpen={isOpen} onClose={onClose} title="Music · Jam with Aastha"
+      initialWidth={380} initialHeight={660} defaultPosition={{ x: 800, y: 150 }}
       zIndex={zIndex || 10} onFocus={onFocus || (() => {})}
-      icon={Music}
-      color="#8B5CF6"
+      icon={Icons.music}
       minimizedContent={
-          <MinimizedPlayer 
-             isPlaying={isPlaying} 
+          <MinimizedPlayer
+             isPlaying={isPlaying}
              track={currentTrackData}
              onPlayPause={(e) => {
                 e.stopPropagation();
@@ -676,411 +695,207 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       }
       persistenceKey={persistenceKey}
     >
-      <div className="flex flex-col h-full w-full font-sans select-none relative">
-        
+      <div className="flex flex-col h-full w-full font-sans select-none relative px-3 pb-3 gap-3">
+
         {/* Hidden Player */}
         <div id="jam-player-frame" className="absolute pointer-events-none opacity-0" />
 
-        {/* --- CONFIGURATION MODAL --- */}
+        {/* --- CURATE SHEET --- */}
         <AnimatePresence>
             {showConfigModal && (
-                <motion.div 
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                    className="absolute inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col p-6"
+                <motion.div
+                    initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 24 }}
+                    transition={{ duration: 0.25, ease: [0.2, 0, 0, 1] }}
+                    className="absolute inset-x-2 bottom-2 top-0 z-50 rounded-[28px] bg-md-surface-container-high border border-md-outline-variant/30 shadow-2xl flex flex-col p-5"
+                    role="dialog" aria-label="Curate your vibe"
                 >
-                    <div className="w-full h-full flex flex-col">
-                        <div className="flex items-center justify-between mb-4 shrink-0">
-                            <h3 className="text-xl font-serif text-white">Curate Your Vibe</h3>
-                            <button onClick={() => setShowConfigModal(false)}><X className="text-white/50 hover:text-white"/></button>
-                        </div>
-                        
-                        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-6">
-                            {/* Languages */}
-                            <div>
-                                <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Languages (Multi-Select)</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {LANGUAGES.map(lang => (
-                                        <button
-                                            key={lang}
-                                            onClick={() => toggleSelection(selectedLanguages, lang, setSelectedLanguages)}
-                                            className={`
-                                                px-3 py-1.5 rounded-full text-xs font-medium transition-all border
-                                                ${selectedLanguages.includes(lang) 
-                                                    ? 'bg-white text-black border-white' 
-                                                    : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10'}
-                                            `}
-                                        >
-                                            {lang}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
+                    <div className="flex items-center justify-between mb-4 shrink-0">
+                        <h3 className="text-xl font-serif text-md-on-surface">Curate your vibe</h3>
+                        <IconButton label="Close" onClick={() => setShowConfigModal(false)}><X size={20} /></IconButton>
+                    </div>
 
-                            {/* Moods */}
-                            <div>
-                                <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Vibe Override (Multi-Select)</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {MOOD_TAGS.map(tag => (
-                                        <button
-                                            key={tag}
-                                            onClick={() => toggleSelection(selectedMoods, tag, setSelectedMoods)}
-                                            className={`
-                                                px-3 py-1.5 rounded-full text-xs font-medium transition-all border
-                                                ${selectedMoods.includes(tag) 
-                                                    ? 'bg-teal-500/20 text-teal-200 border-teal-500/50' 
-                                                    : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10'}
-                                            `}
-                                        >
-                                            {tag}
-                                        </button>
-                                    ))}
-                                </div>
+                    <div className="flex-1 overflow-y-auto scrollbar-hide space-y-5">
+                        {([
+                          { title: 'Languages', items: LANGUAGES, sel: selectedLanguages, set: setSelectedLanguages },
+                          { title: 'Vibe', items: MOOD_TAGS, sel: selectedMoods, set: setSelectedMoods },
+                          { title: 'Genre', items: GENRES, sel: selectedGenres, set: setSelectedGenres },
+                        ] as const).map((g) => (
+                          <div key={g.title}>
+                            <h4 className="text-sm font-medium text-md-primary mb-2 px-1">{g.title}</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {g.items.map((it: string) => (
+                                <Chip key={it} selected={(g.sel as string[]).includes(it)} onClick={() => toggleSelection(g.sel as any, it, g.set as any)}
+                                  icon={(g.sel as string[]).includes(it) ? <Check size={14} /> : undefined}>
+                                  {it}
+                                </Chip>
+                              ))}
                             </div>
+                          </div>
+                        ))}
 
-                            {/* Genres */}
-                            <div>
-                                <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Genre (Multi-Select)</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {GENRES.map(genre => (
-                                        <button
-                                            key={genre}
-                                            onClick={() => toggleSelection(selectedGenres, genre, setSelectedGenres)}
-                                            className={`
-                                                px-3 py-1.5 rounded-full text-xs font-medium transition-all border
-                                                ${selectedGenres.includes(genre)
-                                                    ? 'bg-purple-500/20 text-purple-200 border-purple-500/50'
-                                                    : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10'}
-                                            `}
-                                        >
-                                            {genre}
-                                        </button>
-                                    ))}
+                        <div>
+                            <h4 className="text-sm font-medium text-md-primary mb-2 px-1">Session length</h4>
+                            <div className="rounded-[20px] bg-md-surface-container p-4 flex justify-between items-center">
+                                <div>
+                                    <div className="text-sm text-md-on-surface">Minutes</div>
+                                    <div className="text-[11px] text-md-on-surface-variant">10 – 400</div>
                                 </div>
-                            </div>
-
-                             {/* Duration Slider Replaced by Stepper */}
-                            <div>
-                                <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Session Duration</h4>
-                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                                    <div className="flex justify-between items-center">
-                                        <div className="flex flex-col">
-                                            <div className="text-xs text-white/60 mb-1">Duration (min)</div>
-                                            <div className="text-[10px] text-white/30">10 - 400 min</div>
-                                        </div>
-                                        <Stepper 
-                                            value={targetDuration}
-                                            onChange={setTargetDuration}
-                                            min={10}
-                                            max={400}
-                                            step={10}
-                                        />
-                                    </div>
-                                </div>
+                                <Stepper value={targetDuration} onChange={setTargetDuration} min={10} max={400} step={10} />
                             </div>
                         </div>
+                    </div>
 
-                        <div className="mt-6 pt-4 border-t border-white/10 shrink-0">
-                            <button 
-                                onClick={() => generateVibePlaylist()}
-                                className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-white text-black hover:scale-[1.02] transition-transform"
-                            >
-                                <Sparkles size={16} className="text-amber-600" /> Generate Playlist
-                            </button>
-                            <p className="text-[10px] text-white/30 mt-3 text-center">
-                                Aastha will blend your chat context with these preferences.
-                            </p>
-                        </div>
+                    <div className="pt-4 shrink-0">
+                        <Button size="lg" className="w-full" onClick={() => generateVibePlaylist()} icon={<Sparkles size={18} />}>Make my playlist</Button>
+                        <p className="text-[11px] text-md-on-surface-variant mt-2 text-center">Aastha blends how you've been feeling with these picks.</p>
                     </div>
                 </motion.div>
             )}
         </AnimatePresence>
 
-        {/* --- TOP 55%: The Stage --- */}
-        <div 
-            className="h-[55%] relative flex flex-col items-center p-6 transition-colors duration-700 overflow-hidden"
-            style={{ background: `linear-gradient(180deg, ${currentTheme.primaryColor}40, #111827)` }}
-        >
-            {/* Input Bar */}
-            <div className="w-full relative z-20 mb-6 mt-8">
-                <form onSubmit={handleSearch} className="relative flex gap-2">
-                    <div className="relative flex-1">
-                        <input 
-                            value={query} onChange={e => setQuery(e.target.value)}
-                            placeholder="Search song..." 
-                            className="w-full bg-black/30 backdrop-blur-md border border-white/10 rounded-full px-4 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/30 transition-all pr-8"
-                        />
-                        <button
-                            type="submit" // Trigger Search on Click
-                            onClick={handleSearch}
-                            className="absolute right-3 top-2.5 text-white/30 hover:text-white transition-colors"
-                        >
-                            <Search size={14} />
-                        </button>
-                    </div>
-                    <button 
-                        type="button"
-                        onClick={handleGenerateClick}
-                        className="bg-white/10 hover:bg-white/20 border border-white/10 rounded-full px-3 flex items-center justify-center transition-all"
-                        title="Configure Vibe"
-                    >
-                        {isSearching ? <Sparkles className="animate-spin text-white" size={16} /> : <Settings size={16} style={{ color: currentTheme.primaryColor }} />}
-                    </button>
-                </form>
+        {/* --- SEARCH --- */}
+        <form onSubmit={handleSearch} className="shrink-0 flex gap-2">
+            <div className="relative flex-1">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-md-on-surface-variant pointer-events-none" />
+                <input
+                    value={query} onChange={e => setQuery(e.target.value)}
+                    placeholder="Search a song or artist"
+                    aria-label="Search songs"
+                    className="w-full h-12 rounded-full bg-md-surface-container-highest text-md-on-surface placeholder:text-md-on-surface-variant/70 pl-11 pr-4 text-sm border border-transparent focus:border-md-primary focus:outline-none"
+                />
             </div>
+            <IconButton variant="tonal" size="md" label="Curate a playlist" onClick={handleGenerateClick} className="!w-12 !h-12">
+                {isSearching ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+            </IconButton>
+        </form>
 
-            {/* Album Art Centerpiece (Updated Visuals) */}
-            <div className="relative flex-1 flex items-center justify-center w-full">
-                {isPlaying && (
-                    <motion.div 
-                        animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
-                        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                        className="absolute w-64 h-64 rounded-full blur-3xl"
-                        style={{ backgroundColor: currentTheme.primaryColor }}
-                    />
-                )}
+        {/* --- STAGE or QUEUE --- */}
+        <div className="flex-1 min-h-0 rounded-[28px] bg-md-surface-container overflow-hidden flex flex-col">
+          {showQueue ? (
+              <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+                   <div className="flex justify-between items-center mb-2 px-1">
+                      <h3 className="text-sm font-medium text-md-primary">Up next · {queue.length}</h3>
+                      <IconButton size="sm" label="Back to player" onClick={() => setShowQueue(false)}><X size={16}/></IconButton>
+                   </div>
+                   {queue.length === 0 ? (
+                       <div className="text-md-on-surface-variant text-center py-10 text-sm">Nothing queued yet — search or tap ✨.</div>
+                   ) : isMobile ? (
+                       <Reorder.Group axis="y" values={queue} onReorder={handleReorder} className="space-y-2">
+                           {queue.map((track, idx) => (
+                               <MobileQueueItem key={track.uuid} track={track} index={idx} isActive={currentIndex === idx}
+                                  onPlay={() => { setCurrentIndex(idx); loadAndPlay(track); }} onRemove={() => removeFromQueue(idx)} />
+                           ))}
+                       </Reorder.Group>
+                   ) : (
+                       <div className="space-y-2">
+                           {queue.map((track, idx) => (
+                               <DesktopQueueItem key={track.uuid} track={track} index={idx} isActive={currentIndex === idx}
+                                  onPlay={() => { setCurrentIndex(idx); loadAndPlay(track); }}
+                                  onMoveUp={() => moveTrack(idx, 'up')} onMoveDown={() => moveTrack(idx, 'down')}
+                                  onRemove={() => removeFromQueue(idx)} isFirst={idx === 0} isLast={idx === queue.length - 1} />
+                           ))}
+                       </div>
+                   )}
+              </div>
+          ) : (
+              <div className="flex-1 min-h-0 flex flex-col p-4 gap-3">
+                  {/* Artwork */}
+                  <div className="flex-1 min-h-0 flex items-center justify-center">
+                      <motion.div
+                          className="h-full max-h-60 aspect-square rounded-[28px] overflow-hidden relative bg-md-surface-container-highest shadow-lg"
+                          animate={{ scale: isPlaying ? 1 : 0.94 }}
+                          transition={{ duration: 0.4, ease: [0.2, 0, 0, 1] }}
+                      >
+                          {currentTrackData?.thumbnail ? (
+                              <img src={currentTrackData.thumbnail} className="w-full h-full object-cover" alt="" />
+                          ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-md-primary-container text-md-on-primary-container">
+                                  <Disc size={56} className="opacity-60" />
+                              </div>
+                          )}
+                      </motion.div>
+                  </div>
 
-                <motion.div
-                    className="w-56 h-56 rounded-full shadow-2xl flex items-center justify-center relative overflow-hidden z-10"
-                    animate={{ scale: isPlaying ? [1, 1.02, 1] : 1 }}
-                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                >
-                    {/* Background Blur of Art */}
-                     {currentTrackData?.thumbnail && (
-                        <div
-                            className="absolute inset-0 bg-cover bg-center blur-sm opacity-50 scale-110"
-                            style={{ backgroundImage: `url(${currentTrackData.thumbnail})` }}
-                        />
-                    )}
+                  {/* Track info */}
+                  <div className="shrink-0 flex items-end justify-between gap-3">
+                      <div className="min-w-0">
+                          <h3 className="text-md-on-surface font-semibold text-lg truncate">{currentTrackData?.title || 'Ready to jam'}</h3>
+                          <p className="text-md-on-surface-variant text-sm truncate">{currentTrackData?.artist || 'Search a song or ask Aastha'}</p>
+                      </div>
+                      {loopMode === 'custom' && (
+                          <span className="shrink-0 h-7 px-2.5 rounded-full bg-md-secondary-container text-md-on-secondary-container text-[11px] font-medium inline-flex items-center">Loop {currentLoopCount}/{loopTarget}</span>
+                      )}
+                  </div>
 
-                    {/* Actual Art */}
-                    <div className="w-full h-full rounded-full overflow-hidden border border-white/10 relative z-20">
-                        {currentTrackData?.thumbnail ? (
-                            <img src={currentTrackData.thumbnail} className="w-full h-full object-cover" alt="Art" />
-                        ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center">
-                                <Disc size={48} className="text-white/20" />
-                            </div>
-                        )}
-                    </div>
-                </motion.div>
-            </div>
+                  {/* Progress (scrub) */}
+                  <div className="shrink-0">
+                      <input
+                          type="range" min="0" max={duration || 100}
+                          value={progressNow}
+                          aria-label="Seek"
+                          onMouseDown={() => setIsDragging(true)}
+                          onTouchStart={() => setIsDragging(true)}
+                          onChange={(e) => setDragTime(parseFloat(e.target.value))}
+                          onMouseUp={(e) => { setIsDragging(false); if (playerRef.current) playerRef.current.seekTo(parseFloat(e.currentTarget.value)); }}
+                          onTouchEnd={() => { setIsDragging(false); if (playerRef.current) playerRef.current.seekTo(dragTime); }}
+                          className="m3-slider"
+                          style={progressFill}
+                      />
+                      <div className="flex justify-between text-[11px] text-md-on-surface-variant tabular-nums -mt-1">
+                          <span>{formatTime(progressNow)}</span>
+                          <span>{formatTime(duration)}</span>
+                      </div>
+                  </div>
+              </div>
+          )}
         </div>
 
-        {/* --- BOTTOM 45%: The Deck --- */}
-        <div className="h-[45%] bg-gray-900 p-6 flex flex-col justify-between relative z-10 overflow-hidden">
-            
-            {showQueue ? (
-                <div className="flex-1 overflow-y-auto pr-1 -mr-2 mb-4 custom-scrollbar">
-                     <div className="flex justify-between items-center mb-3 sticky top-0 bg-gray-900 z-10 pb-2 border-b border-white/5">
-                        <h3 className="text-white/60 text-xs font-bold uppercase tracking-widest">Queue ({queue.length})</h3>
-                        <button onClick={() => setShowQueue(false)} className="text-white/40 hover:text-white"><X size={14}/></button>
-                     </div>
-                     {queue.length === 0 ? (
-                         <div className="text-white/20 text-center py-8 text-xs italic">Queue is empty</div>
-                     ) : (
-                         // CONDITIONAL RENDERING BASED ON DEVICE
-                         isMobile ? (
-                             <Reorder.Group axis="y" values={queue} onReorder={handleReorder} className="space-y-2">
-                                 {queue.map((track, idx) => (
-                                     <MobileQueueItem
-                                        key={track.uuid}
-                                        track={track}
-                                        index={idx}
-                                        isActive={currentIndex === idx}
-                                        onPlay={() => { setCurrentIndex(idx); loadAndPlay(track); }}
-                                        onRemove={() => removeFromQueue(idx)}
-                                     />
-                                 ))}
-                             </Reorder.Group>
-                         ) : (
-                             <div className="space-y-2">
-                                 {queue.map((track, idx) => (
-                                     <DesktopQueueItem
-                                        key={track.uuid}
-                                        track={track}
-                                        index={idx}
-                                        isActive={currentIndex === idx}
-                                        onPlay={() => { setCurrentIndex(idx); loadAndPlay(track); }}
-                                        onMoveUp={() => moveTrack(idx, 'up')}
-                                        onMoveDown={() => moveTrack(idx, 'down')}
-                                        onRemove={() => removeFromQueue(idx)}
-                                        isFirst={idx === 0}
-                                        isLast={idx === queue.length - 1}
-                                     />
-                                 ))}
-                             </div>
-                         )
-                     )}
-                </div>
-            ) : (
-                <>
-                    {/* Track Info */}
-                    <div className="flex justify-between items-end mb-2">
-                        <div className="overflow-hidden">
-                            <h3 className="text-white font-bold text-lg truncate pr-4">
-                                {currentTrackData?.title || 'Ready to Jam'}
-                            </h3>
-                            <p className="text-white/40 text-xs font-medium truncate">
-                                {currentTrackData?.artist || 'Select a song or ask Aastha'}
-                            </p>
-                        </div>
-                        {loopMode === 'custom' && (
-                            <div className="text-[10px] text-white/30 font-mono text-right">
-                                Loop: <span style={{ color: currentTheme.primaryColor }}>{currentLoopCount}</span>/{loopTarget}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Progress Bar with Fluid Scrubbing */}
-                    <div className="mb-6 group">
-                        <div className="flex justify-between text-[10px] text-white/30 mb-1 font-mono group-hover:text-white/50 transition-colors">
-                            <span>{formatTime(isDragging ? dragTime : currentTime)}</span>
-                            <span>{formatTime(duration)}</span>
-                        </div>
-                        <div className="h-4 flex items-center relative">
-                            {/* Background Track */}
-                            <div className="absolute w-full h-1.5 bg-white/10 rounded-full overflow-hidden pointer-events-none">
-                                <div 
-                                    className="h-full" 
-                                    style={{ 
-                                        width: `${((isDragging ? dragTime : currentTime) / (duration || 1)) * 100}%`,
-                                        backgroundColor: currentTheme.primaryColor 
-                                    }}
-                                />
-                            </div>
-                            
-                            {/* Range Input for Smooth Scrubbing */}
-                            <input 
-                                type="range" 
-                                min="0" 
-                                max={duration || 100} 
-                                value={isDragging ? dragTime : currentTime}
-                                onMouseDown={() => setIsDragging(true)}
-                                onTouchStart={() => setIsDragging(true)}
-                                onChange={(e) => setDragTime(parseFloat(e.target.value))}
-                                onMouseUp={(e) => {
-                                    setIsDragging(false);
-                                    if (playerRef.current) playerRef.current.seekTo(parseFloat(e.currentTarget.value));
-                                }}
-                                onTouchEnd={(e) => {
-                                    setIsDragging(false);
-                                    if (playerRef.current) playerRef.current.seekTo(dragTime);
-                                }}
-                                className="w-full h-full opacity-0 cursor-pointer z-10"
-                            />
-
-                            {/* Visible Thumb (follows input value) */}
-                            <div 
-                                className="absolute w-3 h-3 bg-white rounded-full shadow-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"
-                                style={{ 
-                                    left: `calc(${((isDragging ? dragTime : currentTime) / (duration || 1)) * 100}% - 6px)` 
-                                }}
-                            />
-                        </div>
-                    </div>
-                </>
-            )}
-
-            <div className="flex items-center justify-between shrink-0">
-                {/* Loop Control */}
-                <div className="flex items-center gap-2">
-                    <button 
+        {/* --- TRANSPORT (Liquid Glass control bar) --- */}
+        <div className="shrink-0 glass rounded-[28px] px-3 py-2 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                    <button
                         onClick={toggleLoopMode}
-                        className={`p-2 rounded-lg transition-all ${loopMode !== 'off' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white'}`}
-                        title={`Loop: ${loopMode}`}
+                        aria-label={`Repeat: ${loopMode}`}
+                        title={`Repeat: ${loopMode}`}
+                        className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-colors ${loopMode !== 'off' ? 'bg-md-secondary-container text-md-on-secondary-container' : 'text-md-on-surface-variant hover:bg-md-on-surface/10'}`}
                     >
                         <Repeat size={18} />
-                        {loopMode === 'one' && <span className="absolute text-[8px] font-bold ml-[-6px] mt-[6px]">1</span>}
-                        {loopMode === 'custom' && <span className="absolute text-[8px] font-bold ml-[-6px] mt-[6px]">*</span>}
+                        {loopMode === 'one' && <span className="absolute bottom-1.5 right-1.5 text-[9px] font-bold">1</span>}
+                        {loopMode === 'custom' && <span className="absolute bottom-1.5 right-1.5 text-[9px] font-bold">✱</span>}
                     </button>
-                    {/* Custom Loop Input - Upgraded to Stepper */}
-                    {loopMode === 'custom' && (
-                         <div className="ml-2">
-                             <Stepper 
-                                value={loopTarget}
-                                onChange={setLoopTarget}
-                                min={2}
-                                max={50}
-                                step={1}
-                                compact={true}
-                             />
-                         </div>
-                    )}
+                    {loopMode === 'custom' && <Stepper value={loopTarget} onChange={setLoopTarget} min={2} max={50} step={1} compact={true} />}
                 </div>
 
-                {/* Playback Controls & Volume */}
-                <div className="flex items-center gap-4 relative">
-                    {/* Volume Control */}
-                    <div
-                        className="relative flex items-center"
-                        onMouseEnter={() => setShowVolume(true)}
-                        onMouseLeave={() => setShowVolume(false)}
+                <div className="flex items-center gap-1">
+                    <IconButton label="Previous" onClick={playPrev}><SkipBack size={22} /></IconButton>
+                    <button
+                        onClick={handlePlayPause}
+                        aria-label={isPlaying ? 'Pause' : 'Play'}
+                        className="w-14 h-14 rounded-[20px] bg-md-primary text-md-on-primary flex items-center justify-center active:scale-95 transition-transform shadow-md"
                     >
-                        <button className="text-white/40 hover:text-white transition-colors p-2">
-                            {volume === 0 ? <VolumeX size={18} /> : volume < 50 ? <Volume1 size={18} /> : <Volume2 size={18} />}
-                        </button>
-
-                        <AnimatePresence>
-                            {showVolume && (
-                                <motion.div
-                                    initial={{ opacity: 0, x: -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -10 }}
-                                    className="absolute left-full ml-2 bg-[#1F2937] rounded-full p-2 h-8 flex items-center border border-white/10 z-20 w-24"
-                                >
-                                    <input
-                                        type="range"
-                                        min="0" max="100"
-                                        value={volume}
-                                        onChange={(e) => setVolume(parseInt(e.target.value))}
-                                        className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
-                                    />
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-
-                    <button onClick={playPrev} className="text-white/40 hover:text-white transition-colors">
-                        <SkipBack size={24} />
+                        {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-0.5" />}
                     </button>
-                    <button 
-                        onClick={() => {
-                            if (!playerRef.current) return;
-
-                            // FORCE LOAD logic if state is "unstarted" (or sometimes -1/5)
-                            // If user clicked play but video isn't actually loaded/playing yet
-                            const state = playerRef.current.getPlayerState ? playerRef.current.getPlayerState() : -1;
-
-                            if (isPlaying) {
-                                playerRef.current.pauseVideo();
-                            } else {
-                                // If unstarted or cued, we might need to nudge it
-                                if ((state === -1 || state === 5) && queue.length > 0) {
-                                    playerRef.current.loadVideoById(queue[currentIndex].id);
-                                    // Restore time if saved
-                                    const savedTime = localStorage.getItem('jam_time');
-                                    if (savedTime) playerRef.current.seekTo(parseFloat(savedTime));
-                                } else {
-                                    playerRef.current.playVideo();
-                                }
-                            }
-                        }}
-                        className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)]"
-                    >
-                        {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
-                    </button>
-                    <button onClick={playNext} className="text-white/40 hover:text-white transition-colors">
-                        <SkipForward size={24} />
-                    </button>
+                    <IconButton label="Next" onClick={playNext}><SkipForward size={22} /></IconButton>
                 </div>
 
-                {/* Queue / Misc */}
-                <button onClick={() => setShowQueue(!showQueue)} className={`p-2 transition-colors relative ${showQueue ? 'text-white bg-white/10 rounded-lg' : 'text-white/30 hover:text-white'}`}>
+                <button
+                    onClick={() => setShowQueue(!showQueue)}
+                    aria-label="Queue"
+                    aria-pressed={showQueue}
+                    className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-colors ${showQueue ? 'bg-md-secondary-container text-md-on-secondary-container' : 'text-md-on-surface-variant hover:bg-md-on-surface/10'}`}
+                >
                     <ListMusic size={20} />
-                    {!showQueue && <span className="absolute -top-1 -right-1 bg-white/10 text-[9px] w-4 h-4 flex items-center justify-center rounded-full text-white/70">{queue.length}</span>}
+                    {!showQueue && queue.length > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-md-primary text-md-on-primary text-[10px] font-semibold flex items-center justify-center">{queue.length}</span>}
                 </button>
             </div>
-
+            <div className="flex items-center gap-2 px-1">
+                <button onClick={() => setVolume(volume === 0 ? 60 : 0)} aria-label={volume === 0 ? 'Unmute' : 'Mute'} className="text-md-on-surface-variant shrink-0">
+                    {volume === 0 ? <VolumeX size={16} /> : volume < 50 ? <Volume1 size={16} /> : <Volume2 size={16} />}
+                </button>
+                <input type="range" min="0" max="100" value={volume} aria-label="Volume"
+                    onChange={(e) => setVolume(parseInt(e.target.value))} className="m3-slider flex-1" style={volumeFill} />
+            </div>
         </div>
       </div>
     </DraggableWindow>

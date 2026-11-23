@@ -13,16 +13,21 @@ import { BiometricGuard } from './components/auth/BiometricGuard';
 import { ErrorBoundary } from './components/ErrorBoundary'; // Import ErrorBoundary
 import { Toaster } from 'react-hot-toast';
 import { App as CapacitorApp } from '@capacitor/app';
-import { LocalNotifications } from '@capacitor/local-notifications';
 import { scheduleGhostNotifications, clearGhostNotifications } from './services/offlineGhostService';
+import { notificationService } from './services/notificationService';
+import { LiquidGlassDefs } from './design/LiquidGlass';
+import { requestPermission as requestNotificationPermission } from './services/notifications';
 import { userService } from './services/userService';
 import { backgroundService } from './services/backgroundService';
+import { followUpCheckIns } from './services/followUpCheckIns';
 
 // Lazy Load Pages
 // Note: We use the default export from the new Landing.tsx
 const Landing = lazy(() => import('./pages/Landing'));
 // Removed Auth and VerifyOTPScreen as they are replaced by Login.tsx
 const Sanctuary = lazy(() => import('./pages/Sanctuary').then(module => ({ default: module.Sanctuary })));
+const PrivacyPolicyPage = lazy(() => import('./pages/Legal').then(m => ({ default: m.PrivacyPolicyPage })));
+const TermsPage = lazy(() => import('./pages/Legal').then(m => ({ default: m.TermsPage })));
 
 // Protected Route Wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -57,6 +62,7 @@ const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) 
 const AppRoutes = () => {
   return (
     <Suspense fallback={<LoadingFallback />}>
+      <LiquidGlassDefs />
       <Routes>
         {/* Public Routes - Wrapped to redirect if already auth */}
         <Route path="/" element={<PublicOnlyRoute><Landing /></PublicOnlyRoute>} />
@@ -76,6 +82,10 @@ const AppRoutes = () => {
           }
         />
 
+        {/* Legal (public — linked from sign-up, footer and Settings) */}
+        <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -89,6 +99,14 @@ const App: React.FC = () => {
   // Offline Ghost Logic & Data Sync
   React.useEffect(() => {
       let listener: any;
+      // Offline queues have their own backoff gate (services/offlineQueue.ts), so these calls are cheap no-ops
+      // while waiting; 'online' forces one immediate try because the network just came back.
+      const syncQueues = (force = false) => {
+          userService.syncOfflineMoods(force).catch(() => {});
+          userService.syncOfflineDiary(force).catch(() => {});
+          if (localStorage.getItem('userInfo')) followUpCheckIns.sync().catch(() => {}); // 7.4 check-ins (native only)
+      };
+      const onOnline = () => syncQueues(true);
 
       const initServices = async () => {
           try {
@@ -105,8 +123,7 @@ const App: React.FC = () => {
                       } else {
                           // Foreground: Clear ghosts & SYNC DATA
                           await clearGhostNotifications().catch(e => console.warn("Ghost clear failed", e));
-                          userService.syncOfflineMoods().catch(e => console.warn("Sync failed", e));
-                          userService.syncOfflineDiary().catch(e => console.warn("Diary sync failed", e));
+                          syncQueues();
                       }
                   } catch (innerError) {
                       console.warn("App state listener error", innerError);
@@ -115,32 +132,19 @@ const App: React.FC = () => {
 
               // 2. Initial Checks on Mount
               await clearGhostNotifications().catch(() => {});
-              userService.syncOfflineMoods().catch(() => {});
-              userService.syncOfflineDiary().catch(() => {});
+              syncQueues();
               backgroundService.init().catch(e => console.warn("Background init failed", e));
 
               // 3. Notification Setup (Channels & Permissions)
               try {
-                  await LocalNotifications.requestPermissions();
-                  await LocalNotifications.createChannel({
-                      id: 'pop_notifications',
-                      name: 'Aastha Alerts',
-                      description: 'Notifications for Timers and Music',
-                      importance: 5,
-                      visibility: 1,
-                      vibration: true,
-                      sound: 'default'
-                  });
-                  console.log('✅ Notification channel created');
+                  await requestNotificationPermission();
+                  await notificationService.init(); // channels + restore opted-in daily reminders
               } catch (e) {
-                  console.error('❌ Error creating channel:', e);
+                  console.error('❌ Notification setup failed:', e);
               }
 
               // 4. Web Online Listener (Fallback for non-Capacitor)
-              window.addEventListener('online', () => {
-                  userService.syncOfflineMoods().catch(() => {});
-                  userService.syncOfflineDiary().catch(() => {});
-              });
+              window.addEventListener('online', onOnline);
 
           } catch (e) {
               console.warn("Service init failed", e);
@@ -151,7 +155,7 @@ const App: React.FC = () => {
 
       return () => {
           if (listener) listener.remove();
-          window.removeEventListener('online', () => {});
+          window.removeEventListener('online', onOnline); // was an anonymous fn → never removed
       };
   }, []);
 

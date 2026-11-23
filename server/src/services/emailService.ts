@@ -13,7 +13,8 @@ const resend = new Resend(process.env.RESEND_API_KEY || 're_123456789');
  * Sender: Aastha Security <security@aasthaai.site>
  */
 export const sendOTPEmail = async (to: string, otp: string, subject: string = 'Your Verification Code - Aastha') => {
-  console.log(`[OTP-DEV] Generated OTP for ${to}: ${otp}`);
+  // Never log codes/emails in production (Render logs are not a secret store)
+  if (process.env.NODE_ENV !== 'production' && !process.env.RENDER) console.log(`[OTP-DEV] Generated OTP for ${to}: ${otp}`);
 
   if (!process.env.RESEND_API_KEY) {
       console.warn("[Email Service] No RESEND_API_KEY found. Email will NOT be sent. Use console log above.");

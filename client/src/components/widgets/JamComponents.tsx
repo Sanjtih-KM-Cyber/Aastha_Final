@@ -32,12 +32,12 @@ export const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max 
     };
 
     const containerClass = compact
-        ? "flex items-center bg-[#1F2937] rounded-lg border border-white/10 h-8 w-24 justify-between px-1"
-        : "flex items-center bg-[#1F2937] rounded-lg border border-white/10 h-10 w-[120px] justify-between px-1";
+        ? "flex items-center bg-[#1F2937] rounded-lg border border-md-outline-variant/40 h-8 w-24 justify-between px-1"
+        : "flex items-center bg-[#1F2937] rounded-lg border border-md-outline-variant/40 h-10 w-[120px] justify-between px-1";
 
     const btnClass = compact
-        ? "w-6 h-6 flex items-center justify-center text-white/50 hover:text-white disabled:opacity-30 disabled:hover:text-white/50 transition-colors"
-        : "w-8 h-8 flex items-center justify-center text-white/50 hover:text-white disabled:opacity-30 disabled:hover:text-white/50 transition-colors";
+        ? "w-6 h-6 flex items-center justify-center text-md-on-surface-variant hover:text-white disabled:opacity-30 disabled:hover:text-md-on-surface-variant transition-colors"
+        : "w-8 h-8 flex items-center justify-center text-md-on-surface-variant hover:text-white disabled:opacity-30 disabled:hover:text-md-on-surface-variant transition-colors";
 
     return (
         <div className={containerClass}>
@@ -49,7 +49,7 @@ export const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max 
                 <Minus size={compact ? 12 : 14} />
             </button>
 
-            <span className={`text-sm font-medium text-white font-mono min-w-[20px] text-center ${compact ? 'text-xs' : ''}`}>
+            <span className={`text-sm font-medium text-md-on-surface font-mono min-w-[20px] text-center ${compact ? 'text-xs' : ''}`}>
                 {value}
             </span>
 
@@ -79,7 +79,7 @@ export const MobileQueueItem = ({ track, index, isActive, onRemove, onPlay }: an
             layout="position"
         >
             <motion.div
-                className={`flex items-center gap-3 p-2 rounded-lg transition-colors bg-[#111827] border-b border-white/5 relative z-10`}
+                className={`flex items-center gap-3 p-2 rounded-lg transition-colors bg-[#111827] border-b border-md-outline-variant/30 relative z-10`}
                 drag="x"
                 dragConstraints={{ left: -100, right: 0 }}
                 dragElastic={0.1}
@@ -94,19 +94,19 @@ export const MobileQueueItem = ({ track, index, isActive, onRemove, onPlay }: an
                 {isActive ? (
                      <div className="w-1 h-6 bg-teal-400 rounded-full animate-pulse shrink-0"/>
                 ) : (
-                     <span className="w-4 text-[10px] text-white/30 text-center shrink-0">{index + 1}</span>
+                     <span className="w-4 text-[10px] text-md-on-surface-variant/70 text-center shrink-0">{index + 1}</span>
                 )}
 
                 {/* Track Info */}
                 <div className="flex-1 min-w-0" onClick={onPlay}>
-                    <div className={`text-xs truncate font-medium ${isActive ? 'text-white' : 'text-white/70'}`}>{track.title}</div>
-                    <div className="text-[10px] truncate text-white/40">{track.artist}</div>
+                    <div className={`text-xs truncate font-medium ${isActive ? 'text-md-on-surface' : 'text-md-on-surface-variant'}`}>{track.title}</div>
+                    <div className="text-[10px] truncate text-md-on-surface-variant/80">{track.artist}</div>
                 </div>
 
                 {/* Drag Handle (Right Side) */}
                 <div
                     onPointerDown={(e) => controls.start(e)}
-                    className="p-2 touch-none cursor-grab active:cursor-grabbing text-white/30 hover:text-white"
+                    className="p-2 touch-none cursor-grab active:cursor-grabbing text-md-on-surface-variant/70 hover:text-white"
                 >
                     <GripVertical size={16} />
                 </div>
@@ -123,22 +123,22 @@ export const MobileQueueItem = ({ track, index, isActive, onRemove, onPlay }: an
 // --- DESKTOP QUEUE ITEM (Arrows, Trash, No Drag) ---
 export const DesktopQueueItem = ({ track, index, isActive, onRemove, onPlay, onMoveUp, onMoveDown, isFirst, isLast }: any) => {
     return (
-        <div className={`group flex items-center gap-3 p-2 rounded-lg transition-colors ${isActive ? 'bg-white/10' : 'hover:bg-white/5'}`}>
+        <div className={`group flex items-center gap-3 p-2 rounded-lg transition-colors ${isActive ? 'bg-md-surface-container-highest' : 'hover:bg-md-on-surface/[0.06]'}`}>
              {isActive ? (
                  <div className="w-1 h-8 bg-teal-400 rounded-full animate-pulse shrink-0"/>
              ) : (
-                 <span className="w-4 text-[10px] text-white/30 text-center shrink-0">{index + 1}</span>
+                 <span className="w-4 text-[10px] text-md-on-surface-variant/70 text-center shrink-0">{index + 1}</span>
              )}
 
              <div className="flex-1 min-w-0 cursor-pointer" onClick={onPlay}>
-                 <div className={`text-xs truncate font-medium ${isActive ? 'text-white' : 'text-white/70'}`}>{track.title}</div>
-                 <div className="text-[10px] truncate text-white/40">{track.artist}</div>
+                 <div className={`text-xs truncate font-medium ${isActive ? 'text-md-on-surface' : 'text-md-on-surface-variant'}`}>{track.title}</div>
+                 <div className="text-[10px] truncate text-md-on-surface-variant/80">{track.artist}</div>
              </div>
 
              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                 <button onClick={onMoveUp} disabled={isFirst} className="p-1 text-white/30 hover:text-white disabled:opacity-0"><ArrowUp size={12}/></button>
-                 <button onClick={onMoveDown} disabled={isLast} className="p-1 text-white/30 hover:text-white disabled:opacity-0"><ArrowDown size={12}/></button>
-                 <button onClick={onRemove} className="p-1 text-white/30 hover:text-red-400"><Trash2 size={12}/></button>
+                 <button onClick={onMoveUp} disabled={isFirst} className="p-1 text-md-on-surface-variant/70 hover:text-white disabled:opacity-0"><ArrowUp size={12}/></button>
+                 <button onClick={onMoveDown} disabled={isLast} className="p-1 text-md-on-surface-variant/70 hover:text-white disabled:opacity-0"><ArrowDown size={12}/></button>
+                 <button onClick={onRemove} className="p-1 text-md-on-surface-variant/70 hover:text-red-400"><Trash2 size={12}/></button>
              </div>
          </div>
     );

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
+import { Icons, IconTile, TOOL_TONE } from '../../design/icons';
 
 interface WellnessHubProps {
   onToggleWidget: (widget: string) => void;
@@ -28,14 +29,14 @@ interface WellnessHubProps {
 }
 
 const WIDGETS = [
-  { id: 'diary', label: 'Diary', icon: Book, color: 'text-teal-300', barColor: 'bg-teal-400', glow: 'shadow-teal-500/20', from: 'from-teal-500/20', desc: 'Reflect on your day' },
-  { id: 'mood', label: 'Mood', icon: Smile, color: 'text-amber-300', barColor: 'bg-amber-400', glow: 'shadow-amber-500/20', from: 'from-amber-500/20', desc: 'Track your emotions' },
-  { id: 'lore', label: 'The Web', icon: Network, color: 'text-blue-300', barColor: 'bg-blue-400', glow: 'shadow-blue-500/20', from: 'from-blue-500/20', desc: 'Social Detective Board' },
-  { id: 'breathing', label: 'Breathing', icon: Wind, color: 'text-cyan-300', barColor: 'bg-cyan-400', glow: 'shadow-cyan-500/20', from: 'from-cyan-500/20', desc: 'Calm your mind' },
-  { id: 'jam', label: 'Music', icon: Music, color: 'text-violet-300', barColor: 'bg-violet-400', glow: 'shadow-violet-500/20', from: 'from-violet-500/20', desc: 'Listen together' },
-  { id: 'soundscape', label: 'Sounds', icon: Sliders, color: 'text-emerald-300', barColor: 'bg-emerald-400', glow: 'shadow-emerald-500/20', from: 'from-emerald-500/20', desc: 'Ambient noise' },
-  { id: 'pomodoro', label: 'Focus', icon: Clock, color: 'text-rose-300', barColor: 'bg-rose-400', glow: 'shadow-rose-500/20', from: 'from-rose-500/20', desc: 'Deep work timer' },
-  { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-300', barColor: 'bg-slate-400', glow: 'shadow-slate-500/20', from: 'from-slate-500/20', desc: 'Configure Aastha' },
+  { id: 'diary', label: 'Diary', icon: Icons.diary, desc: 'Reflect on your day' },
+  { id: 'mood', label: 'Mood', icon: Icons.mood, desc: 'Track how you feel' },
+  { id: 'lore', label: 'The Web', icon: Icons.web, desc: 'The people in your life' },
+  { id: 'breathing', label: 'Breathing', icon: Icons.breathing, desc: 'Calm your mind' },
+  { id: 'jam', label: 'Music', icon: Icons.music, desc: 'Listen together' },
+  { id: 'soundscape', label: 'Sounds', icon: Icons.sounds, desc: 'Ambient mixes' },
+  { id: 'pomodoro', label: 'Focus', icon: Icons.focus, desc: 'Deep work timer' },
+  { id: 'settings', label: 'Settings', icon: Icons.settings, desc: 'Make Aastha yours' },
 ];
 
 export const WellnessHub: React.FC<WellnessHubProps> = ({ 
@@ -114,6 +115,13 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
       }
   };
 
+  // Tell the chat how much room the sidebar takes (left margin 12 + width + 28 gap) so the chat stays centred in
+  // the remaining space — collapsed it is 80 px wide, not 280 (the chat used to keep a fixed 320 px gap).
+  useEffect(() => {
+    document.documentElement.style.setProperty('--sidebar-space', `${12 + (isCollapsed ? 80 : 280) + 28}px`);
+    return () => { document.documentElement.style.removeProperty('--sidebar-space'); };
+  }, [isCollapsed]);
+
   const sidebarVariants = {
     closed: { x: "-100%", opacity: 0 },
     open: { x: 0, opacity: 1 },
@@ -132,7 +140,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.3 }}
                         onClick={onCloseMobile}
-                        className={`absolute inset-0 ${isLowPowerMode ? 'bg-black/90' : 'bg-black/80 backdrop-blur-md'}`}
+                        className="absolute inset-0 bg-md-surface/95"
                     />
 
                     <motion.div
@@ -147,18 +155,19 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                 <button
                                     key={w.id}
                                     onClick={() => jumpToWidget(i)}
-                                    className="flex-1 h-1.5 rounded-full overflow-hidden bg-white/10 transition-all duration-300 relative group"
+                                    aria-label={`Go to ${w.label}`}
+                                    className="flex-1 h-1.5 rounded-full overflow-hidden bg-md-surface-container-highest transition-all duration-300 relative group"
                                 >
                                     <div
-                                        className={`absolute inset-0 transition-all duration-500 ${activeIndex === i ? w.barColor : 'opacity-0'}`}
+                                        className={`absolute inset-0 transition-all duration-500 bg-md-primary ${activeIndex === i ? '' : 'opacity-0'}`}
                                     />
                                 </button>
                             ))}
                         </div>
 
-                        <div className="px-8 mb-4 flex justify-between items-center text-white">
-                            <h2 className="text-sm font-medium opacity-50 uppercase tracking-widest">Your Sanctuary</h2>
-                            <button onClick={onCloseMobile} className="p-2 -mr-2 text-white/50 hover:text-white rounded-full">
+                        <div className="px-8 mb-4 flex justify-between items-center">
+                            <h2 className="text-sm font-medium tracking-wide text-md-primary">Your Sanctuary</h2>
+                            <button onClick={onCloseMobile} aria-label="Close" className="w-10 h-10 -mr-2 flex items-center justify-center text-md-on-surface-variant hover:bg-md-on-surface/10 rounded-full">
                                 <X size={20} />
                             </button>
                         </div>
@@ -173,7 +182,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                 return (
                                     <div
                                         key={widget.id}
-                                        ref={(el) => (itemsRef.current[i] = el)}
+                                        ref={(el) => { itemsRef.current[i] = el; }}
                                         className="w-full shrink-0 snap-center px-2 flex items-center justify-center h-full"
                                         style={{ scrollSnapStop: 'always' }}
                                     >
@@ -183,11 +192,7 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                                 w-full h-full max-h-[60vh] relative overflow-hidden rounded-[2.5rem]
                                                 flex flex-col items-center justify-center
                                                 transition-all duration-500 ease-out
-                                                ${isLowPowerMode
-                                                    ? 'bg-[#151515] border-white/5' // Simplified solid bg for Lite Mode
-                                                    : 'bg-[#151515]/80 backdrop-blur-3xl border-white/10 shadow-2xl'
-                                                }
-                                                border
+                                                bg-md-surface-container-high border border-md-outline-variant/30 shadow-xl
                                                 ${isActive
                                                     ? 'scale-100 opacity-100 grayscale-0'
                                                     : 'scale-90 opacity-50 grayscale-[30%]'}
@@ -198,28 +203,20 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
                                             }}
                                         >
                                             {/* Static gradient for Lite Mode, Complex for High Quality */}
-                                            {isLowPowerMode ? (
-                                                <div className={`absolute inset-0 bg-gradient-to-br ${widget.from} to-transparent opacity-10`} />
-                                            ) : (
-                                                <>
-                                                    <div className={`absolute inset-0 bg-gradient-to-br ${widget.from} to-transparent opacity-20`} />
-                                                    <div className={`absolute top-0 inset-x-0 h-32 bg-gradient-to-b ${widget.from} to-transparent opacity-10`} />
-                                                </>
-                                            )}
+                                            <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-md-primary/15 to-transparent" />
 
                                             <div className={`
-                                                w-24 h-24 rounded-full flex items-center justify-center mb-8
-                                                bg-black/20 shadow-inner border border-white/5 relative z-10
+                                                w-24 h-24 rounded-[32px] flex items-center justify-center mb-8
+                                                bg-md-primary-container text-md-on-primary-container relative z-10
                                             `}>
-                                                {!isLowPowerMode && <div className={`absolute inset-0 rounded-full opacity-20 ${widget.barColor} blur-xl animate-pulse`} />}
-                                                <widget.icon size={48} className={widget.color} />
+                                                <widget.icon size={52} />
                                             </div>
 
-                                            <h3 className="text-3xl font-serif text-white mb-3 relative z-10">{widget.label}</h3>
-                                            <p className="text-white/50 text-sm max-w-[200px] text-center leading-relaxed relative z-10">{widget.desc}</p>
+                                            <h3 className="text-3xl font-serif text-md-on-surface mb-3 relative z-10">{widget.label}</h3>
+                                            <p className="text-md-on-surface-variant text-sm max-w-[220px] text-center leading-relaxed relative z-10">{widget.desc}</p>
 
-                                            <div className="mt-10 px-8 py-3 rounded-full bg-white/10 border border-white/10 text-white font-medium text-sm hover:bg-white/20 transition-colors relative z-10">
-                                                Tap to Open
+                                            <div className="mt-10 px-8 h-12 inline-flex items-center rounded-full bg-md-primary text-md-on-primary font-medium text-sm relative z-10">
+                                                Open
                                             </div>
 
                                         </div>
@@ -234,151 +231,114 @@ export const WellnessHub: React.FC<WellnessHubProps> = ({
       );
   }
 
+  // Desktop: a floating Liquid Glass navigation panel (control layer) with Material 3 navigation-drawer items.
+  const firstName = user?.name?.split(' ')[0] || 'Friend';
   return (
     <motion.aside
       ref={sidebarRef}
       variants={sidebarVariants}
       initial="closed"
       animate="desktop"
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className={`
-        fixed top-0 bottom-0 left-0 z-20
-        h-full
-        bg-black/40 backdrop-blur-2xl border-r border-white/10
-        flex flex-col
-        shadow-2xl
-        overflow-hidden
-        md:flex hidden
-      `}
+      transition={{ duration: 0.28, ease: [0.2, 0, 0, 1] }}
+      aria-label="Sanctuary navigation"
+      className="glass fixed top-3 bottom-3 left-3 z-20 rounded-[28px] flex-col overflow-hidden md:flex hidden"
     >
-        <div className={`p-6 pb-4 transition-all duration-300 flex flex-col ${isCollapsed ? 'items-center' : ''}`}>
-          <div className={`flex items-center gap-3 mb-6 ${isCollapsed ? 'justify-center' : ''}`}>
-            <div 
-              className="w-10 h-10 min-w-[40px] rounded-lg flex items-center justify-center shadow-lg"
-              style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #111827)` }}
-            >
-              <Sparkles size={20} className="text-white" />
-            </div>
+        <div className={`px-4 pt-5 pb-3 flex flex-col ${isCollapsed ? 'items-center px-3' : ''}`}>
+          <div className={`flex items-center gap-3 mb-5 ${isCollapsed ? 'justify-center' : 'px-1'}`}>
+            <IconTile icon={Icons.relax} tone="primary" active />
             {!isCollapsed && (
-               <motion.h1 initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="font-serif text-xl font-bold text-white tracking-tight whitespace-nowrap">
+               <motion.h1 initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="font-serif text-xl font-semibold text-md-on-surface tracking-tight whitespace-nowrap">
                    Sanctuary
                </motion.h1>
             )}
           </div>
 
           {!isCollapsed && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-4">
-                <h2 className="font-serif text-xl text-white leading-tight">
-                {getGreeting()}, <br />
-                <span className="opacity-60">{user?.name?.split(' ')[0] || 'Friend'}</span>
-                </h2>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-3 px-1">
+                <p className="text-sm text-md-on-surface-variant">{getGreeting()},</p>
+                <h2 className="font-serif text-2xl text-md-on-surface leading-tight truncate">{firstName}</h2>
             </motion.div>
           )}
 
-          <div 
-             className={`flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5 ${isCollapsed ? 'justify-center w-10 h-10 p-0' : 'w-fit'} group cursor-pointer`}
-             title="Daily Streak"
+          <div
+             className={`inline-flex items-center gap-2 rounded-[10px] bg-md-tertiary-container text-md-on-tertiary-container ${isCollapsed ? 'w-10 h-10 justify-center' : 'h-8 px-3 w-fit ml-1'}`}
+             title={`${user?.streak || 1}-day streak`}
           >
-             <div className={`rounded bg-orange-500/20 ${isCollapsed ? 'p-2' : 'p-1'} group-hover:bg-orange-500/30 transition-colors`}>
-               <Flame
-                 size={isCollapsed ? 16 : 12}
-                 className="text-orange-400 group-hover:animate-wiggle"
-                 fill="currentColor"
-               />
-             </div>
-             {!isCollapsed && (
-                 <span className="text-xs font-mono text-white/60 whitespace-nowrap">
-                     {user?.streak || 1} Day Streak
-                 </span>
-             )}
+             <Icons.streak size={isCollapsed ? 20 : 16} />
+             {!isCollapsed && <span className="text-xs font-medium whitespace-nowrap">{user?.streak || 1}-day streak</span>}
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto custom-scrollbar">
-          {!isCollapsed && <p className="px-4 text-[10px] uppercase tracking-widest text-white/30 font-bold mb-2">Toolkit</p>}
-          
+        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto custom-scrollbar">
+          {!isCollapsed && <p className="px-4 pt-1 pb-2 text-sm font-medium tracking-wide text-md-primary">Toolkit</p>}
+
           {WIDGETS.map((widget) => {
             if (widget.id === 'settings') return null;
-            const isActive = activeWidgets[widget.id];
+            const isActive = !!activeWidgets[widget.id];
             return (
               <button
                 key={widget.id}
                 id={`nav-${widget.id}`} // Added ID for Tour Targeting
                 onClick={() => { onToggleWidget(widget.id); }}
+                aria-pressed={isActive}
                 className={`
-                  w-full flex items-center gap-4 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-300 group relative
-                  ${isActive 
-                    ? 'bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)] border border-white/20' 
-                    : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'}
-                  ${isCollapsed ? 'justify-center px-0' : ''}
+                  relative w-full h-[52px] flex items-center gap-3 rounded-full text-[15px] font-semibold transition-colors duration-200 ease-md-emphasized
+                  ${isCollapsed ? 'justify-center px-0' : 'pl-1.5 pr-4'}
+                  ${isActive
+                    ? 'bg-md-secondary-container text-md-on-secondary-container'
+                    : 'text-md-on-surface-variant hover:bg-md-on-surface/[0.08] hover:text-md-on-surface'}
                 `}
-                title={isCollapsed ? widget.label : undefined}
+                title={isCollapsed ? widget.label : widget.desc}
               >
-                {isActive && (
-                  <motion.div 
-                    layoutId="active-bar"
-                    className={`absolute bg-teal-400/80 shadow-[0_0_10px_rgba(45,212,191,1)] rounded-full ${isCollapsed ? 'top-2 right-2 w-1.5 h-1.5' : 'left-0 top-2 bottom-2 w-1 rounded-r-full'}`}
-                    style={{ backgroundColor: currentTheme.primaryColor }}
-                  />
-                )}
-
-                <widget.icon 
-                  size={20} 
-                  className={`transition-colors duration-300 relative z-10 ${isActive ? widget.color : 'text-white/40 group-hover:text-white/80'}`} 
-                />
-                
-                {!isCollapsed && (
-                  <span className="relative z-10 truncate">{widget.label}</span>
-                )}
+                <IconTile icon={widget.icon} tone={TOOL_TONE[widget.id]} active={isActive} />
+                {!isCollapsed && <span className="truncate">{widget.label}</span>}
+                {isActive && !isCollapsed && <span className="ml-auto text-[11px] font-medium opacity-80">Open</span>}
+                {isActive && isCollapsed && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-md-primary" />}
               </button>
             );
           })}
         </nav>
 
-        <div className="p-4 mt-auto border-t border-white/5 bg-black/20">
-          
+        <div className="p-3 mt-auto space-y-2">
           {!isCollapsed ? (
-             <motion.div 
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center gap-3 hover:bg-white/10 transition-colors cursor-pointer mb-4" 
+             <button
                 onClick={onOpenSettings}
+                className="w-full rounded-[20px] p-2.5 flex items-center gap-3 bg-md-surface-container-high/80 hover:bg-md-surface-container-highest transition-colors text-left"
              >
-                <div className="relative">
+                <span className="relative shrink-0">
                     {user?.avatar ? (
-                        <img src={user.avatar} alt="Profile" className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                        <img src={user.avatar} alt="" className="w-10 h-10 rounded-full object-cover" />
                     ) : (
-                        <div 
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-inner"
-                        style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, #333)` }}
-                        >
-                        {user?.name?.charAt(0) || 'U'}
-                        </div>
+                        <span className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold bg-md-primary-container text-md-on-primary-container">
+                          {user?.name?.charAt(0) || 'U'}
+                        </span>
                     )}
                     {user?.isPro && (
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-400 rounded-full border-2 border-black flex items-center justify-center">
-                            <Sparkles size={8} className="text-black" fill="currentColor"/>
-                        </div>
+                        <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-md-tertiary text-md-on-tertiary flex items-center justify-center ring-2 ring-md-surface-container-high">
+                            <Sparkles size={8} fill="currentColor" />
+                        </span>
                     )}
-                </div>
-                
-                <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-white truncate">{user?.name}</p>
-                    <p className="text-[10px] text-white/40 truncate">{user?.isPro ? 'Pro Member' : 'Free Plan'}</p>
-                </div>
-
-                <Settings size={16} className="text-white/40" />
-             </motion.div>
+                </span>
+                <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-medium text-md-on-surface truncate">{user?.name}</span>
+                    <span className="block text-xs text-md-on-surface-variant truncate">{user?.isPro ? 'Pro' : 'Free plan'} · Settings</span>
+                </span>
+                <Icons.settings size={20} className="text-md-on-surface-variant shrink-0" />
+             </button>
           ) : (
-              <button onClick={onOpenSettings} className="w-full flex justify-center mb-4 text-white/40 hover:text-white transition-colors">
-                  <Settings size={20} />
+              <button onClick={onOpenSettings} aria-label="Settings" title="Settings"
+                className="w-full h-12 flex items-center justify-center rounded-full text-md-on-surface-variant hover:bg-md-on-surface/[0.08] hover:text-md-on-surface transition-colors">
+                  <Icons.settings size={22} />
               </button>
           )}
 
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="w-full flex items-center justify-center py-2 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-colors"
+            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={isCollapsed ? 'Expand' : 'Collapse'}
+            className="w-full h-10 flex items-center justify-center rounded-full text-md-on-surface-variant hover:bg-md-on-surface/[0.08] hover:text-md-on-surface transition-colors"
           >
-            {isCollapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
+            {isCollapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
           </button>
         </div>
 

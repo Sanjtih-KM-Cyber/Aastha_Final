@@ -10,12 +10,28 @@ export interface User {
   wallpaper?: string; 
   hasDiarySetup: boolean;
   credits: number;
+  quotaResetsAt?: string | null; // rolling 24 h window: when the free messages refill (null = full)
   isPro?: boolean;
+  subscriptionExpiresAt?: string;
+  voicePassExpiresAt?: string;
   streak?: number; // NEW
   securityQuestions?: { question: string }[];
   persona?: 'aastha' | 'aarav'; // NEW
   encryptionSalt?: string; // NEW: For secure key derivation (replaces email for new users)
   isOnboardingComplete?: boolean;
+  // Returned by the API on login/getMe (Q10: were used without being typed)
+  masterKey?: string;          // diary key material ("The Fortress")
+  nameEncrypted?: string;
+  emailEncrypted?: string;
+  isDataDonationOn?: boolean;
+  thinkingMode?: boolean;
+  gifsEnabled?: boolean;
+  safetyIntroSeen?: boolean;   // "How Aastha keeps you safe" card (7.5)
+  windowControls?: 'mac' | 'windows'; // widget window buttons (synced across devices)
+  themeColor?: string | null; // Sanctuary colour: preset id or #rrggbb (synced)
+  appFont?: string;     // Sanctuary text font id (design/fonts.ts)
+  headingFont?: string; // Sanctuary heading font id
+  legalConsentCurrent?: boolean; // accepted the current Terms + Privacy Policy (server/src/legal.ts)
 }
 
 export interface AuthState {

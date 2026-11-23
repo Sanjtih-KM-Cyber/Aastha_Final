@@ -1,83 +1,76 @@
 import React from 'react';
-import { ArrowRight, ShieldCheck, Heart } from 'lucide-react';
+import { ArrowRight, ShieldCheck } from 'lucide-react';
 import { FadeIn } from './FadeIn';
-import { useTheme } from '../../context/ThemeContext'; // Import Theme Context
+import { Icons } from '../../design/icons';
 
 interface HeroProps {
   onLogin: () => void;
 }
 
+/** Hero — Material You: big Fraunces headline, tonal "app preview" card, glass chips. */
 export const Hero: React.FC<HeroProps> = ({ onLogin }) => {
-  const { isLowPowerMode } = useTheme();
+  const scrollToPrivacy = () => document.getElementById('faq-section')?.scrollIntoView({ behavior: 'smooth' });
 
   return (
-    <section className="relative pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden bg-white dark:bg-[#0B0F17] transition-colors duration-500">
-      {/* Background Decor - SIMPLIFIED FOR LITE MODE */}
-      <div className="absolute inset-0 bg-grid-slate-100 dark:bg-grid-white/[0.05] [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0.6))] dark:[mask-image:linear-gradient(0deg,black,rgba(0,0,0,0.6))] bg-[center_top_-1px] pointer-events-none" />
-      <div className="absolute top-0 left-0 right-0 h-px bg-slate-100 dark:bg-white/5 pointer-events-none" />
+    <section className="relative pt-32 pb-16 md:pt-40 md:pb-28 overflow-hidden">
+      <div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full bg-md-primary/15 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute top-60 -right-40 w-[500px] h-[500px] rounded-full bg-md-tertiary/10 blur-3xl" />
 
-      {/* Added pointer-events-none to these blobs so they don't block clicks */}
-      {/* LITE MODE: Replaced animated blobs with static gradients */}
-      {isLowPowerMode ? (
-          <>
-            <div className="absolute top-20 left-1/4 w-96 h-96 bg-violet-900/10 rounded-full filter blur-3xl pointer-events-none" />
-            <div className="absolute top-40 right-1/4 w-96 h-96 bg-teal-900/10 rounded-full filter blur-3xl pointer-events-none" />
-          </>
-      ) : (
-          <>
-            <div className="absolute top-20 left-1/4 w-96 h-96 bg-violet-200/50 dark:bg-violet-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-3xl opacity-40 animate-float pointer-events-none" />
-            <div className="absolute top-40 right-1/4 w-96 h-96 bg-teal-200/50 dark:bg-teal-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-3xl opacity-40 animate-float pointer-events-none" style={{ animationDelay: '2s' }} />
-          </>
-      )}
-
-      <div className="max-w-7xl mx-auto px-6 relative z-10 text-center">
-        <FadeIn delay={100} direction="up">
-          <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-white/5 backdrop-blur-sm border border-violet-100 dark:border-white/10 rounded-full px-4 py-1.5 shadow-sm mb-8 hover:border-violet-200 dark:hover:border-white/20 transition-colors cursor-default">
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
+      <div className="max-w-6xl mx-auto px-5 relative z-10 grid lg:grid-cols-[1.1fr_0.9fr] gap-12 items-center">
+        <div className="text-center lg:text-left">
+          <FadeIn delay={100} direction="up">
+            <span className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-md-secondary-container text-md-on-secondary-container text-sm font-medium">
+              <Icons.relax size={18} /> A calm space that's yours
             </span>
-            <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">Your Digital Sanctuary</span>
-          </div>
-        </FadeIn>
+          </FadeIn>
 
-        <FadeIn delay={200} direction="up">
-          <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight text-slate-900 dark:text-white mb-8 leading-[1.15] md:leading-[1.1]">
-            From Campus to Corporate <br className="hidden md:block" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 via-purple-500 to-teal-400 dark:from-violet-400 dark:via-purple-300 dark:to-teal-300">
-              Your AI Wellness Companion.
-            </span>
-          </h1>
-        </FadeIn>
+          <FadeIn delay={200} direction="up">
+            <h1 className="mt-6 font-serif text-[44px] sm:text-6xl md:text-7xl leading-[1.05] text-md-on-surface">
+              A friend who listens, <span className="italic text-md-primary">any hour.</span>
+            </h1>
+          </FadeIn>
 
-        <FadeIn delay={300} direction="up">
-          <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed font-light px-4">
-            Your personal emotional intelligence companion for every stage of life.
-            Whether you're facing academic pressure or professional burnout, find a safe space to grow.
-          </p>
-        </FadeIn>
+          <FadeIn delay={300} direction="up">
+            <p className="mt-6 text-lg md:text-xl text-md-on-surface-variant max-w-xl mx-auto lg:mx-0 leading-relaxed">
+              Aastha is an AI companion for students and working people — talk it out, journal, track your mood,
+              breathe, focus. It remembers what matters to you and checks in gently.
+            </p>
+          </FadeIn>
 
-        <FadeIn delay={400} direction="up">
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 px-4">
-            <button
-              id="hero-cta"
-              onClick={onLogin}
-              className="w-full sm:w-auto px-8 py-4 bg-violet-600 hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500 text-white rounded-full font-semibold transition-all hover:shadow-xl hover:shadow-violet-200 dark:hover:shadow-violet-900/50 hover:-translate-y-1 flex items-center justify-center gap-2 group shadow-lg shadow-violet-500/20 z-20 relative"
-            >
-              Start Your Journey
-              <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-            </button>
-            <button className="w-full sm:w-auto px-8 py-4 bg-white/80 dark:bg-white/5 backdrop-blur-sm hover:bg-white dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/10 rounded-full font-semibold transition-all hover:border-violet-200 dark:hover:border-white/30 flex items-center justify-center gap-2 shadow-sm z-20 relative">
-              <ShieldCheck size={20} className="text-violet-600 dark:text-violet-400" />
-              Privacy First
-            </button>
-          </div>
-        </FadeIn>
+          <FadeIn delay={400} direction="up">
+            <div className="mt-9 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
+              <button id="hero-cta" onClick={onLogin}
+                className="w-full sm:w-auto h-14 px-7 rounded-full bg-md-primary text-md-on-primary font-semibold text-base inline-flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition shadow-lg group">
+                Start for free <ArrowRight size={20} className="group-hover:translate-x-0.5 transition-transform" />
+              </button>
+              <button onClick={scrollToPrivacy}
+                className="w-full sm:w-auto h-14 px-6 rounded-full border border-md-outline text-md-on-surface font-semibold inline-flex items-center justify-center gap-2 hover:bg-md-on-surface/[0.06]">
+                <ShieldCheck size={20} className="text-md-primary" /> How your data is handled
+              </button>
+            </div>
+            <p className="mt-4 text-xs text-md-on-surface-variant">Free to start · Not a therapist — in crisis call Tele-MANAS 14416</p>
+          </FadeIn>
+        </div>
 
-        <FadeIn delay={600} className="mt-12 md:mt-16 flex items-center justify-center gap-8 text-sm text-slate-400">
-          <div className="flex items-center gap-2 px-4 py-2 bg-slate-50/50 dark:bg-white/5 rounded-full border border-slate-100 dark:border-white/10">
-            <Heart size={16} className="text-red-400 fill-red-400" />
-            <span className="font-medium dark:text-slate-400">Your Wellness Buddy</span>
+        {/* App preview — tonal card with a glass composer, like the real chat */}
+        <FadeIn delay={300} direction="up" className="hidden sm:block">
+          <div className="relative mx-auto max-w-md rounded-[36px] bg-md-surface-container-low border border-md-outline-variant/30 p-5 shadow-2xl">
+            <div className="flex items-center gap-3 mb-5">
+              <img src="/logo.png" alt="" className="w-10 h-10 rounded-[14px] object-cover" />
+              <div>
+                <p className="text-sm font-semibold text-md-on-surface">Aastha</p>
+                <p className="text-xs text-md-primary">● here for you</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="ml-auto w-fit max-w-[80%] rounded-[22px] rounded-br-md bg-md-primary-container text-md-on-primary-container px-4 py-2.5 text-sm">exams next week and I can't focus 😩</div>
+              <div className="w-fit max-w-[85%] rounded-[22px] rounded-bl-md bg-md-surface-container-high text-md-on-surface px-4 py-2.5 text-sm">That pre-exam slump is so real. Want to try one tiny 25-minute round together? No pressure — just one.</div>
+              <div className="flex gap-2">
+                <span className="h-8 px-3 rounded-[8px] bg-md-secondary-container text-md-on-secondary-container text-xs font-medium inline-flex items-center gap-1.5"><Icons.focus size={16} /> Start focus</span>
+                <span className="h-8 px-3 rounded-[8px] border border-md-outline-variant text-md-on-surface-variant text-xs font-medium inline-flex items-center gap-1.5"><Icons.sounds size={16} /> Rain sounds</span>
+              </div>
+            </div>
+            <div className="glass rounded-full h-12 mt-5 flex items-center px-4 text-sm text-md-on-surface-variant">Type a message…</div>
           </div>
         </FadeIn>
       </div>

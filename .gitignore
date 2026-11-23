@@ -17,6 +17,19 @@ dist-ssr
 *.env.*
 server/.env
 client/.env
+!*.env.example
+
+# Build outputs / binaries (APKs come from CI artifacts, not git)
+*.apk
+*.aab
+
+# Python (brain_server)
+__pycache__/
+*.pyc
+.venv/
+brain_server/*.onnx
+brain_server/*.bin
+brain_server/temp_ref*.wav
 
 # Editor directories and files
 .vscode/*

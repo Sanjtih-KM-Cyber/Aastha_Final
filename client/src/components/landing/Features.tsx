@@ -1,71 +1,37 @@
 import React from 'react';
-import { Lock, Mic, BarChart3, Timer, MessageCircle, Sparkles } from 'lucide-react';
 import { FadeIn } from './FadeIn';
+import { Icons, IconTile, Tone } from '../../design/icons';
 
-const features = [
-  {
-    icon: Lock,
-    title: "End-to-End Encrypted",
-    desc: "Your thoughts are completely private. Password-protected diary ensures your data stays locked away from everyone—including us."
-  },
-  {
-    icon: Mic,
-    title: "Voice Conversations",
-    desc: "Speak freely with natural voice mode. Aastha listens and responds with a soothing, empathetic voice for hands-free therapy."
-  },
-  {
-    icon: BarChart3,
-    title: "Mood Analytics",
-    desc: "Visualize your emotional patterns over time. Understand triggers, celebrate wins, and track your growth journey."
-  },
-  {
-    icon: Timer,
-    title: "Mindful Focus Tools",
-    desc: "Manage exam stress and work deadlines. Integrated Pomodoro timer with ambient soundscapes helps you enter deep work states."
-  },
-  {
-    icon: MessageCircle,
-    title: "Always Available",
-    desc: "Combat loneliness and anxiety 24/7. Whether it's 3 AM study burnout or post-work decompression, Aastha is here."
-  },
-  {
-    icon: Sparkles,
-    title: "Personalized Insights",
-    desc: "Receive proactive guidance tailored to academic pressure, professional growth, and emotional balance."
-  }
+// Every line here must stay TRUE (ROADMAP S8): no "end-to-end", no "therapy", no unverifiable numbers.
+const features: { icon: React.FC<any>; tone: Tone; title: string; desc: string }[] = [
+  { icon: Icons.security, tone: 'primary', title: 'Private by design', desc: 'Chats, diary and moods are encrypted on our servers, your diary has its own lock, and you can export or permanently delete everything any time.' },
+  { icon: Icons.chat, tone: 'secondary', title: 'Talks like a friend', desc: 'Remembers what you share, follows how you text, replies in your language — and gently checks in about things you mentioned.' },
+  { icon: Icons.voice, tone: 'tertiary', title: 'Voice notes & calls', desc: 'Send a voice note or talk it out. Aastha can reply with a warm voice when you’d rather listen than read.' },
+  { icon: Icons.mood, tone: 'primary', title: 'Mood over time', desc: 'Log how you feel in a tap — even moods you invent. See your week and one honest pattern, never a diagnosis.' },
+  { icon: Icons.focus, tone: 'secondary', title: 'Focus & calm tools', desc: 'Focus timer, breathing exercises, ambient sounds and music you can play together — all in one place.' },
+  { icon: Icons.diary, tone: 'tertiary', title: 'A diary that’s yours', desc: 'Write freely with its own password. Forget it? Reset it safely without losing a single entry.' },
 ];
 
-export const Features: React.FC = () => {
-  return (
-    <section id="features-section" className="py-24 bg-white dark:bg-[#0B0F17] relative overflow-hidden scroll-mt-16 transition-colors duration-500">
-      {/* Background Grid */}
-      <div className="absolute inset-0 bg-grid-slate-100 dark:bg-grid-white/[0.05] [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] dark:[mask-image:linear-gradient(180deg,black,rgba(0,0,0,0))]" />
+export const Features: React.FC = () => (
+  <section id="features-section" className="py-20 md:py-28 relative scroll-mt-24">
+    <div className="max-w-6xl mx-auto px-5">
+      <FadeIn className="text-center mb-14">
+        <span className="inline-flex h-8 px-3 items-center rounded-full bg-md-secondary-container text-md-on-secondary-container text-sm font-medium">What’s inside</span>
+        <h2 className="font-serif text-4xl md:text-5xl text-md-on-surface mt-5">Made for the hard days and the ordinary ones</h2>
+        <p className="mt-4 text-lg text-md-on-surface-variant max-w-2xl mx-auto">Everything you need to feel a little lighter, in one calm app.</p>
+      </FadeIn>
 
-      <div className="max-w-7xl mx-auto px-6 relative z-10">
-        <FadeIn className="text-center mb-16">
-          <span className="text-violet-600 dark:text-violet-300 font-semibold tracking-wide uppercase text-sm bg-violet-50 dark:bg-violet-900/20 px-3 py-1 rounded-full border border-violet-100 dark:border-violet-500/20">Features</span>
-          <h2 className="text-3xl md:text-5xl font-bold text-slate-900 dark:text-white mt-6 mb-6">Built for Your Wellbeing</h2>
-          <p className="text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
-            Everything you need for a safe, private, and transformative mental wellness journey.
-          </p>
-        </FadeIn>
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {features.map((feature, idx) => (
-            <FadeIn key={idx} delay={idx * 100} className="h-full">
-              <div className="group h-full p-8 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-violet-200 dark:hover:border-violet-500/30 shadow-sm hover:shadow-2xl hover:shadow-violet-100 dark:hover:shadow-violet-900/20 transition-all duration-300 relative overflow-hidden">
-                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-violet-50 to-transparent dark:from-violet-500/10 rounded-bl-full -mr-4 -mt-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-
-                <div className="w-14 h-14 bg-slate-50 dark:bg-slate-700 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-300 mb-6 group-hover:scale-110 group-hover:bg-violet-600 dark:group-hover:bg-violet-600 group-hover:text-white transition-all duration-300 shadow-sm relative z-10">
-                  <feature.icon size={28} strokeWidth={1.5} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 relative z-10">{feature.title}</h3>
-                <p className="text-slate-600 dark:text-slate-300 leading-relaxed relative z-10">{feature.desc}</p>
-              </div>
-            </FadeIn>
-          ))}
-        </div>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {features.map((f, idx) => (
+          <FadeIn key={f.title} delay={idx * 80} className="h-full">
+            <div className="h-full rounded-[28px] bg-md-surface-container border border-md-outline-variant/30 p-6 hover:bg-md-surface-container-high transition-colors">
+              <IconTile icon={f.icon} tone={f.tone} size="md" className="!w-14 !h-14 !rounded-[18px]" />
+              <h3 className="mt-5 text-xl font-semibold text-md-on-surface">{f.title}</h3>
+              <p className="mt-2 text-md-on-surface-variant leading-relaxed">{f.desc}</p>
+            </div>
+          </FadeIn>
+        ))}
       </div>
-    </section>
-  );
-};
+    </div>
+  </section>
+);

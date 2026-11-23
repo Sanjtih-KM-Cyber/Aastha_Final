@@ -1,65 +1,43 @@
 import React from 'react';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { Check, Minus } from 'lucide-react';
 import { FadeIn } from './FadeIn';
 
-export const Comparison: React.FC = () => {
-  return (
-    <section id="why-aastha" className="py-24 bg-slate-50 dark:bg-slate-900 scroll-mt-16 transition-colors duration-300">
-      <div className="max-w-7xl mx-auto px-6">
-        <FadeIn className="text-center mb-16">
-          <span className="text-violet-600 dark:text-violet-300 font-semibold tracking-wide uppercase text-sm bg-violet-100 dark:bg-violet-900/30 px-3 py-1 rounded-full">The Difference</span>
-          <h2 className="text-3xl md:text-5xl font-bold text-slate-900 dark:text-white mt-6 mb-6">Why Choose Aastha?</h2>
-          <p className="text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
-            Not just another journaling app—a complete wellness companion.
-          </p>
+export const Comparison: React.FC = () => (
+  <section id="why-aastha" className="py-20 md:py-28 scroll-mt-24">
+    <div className="max-w-5xl mx-auto px-5">
+      <FadeIn className="text-center mb-12">
+        <span className="inline-flex h-8 px-3 items-center rounded-full bg-md-secondary-container text-md-on-secondary-container text-sm font-medium">The difference</span>
+        <h2 className="font-serif text-4xl md:text-5xl text-md-on-surface mt-5">Why Aastha?</h2>
+        <p className="mt-4 text-lg text-md-on-surface-variant">Not just another journaling app — something that talks back, kindly.</p>
+      </FadeIn>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <FadeIn delay={100} direction="right">
+          <div className="h-full rounded-[32px] bg-md-surface-container-low border border-md-outline-variant/30 p-8">
+            <h3 className="text-xl font-semibold text-md-on-surface-variant mb-6">A plain journal</h3>
+            <ul className="space-y-4">
+              {['Static text, no reply', 'One-way', 'No sense of your patterns', 'Easy to feel alone with it'].map((t) => (
+                <li key={t} className="flex items-center gap-3 text-md-on-surface-variant">
+                  <span className="w-7 h-7 rounded-full bg-md-surface-container-highest flex items-center justify-center shrink-0"><Minus size={16} /></span>{t}
+                </li>
+              ))}
+            </ul>
+          </div>
         </FadeIn>
-
-        <div className="grid md:grid-cols-2 gap-8 lg:gap-12 max-w-5xl mx-auto">
-          {/* Old Way */}
-          <FadeIn delay={100} direction="right">
-            <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-10 border border-slate-200 dark:border-slate-700 h-full opacity-80 hover:opacity-100 transition-all duration-300">
-              <h3 className="text-2xl font-bold text-slate-400 dark:text-slate-500 mb-8 border-b border-slate-100 dark:border-slate-700 pb-4">Traditional Journaling</h3>
-              <ul className="space-y-6">
-                {[
-                  "Static text with no feedback",
-                  "One-way communication",
-                  "No emotional insights",
-                  "Feels lonely and isolated"
-                ].map((item, i) => (
-                  <li key={i} className="flex items-center gap-4 text-slate-500 dark:text-slate-400 font-medium">
-                    <XCircle className="text-slate-300 dark:text-slate-600 shrink-0" size={24} />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </FadeIn>
-
-          {/* New Way */}
-          <FadeIn delay={200} direction="left">
-            <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-10 border-2 border-violet-500 h-full shadow-2xl shadow-violet-100 dark:shadow-violet-900/20 relative overflow-hidden transform hover:-translate-y-1 transition-all duration-300">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-violet-100 dark:bg-violet-600/20 rounded-bl-full -mr-8 -mt-8 opacity-50" />
-
-              <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-8 border-b border-slate-100 dark:border-slate-700 pb-4 relative z-10">
-                The Aastha Way
-              </h3>
-              <ul className="space-y-6 relative z-10">
-                {[
-                  "Interactive conversations that evolve",
-                  "Two-way empathetic dialogue",
-                  "Proactive insights & growth tracking",
-                  "Always supported, never alone"
-                ].map((item, i) => (
-                  <li key={i} className="flex items-center gap-4 text-slate-800 dark:text-slate-200 font-medium">
-                    <CheckCircle2 className="text-violet-600 dark:text-violet-400 shrink-0 fill-violet-50 dark:fill-violet-900/50" size={24} />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </FadeIn>
-        </div>
+        <FadeIn delay={200} direction="left">
+          <div className="h-full rounded-[32px] bg-md-primary-container text-md-on-primary-container p-8 relative overflow-hidden">
+            <div aria-hidden className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-md-primary/25" />
+            <h3 className="relative text-xl font-semibold mb-6">With Aastha</h3>
+            <ul className="relative space-y-4">
+              {['Conversations that grow with you', 'Remembers what you’ve shared (you can see and delete it)', 'Your week, one honest pattern', 'Checks in — never guilt-trips'].map((t) => (
+                <li key={t} className="flex items-center gap-3 font-medium">
+                  <span className="w-7 h-7 rounded-full bg-md-primary text-md-on-primary flex items-center justify-center shrink-0"><Check size={16} /></span>{t}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </FadeIn>
       </div>
-    </section>
-  );
-};
+    </div>
+  </section>
+);

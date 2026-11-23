@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Wind, Play, Pause, RotateCcw, ChevronDown } from 'lucide-react';
+import { Icons } from '../../design/icons';
 import { useTheme } from '../../context/ThemeContext';
+import { Button, IconButton, Chip } from '../../design/ui';
 
 interface BreathingWidgetProps {
   isOpen: boolean;
@@ -160,59 +162,34 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
       return prevLabel === 'Inhale' ? 1.6 : 1.0;
   };
 
+  const modeKeys = Object.keys(MODES) as (keyof typeof MODES)[];
   return (
-    <DraggableWindow 
+    <DraggableWindow
       isOpen={isOpen} onClose={onClose} title="Breathe"
-      initialWidth={340} initialHeight={520} defaultPosition={{ x: 400, y: 200 }}
+      initialWidth={360} initialHeight={580} defaultPosition={{ x: 400, y: 200 }}
       zIndex={zIndex || 10} onFocus={onFocus || (() => {})}
-      icon={Wind}
-      color="#10B981"
+      icon={Icons.breathing}
       persistenceKey={persistenceKey}
     >
-      <div className="flex flex-col h-full w-full bg-[#0a0a0a] font-sans relative overflow-hidden">
-         
-         {/* VISUALIZER (Top 65%) */}
-         <div className="h-[65%] relative flex items-center justify-center overflow-hidden">
-             
-             {/* Dynamic Aurora Background */}
-             <div className="absolute inset-0 opacity-30 pointer-events-none">
-                 <motion.div 
-                    animate={{ 
-                        scale: isActive ? [1, 1.2, 1] : 1,
-                        opacity: isActive ? [0.3, 0.6, 0.3] : 0.2 
-                    }}
-                    transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-                    className="absolute top-[-20%] left-[-20%] w-full h-full rounded-full blur-[80px]"
-                    style={{ backgroundColor: currentTheme.primaryColor }}
-                 />
-             </div>
+      <div className="flex flex-col h-full w-full font-sans px-3 pb-3 gap-3">
 
-             {/* Main Breathing Circle Container */}
+         {/* VISUALIZER — tonal stage, breathing orb in the seed colour */}
+         <div className="flex-1 min-h-[220px] rounded-[28px] bg-md-surface-container relative flex items-center justify-center overflow-hidden">
+             <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-md-primary/10 to-transparent" />
+
              <div className="relative z-10 flex items-center justify-center">
-                 
-                 {/* Outer Glow Ring (Breath Indicator) */}
+                 {/* Outer ring = breath indicator */}
                  <motion.div
-                    animate={{ 
-                        scale: getScale(),
-                        opacity: phaseLabel === 'Hold' ? 0.6 : 0.3,
-                        borderColor: currentTheme.primaryColor
-                    }}
-                    transition={{ duration: duration / 1000, ease: "easeInOut" }}
-                    className="absolute w-40 h-40 rounded-full border-2 blur-sm"
+                    animate={{ scale: getScale(), opacity: phaseLabel === 'Hold' ? 0.7 : 0.35 }}
+                    transition={{ duration: duration / 1000, ease: 'easeInOut' }}
+                    className="absolute w-36 h-36 rounded-full border-2 border-md-primary"
                  />
-
-                 {/* Glass Bubble (The Core) */}
-                 <motion.div 
-                    animate={{
-                        scale: getScale(),
-                        boxShadow: isActive 
-                            ? `0 0 40px ${currentTheme.primaryColor}40, inset 0 0 20px ${currentTheme.primaryColor}20`
-                            : `0 0 0px transparent`
-                    }}
-                    transition={{ duration: duration / 1000, ease: "easeInOut" }}
-                    className="w-40 h-40 rounded-full bg-white/5 backdrop-blur-md border border-white/10 flex items-center justify-center relative shadow-2xl"
+                 {/* Orb */}
+                 <motion.div
+                    animate={{ scale: getScale() }}
+                    transition={{ duration: duration / 1000, ease: 'easeInOut' }}
+                    className={`w-36 h-36 rounded-full flex items-center justify-center relative transition-colors duration-500 ${isActive ? 'bg-md-primary-container' : 'bg-md-surface-container-highest'}`}
                  >
-                     {/* Centered Text */}
                      <AnimatePresence mode="wait">
                         {!isActive ? (
                              <motion.button
@@ -221,17 +198,19 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
                                 animate={{ scale: 1, opacity: 1 }}
                                 exit={{ scale: 0.8, opacity: 0 }}
                                 onClick={toggleTimer}
-                                className="text-white/50 hover:text-white transition-colors"
+                                aria-label="Start breathing"
+                                className="w-16 h-16 rounded-full bg-md-primary text-md-on-primary flex items-center justify-center shadow-lg"
                              >
-                                <Play size={48} fill="currentColor" className="ml-2"/>
+                                <Play size={28} fill="currentColor" className="ml-1"/>
                              </motion.button>
                         ) : (
-                            <motion.span 
+                            <motion.span
                                 key={phaseLabel}
                                 initial={{ opacity: 0, scale: 0.9 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 1.1 }}
-                                className="font-serif text-2xl text-white tracking-widest font-medium drop-shadow-lg absolute"
+                                aria-live="polite"
+                                className="font-serif text-2xl text-md-on-primary-container tracking-wide absolute"
                             >
                                 {phaseLabel}
                             </motion.span>
@@ -239,62 +218,41 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
                      </AnimatePresence>
                  </motion.div>
              </div>
+
+             {/* step dots */}
+             <div className="absolute bottom-4 inset-x-0 flex justify-center gap-1.5">
+               {currentSteps.map((st, i) => (
+                 <span key={i} title={st} className={`h-1.5 rounded-full transition-all duration-300 ${isActive && i === phaseIndex ? 'w-6 bg-md-primary' : 'w-1.5 bg-md-on-surface-variant/40'}`} />
+               ))}
+             </div>
          </div>
 
-         {/* CONTROLS (Bottom 35%) */}
-         <div className="h-[35%] bg-[#121212]/90 backdrop-blur-xl border-t border-white/5 p-6 flex flex-col justify-between relative z-20">
-             
-             {/* Mode Selection */}
-             <div className="space-y-2">
-                 <div className="relative">
-                     <select 
-                        value={activeMode}
-                        onChange={(e) => { setActiveMode(e.target.value as any); reset(); }}
-                        className="w-full bg-white/5 border border-white/10 text-white text-sm rounded-xl px-4 py-3 appearance-none focus:outline-none focus:border-white/30 transition-colors cursor-pointer hover:bg-white/10"
-                     >
-                        {Object.keys(MODES).map(m => (
-                            <option key={m} value={m} className="bg-gray-900 text-white">
-                                {MODES[m as keyof typeof MODES].label}
-                            </option>
-                        ))}
-                     </select>
-                     <ChevronDown className="absolute right-4 top-3.5 text-white/40 pointer-events-none" size={16} />
-                 </div>
+         {/* MODE PICKER — M3 filter chips */}
+         <div className="shrink-0">
+           <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+             {modeKeys.map((m) => (
+               <Chip key={m} selected={activeMode === m} onClick={() => { setActiveMode(m); reset(); }}>{MODES[m].label}</Chip>
+             ))}
+           </div>
+           <AnimatePresence mode="wait">
+             <motion.p
+               key={activeMode}
+               initial={{ opacity: 0, y: 4 }}
+               animate={{ opacity: 1, y: 0 }}
+               exit={{ opacity: 0 }}
+               className="mt-2 px-1 text-xs text-md-on-surface-variant leading-relaxed min-h-[32px]"
+             >
+               {MODES[activeMode].description} <span className="opacity-70">· {MODES[activeMode].pattern.map(p => p / 1000).join('-')} s</span>
+             </motion.p>
+           </AnimatePresence>
+         </div>
 
-                 {/* Contextual Description */}
-                 <AnimatePresence mode="wait">
-                    <motion.p 
-                        key={activeMode}
-                        initial={{ opacity: 0, y: 5 }} 
-                        animate={{ opacity: 1, y: 0 }} 
-                        exit={{ opacity: 0 }}
-                        className="text-[11px] text-white/40 text-center leading-relaxed px-2 h-8"
-                    >
-                        {MODES[activeMode].description}
-                    </motion.p>
-                 </AnimatePresence>
-             </div>
-
-             {/* Action Bar */}
-             <div className="flex items-center gap-3">
-                 <button 
-                    onClick={toggleTimer}
-                    className="flex-1 py-3.5 rounded-xl text-black font-bold text-sm flex items-center justify-center gap-2 transition-all hover:brightness-110 active:scale-[0.98] shadow-lg"
-                    style={{ backgroundColor: currentTheme.primaryColor }}
-                 >
-                    {isActive ? <Pause size={16} fill="currentColor"/> : <Play size={16} fill="currentColor"/>}
-                    {isActive ? "Pause Session" : "Start Session"}
-                 </button>
-
-                 <button 
-                    onClick={reset}
-                    className="p-3.5 rounded-xl bg-white/5 text-white/40 hover:text-white hover:bg-white/10 transition-colors border border-white/5"
-                    title="Reset"
-                 >
-                    <RotateCcw size={20} />
-                 </button>
-             </div>
-
+         {/* ACTIONS */}
+         <div className="shrink-0 flex items-center gap-2">
+             <Button size="lg" className="flex-1" onClick={toggleTimer} icon={isActive ? <Pause size={18} fill="currentColor"/> : <Play size={18} fill="currentColor"/>}>
+                {isActive ? 'Pause' : 'Start'}
+             </Button>
+             <IconButton variant="tonal" size="lg" label="Reset" onClick={reset}><RotateCcw size={20} /></IconButton>
          </div>
       </div>
     </DraggableWindow>

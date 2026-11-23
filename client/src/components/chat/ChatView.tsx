@@ -3,64 +3,28 @@ import {
   Send, Menu, Headphones, AlertCircle, Smile, 
   Mic, MicOff, X, Search, Image as ImageIcon, Plus, Camera,
   ShieldAlert, Loader2, ChevronDown, Reply, Check, ArrowDown,
-  UserPlus, Play, Pause, Lock, Zap, Leaf
+  UserPlus, Play, Pause, Lock, Zap, Leaf, AudioLines, Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
 import { toast } from 'react-hot-toast'; // Import Toast
 import { MessageBubble } from './MessageBubble';
+import { ThoughtCloudModal } from './ThoughtCloudModal';
+import { SafetyBanner, SafetyInfo } from './SafetyBanner';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { useSync } from '../../context/SyncContext';
 import api from '../../services/api';
+import { chatCache } from '../../services/chatCache';
+import { useSpecular } from '../../design/LiquidGlass';
+import { useStreamingChat, StreamHttpError } from '../../hooks/useStreamingChat';
+import { planLabel } from '../../utils/plan';
+import { deviceTimeZone } from '../../utils/timeZone';
+import { useVoiceRecorder, formatClock } from '../../hooks/useVoiceRecorder';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
-
-// --- NEW COMPONENT: THOUGHT CLOUD MODAL ---
-const ThoughtCloudModal: React.FC<{ isOpen: boolean; onClose: () => void; content: any }> = ({ isOpen, onClose, content }) => {
-    if (!isOpen || !content) return null;
-
-    return (
-        <AnimatePresence>
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-md" />
-                <motion.div
-                    initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                    animate={{ scale: 1, opacity: 1, y: 0 }}
-                    exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                    className="relative w-full max-w-md bg-white/10 border border-white/20 backdrop-blur-xl rounded-3xl p-6 shadow-2xl overflow-hidden"
-                >
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-400 via-violet-400 to-amber-400" />
-                    <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white"><X size={20} /></button>
-
-                    <h3 className="text-xl font-serif text-white mb-4 flex items-center gap-2">
-                        <span className="text-2xl">☁️</span> Inner Thoughts
-                    </h3>
-
-                    <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                        <div className="p-4 bg-black/20 rounded-xl border border-white/5">
-                            <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Monologue</h4>
-                            <p className="text-sm text-white/90 italic leading-relaxed">"{content.internal_monologue || 'No thoughts yet...'}"</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="p-3 bg-black/20 rounded-xl border border-white/5">
-                                <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Mood</h4>
-                                <p className="text-sm text-white font-medium capitalize">{content.mood || 'Neutral'}</p>
-                            </div>
-                            <div className="p-3 bg-black/20 rounded-xl border border-white/5">
-                                <h4 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Strategy</h4>
-                                <p className="text-sm text-white font-medium capitalize">{content.strategy || 'Reply'}</p>
-                            </div>
-                        </div>
-                    </div>
-                </motion.div>
-            </div>
-        </AnimatePresence>
-    );
-};
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -70,6 +34,11 @@ interface ChatMessage {
   id?: string;
   reaction?: string;
   voice_note?: string;
+  reasoning?: string;   // "think deeper" reasoning (shown collapsed)
+  isThinking?: boolean;
+  isClone?: boolean;    // written by Clone Mode → labelled "AI imitation"
+  gif?: { url: string; width?: number; height?: number; title?: string; source?: string }; // GIF reaction
+  myReaction?: string | null; // your ❤️ 😂 👍 on Aastha's reply (7.4)
 }
 
 interface ChatViewProps {
@@ -131,8 +100,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   // --- STATE ---
   const [isInitializing, setIsInitializing] = useState(true);
+  // Crisis/concern support banner (server sends {type:'safety'}) — S9
+  const [safetyInfo, setSafetyInfo] = useState<SafetyInfo | null>(null);
   const [connectionStatus, setConnectionStatus] = useState('Connecting...');
   const hasAttemptedInit = useRef(false);
+  const specular = useSpecular(); // Liquid Glass touch highlight
+  const mountedRef = useRef(true);
+  useEffect(() => {
+      mountedRef.current = true;
+      return () => { mountedRef.current = false; };
+  }, []);
   
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -149,7 +126,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null); // STOP BUTTON REF
 
   // --- DEBOUNCE STATE ---
   const [pendingMessages, setPendingMessages] = useState<string[]>([]);
@@ -183,27 +159,55 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [isListening, setIsListening] = useState(false);
   const [isDictating, setIsDictating] = useState(false); 
   const [transcript, setTranscript] = useState('');
-  const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem('user_tts_enabled') === 'true');
+  // Auto-read is OFF by default and only changes from Settings (voice calls speak anyway, without touching it).
+  const [ttsEnabled, setTtsEnabled] = useState(() => { try { return localStorage.getItem('user_tts_enabled_v2') === 'true'; } catch { return false; } });
+  useEffect(() => {
+    const sync = () => { try { setTtsEnabled(localStorage.getItem('user_tts_enabled_v2') === 'true'); } catch { /* ignore */ } };
+    window.addEventListener('aastha:tts-changed', sync);
+    window.addEventListener('storage', sync);
+    return () => { window.removeEventListener('aastha:tts-changed', sync); window.removeEventListener('storage', sync); };
+  }, []);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(() => localStorage.getItem('user_voice_uri'));
   
   // AUDIO REF for Single Source of Truth
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // --- CLONE MODE & VOICE INPUT ---
-  const [isCloneMode, setIsCloneMode] = useState(false);
-  const [cloneUploadVisible, setCloneUploadVisible] = useState(false);
+  // Clone Mode: name of the person being imitated while it's switched on (null = off)
+  const [cloneName, setCloneName] = useState<string | null>(null);
+  const isCloneMode = !!cloneName;
 
   // --- SETTINGS STATE ---
   const [showSettings, setShowSettings] = useState(false);
 
   // --- CREDITS ---
   const [localCredits, setLocalCredits] = useState(user?.credits || 0);
+  const [quotaResetsAt, setQuotaResetsAt] = useState<string | null>(user?.quotaResetsAt ?? null);
+  useEffect(() => { setQuotaResetsAt(user?.quotaResetsAt ?? null); }, [user?.quotaResetsAt]);
   const [modelMode, setModelMode] = useState<'pro' | 'eco'>(user?.credits && user.credits > 0 ? 'pro' : 'eco');
   const [isStandardMode, setIsStandardMode] = useState(false);
   
   // --- REFS ---
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  // Liquid glass: the header (phone) and the message bar FLOAT over the messages, so the list scrolls under the
+  // glass. Their real heights (reply preview, attachments, safe areas) are measured to pad the list.
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const inputBarRef = useRef<HTMLDivElement | null>(null);
+  const [chromeH, setChromeH] = useState({ top: 0, bottom: 0 });
+  useEffect(() => {
+    const measure = () => setChromeH((prev) => {
+      const h = headerRef.current, b = inputBarRef.current;
+      const top = h && getComputedStyle(h).position === 'absolute' ? Math.round(h.getBoundingClientRect().bottom - (h.parentElement?.getBoundingClientRect().top || 0)) : 0;
+      const bottom = b ? Math.round(b.getBoundingClientRect().height) : 0;
+      return prev.top === top && prev.bottom === bottom ? prev : { top, bottom };
+    });
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    if (ro) { if (headerRef.current) ro.observe(headerRef.current); if (inputBarRef.current) ro.observe(inputBarRef.current); }
+    window.addEventListener('resize', measure);
+    return () => { ro?.disconnect(); window.removeEventListener('resize', measure); };
+  }, [isMobile]);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedTagsRef = useRef<Set<string>>(new Set());
@@ -311,77 +315,102 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           setIsStandardMode(!isPremium);
           setLocalCredits(user.isPro ? 9999 : credits);
           setModelMode(isPremium ? 'pro' : 'eco');
-          if (user.cloneMode?.isActive) setIsCloneMode(true);
+          api.get('/users/clone').then(r => setCloneName(r.data?.isActive ? r.data?.consent?.name || 'Clone' : null)).catch(() => {});
       }
   }, [user]);
 
   // --- 2. INIT CHAT ---
+  // Cache-first: show the last cached messages instantly, then refresh from the server in the
+  // background. Only a first-ever load (no cache) shows the connecting screen. (ROADMAP M2)
+  const mapServerHistory = (data: any[]) => data.map((msg: any) => {
+      // Local cleaner to strip legacy tags while preserving proposals
+      let clean = msg.content || "";
+      clean = clean.replace(/<color>[\s\S]*?<\/color>/gi, '');
+      clean = clean.replace(/<(?!proposal)[^>]+>/g, '');
+      return {
+          ...msg,
+          content: clean,
+          voice_note: msg.voice_note ? resolveAudioUrl(msg.voice_note) : undefined
+      };
+  });
+
+  // Server history is authoritative; keep any local messages newer than it (e.g. sent while syncing).
+  const mergeWithServer = (server: any[]) => setMessages(prev => {
+      const toMs = (t: any) => new Date(t).getTime() || 0;
+      const serverLast = server.length ? toMs(server[server.length - 1].timestamp) : 0;
+      const newerLocal = prev.filter(m => toMs(m.timestamp) > serverLast);
+      return [...server, ...newerLocal] as any;
+  });
+
+  const fetchHistory = async () => {
+      const res = await api.get('/chat/history', { params: { limit: 50 } });
+      return Array.isArray(res.data) ? mapServerHistory(res.data) : [];
+  };
+
   useEffect(() => {
      if (!user) return; 
      if (hasAttemptedInit.current) return;
      hasAttemptedInit.current = true;
 
-     let isMounted = true;
-     const initChat = async () => {
+     // Component-level mounted flag: survives React StrictMode's double-mount (a per-effect flag made the
+     // first run discard its result while the guard skipped the second → spinner forever in dev).
+     let slowTimer: ReturnType<typeof setTimeout> | null = null;
+     const greeting = (line: string) => [{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. ${line}`, timestamp: Date.now() }];
+
+     const cached = chatCache.load((user as any)?._id);
+     if (cached) {
+         setMessages(cached as any);
+         setIsInitializing(false);
+         setTimeout(() => scrollToBottom(), 50);
+     } else {
          setIsInitializing(true);
          setConnectionStatus(`Connecting to ${botName}...`);
+         // Render free tier can take ~a minute to wake — tell the user instead of spinning silently.
+         slowTimer = setTimeout(() => {
+             if (mountedRef.current) setConnectionStatus(`Waking ${botName} up… this can take up to a minute after a quiet spell ☕`);
+         }, 4000);
+     }
+
+     const initChat = async () => {
          try {
-             const res = await api.get('/chat/history');
-             if (isMounted) {
-                 if (Array.isArray(res.data) && res.data.length > 0) {
-                     // Performance: Slice to last 50 messages initially
-                     // [FIX] Map through history to resolve any relative audio URLs AND CLEAN GARBAGE TAGS
-                     const history = res.data.map((msg: any) => {
-                        // Local cleaner to strip legacy tags while preserving proposals
-                        let clean = msg.content || "";
-                        clean = clean.replace(/<color>[\s\S]*?<\/color>/gi, '');
-                        clean = clean.replace(/<(?!proposal)[^>]+>/g, '');
-                        
-                        return {
-                            ...msg,
-                            content: clean,
-                            voice_note: msg.voice_note ? resolveAudioUrl(msg.voice_note) : undefined
-                        };
-                     });
-                     setMessages(history.slice(-50));
-                 } else {
-                     setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. How can I support you right now?`, timestamp: Date.now() }]);
-                 }
+             const history = await fetchHistory();
+             if (!mountedRef.current) return;
+             if (history.length > 0) {
+                 mergeWithServer(history);
+                 setTimeout(() => scrollToBottom(), 80); // after the merged list has rendered
              }
+             else if (!cached) setMessages(greeting('How can I support you right now?') as any);
          } catch (e: any) { 
              console.error("Init failed:", e);
-             if (isMounted) setMessages([{ role: 'assistant', content: `Hi ${user?.name || 'friend'}, I am ${botName}. I'm listening.`, timestamp: Date.now() }]);
+             if (mountedRef.current && !cached) setMessages(greeting("I'm listening.") as any);
          } finally {
-             if (isMounted) {
-                 setTimeout(() => { scrollToBottom(); setIsInitializing(false); }, 500);
+             if (slowTimer) clearTimeout(slowTimer);
+             if (mountedRef.current && !cached) {
+                 setTimeout(() => { scrollToBottom(); setIsInitializing(false); }, 300);
              }
          }
      };
      initChat();
-     return () => { isMounted = false; };
+     return () => { if (slowTimer) clearTimeout(slowTimer); };
   }, [user, navigate, botName]);
+
+  // Persist the latest messages for instant next launch (skip while a reply is streaming).
+  useEffect(() => {
+      if (isTyping || isInitializing || messages.length === 0) return;
+      chatCache.save((user as any)?._id, messages);
+  }, [messages, isTyping, isInitializing, user]);
 
   // --- RE-SYNC ON APP RESUME (Mobile) ---
   useEffect(() => {
+      let lastResumeSync = 0;
       const listener = App.addListener('appStateChange', async ({ isActive }) => {
-          if (isActive && user) {
+          // On the web this fires on every focus/visibility change — throttle to once per 30 s.
+          if (isActive && user && Date.now() - lastResumeSync > 30_000) {
+              lastResumeSync = Date.now();
               // Silent refresh of history when app comes to foreground
               try {
-                  const res = await api.get('/chat/history');
-                  if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-                      const history = res.data.map((msg: any) => {
-                        let clean = msg.content || "";
-                        clean = clean.replace(/<color>[\s\S]*?<\/color>/gi, '');
-                        clean = clean.replace(/<(?!proposal)[^>]+>/g, '');
-                        return {
-                            ...msg,
-                            content: clean,
-                            voice_note: msg.voice_note ? resolveAudioUrl(msg.voice_note) : undefined
-                        };
-                     });
-                     // Update state only if we have new data or to ensure consistency
-                     setMessages(history.slice(-50));
-                  }
+                  const history = await fetchHistory();
+                  if (history.length > 0) mergeWithServer(history);
               } catch (e) { console.error("Resume sync failed", e); }
           }
       });
@@ -562,13 +591,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     if (isVoiceMode) {
         stopListening();
         setIsVoiceMode(false);
-        setTtsEnabled(false);
-        localStorage.setItem('user_tts_enabled', 'false');
     } else {
         if (isDictating) { setIsDictating(false); }
         setIsVoiceMode(true);
-        setTtsEnabled(true);
-        localStorage.setItem('user_tts_enabled', 'true');
         const voices = ('speechSynthesis' in window) ? window.speechSynthesis.getVoices() : [];
         const indianVoice = voices.find(v => v.lang.includes('IN') || v.name.includes('India'));
         if (indianVoice) {
@@ -596,21 +621,53 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
   const handleVoiceSend = (text: string) => { stopListening(); setTranscript(''); handleSend(undefined, text); };
 
+  // "Stick to bottom": while the user is at the bottom, any content growth (new bubbles, entrance
+  // animations, images, streaming text) keeps the view pinned to the newest message. Scrolling up releases it.
+  const stickToBottomRef = useRef(true);
   const scrollToBottom = () => {
+      stickToBottomRef.current = true;
       if (messagesContainerRef.current) {
-          messagesContainerRef.current.scrollTo({ 
-              top: messagesContainerRef.current.scrollHeight, 
-              behavior: 'smooth' 
+          messagesContainerRef.current.scrollTo({
+              top: messagesContainerRef.current.scrollHeight,
+              behavior: 'smooth'
           });
       }
   };
   useEffect(() => scrollToBottom(), [messages, isTyping]);
+  useEffect(() => {
+      const el = messagesContainerRef.current;
+      if (!el || typeof ResizeObserver === 'undefined') return;
+      let frame = 0;
+      const pin = () => {
+          if (!stickToBottomRef.current) return;
+          cancelAnimationFrame(frame);
+          frame = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+      };
+      const ro = new ResizeObserver(pin);
+      ro.observe(el);
+      Array.from(el.children as HTMLCollection).forEach((c) => ro.observe(c as Element));
+      const mo = new MutationObserver(() => {
+          Array.from(el.children as HTMLCollection).forEach((c) => ro.observe(c as Element));
+          pin();
+      });
+      mo.observe(el, { childList: true, subtree: true, characterData: true });
+      return () => { ro.disconnect(); mo.disconnect(); cancelAnimationFrame(frame); };
+  }, [isInitializing]);
 
+  const lastScrollTopRef = useRef(0);
   const handleScroll = () => {
       if (!messagesContainerRef.current) return;
       const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
       const isBottom = scrollHeight - scrollTop - clientHeight < 100;
       setShowScrollDown(!isBottom);
+      stickToBottomRef.current = isBottom; // user scrolled up → stop auto-pinning
+      // Phone tab bar: shrinks while you scroll through the chat in EITHER direction (more room to read),
+      // grows back when you're at the latest messages again (or tap it).
+      const delta = scrollTop - lastScrollTopRef.current;
+      if (Math.abs(delta) > 8 || isBottom) {
+          window.dispatchEvent(new CustomEvent('aastha:chat-scroll', { detail: { direction: isBottom ? 'bottom' : delta > 0 ? 'down' : 'up' } }));
+          lastScrollTopRef.current = scrollTop;
+      }
   };
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -619,26 +676,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       if (files && files.length > 0) {
           try {
               const compressed = await compressImage(files[0]);
-              if (cloneUploadVisible) {
-                 // Clone Mode Logic
-                 handleCloneUpload(compressed);
-              } else {
-                 setAttachedImage(compressed);
-              }
+              setAttachedImage(compressed);
           } catch (err) { setError("Failed to process image."); }
       }
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleCloneUpload = async (img: string) => {
-     // TODO: Implement Clone Mode Activation
-     setCloneUploadVisible(false);
-     setIsCloneMode(true);
-     setMessages(prev => [...prev, { role: 'system', content: 'SYSTEM: Clone Mode Activated. Upload a screenshot to mimic.', timestamp: Date.now() }]);
-     // Just for now, we simulate activation. Ideally send to /chat to activate.
-     // We will treat this as a "message" with intent to clone.
-     handleSend(undefined, 'ACTIVATE_CLONE_MODE', img);
-  };
 
   const copyToClipboard = (text: string) => {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
@@ -681,233 +724,182 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   // --- 5. SEND LOGIC (INTEGRATED WITH SERVER BRAIN) ---
+  // Transport (fetch, SSE parsing, batching, abort) lives in hooks/useStreamingChat; this file decides what events mean.
+  const chatStream = useStreamingChat();
+  const settleStatus = () => setStatusDisplay(prev => (prev === 'Listening...' ? prev : 'Online'));
+
   const handleStop = () => {
-    if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-    }
+    chatStream.stop();
     setIsTyping(false);
-    setStatusDisplay('Online');
+    settleStatus();
+  };
+
+  const readToken = () => {
+    try {
+      const storedInfo = sessionStorage.getItem('userInfo') || localStorage.getItem('userInfo');
+      return storedInfo ? JSON.parse(storedInfo).token || '' : '';
+    } catch { return ''; }
   };
 
   const callChatAPI = async (finalText: string, images: string[], audioBase64: string | null, isPermissionGrant: boolean, tempBotId: string, isSilent: boolean = false, tempId?: string) => {
-      try {
-          if (abortControllerRef.current) abortControllerRef.current.abort();
-          const abortController = new AbortController();
-          abortControllerRef.current = abortController;
-
-          // Set "Thinking..." ONLY if NOT in silent mode (Listening Mode)
-          if (!isSilent || isPermissionGrant) {
-            setIsTyping(true);
-            setStatusDisplay('Thinking...');
-          }
-
-          let token = '';
-          try {
-            const storedInfo = localStorage.getItem('userInfo');
-            if (storedInfo) token = JSON.parse(storedInfo).token;
-          } catch(e) {}
-
-          const streamResponse = await fetch(getApiUrl('/chat'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            credentials: 'include',
-            signal: abortController.signal,
-            body: JSON.stringify({
-                message: finalText,
-                images: images,
-                audio: audioBase64,
-                forceReply: isPermissionGrant,
-                isVoiceMode: isVoiceMode,
-                userLocalTime: new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true }),
-                userLocalHour: new Date().getHours(),
-                tempId: tempId
-            }),
-          });
-
-          if (!streamResponse.ok) {
-              setIsTyping(false);
-              if (streamResponse.status === 401) {
-                   setError("Session expired. Please login again.");
-                   return;
-              }
-              const errData = await streamResponse.json().catch(() => ({}));
-              throw new Error(errData.message || `${botName} is unreachable.`);
-          }
-
-          const reader = streamResponse.body?.getReader();
-          const decoder = new TextDecoder();
-          processedTagsRef.current.clear();
-
-          let aiContentRaw = '';
-          let buffer = '';
-          let serverAudioPlayed = false;
-
-          if (reader) {
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                buffer += chunk;
-                const lines = buffer.split('\n\n');
-                buffer = lines.pop() || '';
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const dataStr = line.replace('data: ', '');
-                        if (dataStr.trim() === '[DONE]') break;
-                        try {
-                            const data = JSON.parse(dataStr);
-
-                            // A. HANDLE THOUGHT (THE BRAIN)
-                            if (data.type === 'thought') {
-                                const brain = data.content;
-                                if (brain) {
-                                    setLastSubconscious(brain);
-                                    if (brain.mood) setCurrentMood(brain.mood);
-                                    if (brain.status_display) setStatusDisplay(brain.status_display);
-                                    if (brain.suggested_replies) setSuggestedChips(brain.suggested_replies);
-                                    if (brain.ui_action) setUiAction(brain.ui_action as any);
-
-                                    // Sticky Reaction
-                                    if (brain.reaction) {
-                                         // Find the LAST user message (the one we just sent) to attach reaction
-                                         setMessages(prev => {
-                                             const newList = [...prev];
-                                             for (let i = newList.length - 1; i >= 0; i--) {
-                                                 if (newList[i].role === 'user') {
-                                                     newList[i] = { ...newList[i], reaction: brain.reaction };
-                                                     break;
-                                                 }
-                                             }
-                                             return newList;
-                                          });
-                                    }
-
-                                    // GOD MODE TOOLS
-                                    if (brain.tool_calls && brain.tool_calls.length > 0) {
-                                        brain.tool_calls.forEach((tool: any) => {
-                                            let toolName = '';
-                                            let params = {};
-                                            let reason = "I can help with that";
-
-                                            if (tool.name === 'control_widget') {
-                                                toolName = tool.params.widget;
-                                                params = tool.params.params || tool.params;
-                                            } else if (tool.name === 'write_diary') {
-                                                toolName = 'diary';
-                                                params = tool.params;
-                                                reason = "Write in Diary";
-                                            }
-
-                                            if (toolName === 'voice_hug') {
-                                                const hugTag = `\n\n[Voice Hug Playing 🎵]`;
-                                                aiContentRaw += hugTag;
-                                            }
-
-                                            if (toolName) {
-                                                const proposalTag = `\n<proposal tool="${toolName}" params='${JSON.stringify(params)}' reason="${reason}" />`;
-                                                aiContentRaw += proposalTag;
-                                            }
-                                        });
-                                    }
-
-                                    // Stop typing indicator if listening
-                                    if (brain.strategy === 'listen') {
-                                        setIsTyping(false);
-                                        // Remove the temporary bubble if empty
-                                        if (!aiContentRaw) {
-                                            setMessages(prev => prev.filter(m => m.id !== tempBotId));
-                                        }
-                                    }
-                                }
-                            }
-
-                            // B. HANDLE META
-                            if (data.meta) {
-                                if (data.meta.credits !== undefined) {
-                                    setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits));
-                                }
-                                setModelMode(data.meta.mode);
-                                const isEco = data.meta.mode === 'standard';
-                                setIsStandardMode(isEco);
-                                if (data.meta.limitReached) setIsCloneMode(false);
-
-                                if (data.meta.voice_status === 'failed') {
-                                    const hasProAccess = user?.isPro || (user?.credits || 0) > 0 || data.meta.use_fallback_tts;
-                                    if (!hasProAccess) {
-                                        toast("My voice engine is taking a nap. Waking up... try again in 1 minute.", {
-                                            icon: '😴',
-                                            style: { borderRadius: '10px', background: '#333', color: '#fff' },
-                                            duration: 4000
-                                        });
-                                        serverAudioPlayed = true;
-                                    }
-                                }
-                            }
-
-                            // C. VOICE NOTE
-                            if (data.voice_note) {
-                                setMessages(prev => prev.map(msg => {
-                                    if (msg.id === tempBotId) {
-                                        return { ...msg, voice_note: resolveAudioUrl(data.voice_note) };
-                                    }
-                                    return msg;
-                                }));
-                            }
-
-                            // D. STREAMING AUDIO
-                            if (data.voice_audio) {
-                                serverAudioPlayed = true;
-                                const resolvedUrl = resolveAudioUrl(data.voice_audio);
-                                speakMessage(resolvedUrl);
-                            }
-
-                            // E. CONTENT
-                            if (data.content && !data.type) {
-                                aiContentRaw += data.content;
-                                const cleanContent = processMagicTags(aiContentRaw);
-                                setMessages(prev => {
-                                    const index = prev.findIndex(m => m.id === tempBotId);
-                                    if (index !== -1) {
-                                        const newArr = [...prev];
-                                        newArr[index] = { ...newArr[index], content: cleanContent };
-                                        return newArr;
-                                    } else {
-                                        // SAFETY: If we can't find the message, it likely means it was replaced by a broadcast
-                                        // or removed. We should NOT create a duplicate unless it's the very first chunk.
-                                        // Since we don't track chunk index easily here, we will trust the broadcast to handle it
-                                        // if the message is missing.
-                                        return prev;
-                                    }
-                                });
-                            }
-                        } catch (e: any) {}
-                    }
-                }
-            }
-          }
-
-          const cleanFinal = processMagicTags(aiContentRaw);
-          if ((isVoiceMode || ttsEnabled) && aiContentRaw && !serverAudioPlayed) {
-              speakMessage(cleanFinal);
-          }
-
-      } catch (error: any) {
-          if (error.name === 'AbortError') {
-              console.log("Generation stopped by user.");
-              return;
-          }
-          console.error(error);
-          setMessages(prev => prev.filter(m => m.id !== tempBotId));
-          setError(error.message || "Connection failed.");
-      } finally {
-          setIsTyping(false);
-          abortControllerRef.current = null;
+      // Set "Thinking..." ONLY if NOT in silent mode (Listening Mode)
+      if (!isSilent || isPermissionGrant) {
+        setIsTyping(true);
+        setStatusDisplay('Thinking...');
       }
+      processedTagsRef.current.clear();
+      let serverAudioPlayed = false;
+      const patchBot = (fn: (m: ChatMessage) => ChatMessage) => setMessages(prev => prev.map(m => m.id === tempBotId ? fn(m) : m));
+
+      await chatStream.stream(getApiUrl('/chat'), readToken(), {
+          message: finalText,
+          images: images,
+          audio: audioBase64,
+          forceReply: isPermissionGrant,
+          isVoiceMode: isVoiceMode,
+          userLocalTime: new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true }),
+          userLocalHour: new Date().getHours(),
+          thinkingMode: !!(user as any)?.thinkingMode,
+          timeZone: deviceTimeZone(), // check-ins + "today" follow the user's own clock
+          tempId: tempId
+      }, {
+          onContent: (raw) => {
+              const cleanContent = processMagicTags(raw);
+              setMessages(prev => {
+                  const index = prev.findIndex(m => m.id === tempBotId);
+                  if (index === -1) return prev; // replaced by a sync broadcast — don't duplicate
+                  const newArr = [...prev];
+                  newArr[index] = { ...newArr[index], content: cleanContent };
+                  return newArr;
+              });
+          },
+          onEvent: (data, ctx) => {
+              // A0. SAFETY / CLOSENESS / THINKING EVENTS (Phase 3)
+              if (data.type === 'safety') {
+                  setSafetyInfo({ level: data.level, helplines: data.helplines || [] });
+                  // pending check-in notifications are cancelled for 48 h after a crisis (server decides; refresh now)
+                  if (data.level === 'crisis') window.dispatchEvent(new Event('aastha:reach-out-refresh'));
+              }
+              if (data.type === 'error' && data.message) setError(String(data.message));
+              if (data.type === 'clone' && data.name) {
+                  setCloneName(data.name);
+                  patchBot(m => ({ ...m, isClone: true }));
+              }
+              if (data.type === 'gif' && data.gif?.url && /^https:\/\//.test(data.gif.url)) patchBot(m => ({ ...m, gif: data.gif }));
+              // Your own voice note: show it as a bubble with its transcript (7.4)
+              if (data.type === 'transcript' && tempId) {
+                  setMessages(prev => prev.map(m => m.id === tempId ? { ...m, content: data.text || m.content, voice_note: data.voice_note ? resolveAudioUrl(data.voice_note) : m.voice_note } : m));
+              }
+              // Saved ids → reactions are stored against the real message (7.4)
+              if (data.type === 'saved' && data.assistantId) {
+                  setMessages(prev => prev.map(m => m.id === tempBotId ? { ...m, id: data.assistantId } : m));
+              }
+              if (data.type === 'clone_paused') {
+                  toast(data.reason === 'safety'
+                      ? `I've paused the imitation — ${botName} is here with you now.`
+                      : `That's today's ${data.limit} imitation replies — ${botName} is replying instead.`,
+                      { icon: data.reason === 'safety' ? '💜' : '⏳', style: { borderRadius: '12px', background: '#1f1b2e', color: '#fff' }, duration: 5000 });
+              }
+              if (data.type === 'bond' && data.name) {
+                  toast(`You and ${botName} are now: ${data.name}`, { icon: '💞', style: { borderRadius: '12px', background: '#1f1b2e', color: '#fff' }, duration: 4000 });
+              }
+              if (data.type === 'thinking_start' || data.type === 'reasoning' || data.type === 'thinking_end') {
+                  setStatusDisplay(data.type === 'thinking_end' ? 'Typing...' : 'Thinking it through...');
+                  patchBot(m => ({
+                      ...m,
+                      isThinking: data.type !== 'thinking_end',
+                      reasoning: data.type === 'reasoning' ? (m.reasoning || '') + (data.content || '') : m.reasoning,
+                  }));
+              }
+
+              // A. HANDLE THOUGHT (THE BRAIN)
+              if (data.type === 'thought' && data.content) {
+                  const brain = data.content;
+                  setLastSubconscious(brain);
+                  if (brain.mood) setCurrentMood(brain.mood);
+                  if (brain.status_display) setStatusDisplay(brain.status_display);
+                  if (brain.suggested_replies) setSuggestedChips(brain.suggested_replies);
+                  if (brain.ui_action) setUiAction(brain.ui_action as any);
+
+                  // Sticky Reaction on the last user message (the one we just sent)
+                  if (brain.reaction) {
+                      setMessages(prev => {
+                          const newList = [...prev];
+                          for (let i = newList.length - 1; i >= 0; i--) {
+                              if (newList[i].role === 'user') { newList[i] = { ...newList[i], reaction: brain.reaction }; break; }
+                          }
+                          return newList;
+                      });
+                  }
+
+                  // App tools → proposal chips (rendered by MessageBubble)
+                  (brain.tool_calls || []).forEach((tool: any) => {
+                      let toolName = '';
+                      let params = {};
+                      let reason = "I can help with that";
+                      if (tool.name === 'control_widget') {
+                          toolName = tool.params.widget;
+                          params = tool.params.params || tool.params;
+                      } else if (tool.name === 'write_diary') {
+                          toolName = 'diary';
+                          params = tool.params;
+                          reason = "Write in Diary";
+                      }
+                      if (toolName === 'voice_hug') ctx.append(`\n\n[Voice Hug Playing 🎵]`);
+                      if (toolName) ctx.append(`\n<proposal tool="${toolName}" params='${JSON.stringify(params)}' reason="${reason}" />`);
+                  });
+
+                  // Listening mode: no reply coming
+                  if (brain.strategy === 'listen') {
+                      setIsTyping(false);
+                      if (!ctx.raw) setMessages(prev => prev.filter(m => m.id !== tempBotId));
+                  }
+              }
+
+              // B. HANDLE META
+              if (data.meta) {
+                  if (data.meta.credits !== undefined) setLocalCredits(data.meta.credits === '∞' ? 9999 : Number(data.meta.credits));
+                  if (data.meta.resetsAt !== undefined) setQuotaResetsAt(data.meta.resetsAt);
+                  if (data.meta.mode) {
+                      setModelMode(data.meta.mode);
+                      setIsStandardMode(data.meta.mode === 'standard');
+                  }
+                  if (data.meta.voice_status === 'failed') {
+                      const hasProAccess = user?.isPro || (user?.credits || 0) > 0 || data.meta.use_fallback_tts;
+                      if (!hasProAccess) {
+                          toast("My voice engine is taking a nap. Waking up... try again in 1 minute.", { icon: '😴', style: { borderRadius: '10px', background: '#333', color: '#fff' }, duration: 4000 });
+                          serverAudioPlayed = true;
+                      }
+                  }
+              }
+
+              // C. VOICE NOTE
+              if (data.voice_note && data.type !== 'transcript') patchBot(m => ({ ...m, voice_note: resolveAudioUrl(data.voice_note) }));
+
+              // D. STREAMING AUDIO
+              if (data.voice_audio) {
+                  serverAudioPlayed = true;
+                  speakMessage(resolveAudioUrl(data.voice_audio));
+              }
+          },
+          onDone: (raw) => {
+              const cleanFinal = processMagicTags(raw);
+              if ((isVoiceMode || ttsEnabled) && raw && !serverAudioPlayed) speakMessage(cleanFinal);
+          },
+          onError: (err: any) => {
+              if (err instanceof StreamHttpError && err.status === 401) { setError("Session expired. Please login again."); return; }
+              console.error(err);
+              setMessages(prev => prev.filter(m => m.id !== tempBotId));
+              setError(err?.message || `${botName} is unreachable.`);
+          },
+          onAbort: () => console.log("Generation stopped by user."),
+          // Always runs (done, error or stop) — the header can't stay on "Typing…" any more (7.1)
+          onSettled: ({ superseded }) => {
+              if (superseded) return;
+              setIsTyping(false);
+              settleStatus();
+          },
+      });
   };
 
   const handleSend = async (e?: React.FormEvent, overrideInput?: string, overrideImage?: string, audioBlob?: Blob) => {
@@ -932,8 +924,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     if (attachedImage || overrideImage) { finalContent = `[Image Attached] ${finalContent}`; }
     if (audioBlob) { finalContent = `[Voice Note]`; }
 
-    // 1. UPDATE UI IMMEDIATELY
-    const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}` };
+    // 1. UPDATE UI IMMEDIATELY (your voice note plays from the device until the server copy arrives)
+    const userMsg: ChatMessage = { role: 'user', content: finalContent, timestamp: Date.now(), id: `local-${Date.now()}`, ...(audioBlob ? { voice_note: URL.createObjectURL(audioBlob) } : {}) };
     const updatedMessages = [...messages, userMsg];
     const SLICE_LIMIT = 50;
     
@@ -952,7 +944,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current); // Kill timer
     }
 
-    if (isPermissionGrant || isVoiceMode) {
+    if (isPermissionGrant || isVoiceMode || audioBlob) {
         // BYPASS DEBOUNCE for Force Reply or Voice Mode
         if (sendDebounceTimer.current) clearTimeout(sendDebounceTimer.current);
 
@@ -962,7 +954,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
         // Add placeholder bubble
         const tempBotId = `temp-${Date.now()}`;
-        const nextState = [...updatedMessages, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
+        const nextState: ChatMessage[] = [...updatedMessages, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
         setMessages(nextState.length > SLICE_LIMIT ? nextState.slice(nextState.length - SLICE_LIMIT) : nextState);
 
         // Fire API Immediately
@@ -998,7 +990,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
         if (shouldShowBubble) {
             setMessages(prev => {
-                 const withBot = [...prev, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
+                 const withBot: ChatMessage[] = [...prev, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }];
                  return withBot.length > SLICE_LIMIT ? withBot.slice(withBot.length - SLICE_LIMIT) : withBot;
             });
         }
@@ -1008,6 +1000,28 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
     }, 6000); // 6 Seconds Pause (High Latency Mode)
   };
+
+  // --- REACTIONS on Aastha's replies (7.4) ---
+  const reactTo = async (msgId: string | undefined, emoji: string | null) => {
+      if (!msgId || !/^[0-9a-f]{24}$/i.test(msgId)) { toast('One sec — still saving that message…', { icon: '⏳' }); return; }
+      let previous: string | null | undefined;
+      setMessages(prev => prev.map(m => { if (m.id !== msgId) return m; previous = m.myReaction; return { ...m, myReaction: emoji }; }));
+      try {
+          await api.post('/chat/react', { messageId: msgId, reaction: emoji });
+      } catch {
+          setMessages(prev => prev.map(m => m.id === msgId ? { ...m, myReaction: previous ?? null } : m));
+          toast.error("Couldn't save that reaction");
+      }
+  };
+
+  // --- VOICE NOTES you record (7.4) ---
+  const recorder = useVoiceRecorder((msg) => setError(msg));
+  const sendRecording = async () => {
+      const blob = await recorder.stop();
+      if (!blob || blob.size < 800) { toast('That was too short to send', { icon: '🎙️' }); return; }
+      handleSend(undefined, undefined, undefined, blob);
+  };
+  const startRecording = () => { if (isDictating) toggleDictation(); recorder.start(() => { sendRecording(); }); };
 
   const processMagicTags = (text: string) => {
     // Legacy Tag Processing (Retained for backward compat)
@@ -1140,7 +1154,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              <React.Fragment key={domId}>
                 {showSeparator && (
                     <div className="flex justify-center my-8 shrink-0">
-                        <span className={`text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm ${isLowPowerMode ? 'bg-black/40 text-white/50 border border-white/10' : 'bg-black/30 backdrop-blur-md border border-white/5 text-white/50'}`}>{dateLabel}</span>
+                        <span className={`text-[10px] font-medium px-4 py-1 rounded-full uppercase tracking-widest shadow-sm bg-md-surface-container text-md-on-surface-variant`}>{dateLabel}</span>
                     </div>
                 )}
                 <div 
@@ -1153,6 +1167,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         timestamp={msg.timestamp}
                         reaction={msg.reaction}
                         voice_note={msg.voice_note} // Pass Voice Note
+                        reasoning={msg.reasoning}
+                        isClone={msg.isClone}
+                        gif={msg.gif}
+                        myReaction={msg.myReaction}
+                        onReact={msg.role === 'assistant' && !isCurrentlyStreaming ? (emo) => reactTo(msg.id, emo) : undefined}
+                        cloneName={cloneName || undefined}
+                        isDeepThinking={msg.isThinking}
                         mood={currentMood}
                         onReply={() => handleReply(msg.content)} 
                         onCopy={copyToClipboard}
@@ -1198,7 +1219,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     // 3. FIXED: 'md:pl-80' keeps it right of the sidebar on PC.
     <div 
         id="chat-view-container"
-        className="fixed inset-0 w-full flex flex-col items-center overflow-hidden bg-transparent md:pl-80 overscroll-none touch-none"
+        className="fixed inset-0 w-full flex flex-col items-center overflow-hidden bg-transparent md:pl-[var(--sidebar-space,20rem)] md:transition-[padding] md:duration-300 overscroll-none touch-none"
     >
       
       {/* 1. GLOBAL BACKGROUNDS & WALLPAPER */}
@@ -1208,15 +1229,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                   className="w-full h-full bg-cover bg-center bg-no-repeat"
                   style={{ backgroundImage: `url(${user.wallpaper})` }}
               >
-                  <div className="absolute inset-0 bg-black/60 md:bg-black/40" />
+                  <div className="absolute inset-0 bg-black/[0.72] md:bg-black/50" /> {/* M8: darker so chat text stays readable over photos */}
               </div>
           ) : (
-              <div className="w-full h-full bg-[#0a0e17] md:bg-transparent" />
+              <>
+                {/* Phone: soft colour "aura" from the user's own palette — gives the liquid glass something to
+                    refract (glass over a flat colour just looks grey). Static gradients: no GPU cost. */}
+                <div className="md:hidden w-full h-full" style={{ background: `
+                  radial-gradient(70% 42% at 88% 6%, rgb(var(--md-primary) / 0.26), transparent 72%),
+                  radial-gradient(62% 38% at 4% 46%, rgb(var(--md-tertiary) / 0.18), transparent 72%),
+                  radial-gradient(80% 45% at 75% 98%, rgb(var(--md-secondary) / 0.20), transparent 70%),
+                  linear-gradient(180deg, rgb(var(--md-surface-container-low)), rgb(var(--md-surface)) 55%, rgb(var(--md-surface-container-lowest)))` }} />
+                <div className="hidden md:block w-full h-full bg-transparent" />
+              </>
           )}
 
           {/* LITE MODE: No noise texture */}
           {!isLowPowerMode && (
-              <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
+              <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.03] mix-blend-overlay" />
           )}
       </div>
 
@@ -1231,10 +1261,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           )}
       </AnimatePresence>
 
-      {/* CLONE MODE HEADER OVERLAY */}
+      {/* CLONE MODE BANNER — always clear that replies are an AI imitation */}
       {isCloneMode && (
-         <div className="absolute top-0 left-0 right-0 h-14 z-20 bg-purple-500/20 backdrop-blur-md flex items-center justify-center pointer-events-none">
-             <span className="text-purple-200 font-bold tracking-wider text-xs uppercase animate-pulse">Clone Mode Active</span>
+         <div className={`z-30 flex justify-center px-3 ${isMobile ? 'mt-2' : 'mt-1'}`}>
+             <div className="flex items-center gap-2 pl-3 pr-1 py-1 rounded-full bg-md-tertiary-container text-md-on-tertiary-container text-xs shadow-md">
+                 <span>🎭 Chatting with an <strong>AI imitation</strong> of {cloneName}</span>
+                 <button
+                     onClick={async () => { try { await api.put('/users/clone-settings', { isActive: false }); setCloneName(null); toast(`Back to ${botName} 💜`); } catch { /* ignore */ } }}
+                     className="px-2.5 py-1 rounded-full bg-black/20 hover:bg-black/30 font-medium">
+                     Turn off
+                 </button>
+             </div>
          </div>
       )}
 
@@ -1272,11 +1309,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       {/* --- SECTION 1: HEADER --- */}
       {/* LITE MODE: Updated to use transparent black for "See-Through" effect */}
-      <div className={`shrink-0 w-full z-30 pt-[env(safe-area-inset-top)] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-2 pointer-events-auto ${isMobile ? (isLowPowerMode ? 'bg-[#0a0e17]/80' : 'bg-gradient-to-b from-black/80 to-transparent') : 'md:top-0 md:pt-6 bg-none'}`}>
+      <div
+        ref={headerRef}
+        onPointerMove={isMobile ? specular : undefined}
+        className={`shrink-0 z-30 pointer-events-auto ${isMobile
+          ? 'glass glass-clear glass-specular absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+0.5rem)] rounded-[28px] px-2 py-0.5'
+          // PC: floats over the messages too (no bar, no hard edge) — messages fade out as they reach it (mask below)
+          : 'absolute top-0 left-[var(--sidebar-space,20rem)] right-0 transition-[left] duration-300 pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-2 pt-6 bg-none'}`}>
         <div className="flex items-center gap-3 h-14 justify-between relative">
              <div className="shrink-0 flex items-center z-20">
                  {/* LITE MODE: Remove backdrop-blur */}
-                 <button id="mobile-menu-btn" onClick={onMobileMenuClick} className={`p-2.5 rounded-full border border-white/5 text-white/70 bg-black/20 ${!isLowPowerMode ? 'backdrop-blur-md' : ''} ${!isMobile ? 'md:hidden' : ''}`}>
+                 <button id="mobile-menu-btn" onClick={onMobileMenuClick} className={`p-2.5 rounded-full border border-white/5 text-white/70 bg-white/[0.06]  ${!isMobile ? 'md:hidden' : ''}`}>
                     <Menu size={20} />
                  </button>
              </div>
@@ -1319,7 +1362,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
-                                className={`flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/20 border border-white/5 shadow-lg cursor-pointer hover:bg-black/30 transition-colors ${!isLowPowerMode ? 'backdrop-blur-xl' : ''}`}
+                                className={`flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.06] border border-white/5 shadow-lg cursor-pointer hover:bg-white/[0.08] transition-colors `}
                             >
                                 <div className={`w-2 h-2 rounded-full ${currentActivity === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : `bg-amber-400 ${!isLowPowerMode ? 'animate-pulse' : ''}`}`} />
                                 <span className="text-xs font-medium text-white/80 tracking-wide uppercase">{statusDisplay}</span>
@@ -1331,18 +1374,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
              <div className="shrink-0 flex items-center gap-3 justify-end z-20">
                  {/* CREDITS INDICATOR */}
-                 <div className={`hidden md:flex px-3 py-1.5 rounded-full border items-center gap-2 shadow-lg transition-colors ${!isLowPowerMode ? 'backdrop-blur-xl' : ''} ${!isStandardMode ? 'bg-black/30 border-white/10' : 'bg-white/5 border-white/5'}`}>
-                    {!isStandardMode ? <Zap size={14} className="text-amber-300" fill="currentColor" /> : <Leaf size={14} className="text-emerald-400" fill="currentColor" />}
-                    <span className={`text-xs font-mono font-bold ${!isStandardMode ? 'text-white/60' : 'text-white/40'}`}>
-                        {!isStandardMode ? (localCredits > 100 ? '∞' : `${isNaN(localCredits) ? 0 : localCredits} Premium`) : 'Eco Mode'}
-                    </span>
-                 </div>
+                 {(() => {
+                    const plan = planLabel(user as any, localCredits, new Date(), quotaResetsAt);
+                    return (
+                      <div data-testid="plan-pill" title={plan.hint ? `${plan.text} · ${plan.hint}` : plan.text} className={`hidden md:flex px-3 py-1.5 rounded-full border items-center gap-2 shadow-lg transition-colors ${plan.kind !== 'eco' ? 'bg-white/[0.08] border-white/10' : 'bg-white/5 border-white/5'}`}>
+                        {plan.kind === 'eco' ? <Leaf size={14} className="text-emerald-400" fill="currentColor" /> : <Zap size={14} className="text-amber-300" fill="currentColor" />}
+                        <span className={`text-xs font-medium whitespace-nowrap ${plan.kind !== 'eco' ? 'text-white/70' : 'text-white/45'}`}><span className="xl:hidden">{plan.short}</span><span className="hidden xl:inline">{plan.text}</span></span>
+                      </div>
+                    );
+                 })()}
 
                  {/* HEADPHONE ICON */}
                  <button
                     onClick={() => toggleVoiceMode()}
                     disabled={isStandardMode && !user?.isPro}
-                    className={`shrink-0 w-10 h-10 rounded-full border border-white/10 flex items-center justify-center transition-all shadow-lg ${!isLowPowerMode ? 'backdrop-blur-xl' : ''} ${isVoiceMode ? 'bg-red-500 text-white hover:bg-red-600' : (isStandardMode && !user?.isPro ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-black/20 text-white/70 hover:bg-white/10 hover:text-white')}`}
+                    className={`shrink-0 w-10 h-10 rounded-full border border-white/10 flex items-center justify-center transition-all shadow-lg  ${isVoiceMode ? 'bg-red-500 text-white hover:bg-red-600' : (isStandardMode && !user?.isPro ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white')}`}
                  >
                     <Headphones size={18} />
                  </button>
@@ -1351,7 +1397,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     initial={false}
                     animate={{ width: isSearchOpen ? (isMobile ? 200 : 300) : 40 }}
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    className={`flex items-center h-10 rounded-full border ${isSearchOpen ? 'bg-black/60 border-white/10 px-3' : 'bg-black/20 border-transparent justify-center'}`}
+                    className={`flex items-center h-10 rounded-full border ${isSearchOpen ? 'bg-black/60 border-white/10 px-3' : 'bg-white/[0.06] border-transparent justify-center'}`}
                  >
                      {isSearchOpen ? (
                          <>
@@ -1387,15 +1433,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
         </div>
       </div>
       
-      <AnimatePresence>{error && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-red-500/10 border border-red-500/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-red-200 text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>}</AnimatePresence>
+      <AnimatePresence>
+        {safetyInfo && <SafetyBanner info={safetyInfo} botName={botName} onDismiss={() => setSafetyInfo(null)} />}
+      </AnimatePresence>
+      <AnimatePresence>{error && (
+        // wrapper centres it — framer-motion's y animation would overwrite a -translate-x-1/2 transform
+        <div className="absolute inset-x-0 top-24 z-40 flex justify-center px-3 pointer-events-none">
+          <motion.div role="alert" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="pointer-events-auto bg-md-error/15 border border-md-error/30 px-4 py-2 rounded-full flex items-center gap-3 text-md-error text-sm shadow-xl cursor-pointer" onClick={() => setError(null)}><AlertCircle size={16} /> {error}</motion.div>
+        </div>
+      )}</AnimatePresence>
 
       {/* --- SECTION 2: CHAT AREA --- */}
       <div 
           ref={messagesContainerRef}
           onScroll={handleScroll}
           // ADDED: touch-auto to allow scrolling messages
-          className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden px-4 md:px-6 py-4 pb-32 touch-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
-          style={{ width: '100%', overflowAnchor: 'none' }}
+          className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden px-4 md:px-6 touch-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
+          style={{ width: '100%', overflowAnchor: 'none', paddingTop: (chromeH.top || 0) + 16,
+            // one continuous surface: content dissolves under the floating header / message bar instead of being cut
+            ...(chromeH.top ? (() => { const m = `linear-gradient(to bottom, transparent 0, transparent ${isMobile ? 0 : Math.round(chromeH.top * 0.5)}px, #000 ${isMobile ? Math.round(chromeH.top * 0.35) : chromeH.top + 24}px, #000 calc(100% - ${Math.round(chromeH.bottom * 0.45)}px), rgb(0 0 0 / 0.35) 100%)`; return { maskImage: m, WebkitMaskImage: m }; })() : {}), paddingBottom: (chromeH.bottom || 128) + 12, scrollPaddingTop: chromeH.top + 16, scrollPaddingBottom: chromeH.bottom + 12 }}
       >
           {renderMessages()}
           <div ref={messagesEndRef} />
@@ -1410,7 +1466,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                 exit={{ opacity: 0, y: 10 }}
                 onClick={scrollToBottom}
                 // LITE MODE: Simplified
-                className={`fixed bottom-48 left-1/2 -translate-x-1/2 bg-black/60 border border-white/10 text-white/80 p-2 rounded-full shadow-xl z-50 hover:bg-white/10 hover:text-white transition-colors ${!isLowPowerMode ? 'backdrop-blur-md' : ''}`}
+                aria-label="Scroll to latest"
+                className={`glass glass-pill fixed right-4 z-50 p-2.5 text-md-on-surface hover:brightness-110 transition ${isMobile ? 'bottom-[calc(10.5rem+env(safe-area-inset-bottom))]' : 'bottom-36'}`}
             >
                 <ArrowDown size={20} />
             </motion.button>
@@ -1419,7 +1476,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       {/* --- SECTION 3: INPUT AREA --- */}
       {/* FIXED: pb-6 adds padding so the input text isn't covered by Android gesture bar */}
-      <div className={`shrink-0 w-full pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pb-10 pt-2 z-30 max-w-[700px] mx-auto ${isMobile ? (isLowPowerMode ? 'bg-[#0a0e17]/80' : 'bg-gradient-to-t from-black via-black/80 to-transparent') : 'md:pb-6 bg-none'}`}>
+      <div ref={inputBarRef} className={`absolute bottom-0 left-0 right-0 md:left-[var(--sidebar-space,20rem)] md:transition-[left] md:duration-300 w-full pl-[calc(0.75rem+env(safe-area-inset-left))] pr-[calc(0.75rem+env(safe-area-inset-right))] pt-2 z-30 max-w-[700px] mx-auto pointer-events-none [&>*]:pointer-events-auto ${isMobile ? 'pb-[calc(5.5rem+env(safe-area-inset-bottom))]' : 'md:pb-6 bg-none'}`}>
           <div className="flex flex-col gap-2">
              <AnimatePresence>
                  {replyingTo && (
@@ -1476,7 +1533,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
              {/* INPUT AREA */}
              {/* LITE MODE: Removed backdrop-blur-3xl */}
-             <div id="chat-input-area" className={`relative flex items-center gap-3 bg-[#0a0e17]/60 border ${uiAction === 'listen' ? 'border-teal-500/50 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'border-white/5'} p-2 pr-2 pl-3 shadow-2xl transition-all ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'} ${!isLowPowerMode ? 'backdrop-blur-3xl' : ''}`}>
+             <div
+               id="chat-input-area"
+               onPointerMove={specular}
+               className={`glass glass-clear glass-specular glass-refract relative flex items-center gap-3 p-2 pr-2 pl-3 transition-all duration-300 ease-md-emphasized ${uiAction === 'listen' ? '!border-md-primary/60 ring-2 ring-md-primary/20' : ''} ${replyingTo ? 'rounded-b-[2rem] rounded-t-none' : 'rounded-[2rem]'}`}>
                  {uiAction === 'listen' && (
                      <div className="absolute -top-8 left-0 right-0 flex justify-center pointer-events-none">
                          <motion.div
@@ -1509,7 +1569,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         </button>
                     </div>
 
-                    <form onSubmit={handleSend} className="flex-1 flex items-center relative h-full">
+                    {recorder.isRecording && (
+                        <div className="flex-1 flex items-center gap-3 h-12 px-2" role="status" aria-live="polite">
+                            <span className="w-2.5 h-2.5 rounded-full bg-md-error animate-pulse" />
+                            <span className="text-sm font-mono text-md-on-surface">{formatClock(recorder.seconds)}</span>
+                            <span className="text-xs text-white/40 truncate">Recording… tap send when done</span>
+                            <button type="button" onClick={recorder.cancel} aria-label="Discard recording" className="ml-auto p-2 rounded-full text-white/50 hover:text-white hover:bg-white/10"><Trash2 size={18} /></button>
+                        </div>
+                    )}
+                    <form onSubmit={handleSend} className={`flex-1 flex items-center relative h-full ${recorder.isRecording ? 'hidden' : ''}`}>
                         <textarea
                             ref={textareaRef}
                             value={input}
@@ -1545,11 +1613,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         </div>
                     </form>
 
+                    {!isTyping && !recorder.isRecording && !input.trim() && !attachedImage && recorder.isSupported ? (
                     <button
-                        onClick={(e) => isTyping ? handleStop() : handleSend(e)}
-                        disabled={!isTyping && !input.trim() && !attachedImage}
-                        className={`p-3.5 rounded-full text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-1 ${isTyping ? 'bg-red-500 hover:bg-red-600' : ''}`}
-                        style={{ background: isTyping ? undefined : `linear-gradient(135deg, ${currentTheme.primaryColor}, #4f46e5)` }}
+                        type="button"
+                        onClick={startRecording}
+                        aria-label="Record a voice note"
+                        title="Record a voice note"
+                        className="p-3.5 rounded-full shadow-lg hover:brightness-110 active:scale-95 transition-all duration-200 ease-md-emphasized ml-1 bg-md-primary text-md-on-primary"
+                    >
+                        <AudioLines size={18} />
+                    </button>
+                    ) : (
+                    <button
+                        onClick={(e) => recorder.isRecording ? sendRecording() : isTyping ? handleStop() : handleSend(e)}
+                        disabled={!isTyping && !recorder.isRecording && !input.trim() && !attachedImage}
+                        aria-label={recorder.isRecording ? 'Send voice note' : isTyping ? 'Stop' : 'Send'}
+                        className={`p-3.5 rounded-full shadow-lg hover:brightness-110 active:scale-95 transition-all duration-200 ease-md-emphasized disabled:opacity-40 disabled:cursor-not-allowed ml-1 ${isTyping ? 'bg-md-error text-md-on-error' : 'bg-md-primary text-md-on-primary'}`}
                     >
                         {isTyping ? (
                             <div className="w-[18px] h-[18px] flex items-center justify-center">
@@ -1559,6 +1638,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                             <Send size={18} className="ml-0.5" fill="currentColor" />
                         )}
                     </button>
+                    )}
                     </>
              </div>
           </div>

@@ -15,7 +15,11 @@ const PERMISSIONS = [
     '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
     '<uses-permission android:name="android.permission.WAKE_LOCK" />',
     '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
-    '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />' // Android 14 requirement
+    '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />', // Android 14 requirement
+    '<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />', // on-time reminders (Android 12+)
+    '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />', // restore reminders after reboot
+    '<uses-permission android:name="android.permission.RECORD_AUDIO" />', // voice notes + dictation (7.4)
+    '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />'
 ];
 
 // 1. Inject Permissions

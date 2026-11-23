@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config(); // Must be first to ensure env vars are loaded before imports
+import { captureError, flushMonitoring } from './monitoring'; // crash reporting (off without SENTRY_DSN)
 
 import express, { Request, Response, NextFunction } from 'express';
 import { createServer } from 'http';
@@ -12,7 +13,9 @@ import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
 import Redis from 'ioredis';
 import jwt from 'jsonwebtoken'; // ✅ REQUIRED IMPORT
-import connectDB from './db'; 
+import mongoose from 'mongoose';
+import connectDB, { isDbReady } from './db';
+import { scheduleKeyRotation } from './services/keyRotation';
 import authRoutes from './routes/authRoutes';
 import chatRoutes from './routes/chatRoutes';
 import dataRoutes from './routes/dataRoutes';
@@ -29,7 +32,22 @@ if (missingVars.length > 0) {
     process.exit(1); // Stop the server immediately
 }
 
+// --- PROCESS SAFETY NET (stops stray async errors from killing the API) ---
+process.on('unhandledRejection', (reason) => {
+    // Log and keep serving: a failed background promise (memory, email, donation) must not take the API down.
+    console.error('[Process] Unhandled promise rejection:', reason);
+    captureError(reason, { kind: 'unhandledRejection' });
+});
+
+process.on('uncaughtException', (err) => {
+    // State may be corrupt after a synchronous throw: log, close gracefully, let Render restart us.
+    console.error('[Process] Uncaught exception — shutting down gracefully:', err);
+    captureError(err, { kind: 'uncaughtException' });
+    flushMonitoring().finally(() => shutdown(1));
+});
+
 connectDB();
+scheduleKeyRotation(); // re-encrypts stored data onto the current keys after a rotation (services/keyRotation.ts)
 
 // Init Ghost Service (This line caused the error before because ghostService.ts was outdated)
 ghostService.init();
@@ -108,7 +126,8 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization','X-Requested-With']
+  allowedHeaders: ['Content-Type','Authorization','X-Requested-With','X-Time-Zone'],
+  exposedHeaders: ['X-Has-More']
 }));
 
 app.use(compression()); // Compress all responses
@@ -172,23 +191,52 @@ const apiLimiter = rateLimit({
     store: limiterStore
 });
 
-app.get('/health', (_req: Request, res: Response) => res.json({ status: 'ok', ts: new Date() }));
+// Always 200 so a DB blip doesn't make Render restart the service; `db` shows real state.
+app.get('/health', (_req: Request, res: Response) =>
+  res.json({ status: 'ok', db: isDbReady() ? 'up' : 'reconnecting', ts: new Date() })
+);
 
 // Mount routers
 app.use('/api/users', authLimiter, authRoutes);
-app.use('/api/chat', chatLimiter, chatRoutes);
+// Only SENDING a message counts against the chat limit; history reads use the general API limit.
+// (Before, history refetches on every tab switch ate the 20/min chat budget → users' messages got 429.)
+app.use('/api/chat', (req, res, next) => (req.method === 'POST' ? chatLimiter(req, res, next) : apiLimiter(req, res, next)), chatRoutes);
 app.use('/api/ai', apiLimiter, aiRoutes);
 app.use('/api/data', apiLimiter, dataRoutes);
 
 // Error handler
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   console.error(err.stack);
-  res.status(500).json({ message: 'Internal Server Error', error: err.message });
+  captureError(err, { route: String(req.baseUrl || '') + String(req.route?.path || '') });
+  // Never leak internal error details to clients
+  if (res.headersSent) return;
+  res.status(500).json({ message: 'Internal Server Error' });
 });
 
 const PORT = Number(process.env.PORT) || 5000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
+});
+
+// --- GRACEFUL SHUTDOWN (Render sends SIGTERM on deploys/restarts) ---
+let shuttingDown = false;
+function shutdown(code: number) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    // Hard stop if graceful close hangs
+    setTimeout(() => process.exit(code), 10_000).unref();
+    try {
+        server.close(() => {
+            mongoose.connection.close().finally(() => process.exit(code));
+        });
+    } catch {
+        process.exit(code);
+    }
+}
+
+process.on('SIGTERM', () => {
+    console.log('[Process] SIGTERM received — closing gracefully.');
+    shutdown(0);
 });
 
 export default app;

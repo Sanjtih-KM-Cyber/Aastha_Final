@@ -3,6 +3,7 @@ import api from '../services/api';
 import { AuthState, User } from '../types';
 import { deriveKey } from '../utils/encryptionUtils';
 import { AUTH_UNAUTHORIZED_EVENT } from '../constants';
+import { chatCache } from '../services/chatCache';
 
 const getClientServerDecrypt = (ciphertext: string) => {
   try {
@@ -17,6 +18,9 @@ const getClientServerDecrypt = (ciphertext: string) => {
 interface RegisterData {
   name: string;
   email: string;
+  username?: string;
+  dateOfBirth?: string;
+  acceptTerms?: boolean; // recorded with version + time on the server
   password: string;
   diaryPassword?: string;
   securityQuestions: { question: string; answer: string }[];
@@ -89,6 +93,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('userInfo');
       sessionStorage.removeItem('userInfo'); // Tab Isolation Clear
       localStorage.removeItem('auth_last_active'); // Clear lock timer on explicit logout
+      chatCache.clearAll(); // Don't leave private chat text on the device after logout
+      import('../services/followUpCheckIns').then(m => m.followUpCheckIns.cancelAll()).catch(() => {}); // no check-ins for a logged-out phone
 
       setState({
         user: null,

@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { Play, Pause, RotateCcw, Settings, Check, AlertCircle, Clock } from 'lucide-react';
+import { Icons } from '../../design/icons';
+import { Button, IconButton } from '../../design/ui';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { NOTIF_IDS, CHANNELS, cancelIds, scheduleOne } from '../../services/notifications';
 import { App as CapacitorApp } from '@capacitor/app';
 import { backgroundService } from '../../services/backgroundService';
 
@@ -273,6 +276,22 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
       }
   }, [isOpen, initialParams]);
 
+  // Pre-schedule the end-of-session alert with the OS. JS timers pause when the app is backgrounded
+  // or the screen is locked, so a notification sent "when timeLeft hits 0" never arrived on phones.
+  useEffect(() => {
+    if (isActive && targetEndTime && targetEndTime > Date.now() + 1000) {
+      scheduleOne({
+        id: NOTIF_IDS.POMODORO_DONE,
+        title: mode === 'focus' ? "Session complete! 🎉" : "Break over! 🚀",
+        body: mode === 'focus' ? "Great work. Time to recharge." : "Ready to focus again?",
+        at: new Date(targetEndTime),
+        channel: CHANNELS.TIMERS,
+      }).catch(console.error);
+    } else if (!isActive) {
+      cancelIds([NOTIF_IDS.POMODORO_DONE]);
+    }
+  }, [isActive, targetEndTime, mode]);
+
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     // ✅ ADDED CHECK: Only tick if Open AND Active
@@ -299,18 +318,9 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
       // Timer Finished Logic
       audioRef.current?.play().catch(e => console.log(e));
 
-      // Schedule a distinct "Finished" notification
-      LocalNotifications.schedule({
-        notifications: [{
-            id: 3001,
-            title: mode === 'focus' ? "Session Complete! 🎉" : "Break Over! 🚀",
-            body: mode === 'focus' ? "Great work. Time to recharge." : "Ready to focus again?",
-            schedule: { at: new Date() },
-            channelId: 'pop_notifications',
-            sound: undefined // Use channel default
-        }]
-      }).catch(console.error);
-      
+      // The "finished" notification is pre-scheduled with the OS for targetEndTime (see effect below),
+      // so it also fires when the phone is locked / app is in the background (M3).
+
       if (mode === 'focus') {
           // Focus Finished -> Auto-Start Break
           const nextDuration = breakDuration * 60;
@@ -403,208 +413,161 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onClose,
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Circular Progress Calculation
+  // Circular Progress Calculation (M3 circular progress: thick track + rounded active arc)
   const radius = 100;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference * (1 - progress);
+  const fill = (v: number, min: number, max: number) => ({ ['--fill' as any]: `${Math.round(((v - min) / (max - min)) * 100)}%` } as React.CSSProperties);
 
-  // --- MINIMIZED CONTENT ---
+  // --- MINIMIZED CONTENT (lives inside the glass title bar) ---
   const MinimizedContent = (
-      <div className="flex items-center gap-3">
-          {/* Time */}
-          <span className="text-xl font-mono font-bold text-white tabular-nums tracking-tight">
-              {formatTime(timeLeft)}
+      <div className="flex items-center gap-2">
+          <span className="text-lg font-semibold text-md-on-surface tabular-nums tracking-tight">{formatTime(timeLeft)}</span>
+          <span className={`text-[11px] font-medium px-2 h-6 inline-flex items-center rounded-full ${mode === 'focus' ? 'bg-md-primary-container text-md-on-primary-container' : 'bg-md-tertiary-container text-md-on-tertiary-container'}`}>
+              {mode === 'focus' ? 'Focus' : 'Break'}
           </span>
-
-          {/* Mode Badge */}
-          <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${mode === 'focus' ? 'bg-red-500/20 text-red-200' : 'bg-green-500/20 text-green-200'}`}>
-              {mode}
-          </span>
-
-          {/* Control */}
           <button
                 onClick={toggleTimer}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center shrink-0 ml-1"
+                aria-label={isActive ? 'Pause' : 'Start'}
+                className="w-8 h-8 rounded-full bg-md-primary text-md-on-primary flex items-center justify-center shrink-0"
           >
-              {isActive ? <Pause size={14} className="text-white"/> : <Play size={14} className="text-white ml-0.5"/>}
+              {isActive ? <Pause size={14} fill="currentColor"/> : <Play size={14} fill="currentColor" className="ml-0.5"/>}
           </button>
       </div>
   );
 
   return (
-    <DraggableWindow 
-      isOpen={isOpen} 
-      onClose={onClose} 
-      title="Flow Timer" 
-      initialWidth={340}
-      initialHeight={480}
+    <DraggableWindow
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Focus"
+      initialWidth={360}
+      initialHeight={540}
       defaultPosition={{ x: 80, y: 500 }}
       zIndex={zIndex || 10}
       onFocus={onFocus || (() => {})}
-      icon={Clock}
-      color="#F43F5E"
+      icon={Icons.focus}
       minimizedContent={MinimizedContent}
       mobileMinimizedType="squircle"
       persistenceKey={persistenceKey}
     >
-      <div className="flex flex-col items-center justify-center py-6 bg-black/80 h-full relative overflow-hidden font-sans">
-        
-        {/* Subtle Glow Background */}
-        <motion.div 
-            animate={{ opacity: isActive ? [0.1, 0.2, 0.1] : 0.05 }}
-            transition={{ duration: 4, repeat: Infinity }}
-            className="absolute inset-0 bg-gradient-to-t from-transparent to-transparent via-white/5 pointer-events-none"
-            style={{ background: `radial-gradient(circle at center, ${currentTheme.primaryColor}30 0%, transparent 70%)` }}
-        />
-
-        <button onClick={() => setIsEditing(!isEditing)} className="absolute top-3 right-3 text-white/30 hover:text-white transition-colors z-20">
-            <Settings size={16} />
-        </button>
-
+      <div className="flex flex-col h-full w-full font-sans px-3 pb-3 gap-3">
         <AnimatePresence mode="wait">
         {!isEditing ? (
-            <motion.div 
+            <motion.div
                 key="timer"
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="flex flex-col items-center z-10 w-full"
+                className="flex-1 min-h-0 flex flex-col gap-3"
             >
-                <div className="relative w-64 h-64 mb-8 flex items-center justify-center">
-                    {/* SVG Ring */}
-                    <svg className="absolute inset-0 w-full h-full -rotate-90 transform">
-                        <circle 
-                            cx="128" cy="128" r={radius} 
-                            stroke="rgba(255,255,255,0.05)" 
-                            strokeWidth="4" 
-                            fill="transparent" 
-                        />
-                        <motion.circle 
-                            cx="128" cy="128" r={radius}
-                            stroke={currentTheme.primaryColor}
-                            strokeWidth="4" 
-                            fill="transparent"
-                            strokeDasharray={circumference}
-                            animate={{ strokeDashoffset }}
-                            transition={{ duration: 1, ease: "linear" }}
-                            strokeLinecap="round"
-                            className="filter drop-shadow-[0_0_8px_currentColor]"
-                        />
-                    </svg>
-                    
-                    {/* Time Display */}
-                    <div className="text-center">
-                        <motion.div 
-                            key={formatTime(timeLeft)}
-                            className="text-6xl font-light font-mono tracking-tighter text-white tabular-nums"
-                        >
-                            {formatTime(timeLeft)}
-                        </motion.div>
-                        <p className="text-xs uppercase tracking-[0.4em] text-white/40 mt-2 font-medium">{mode}</p>
+                <div className="flex-1 min-h-0 rounded-[28px] bg-md-surface-container relative flex flex-col items-center justify-center py-4">
+                    <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
+                        <span className={`h-8 px-3 inline-flex items-center gap-1.5 rounded-full text-xs font-medium ${mode === 'focus' ? 'bg-md-primary-container text-md-on-primary-container' : 'bg-md-tertiary-container text-md-on-tertiary-container'}`}>
+                            {mode === 'focus' ? '🧠 Focus' : '🍃 Break'}
+                        </span>
+                        <IconButton label="Timer settings" onClick={() => setIsEditing(true)}><Settings size={18} /></IconButton>
+                    </div>
+
+                    <div className="relative w-60 h-60 flex items-center justify-center mt-6">
+                        <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 256 256">
+                            <circle cx="128" cy="128" r={radius} stroke="rgb(var(--md-surface-container-highest))" strokeWidth="12" fill="transparent" />
+                            <motion.circle
+                                cx="128" cy="128" r={radius}
+                                stroke="rgb(var(--md-primary))"
+                                strokeWidth="12"
+                                fill="transparent"
+                                strokeDasharray={circumference}
+                                animate={{ strokeDashoffset }}
+                                transition={{ duration: 1, ease: 'linear' }}
+                                strokeLinecap="round"
+                            />
+                        </svg>
+                        <div className="text-center">
+                            <div className="text-[56px] leading-none font-light text-md-on-surface tabular-nums tracking-tight">{formatTime(timeLeft)}</div>
+                            <p className="text-xs text-md-on-surface-variant mt-2">{mode === 'focus' ? `${focusDuration} min focus` : `${breakDuration} min break`}</p>
+                        </div>
+                    </div>
+
+                    <div className="h-8 mt-2 w-full px-6 text-center">
+                        <AnimatePresence mode="wait">
+                            {currentMessage && (
+                                <motion.p
+                                    key={currentMessage}
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -8 }}
+                                    className="text-sm font-medium text-md-on-surface"
+                                >
+                                    {currentMessage}
+                                </motion.p>
+                            )}
+                        </AnimatePresence>
                     </div>
                 </div>
-                
-                {/* Cheering Message Area */}
-                <div className="h-8 mb-4 w-full px-6 text-center">
-                    <AnimatePresence mode="wait">
-                        {currentMessage && (
-                            <motion.p 
-                                key={currentMessage}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                                className="text-sm font-medium text-white/90"
-                            >
-                                {currentMessage}
-                            </motion.p>
-                        )}
-                    </AnimatePresence>
-                </div>
 
-                {/* Controls */}
-                <div className="flex items-center gap-6">
-                    <button onClick={resetTimer} className="p-3 rounded-full text-white/30 hover:text-white hover:bg-white/5 transition-all"><RotateCcw size={20}/></button>
-                    <button 
-                        onClick={toggleTimer}
-                        className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center transition-all shadow-lg hover:scale-105 active:scale-95"
-                        style={{ backgroundColor: isActive ? 'white' : currentTheme.primaryColor, color: isActive ? 'black' : 'black' }}
-                    >
-                        {isActive ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
-                    </button>
-                    <div className="w-12"></div> {/* Spacer for balance */}
+                <div className="shrink-0 flex items-center gap-2">
+                    <IconButton variant="tonal" size="lg" label="Reset timer" onClick={resetTimer}><RotateCcw size={20}/></IconButton>
+                    <Button size="lg" className="flex-1" onClick={toggleTimer} icon={isActive ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}>
+                        {isActive ? 'Pause' : timeLeft < (mode === 'focus' ? focusDuration : breakDuration) * 60 ? 'Resume' : 'Start'}
+                    </Button>
                 </div>
             </motion.div>
         ) : (
-            <motion.div 
+            <motion.div
                 key="settings"
-                initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-                className="w-full px-8 z-10"
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
+                className="flex-1 flex flex-col gap-3"
             >
-                <h4 className="text-white font-serif text-xl mb-6 text-center">Timer Settings</h4>
-                
-                <div className="space-y-8">
-                    {/* Focus Slider */}
+                <div className="rounded-[28px] bg-md-surface-container p-5 space-y-6">
+                    <h4 className="text-md-on-surface text-lg font-medium">Timer lengths</h4>
                     <div>
-                        <div className="flex justify-between text-xs text-white/50 uppercase tracking-widest mb-2">
-                            <span>Focus</span>
-                            <span>{focusDuration} min</span>
+                        <div className="flex justify-between text-sm mb-2">
+                            <span className="text-md-on-surface">Focus</span>
+                            <span className="text-md-primary font-medium tabular-nums">{focusDuration} min</span>
                         </div>
-                        <input 
+                        <input
                             type="range" min="1" max="120" step="1"
-                            value={focusDuration} 
+                            value={focusDuration}
+                            aria-label="Focus minutes"
                             onChange={(e) => setFocusDuration(Number(e.target.value))}
-                            className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer hover:bg-white/20 accent-white"
+                            className="m3-slider"
+                            style={fill(focusDuration, 1, 120)}
                         />
-                        {/* Warning for low time */}
                         <AnimatePresence>
                             {focusDuration < 10 && (
-                                <motion.div 
-                                    initial={{ opacity: 0, height: 0 }} 
-                                    animate={{ opacity: 1, height: 'auto' }} 
-                                    exit={{ opacity: 0, height: 0 }}
-                                    className="flex items-center gap-1.5 mt-2 text-amber-400/80"
-                                >
-                                    <AlertCircle size={10} />
-                                    <span className="text-[10px] font-medium">Recommendation: &gt; 10 mins for deep flow</span>
-                                </motion.div>
+                                <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                                    className="flex items-center gap-1.5 mt-2 text-xs text-md-on-surface-variant">
+                                    <AlertCircle size={12} /> 10+ minutes usually works better for deep focus.
+                                </motion.p>
                             )}
                         </AnimatePresence>
                     </div>
-
-                    {/* Break Slider */}
                     <div>
-                        <div className="flex justify-between text-xs text-white/50 uppercase tracking-widest mb-2">
-                            <span>Break</span>
-                            <span>{breakDuration} min</span>
+                        <div className="flex justify-between text-sm mb-2">
+                            <span className="text-md-on-surface">Break</span>
+                            <span className="text-md-primary font-medium tabular-nums">{breakDuration} min</span>
                         </div>
-                        <input 
+                        <input
                             type="range" min="1" max="30" step="1"
-                            value={breakDuration} 
+                            value={breakDuration}
+                            aria-label="Break minutes"
                             onChange={(e) => setBreakDuration(Number(e.target.value))}
-                            className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer hover:bg-white/20 accent-white"
+                            className="m3-slider"
+                            style={fill(breakDuration, 1, 30)}
                         />
-                         {/* Warning for low break time */}
-                         <AnimatePresence>
+                        <AnimatePresence>
                             {breakDuration < 5 && (
-                                <motion.div 
-                                    initial={{ opacity: 0, height: 0 }} 
-                                    animate={{ opacity: 1, height: 'auto' }} 
-                                    exit={{ opacity: 0, height: 0 }}
-                                    className="flex items-center gap-1.5 mt-2 text-amber-400/80"
-                                >
-                                    <AlertCircle size={10} />
-                                    <span className="text-[10px] font-medium">Recommendation: &gt; 5 mins for recovery</span>
-                                </motion.div>
+                                <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                                    className="flex items-center gap-1.5 mt-2 text-xs text-md-on-surface-variant">
+                                    <AlertCircle size={12} /> 5+ minutes helps you actually recover.
+                                </motion.p>
                             )}
                         </AnimatePresence>
                     </div>
                 </div>
-
-                <button 
-                    onClick={handleSaveSettings}
-                    className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 mt-10 text-black shadow-lg hover:brightness-110 transition-all"
-                    style={{ backgroundColor: currentTheme.primaryColor }}
-                >
-                    <Check size={16} /> Save Changes
-                </button>
+                <div className="mt-auto flex gap-2">
+                    <Button variant="text" onClick={() => setIsEditing(false)}>Cancel</Button>
+                    <Button size="lg" className="flex-1" onClick={handleSaveSettings} icon={<Check size={18} />}>Save</Button>
+                </div>
             </motion.div>
         )}
         </AnimatePresence>

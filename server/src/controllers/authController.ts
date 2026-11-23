@@ -4,28 +4,63 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import User from '../models/User';
 import Diary from '../models/Diary';
-import Chat from '../models/Chat';
+import VoiceNote from '../models/VoiceNote';
+import { deleteAllMessages, iterateAllMessages } from '../services/messageStore';
 import Mood from '../models/Mood';
 import { Person } from '../models/Person';
 import TrainingLog from '../models/TrainingLog';
 import { sanitizeForTraining } from './chatController';
 import { AuthRequest } from '../middleware/authMiddleware';
-import { encrypt, decrypt } from '../utils/serverEncryption';
+import { encrypt, decrypt, needsReencryption, blindIndex, blindIndexCandidates } from '../utils/serverEncryption';
+import { applyDailyReset, quotaResetsAt } from '../utils/dailyReset';
+import { updateStreak } from '../utils/streak';
+import { MIN_AGE, ageOn, consentIsCurrent, currentConsent } from '../legal';
+import { PaymentArchive } from '../models/PaymentArchive';
+import { cleanTimeZone } from '../utils/timeZone';
+import { effectiveLevel, levelFor, BOND_LEVELS } from '../services/relationship';
+import { SUPPORTED_LANGUAGES } from '../prompts/companion';
 import { sendOTPEmail } from '../services/emailService';
+import { verifyJwt } from '../utils/jwtKeys';
 import { encryptMasterKey, decryptMasterKey, generateMasterKey } from '../utils/cryptoUtils';
 
-const hashEmail = (email: string) => {
-    return crypto.createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
-};
+/** Email lookup hash: KEYED blind index (rotatable via BLIND_INDEX_KEYS). Plain email is never stored. */
+const hashEmail = (email: string) => blindIndex(email.toLowerCase().trim());
+/** Old unkeyed SHA-256 (accounts created before 2026-11-23) — still matched until the rotation sweep rewrites it. */
+const legacyEmailHash = (email: string) => crypto.createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
+/** Match an email under the current blind key, any older blind key, or the legacy unkeyed hash. */
+const emailHashLookup = (email: string) => ({ $in: [...blindIndexCandidates(email.toLowerCase().trim()), legacyEmailHash(email)] });
 
-const generateToken = (id: string) => {
+// `tv` (token version) lets us revoke every session for a user by bumping user.tokenVersion.
+const generateToken = (user: { _id: any; tokenVersion?: number }) => {
   if (!process.env.JWT_SECRET) {
     throw new Error('Server misconfiguration: Missing JWT_SECRET');
   }
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+  return jwt.sign({ id: user._id.toString(), tv: user.tokenVersion ?? 0 }, process.env.JWT_SECRET, {
     expiresIn: '30d',
   });
 };
+
+// Phase 3 fields the app needs (closeness, language, thinking toggle)
+const relationshipFields = (user: any) => {
+  const bond = user.bond || {};
+  const level = effectiveLevel(bond);
+  return {
+    bond: {
+      level,
+      name: BOND_LEVELS[level].name,
+      earnedLevel: levelFor(bond.points || 0),
+      override: typeof bond.override === 'number' ? bond.override : null,
+    },
+    preferredLanguage: user.preferredLanguage || 'auto',
+    region: user.region || '',
+    thinkingMode: !!user.thinkingMode,
+    gifsEnabled: user.gifsEnabled !== false,
+  };
+};
+
+// Brute-force protection: max wrong OTP / security-answer attempts per issued code.
+const MAX_OTP_ATTEMPTS = 5;
+const recordFailedAttempt = (userId: any) => User.updateOne({ _id: userId }, { $inc: { otpAttempts: 1 } });
 
 const generateResetVerifiedToken = (id: string) => {
   if (!process.env.JWT_SECRET) {
@@ -49,7 +84,7 @@ const escapeRegex = (text: string) => {
 // --- REGISTER ---
 export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, username, password, diaryPassword, securityQuestions, dateOfBirth } = (req as any).body;
+    const { name, email, username, password, diaryPassword, securityQuestions, dateOfBirth, acceptTerms } = (req as any).body;
 
     if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string' || typeof username !== 'string') {
         (res as any).status(400).json({ message: 'Invalid input format. Strings required.' });
@@ -67,13 +102,23 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
         (res as any).status(400).json({ message: 'Invalid Date of Birth.' });
         return;
     }
+    // Adults only (Terms §2, Privacy §10): DPDP Act s.9 needs verifiable parental consent for under-18s
+    if (ageOn(dob) < MIN_AGE || dob.getTime() > Date.now()) {
+        (res as any).status(400).json({ message: `Aastha is for adults (${MIN_AGE}+). If you're going through something hard, please reach out to Tele-MANAS on 14416 — it's free and open 24/7.` });
+        return;
+    }
+    // Informed consent to the Terms + Privacy Policy is required and recorded (version + time)
+    if (acceptTerms !== true) {
+        (res as any).status(400).json({ message: 'Please agree to the Terms and Privacy Policy to create an account.' });
+        return;
+    }
 
     const cleanEmail = email.toLowerCase().trim();
     const cleanUsername = username.toLowerCase().trim();
     const emailHash = hashEmail(cleanEmail);
 
     // Unique Checks
-    const emailExists = await User.findOne({ $or: [{ emailHash }, { email: cleanEmail }] });
+    const emailExists = await User.findOne({ $or: [{ emailHash: emailHashLookup(cleanEmail) }, { email: cleanEmail }] });
     if (emailExists) {
         (res as any).status(400).json({ message: 'Email already registered' });
         return;
@@ -126,7 +171,6 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 
     const user = await User.create({
       name: name,
-      email: cleanEmail,
       emailHash: emailHash,
       username: cleanUsername,
       emailEncrypted: encrypt(email),
@@ -142,6 +186,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
       streak: 1, 
       lastVisit: new Date(),
       dateOfBirth: dob,
+      legalConsent: currentConsent(),
       // --- STRICT VERIFICATION MODE ---
       isVerified: false,
       otpCode: otpCodeHash,
@@ -182,13 +227,24 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     // Optimized: Removed Regex to prevent table scans. Used Exact Match which utilizes index.
     let user = await User.findOne({
       $or: [
-        { emailHash: identifierHash },
+        { emailHash: emailHashLookup(cleanIdentifier) },
         { email: cleanIdentifier },
         { username: cleanIdentifier }
       ]
     }).select('+masterKeyBlob1'); // Explicitly select hidden field for Logic
 
     // --- MIGRATION ON LOGIN ---
+    // Plaintext email (old accounts) → encrypted only; old/unkeyed hash → current keyed hash.
+    if (user && user.emailHash) {
+        const plainEmail = (decrypt(user.emailEncrypted || '') || user.email || '').toLowerCase().trim();
+        let changed = false;
+        if (plainEmail && user.emailHash !== hashEmail(plainEmail)) { user.emailHash = hashEmail(plainEmail); changed = true; }
+        if (user.email) {
+            if (!user.emailEncrypted) user.emailEncrypted = encrypt(user.email);
+            user.email = undefined; changed = true;
+        }
+        if (changed) await user.save();
+    }
     if (user && user.email && !user.emailHash) {
         const emailToMigrate = user.email.toLowerCase().trim();
         user.emailHash = hashEmail(emailToMigrate);
@@ -238,6 +294,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
              const otp = generateOTP();
              user.otpCode = await bcrypt.hash(otp, 8); // Optimized
              user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+             user.otpAttempts = 0;
              await user.save();
 
              sendOTPEmail(userEmail, otp).catch(e => console.error("[Auth] Login OTP Error:", e));
@@ -254,24 +311,17 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       let needsSave = false;
 
       // --- LAZY MIGRATION: RE-ENCRYPT DATA ---
-      if (user.emailEncrypted) {
-          const currentEmail = decrypt(user.emailEncrypted); // Decrypts using whichever key works
-          const newEmailEncrypted = encrypt(currentEmail);   // Encrypts using ONLY the new key
-
-          if (user.emailEncrypted !== newEmailEncrypted) {
-              console.log(`[Key Rotation] Migrating data for user ${user._id} to new key.`);
-              user.emailEncrypted = newEmailEncrypted;
-              needsSave = true;
-          }
+      // Only re-encrypt when the value is NOT readable with the primary key (real rotation),
+      // instead of on every login (ciphertexts always differ because of random IVs).
+      if (user.emailEncrypted && needsReencryption(user.emailEncrypted)) {
+          console.log(`[Key Rotation] Migrating email for user ${user._id} to new key.`);
+          user.emailEncrypted = encrypt(decrypt(user.emailEncrypted));
+          needsSave = true;
       }
 
-      if (user.usernameEncrypted) {
-          const currentUsername = decrypt(user.usernameEncrypted);
-          const newUsernameEncrypted = encrypt(currentUsername);
-          if (user.usernameEncrypted !== newUsernameEncrypted) {
-              user.usernameEncrypted = newUsernameEncrypted;
-              needsSave = true;
-          }
+      if (user.usernameEncrypted && needsReencryption(user.usernameEncrypted)) {
+          user.usernameEncrypted = encrypt(decrypt(user.usernameEncrypted));
+          needsSave = true;
       }
 
       let decryptedMasterKeyHex = null;
@@ -317,30 +367,17 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
           needsSave = true;
       }
 
-      // STREAK CALCULATION (Must happen BEFORE updating lastVisit)
+      // STREAK on the user's LOCAL calendar (device zone from the X-Time-Zone header) — utils/streak.ts
       const now = new Date();
-      const lastVisit = user.lastVisit || new Date(0);
-      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const lastVisitMidnight = new Date(lastVisit.getFullYear(), lastVisit.getMonth(), lastVisit.getDate());
-
-      const diffTime = Math.abs(todayMidnight.getTime() - lastVisitMidnight.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays === 1) {
-          user.streak = (user.streak || 0) + 1;
-          needsSave = true;
-      } else if (diffDays > 1) {
-          user.streak = 1;
-          needsSave = true;
-      } else if (!user.streak) {
-          user.streak = 1;
-          needsSave = true;
-      }
+      const loginTz = cleanTimeZone((req as any).query?._tz || (req as any).headers?.['x-time-zone']);
+      if (loginTz && (user as any).timeZone !== loginTz) (user as any).timeZone = loginTz;
+      updateStreak(user, now);
+      needsSave = true;
       
       // Update Visit Time Logic & Reset Ghost Status
       user.lastVisit = now; // Always update on login
       user.ghostNotificationSent = false;
-      user.moodStatus = 'happy';
+      user.moodStatus = 'neutral'; // fresh start each session; the brain re-reads their mood from the chat
       needsSave = true;
 
       // Lazy Migration: Upgrade Hash Strength
@@ -356,19 +393,11 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       if (user.dailyMessageCount === undefined) { user.dailyMessageCount = 0; needsSave = true; }
       if (user.isPro === undefined) { user.isPro = false; needsSave = true; }
 
-      const lastUsage = new Date(user.lastUsageDate || user.createdAt || Date.now());
-      if (lastUsage.getDate() !== now.getDate() ||
-          lastUsage.getMonth() !== now.getMonth() ||
-          lastUsage.getFullYear() !== now.getFullYear()) {
-          user.dailyPremiumUsage = 0;
-          user.dailyMessageCount = 0;
-          user.lastUsageDate = now;
-          needsSave = true;
-      }
+      if (applyDailyReset(user, now)) needsSave = true;
 
       if (needsSave) await user.save();
 
-      const token = generateToken((user._id as any).toString());
+      const token = generateToken(user);
       const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
 
       (res as any).cookie('jwt', token, {
@@ -388,7 +417,17 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         requireUsername: !user.username,
         hasDiarySetup: !!user.diaryPasswordHash,
         isPro: user.isPro,
+        subscriptionExpiresAt: user.subscriptionExpiresAt,
+        voicePassExpiresAt: user.voiceTopUpExpires,
+        ...relationshipFields(user),
         credits: user.isPro ? 9999 : Math.max(0, 16 - (user.dailyMessageCount || 0)),
+        quotaResetsAt: user.isPro ? null : quotaResetsAt(user),
+        safetyIntroSeen: !!(user as any).safetyIntroSeenAt,
+        windowControls: (user as any).windowControls || 'windows',
+        appFont: (user as any).appFont || 'jakarta',
+        headingFont: (user as any).headingFont || 'fraunces',
+        themeColor: (user as any).themeColor || null,
+        legalConsentCurrent: consentIsCurrent((user as any).legalConsent),
         streak: user.streak,
         avatar: user.avatar,
         wallpaper: user.wallpaper,
@@ -449,28 +488,10 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     if (user.isPro === undefined) user.isPro = false;
     
     const now = new Date();
-    const lastUsage = new Date(user.lastUsageDate || user.createdAt);
-    if (lastUsage.getDate() !== now.getDate() || 
-        lastUsage.getMonth() !== now.getMonth() || 
-        lastUsage.getFullYear() !== now.getFullYear()) {
-        user.dailyPremiumUsage = 0;
-        user.dailyMessageCount = 0;
-        user.lastUsageDate = now;
-    }
+    applyDailyReset(user, now);
     
-    const lastVisit = user.lastVisit;
-    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const lastVisitMidnight = new Date(lastVisit.getFullYear(), lastVisit.getMonth(), lastVisit.getDate());
-    
-    const diffTime = Math.abs(todayMidnight.getTime() - lastVisitMidnight.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 1) {
-        user.streak = (user.streak || 0) + 1;
-    } else if (diffDays > 1) {
-        user.streak = 1;
-    }
-    user.lastVisit = now;
+    // Streak on the user's local calendar (utils/streak.ts)
+    updateStreak(user, now);
     
     await user.save();
 
@@ -482,7 +503,17 @@ export const getMe = async (req: AuthRequest, res: Response) => {
         username: user.username || undefined,
         hasDiarySetup: !!user.diaryPasswordHash,
         isPro: user.isPro,
+        subscriptionExpiresAt: user.subscriptionExpiresAt,
+        voicePassExpiresAt: user.voiceTopUpExpires,
+        ...relationshipFields(user),
         credits: user.isPro ? 9999 : Math.max(0, 16 - (user.dailyMessageCount || 0)),
+        quotaResetsAt: user.isPro ? null : quotaResetsAt(user),
+        safetyIntroSeen: !!(user as any).safetyIntroSeenAt,
+        windowControls: (user as any).windowControls || 'windows',
+        appFont: (user as any).appFont || 'jakarta',
+        headingFont: (user as any).headingFont || 'fraunces',
+        themeColor: (user as any).themeColor || null,
+        legalConsentCurrent: consentIsCurrent((user as any).legalConsent),
         streak: user.streak,
         avatar: user.avatar,
         wallpaper: user.wallpaper,
@@ -503,14 +534,33 @@ export const getMe = async (req: AuthRequest, res: Response) => {
 export const updateProfile = async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-        const { name, username, avatar, wallpaper, persona } = (req as any).body;
+        const { name, username, avatar, wallpaper, persona, preferredLanguage, region, closeness, thinkingMode, gifsEnabled } = (req as any).body;
         const user = await User.findById(req.user._id);
         if (!user) return (res as any).status(404).json({ message: 'User not found' });
-        
+
         if (name !== undefined) user.name = name;
         if (avatar !== undefined) user.avatar = avatar;
         if (wallpaper !== undefined) user.wallpaper = wallpaper;
         if (persona !== undefined) user.persona = persona;
+
+        // Phase 3: language/region (A9), closeness override + thinking toggle (A6)
+        if (preferredLanguage !== undefined) {
+            const lang = String(preferredLanguage).toLowerCase();
+            if (!SUPPORTED_LANGUAGES.includes(lang)) return (res as any).status(400).json({ message: 'Unsupported language' });
+            user.preferredLanguage = lang;
+        }
+        if (region !== undefined) user.region = String(region || '').trim().slice(0, 60);
+        if (closeness !== undefined) {
+            // null / "auto" = let the bond grow naturally; 0..4 = fixed closeness chosen by the user
+            const value = closeness === null || closeness === 'auto' ? null : Number(closeness);
+            if (value !== null && !(Number.isInteger(value) && value >= 0 && value <= 4)) {
+                return (res as any).status(400).json({ message: 'Invalid closeness' });
+            }
+            user.bond = { ...((user.bond as any)?.toObject?.() || user.bond || { points: 0, level: 0 }), override: value } as any;
+            user.markModified('bond');
+        }
+        if (thinkingMode !== undefined) user.thinkingMode = !!thinkingMode;
+        if (gifsEnabled !== undefined) user.gifsEnabled = !!gifsEnabled;
         
         if (username) {
             const cleanUsername = username.toLowerCase().trim();
@@ -532,7 +582,17 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
             username: user.username,
             hasDiarySetup: !!user.diaryPasswordHash,
             isPro: user.isPro,
+        subscriptionExpiresAt: user.subscriptionExpiresAt,
+        voicePassExpiresAt: user.voiceTopUpExpires,
+        ...relationshipFields(user),
             credits: user.isPro ? 9999 : Math.max(0, 16 - (user.dailyMessageCount || 0)),
+            quotaResetsAt: user.isPro ? null : quotaResetsAt(user),
+            safetyIntroSeen: !!(user as any).safetyIntroSeenAt,
+            windowControls: (user as any).windowControls || 'windows',
+            appFont: (user as any).appFont || 'jakarta',
+            headingFont: (user as any).headingFont || 'fraunces',
+            themeColor: (user as any).themeColor || null,
+            legalConsentCurrent: consentIsCurrent((user as any).legalConsent),
             streak: user.streak,
             avatar: user.avatar,
             wallpaper: user.wallpaper,
@@ -549,22 +609,6 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
     }
 };
 
-export const upgradeToPro = async (req: AuthRequest, res: Response) => {
-    try {
-        if (!req.user) return (res as any).status(401).json({ message: 'Not authorized' });
-        const user = await User.findById(req.user._id);
-        if (user) {
-            user.isPro = true;
-            user.subscriptionDate = new Date(); // --- STAMP SUBSCRIPTION DATE ---
-            await user.save();
-            (res as any).status(200).json({ success: true, isPro: true, message: "Welcome to Pro!" });
-        } else {
-            (res as any).status(404).json({ message: "User not found" });
-        }
-    } catch (e) {
-        (res as any).status(500).json({ message: 'Upgrade failed' });
-    }
-};
 
 export const softDeleteUser = async (req: AuthRequest, res: Response) => {
   try {
@@ -577,12 +621,22 @@ export const softDeleteUser = async (req: AuthRequest, res: Response) => {
 
     console.log(`[Nuclear Delete] Wiping data for user ${userId}`);
 
+    // Tax/accounting law: keep the bare transaction records (no name/email/content) — Privacy Policy §8
+    const paying: any = await User.findById(userId).select('emailHash paymentHistory').lean();
+    if (paying?.paymentHistory?.length) {
+        await PaymentArchive.create({
+            emailHash: paying.emailHash,
+            records: paying.paymentHistory.map((p: any) => ({ orderId: p.orderId, paymentId: p.paymentId, amount: p.amount, status: p.status, date: p.date })),
+        });
+    }
+
     await Promise.all([
         User.findByIdAndDelete(userId),
-        Chat.deleteMany({ user: userId }),
+        deleteAllMessages(userId),
         Diary.deleteMany({ user: userId }),
         Mood.deleteMany({ user: userId }),
-        Person.deleteMany({ userId: userId }) // Ensure Person model has userId field, or handle accordingly
+        Person.deleteMany({ userId: userId }),
+        VoiceNote.deleteMany({ user: userId })
     ]);
 
     (res as any).cookie('jwt', '', { httpOnly: true, expires: new Date(0) });
@@ -598,7 +652,7 @@ export const initiateReset = async (req: Request, res: Response) => {
     const cleanEmail = email.toLowerCase().trim();
     const emailHash = hashEmail(cleanEmail);
 
-    const user = await User.findOne({ $or: [{ emailHash: emailHash }, { email: cleanEmail }] });
+    const user = await User.findOne({ $or: [{ emailHash: emailHashLookup(cleanEmail) }, { email: cleanEmail }] });
 
     if (!user) {
          // SECURITY: Fake delay to prevent enumeration
@@ -613,6 +667,7 @@ export const initiateReset = async (req: Request, res: Response) => {
 
     user.otpCode = await bcrypt.hash(otp, 8);
     user.otpExpires = otpExpires;
+    user.otpAttempts = 0;
     await user.save();
 
     console.log(`[Reset] Sending OTP to ${cleanEmail}`);
@@ -632,7 +687,7 @@ export const verifyResetOTP = async (req: Request, res: Response) => {
         const emailHash = hashEmail(cleanEmail);
 
         const user = await User.findOne({
-            $or: [{ emailHash }, { email: cleanEmail }]
+            $or: [{ emailHash: emailHashLookup(cleanEmail) }, { email: cleanEmail }]
         });
 
         if (!user || !user.otpCode || !user.otpExpires) {
@@ -643,8 +698,15 @@ export const verifyResetOTP = async (req: Request, res: Response) => {
              return (res as any).status(400).json({ message: 'OTP expired.' });
         }
 
+        if ((user.otpAttempts || 0) >= MAX_OTP_ATTEMPTS) {
+             return (res as any).status(429).json({ message: 'Too many wrong attempts. Please request a new code.' });
+        }
+
         const isValid = await bcrypt.compare(String(otp), user.otpCode);
-        if (!isValid) return (res as any).status(400).json({ message: 'Invalid code.' });
+        if (!isValid) {
+            await recordFailedAttempt(user._id);
+            return (res as any).status(400).json({ message: 'Invalid code.' });
+        }
 
         // Retrieve Security Question
         let question = "What is your favorite color?"; // Fallback
@@ -684,7 +746,7 @@ export const completeReset = async (req: Request, res: Response) => {
     if (!process.env.JWT_SECRET) throw new Error("Missing Secret");
     let decoded: any;
     try {
-        decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
+        decoded = verifyJwt(resetToken);
         if (decoded.purpose !== 'reset-verified') throw new Error('Invalid token purpose');
     } catch (e) {
         return (res as any).status(401).json({ message: 'Session expired. Please verify OTP again.' });
@@ -693,7 +755,7 @@ export const completeReset = async (req: Request, res: Response) => {
     const cleanEmail = email.toLowerCase().trim();
     const emailHash = hashEmail(cleanEmail);
 
-    const user = await User.findOne({ $or: [{ emailHash: emailHash }, { email: cleanEmail }] }).select('+masterKeyBlob2');
+    const user = await User.findOne({ $or: [{ emailHash: emailHashLookup(cleanEmail) }, { email: cleanEmail }] }).select('+masterKeyBlob2');
 
     if (!user || (user._id as any).toString() !== decoded.id) {
         return (res as any).status(403).json({ message: 'Invalid user context.' });
@@ -705,10 +767,17 @@ export const completeReset = async (req: Request, res: Response) => {
          return (res as any).status(400).json({ message: 'Incorrect answer.' });
     }
 
+    if ((user.otpAttempts || 0) >= MAX_OTP_ATTEMPTS) {
+        return (res as any).status(429).json({ message: 'Too many wrong attempts. Please restart the reset.' });
+    }
+
     const cleanAnswer = answer.toLowerCase().trim();
     const isValid = await bcrypt.compare(cleanAnswer, user.securityQuestions[0].answerHash);
 
-    if (!isValid) return (res as any).status(401).json({ message: 'Incorrect answer.' });
+    if (!isValid) {
+        await recordFailedAttempt(user._id);
+        return (res as any).status(401).json({ message: 'Incorrect answer.' });
+    }
 
     // THE FORTRESS: Recover Master Key
     let recoverySuccess = false;
@@ -737,6 +806,9 @@ export const completeReset = async (req: Request, res: Response) => {
 
     const salt = await bcrypt.genSalt(10);
     user.passwordHash = await bcrypt.hash(newPassword, salt);
+    user.otpAttempts = 0;
+    // Log out every existing session (a stolen token must not survive a password reset)
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
 
     (res as any).status(200).json({ message: 'Password reset successful.' });
@@ -755,18 +827,6 @@ export const verifyDiaryPassword = async (req: AuthRequest, res: Response) => {
   } catch (error) { (res as any).status(500).json({ message: 'Server error' }); }
 };
 
-export const verifySecurityAnswer = async (req: AuthRequest, res: Response) => {
-    try {
-        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-        const { answer } = (req as any).body;
-        const user = await User.findById(req.user._id);
-        if (!user || !user.securityQuestions || user.securityQuestions.length === 0) return (res as any).status(400).json({ message: 'Security questions not set.' });
-        const isValid = await bcrypt.compare(answer.toLowerCase().trim(), user.securityQuestions[0].answerHash);
-        if (isValid) (res as any).json({ success: true });
-        else (res as any).status(403).json({ message: 'Incorrect answer' });
-    } catch(e) { (res as any).status(500).json({ message: 'Error' }); }
-};
-
 // --- OTP VERIFICATION ---
 export const verifyOTP = async (req: Request, res: Response) => {
     try {
@@ -777,8 +837,8 @@ export const verifyOTP = async (req: Request, res: Response) => {
         console.log(`[Auth] Verifying OTP for ${cleanEmail}.`);
         const user = await User.findOne({ 
             $or: [
-                { emailHash },
-                { email: { $regex: new RegExp(`^${escapeRegex(cleanEmail)}$`, 'i') } },
+                { emailHash: emailHashLookup(cleanEmail) },
+                { email: cleanEmail },
                 { username: cleanEmail }
             ]
         });
@@ -794,10 +854,15 @@ export const verifyOTP = async (req: Request, res: Response) => {
             return (res as any).status(400).json({ message: 'OTP expired.' });
         }
 
+        if ((user.otpAttempts || 0) >= MAX_OTP_ATTEMPTS) {
+            return (res as any).status(429).json({ message: 'Too many wrong attempts. Please request a new code.' });
+        }
+
         const otpString = String(otp);
         const isValid = await bcrypt.compare(otpString, user.otpCode);
 
         if (!isValid) {
+            await recordFailedAttempt(user._id);
             return (res as any).status(400).json({ message: 'Invalid code.' });
         }
 
@@ -812,7 +877,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
         await user.save();
 
         // Issue Token
-        const token = generateToken((user._id as any).toString());
+        const token = generateToken(user);
         const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
         (res as any).cookie('jwt', token, {
             httpOnly: true,
@@ -830,7 +895,17 @@ export const verifyOTP = async (req: Request, res: Response) => {
             username: user.username,
             hasDiarySetup: !!user.diaryPasswordHash,
             isPro: user.isPro,
+        subscriptionExpiresAt: user.subscriptionExpiresAt,
+        voicePassExpiresAt: user.voiceTopUpExpires,
+        ...relationshipFields(user),
             credits: user.isPro ? 9999 : Math.max(0, 16 - (user.dailyMessageCount || 0)),
+            quotaResetsAt: user.isPro ? null : quotaResetsAt(user),
+            safetyIntroSeen: !!(user as any).safetyIntroSeenAt,
+            windowControls: (user as any).windowControls || 'windows',
+            appFont: (user as any).appFont || 'jakarta',
+            headingFont: (user as any).headingFont || 'fraunces',
+            themeColor: (user as any).themeColor || null,
+            legalConsentCurrent: consentIsCurrent((user as any).legalConsent),
             streak: user.streak,
             avatar: user.avatar,
             wallpaper: user.wallpaper,
@@ -855,8 +930,8 @@ export const resendOTP = async (req: Request, res: Response) => {
 
         const user = await User.findOne({ 
              $or: [
-                 { emailHash },
-                 { email: { $regex: new RegExp(`^${escapeRegex(cleanEmail)}$`, 'i') } },
+                 { emailHash: emailHashLookup(cleanEmail) },
+                 { email: cleanEmail },
                  { username: cleanEmail }
              ]
         });
@@ -869,6 +944,7 @@ export const resendOTP = async (req: Request, res: Response) => {
 
         user.otpCode = await bcrypt.hash(otp, 10);
         user.otpExpires = otpExpires;
+        user.otpAttempts = 0;
         await user.save();
 
         sendOTPEmail(cleanEmail, otp).catch(e => console.error("[Auth] Background Email Error:", e));
@@ -904,20 +980,6 @@ export const changeDiaryPassword = async (req: AuthRequest, res: Response) => {
     }
 };
 
-export const resetDiaryNuclear = async (req: AuthRequest, res: Response) => {
-    try {
-        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-        const { newPassword } = (req as any).body;
-        const user = await User.findById(req.user._id);
-        if (!user) return (res as any).status(404).json({ message: 'User not found' });
-        await Diary.deleteMany({ user: req.user._id });
-        const salt = await bcrypt.genSalt(10);
-        user.diaryPasswordHash = await bcrypt.hash(newPassword, salt);
-        await user.save();
-        (res as any).json({ success: true, message: 'Diary wiped and password reset.' });
-    } catch(e) { (res as any).status(500).json({ message: 'Error' }); }
-};
-
 export const completeOnboarding = async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return (res as any).status(401).json({ message: 'Not authorized' });
@@ -935,50 +997,6 @@ export const completeOnboarding = async (req: AuthRequest, res: Response) => {
 };
 
 // --- NEW PERSONA UPLOADS & SETTINGS ---
-export const uploadPersonaVoice = async (req: AuthRequest, res: Response) => {
-    try {
-        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-        const { audio } = (req as any).body; // Base64
-        if (!audio) return (res as any).status(400).json({ message: 'No audio data' });
-
-        // Save to User Model (Note: Mongo doc size limit is 16MB. 60s audio is < 1MB typically)
-        await User.findByIdAndUpdate(req.user._id, {
-            'cloneMode.voiceSample': audio,
-            'cloneMode.isVoiceActive': true // Auto-enable on upload
-        });
-
-        (res as any).json({ success: true, message: 'Voice sample uploaded.' });
-    } catch(e) { (res as any).status(500).json({ message: 'Upload failed' }); }
-};
-
-export const uploadPersonaScreenshot = async (req: AuthRequest, res: Response) => {
-    try {
-        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-        const { image } = (req as any).body; // Base64
-        if (!image) return (res as any).status(400).json({ message: 'No image data' });
-
-        // Just acknowledge. Actual analysis happens in /chat logic or specialized endpoint if needed.
-        // For now, we assume the frontend sends ACTIVATE_CLONE_MODE to /chat with the image.
-
-        (res as any).json({ success: true, message: 'Screenshot received.' });
-    } catch(e) { (res as any).status(500).json({ message: 'Upload failed' }); }
-};
-
-export const updateCloneSettings = async (req: AuthRequest, res: Response) => {
-    try {
-        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-        const { isActive, isPersonaActive, isVoiceActive } = (req as any).body;
-
-        const updates: any = {};
-        if (isActive !== undefined) updates['cloneMode.isActive'] = isActive;
-        if (isPersonaActive !== undefined) updates['cloneMode.isPersonaActive'] = isPersonaActive;
-        if (isVoiceActive !== undefined) updates['cloneMode.isVoiceActive'] = isVoiceActive;
-
-        await User.findByIdAndUpdate(req.user._id, updates);
-        (res as any).json({ success: true, message: 'Settings updated.' });
-    } catch(e) { (res as any).status(500).json({ message: 'Update failed' }); }
-};
-
 // --- DATA DONATION ---
 export const toggleDataDonation = async (req: AuthRequest, res: Response) => {
     try {
@@ -997,54 +1015,43 @@ export const toggleDataDonation = async (req: AuthRequest, res: Response) => {
             // Run in background
             (async () => {
                 try {
-                    const chat = await Chat.findOne({ user: user._id });
-                    if (chat && chat.messages.length > 0) {
-                        const bulkOps = [];
-                        for (const msg of chat.messages) {
-                            const decrypted = decrypt(msg.content);
-                            // Safe Mode: Skip if decryption failed
-                            if (msg.content.includes(':') && decrypted === msg.content) continue;
+                    // Stream messages oldest → newest and pair user→assistant turns (no full-history load).
+                    const cursor = await iterateAllMessages(user._id as any);
+                    let prev: any = null;
+                    let batch: any[] = [];
+                    let exported = 0;
+                    const isUndecryptable = (raw: string, dec: string) => raw.includes(':') && dec === raw;
 
-                            // Simple sanitization of output is tricky as we don't have prompt context easily,
-                            // but we treat msg.content as the 'text'.
-                            // We need input/output pairs.
-                            // This simple loop exports INDIVIDUAL messages which might break the input/output pair schema of TrainingLog.
-                            // The schema expects: input, output.
-                            // We need to pair them? Or just dump them?
-                            // The requirement says "Fetch all messages... Pair & Save: Create Input->Output pairs".
-                        }
-
-                        // Pairing Logic: Iterate i=0 to len-1
-                        for (let i = 0; i < chat.messages.length - 1; i++) {
-                            const current = chat.messages[i];
-                            const next = chat.messages[i+1];
-
-                            if (current.role === 'user' && next.role === 'assistant') {
-                                const inputDec = decrypt(current.content);
-                                const outputDec = decrypt(next.content);
-
-                                if (current.content.includes(':') && inputDec === current.content) continue;
-                                if (next.content.includes(':') && outputDec === next.content) continue;
-
-                                bulkOps.push({
+                    for await (const msg of cursor as any) {
+                        if (prev && prev.role === 'user' && msg.role === 'assistant') {
+                            const inputDec = decrypt(prev.content);
+                            const outputDec = decrypt(msg.content);
+                            if (!isUndecryptable(prev.content, inputDec) && !isUndecryptable(msg.content, outputDec)) {
+                                batch.push({
                                     insertOne: {
                                         document: {
                                             userMood: user.moodStatus || "neutral",
                                             persona: user.persona || "aastha",
                                             input: sanitizeForTraining(inputDec, user.name),
                                             output: sanitizeForTraining(outputDec, user.name),
-                                            createdAt: next.timestamp
+                                            createdAt: msg.timestamp
                                         }
                                     }
                                 });
                             }
                         }
-
-                        if (bulkOps.length > 0) {
-                            await TrainingLog.bulkWrite(bulkOps);
-                            console.log(`[Data Donation] Exported ${bulkOps.length} pairs for ${user._id}`);
+                        prev = msg;
+                        if (batch.length >= 500) {
+                            await TrainingLog.bulkWrite(batch);
+                            exported += batch.length;
+                            batch = [];
                         }
                     }
+                    if (batch.length > 0) {
+                        await TrainingLog.bulkWrite(batch);
+                        exported += batch.length;
+                    }
+                    if (exported > 0) console.log(`[Data Donation] Exported ${exported} pairs for ${user._id}`);
 
                     user.hasDonatedHistory = true;
                     await user.save();

@@ -4,6 +4,10 @@ import FormData from 'form-data';
 // The URL of your deployed Hugging Face Space
 const BRAIN_URL = process.env.BRAIN_SERVER_URL || 'https://sking0123-aastha-voice.hf.space';
 
+// Shared secret checked by brain_server (must match BRAIN_SHARED_SECRET on the HF Space)
+const brainAuthHeaders = (): Record<string, string> =>
+    process.env.BRAIN_SHARED_SECRET ? { 'x-brain-secret': process.env.BRAIN_SHARED_SECRET } : {};
+
 export const brainService = {
     /**
      * Generate Speech (TTS)
@@ -28,7 +32,7 @@ export const brainService = {
             }
 
             const response = await axios.post(`${BRAIN_URL}/speak`, form, {
-                headers: { ...form.getHeaders() },
+                headers: { ...form.getHeaders(), ...brainAuthHeaders() },
                 responseType: 'arraybuffer',
                 validateStatus: (status) => status < 500,
                 timeout: 120000 // Increased timeout for Parler (slower) to 2 mins
@@ -65,7 +69,7 @@ export const brainService = {
             form.append('image', imageBuffer, { filename: 'image.jpg' });
 
             const response = await axios.post(`${BRAIN_URL}/see`, form, {
-                headers: { ...form.getHeaders() },
+                headers: { ...form.getHeaders(), ...brainAuthHeaders() },
                 timeout: 15000
             });
 

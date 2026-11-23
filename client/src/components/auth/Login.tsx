@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Sparkles, Loader2, Eye, EyeOff, BookLock, Shield, KeyRound, CheckCircle2 } from 'lucide-react';
+import { Sun, Moon } from 'lucide-react';
+import { usePublicTheme } from '../../hooks/usePublicTheme';
 import { FadeIn } from '../landing/FadeIn';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { SECURITY_QUESTIONS } from '../../constants';
 import { useTheme } from '../../context/ThemeContext'; // Import for Lite Mode
 
@@ -124,13 +126,22 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   };
 
   const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault(); setIsLoading(true); setError(null);
+    e.preventDefault(); setError(null);
+    const dob = new Date(regDob);
+    const age = (Date.now() - dob.getTime()) / (365.2425 * 86400000);
+    if (!regDob || isNaN(dob.getTime()) || age < 18) {
+      setError("Aastha is for adults (18+). If you're going through something hard, Tele-MANAS is free and open 24/7 on 14416.");
+      return;
+    }
+    if (!acceptTerms) { setError('Please agree to the Terms and Privacy Policy.'); return; }
+    setIsLoading(true);
     try {
         const res = await register({
             name: regName,
             email: regEmail,
             username: regUsername,
             dateOfBirth: regDob,
+            acceptTerms,
             password: regPassword,
             diaryPassword: regDiaryPassword,
             securityQuestions: [{ question: secQ1, answer: secA1 }]
@@ -289,255 +300,241 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
       else navigate('/');
   };
 
+  const isCodeStep = mode === 'verify-otp' || mode === 'forgot-otp';
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const publicTheme = usePublicTheme();
+  const heroTitle: Record<string, string> = {
+    'login': 'Welcome back to your sanctuary.',
+    'register': 'A quiet place, just for you.',
+    'verify-otp': 'One quick check.',
+    'forgot-otp': 'Let’s make sure it’s you.',
+    'forgot-init': 'Let’s get you back in.',
+    'forgot-complete': 'Almost there.',
+  };
+  const formTitle: Record<string, string> = {
+    'login': 'Sign in', 'register': 'Create your account', 'verify-otp': 'Check your email',
+    'forgot-otp': 'Check your email', 'forgot-init': 'Forgot password', 'forgot-complete': 'Set a new password',
+  };
+  const formSub: Record<string, string> = {
+    'login': 'Use your email or username.',
+    'register': 'Takes a minute. Free to start.',
+    'verify-otp': `We sent a 6-digit code to ${regEmail || 'your email'}.`,
+    'forgot-otp': `We sent a 6-digit code to ${resetEmail || 'your email'}.`,
+    'forgot-init': 'Enter the email you signed up with.',
+    'forgot-complete': 'Answer your security question, then choose a new password.',
+  };
+  const label = 'block text-sm font-medium text-md-on-surface-variant mb-1.5 px-1';
+  const field = 'w-full h-12 px-4 rounded-[14px] bg-md-surface-container-highest text-md-on-surface placeholder:text-md-on-surface-variant/60 border-2 border-transparent focus:border-md-primary focus:outline-none transition-colors';
+  const primaryBtn = 'w-full h-14 rounded-full bg-md-primary text-md-on-primary font-semibold text-base flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] transition disabled:opacity-60';
+  const textBtn = 'text-md-primary font-semibold hover:underline underline-offset-4';
+
   return (
-    <div className="min-h-screen bg-[#0B0F17] flex font-sans">
-      {/* Left Panel - Art/Sanctuary (Desktop Only) */}
-      {/* LITE MODE: REMOVED LEFT PANEL ANIMATIONS */}
-      <div className="hidden lg:flex w-1/2 relative overflow-hidden items-center justify-center p-12 text-white bg-black">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-violet-900/40 via-black to-black" />
+    <div style={publicTheme.style} className="min-h-[100dvh] bg-md-surface text-md-on-surface flex font-sans relative overflow-hidden">
+      {/* Soft seed-coloured light (static — no blur animation, cheap on phones) */}
+      <div aria-hidden className="pointer-events-none absolute -top-40 -left-40 w-[520px] h-[520px] rounded-full bg-md-primary/20 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute -bottom-48 -right-32 w-[560px] h-[560px] rounded-full bg-md-tertiary/15 blur-3xl" />
 
-        {!isLowPowerMode && (
-           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px] animate-pulse-glow" />
-        )}
-
-        <div className={`relative z-10 max-w-lg p-12 rounded-3xl border border-white/5 bg-white/5 ${!isLowPowerMode ? 'backdrop-blur-sm' : ''}`}>
-          <div className="w-16 h-16 bg-gradient-to-br from-violet-50 to-indigo-600 rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-violet-500/20 overflow-hidden">
-            {mode === 'verify-otp' || mode === 'forgot-otp' ? <Shield size={32} className="text-white"/> : <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />}
-          </div>
-          <h2 className="text-5xl font-bold mb-6 leading-tight font-serif">
-            {mode === 'login' && "Return to\nSanctuary."}
-            {mode === 'register' && "Begin Your\nJourney."}
-            {mode === 'verify-otp' && "Secure\nVerification."}
-            {mode === 'forgot-otp' && "Verify Your\nIdentity."}
-            {mode === 'forgot-init' && "Recover Your\nPeace."}
-            {mode === 'forgot-complete' && "Secure Your\nAccount."}
-          </h2>
-          <p className="text-slate-300 text-lg leading-relaxed italic">
-            {mode === 'verify-otp' || mode === 'forgot-otp'
-                ? "We take your privacy seriously. Please verify your identity to ensure your sanctuary remains yours alone."
-                : `"${quote}"`}
-          </p>
+      {/* Top bar (Liquid Glass control) */}
+      <div className="fixed top-0 inset-x-0 z-30 px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+        <div className="glass rounded-full h-14 max-w-6xl mx-auto flex items-center gap-2 px-2">
+          <button onClick={handleBack} aria-label="Back" className="w-10 h-10 rounded-full flex items-center justify-center text-md-on-surface hover:bg-md-on-surface/10">
+            <ArrowLeft size={20} />
+          </button>
+          <img src="/logo.png" alt="" className="w-8 h-8 rounded-[10px] object-cover" />
+          <span className="font-serif text-lg">Aastha</span>
+          <button onClick={publicTheme.toggle} aria-label={publicTheme.isLight ? 'Switch to dark mode' : 'Switch to light mode'}
+            className="ml-auto w-10 h-10 rounded-full flex items-center justify-center text-md-on-surface-variant hover:bg-md-on-surface/10">
+            {publicTheme.isLight ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
         </div>
       </div>
 
-      {/* Right Panel - Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] bg-[#0B0F17] relative">
-        <button
-          onClick={handleBack}
-          className="absolute top-[calc(2rem+env(safe-area-inset-top))] left-8 p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-full transition-all group z-50"
-        >
-          <ArrowLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
-        </button>
+      <div className="relative z-10 w-full max-w-6xl mx-auto grid lg:grid-cols-2 gap-8 items-center px-4 pt-[calc(env(safe-area-inset-top)+6rem)] pb-10">
+        {/* Hero (desktop) — tonal Material card */}
+        <div className="hidden lg:flex flex-col justify-between rounded-[36px] bg-md-primary-container text-md-on-primary-container p-12 min-h-[560px] relative overflow-hidden">
+          <div aria-hidden className="absolute -right-24 -top-24 w-80 h-80 rounded-full bg-md-primary/25" />
+          <div aria-hidden className="absolute right-16 bottom-24 w-40 h-40 rounded-[48px] bg-md-tertiary/25 rotate-12" />
+          <div className="relative">
+            <span className="inline-flex w-16 h-16 rounded-[22px] overflow-hidden bg-md-surface shadow-md">
+              {isCodeStep ? <span className="w-full h-full flex items-center justify-center bg-md-primary text-md-on-primary"><Shield size={30} /></span> : <img src="/logo.png" alt="" className="w-full h-full object-cover" />}
+            </span>
+            <h2 className="mt-10 font-serif text-5xl leading-[1.1] whitespace-pre-line">{heroTitle[mode]}</h2>
+          </div>
+          <p className="relative text-lg leading-relaxed opacity-90 max-w-md">
+            {isCodeStep ? 'Your sanctuary stays yours — we check it’s really you before letting anyone in.' : `“${quote}”`}
+          </p>
+        </div>
 
-        <div className="w-full max-w-md">
+        {/* Form card */}
+        <div className="w-full max-w-md mx-auto">
           <FadeIn direction="up">
-            <div className="flex justify-center lg:hidden mb-6">
-               <div className="w-16 h-16 bg-gradient-to-br from-violet-50 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-violet-500/20 overflow-hidden">
-                  <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
-               </div>
-            </div>
-            <div className="mb-8 text-center lg:text-left">
-              <h2 className="text-3xl font-bold text-white mb-2">
-                {mode === 'login' && 'Welcome Back'}
-                {mode === 'register' && 'Create Account'}
-                {mode === 'verify-otp' && 'Check your Email'}
-                {mode === 'forgot-otp' && 'Check your Email'}
-                {mode === 'forgot-init' && 'Find Account'}
-                {mode === 'forgot-complete' && 'Reset Password'}
-              </h2>
-              <p className="text-slate-400">
-                {mode === 'login' && 'Please enter your details to sign in.'}
-                {mode === 'register' && 'Join thousands finding peace today.'}
-                {mode === 'verify-otp' && `We sent a code to ${regEmail || 'your email'}.`}
-                {mode === 'forgot-otp' && `We sent a code to ${resetEmail || 'your email'}.`}
-                {mode === 'forgot-init' && 'Enter email to recover password.'}
-                {mode === 'forgot-complete' && 'Answer your security question.'}
-              </p>
-            </div>
+            <div className="rounded-[32px] bg-md-surface-container-low border border-md-outline-variant/30 p-6 sm:p-8 shadow-xl">
+              <div className="lg:hidden flex justify-center mb-5">
+                <span className="inline-flex w-16 h-16 rounded-[22px] overflow-hidden shadow-md">
+                  {isCodeStep ? <span className="w-full h-full flex items-center justify-center bg-md-primary text-md-on-primary"><Shield size={30} /></span> : <img src="/logo.png" alt="" className="w-full h-full object-cover" />}
+                </span>
+              </div>
 
-            {error && (
-                <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-200 text-sm text-center">
-                    {error}
+              {(mode === 'login' || mode === 'register') && (
+                <div role="tablist" className="flex p-1 rounded-full bg-md-surface-container-highest mb-6">
+                  {(['login', 'register'] as const).map((m) => (
+                    <button key={m} role="tab" aria-selected={mode === m} type="button" onClick={() => { setError(null); setMode(m); }}
+                      className={`flex-1 h-10 rounded-full text-sm font-semibold transition-colors ${mode === m ? 'bg-md-primary text-md-on-primary shadow-sm' : 'text-md-on-surface-variant hover:text-md-on-surface'}`}>
+                      {m === 'login' ? 'Sign in' : 'Create account'}
+                    </button>
+                  ))}
                 </div>
-            )}
+              )}
 
-            {/* LOGIN FORM */}
-            {mode === 'login' && (
-              <form className="space-y-5" onSubmit={handleLogin}>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">Email or Username</label>
-                  <input
-                    type="text"
-                    value={identifier}
-                    onChange={e => setIdentifier(e.target.value)}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/50 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <label className="text-sm font-medium text-slate-300">Password</label>
-                    <button type="button" onClick={() => setMode('forgot-init')} className="text-xs text-violet-400 hover:text-violet-300">Forgot?</button>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/50 text-white pr-10"
-                    />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-slate-500 hover:text-white"><Eye size={18}/></button>
-                  </div>
-                </div>
-                <button disabled={isLoading} className="w-full bg-violet-600 text-white py-4 rounded-xl font-bold hover:bg-violet-700 transition-all flex items-center justify-center">
-                  {isLoading ? <Loader2 className="animate-spin" /> : 'Enter Sanctuary'}
-                </button>
-                <div className="text-center mt-6">
-                  <button type="button" onClick={() => setMode('register')} className="text-slate-400 hover:text-white text-sm">Don't have an account? <span className="text-violet-400 font-bold">Sign up</span></button>
-                </div>
-              </form>
-            )}
+              <div className="mb-6 text-center lg:text-left">
+                <h1 className="font-serif text-3xl text-md-on-surface">{formTitle[mode]}</h1>
+                <p className="text-sm text-md-on-surface-variant mt-1.5">{formSub[mode]}</p>
+              </div>
 
-            {/* REGISTER FORM */}
-            {mode === 'register' && (
-               <form className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2" onSubmit={handleRegister}>
-                  <div className="grid grid-cols-2 gap-4">
-                      <input type="text" placeholder="Full Name" value={regName} onChange={e => setRegName(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full" required />
-                      <input type="text" placeholder="Username" value={regUsername} onChange={e => setRegUsername(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full" required />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                      <input type="email" placeholder="Email Address" value={regEmail} onChange={e => setRegEmail(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full" required />
-                      <input
-                        type="date"
-                        placeholder="Date of Birth"
-                        value={regDob}
-                        onChange={e => setRegDob(e.target.value)}
-                        className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full placeholder-white/50"
-                        required
-                      />
-                  </div>
+              {error && (
+                <div role="alert" className="mb-5 p-3 rounded-[16px] bg-md-error-container text-md-on-error-container text-sm text-center">{error}</div>
+              )}
 
-                  <div className="relative">
-                      <input type={showRegPassword ? "text" : "password"} placeholder="Password" value={regPassword} onChange={e => setRegPassword(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full pr-10" required />
-                      <button type="button" onClick={() => setShowRegPassword(!showRegPassword)} className="absolute right-3 top-3 text-slate-500 hover:text-white"><Eye size={18}/></button>
+              {/* SIGN IN */}
+              {mode === 'login' && (
+                <form className="space-y-4" onSubmit={handleLogin}>
+                  <div>
+                    <label className={label} htmlFor="login-id">Email or username</label>
+                    <input id="login-id" type="text" autoComplete="username" value={identifier} onChange={e => setIdentifier(e.target.value)} className={field} />
                   </div>
-
-                  <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-                      <div className="flex items-center gap-2 mb-2 text-slate-300 text-xs uppercase tracking-wider font-bold">
-                          <BookLock size={12} className="text-violet-400"/> Diary Encryption
-                      </div>
-                      <div className="relative">
-                        <input
-                            type={showRegDiaryPassword ? "text" : "password"}
-                            placeholder="Diary Password (Different from login)"
-                            value={regDiaryPassword}
-                            onChange={e => setRegDiaryPassword(e.target.value)}
-                            className="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white w-full text-sm mb-1 pr-9"
-                            required
-                        />
-                        <button type="button" onClick={() => setShowRegDiaryPassword(!showRegDiaryPassword)} className="absolute right-2 top-2 text-slate-500 hover:text-white">
-                            {showRegDiaryPassword ? <EyeOff size={14}/> : <Eye size={14}/>}
-                        </button>
-                      </div>
-                      <p className="text-[10px] text-slate-500">This key encrypts your journals locally. We cannot recover it.</p>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label className={label} htmlFor="login-pw">Password</label>
+                      <button type="button" onClick={() => { setError(null); setMode('forgot-init'); }} className={`text-xs mb-1.5 ${textBtn}`}>Forgot?</button>
+                    </div>
+                    <div className="relative">
+                      <input id="login-pw" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} className={`${field} pr-12`} />
+                      <button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-1.5 top-1.5 w-9 h-9 rounded-full flex items-center justify-center text-md-on-surface-variant hover:bg-md-on-surface/10">
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                   </div>
-
-                  <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-                      <div className="flex items-center gap-2 mb-2 text-slate-300 text-xs uppercase tracking-wider font-bold">
-                          <Shield size={12} className="text-teal-400"/> Security Question
-                      </div>
-                      <select value={secQ1} onChange={e => setSecQ1(e.target.value)} className="w-full bg-black/20 text-xs text-white p-2 rounded mb-2 border border-white/10 cursor-pointer">
-                          {SECURITY_QUESTIONS.map(q => <option key={q} value={q} className="bg-gray-900">{q}</option>)}
-                      </select>
-                      <input type="text" placeholder="Answer" value={secA1} onChange={e => setSecA1(e.target.value)} className="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white w-full text-sm" required />
-                  </div>
-
-                  <button disabled={isLoading} className="w-full bg-violet-600 text-white py-4 rounded-xl font-bold hover:bg-violet-700 transition-all flex items-center justify-center">
-                    {isLoading ? <Loader2 className="animate-spin" /> : 'Create Account'}
+                  <button disabled={isLoading} className={`${primaryBtn} mt-2`}>
+                    {isLoading ? <Loader2 className="animate-spin" /> : 'Enter Sanctuary'}
                   </button>
-                  <div className="text-center">
-                    <button type="button" onClick={() => setMode('login')} className="text-slate-400 hover:text-white text-sm">Already have an account? <span className="text-violet-400 font-bold">Login</span></button>
+                </form>
+              )}
+
+              {/* CREATE ACCOUNT */}
+              {mode === 'register' && (
+                <form className="space-y-4" onSubmit={handleRegister}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><label className={label} htmlFor="r-name">Name</label><input id="r-name" type="text" autoComplete="name" value={regName} onChange={e => setRegName(e.target.value)} className={field} required /></div>
+                    <div><label className={label} htmlFor="r-user">Username</label><input id="r-user" type="text" autoComplete="username" value={regUsername} onChange={e => setRegUsername(e.target.value)} className={field} required /></div>
                   </div>
-               </form>
-            )}
-
-            {/* VERIFY OTP FORM (Combined for Registration and Forgot Password) */}
-            {(mode === 'verify-otp' || mode === 'forgot-otp') && (
-                <form className="space-y-8" onSubmit={mode === 'verify-otp' ? handleVerifyOtp : handleForgotOtpVerify}>
-                    <div className="flex justify-between gap-2">
-                        {otp.map((digit, idx) => (
-                            <input
-                                key={idx}
-                                ref={el => { otpRefs.current[idx] = el; }}
-                                type="text"
-                                maxLength={1}
-                                inputMode="numeric"
-                                autoComplete="one-time-code"
-                                pattern="\d{1}"
-                                value={digit}
-                                onChange={(e) => handleOtpChange(idx, e.target.value)}
-                                onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                                onPaste={handleOtpPaste}
-                                className="w-12 h-14 rounded-xl bg-white/5 border border-white/10 text-center text-2xl font-bold text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all focus:bg-white/10"
-                            />
-                        ))}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><label className={label} htmlFor="r-email">Email</label><input id="r-email" type="email" autoComplete="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} className={field} required /></div>
+                    <div><label className={label} htmlFor="r-dob">Date of birth</label><input id="r-dob" type="date" value={regDob} onChange={e => setRegDob(e.target.value)} className={`${field} [color-scheme:dark]`} required /></div>
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="r-pw">Password</label>
+                    <div className="relative">
+                      <input id="r-pw" type={showRegPassword ? 'text' : 'password'} autoComplete="new-password" value={regPassword} onChange={e => setRegPassword(e.target.value)} className={`${field} pr-12`} required />
+                      <button type="button" aria-label={showRegPassword ? 'Hide password' : 'Show password'} onClick={() => setShowRegPassword(!showRegPassword)}
+                        className="absolute right-1.5 top-1.5 w-9 h-9 rounded-full flex items-center justify-center text-md-on-surface-variant hover:bg-md-on-surface/10">
+                        {showRegPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
                     </div>
+                  </div>
 
-                    <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-4 flex gap-3 items-start">
-                        <KeyRound className="text-violet-400 shrink-0 mt-0.5" size={18} />
-                        <div>
-                            <p className="text-sm text-violet-200 font-medium">Secure Verification</p>
-                            <p className="text-xs text-violet-300/60 mt-1">
-                                Please enter the 6-digit code sent to {mode === 'verify-otp' ? regEmail : resetEmail}. Check your spam folder.
-                            </p>
-                        </div>
+                  <div className="rounded-[20px] bg-md-surface-container p-4">
+                    <div className="flex items-center gap-2 mb-1 text-sm font-semibold text-md-on-surface"><BookLock size={16} className="text-md-primary" /> Diary lock</div>
+                    <p className="text-xs text-md-on-surface-variant mb-3">A separate password for your diary. Forgot it later? Reset it in Settings — your entries stay.</p>
+                    <div className="relative">
+                      <input type={showRegDiaryPassword ? 'text' : 'password'} aria-label="Diary password" placeholder="Diary password (different from login)" value={regDiaryPassword} onChange={e => setRegDiaryPassword(e.target.value)} className={`${field} pr-12`} required />
+                      <button type="button" aria-label={showRegDiaryPassword ? 'Hide diary password' : 'Show diary password'} onClick={() => setShowRegDiaryPassword(!showRegDiaryPassword)}
+                        className="absolute right-1.5 top-1.5 w-9 h-9 rounded-full flex items-center justify-center text-md-on-surface-variant hover:bg-md-on-surface/10">
+                        {showRegDiaryPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
                     </div>
+                  </div>
 
-                    <button disabled={isLoading} className="w-full bg-violet-600 text-white py-4 rounded-xl font-bold hover:bg-violet-700 transition-all flex items-center justify-center gap-2">
-                         {isLoading ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={20}/> Verify & Continue</>}
-                    </button>
+                  <div className="rounded-[20px] bg-md-surface-container p-4">
+                    <div className="flex items-center gap-2 mb-3 text-sm font-semibold text-md-on-surface"><Shield size={16} className="text-md-primary" /> Security question</div>
+                    <select aria-label="Security question" value={secQ1} onChange={e => setSecQ1(e.target.value)} className={`${field} mb-2 text-sm`}>
+                      {SECURITY_QUESTIONS.map(q => <option key={q} value={q}>{q}</option>)}
+                    </select>
+                    <input type="text" aria-label="Answer" placeholder="Your answer" value={secA1} onChange={e => setSecA1(e.target.value)} className={field} required />
+                  </div>
 
-                    <div className="text-center">
-                        <p className="text-slate-500 text-sm">Didn't receive code?
-                            <button
-                                type="button"
-                                onClick={handleResendOtp}
-                                disabled={otpResendCooldown > 0}
-                                className="text-violet-400 font-bold hover:text-violet-300 ml-1 disabled:opacity-50"
-                            >
-                                {otpResendCooldown > 0 ? `Wait ${otpResendCooldown}s` : 'Resend'}
-                            </button>
-                        </p>
-                    </div>
+                  <label className="flex items-start gap-3 cursor-pointer px-1">
+                    <input type="checkbox" checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)} required
+                      className="mt-0.5 w-5 h-5 shrink-0 accent-[rgb(var(--md-primary))]" />
+                    <span className="text-sm text-md-on-surface-variant leading-relaxed">
+                      I’m 18 or older and I agree to the <Link to="/terms" target="_blank" className="text-md-primary font-semibold underline-offset-2 hover:underline">Terms</Link> and
+                      the <Link to="/privacy" target="_blank" className="text-md-primary font-semibold underline-offset-2 hover:underline">Privacy Policy</Link>.
+                    </span>
+                  </label>
+                  <button disabled={isLoading || !acceptTerms} className={primaryBtn}>
+                    {isLoading ? <Loader2 className="animate-spin" /> : 'Create account'}
+                  </button>
                 </form>
-            )}
+              )}
 
-            {/* FORGOT PASSWORD INIT */}
-            {mode === 'forgot-init' && (
-                <form className="space-y-6" onSubmit={handleForgotInit}>
-                    <input type="email" placeholder="Enter your registered email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full" required />
-                    <button disabled={isLoading} className="w-full bg-violet-600 text-white py-4 rounded-xl font-bold hover:bg-violet-700 transition-all flex items-center justify-center">
-                         {isLoading ? <Loader2 className="animate-spin" /> : 'Find Account'}
+              {/* CODE (sign-up + forgot password) */}
+              {isCodeStep && (
+                <form className="space-y-6" onSubmit={mode === 'verify-otp' ? handleVerifyOtp : handleForgotOtpVerify}>
+                  <div className="flex justify-between gap-2" aria-label="6-digit code">
+                    {otp.map((digit, idx) => (
+                      <input
+                        key={idx}
+                        ref={el => { otpRefs.current[idx] = el; }}
+                        type="text" maxLength={1} inputMode="numeric" autoComplete="one-time-code" pattern="\d{1}"
+                        aria-label={`Digit ${idx + 1}`}
+                        value={digit}
+                        onChange={(e) => handleOtpChange(idx, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                        onPaste={handleOtpPaste}
+                        className={`w-12 h-14 sm:w-14 sm:h-16 rounded-[16px] text-center text-2xl font-semibold text-md-on-surface border-2 focus:outline-none transition-colors ${digit ? 'bg-md-secondary-container border-md-primary/40' : 'bg-md-surface-container-highest border-transparent'} focus:border-md-primary`}
+                      />
+                    ))}
+                  </div>
+                  <div className="rounded-[20px] bg-md-surface-container p-4 flex gap-3 items-start">
+                    <KeyRound className="text-md-primary shrink-0 mt-0.5" size={18} />
+                    <p className="text-xs text-md-on-surface-variant leading-relaxed">The code expires in 10 minutes. Can’t find it? Check spam or promotions.</p>
+                  </div>
+                  <button disabled={isLoading} className={primaryBtn}>
+                    {isLoading ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={20} /> Verify</>}
+                  </button>
+                  <p className="text-center text-sm text-md-on-surface-variant">
+                    Didn’t get it?{' '}
+                    <button type="button" onClick={handleResendOtp} disabled={otpResendCooldown > 0} className={`${textBtn} disabled:opacity-50 disabled:no-underline`}>
+                      {otpResendCooldown > 0 ? `Resend in ${otpResendCooldown}s` : 'Resend code'}
                     </button>
-                    <button type="button" onClick={() => setMode('login')} className="w-full text-slate-500 text-sm hover:text-white">Back to Login</button>
+                  </p>
                 </form>
-            )}
+              )}
 
-            {/* FORGOT PASSWORD COMPLETE */}
-            {mode === 'forgot-complete' && (
-                <form className="space-y-6" onSubmit={handleForgotComplete}>
-                    <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                        <p className="text-xs text-violet-400 uppercase font-bold tracking-wide mb-2">Security Question</p>
-                        <p className="text-white font-medium">{resetQuestion}</p>
-                    </div>
-                    <input type="text" placeholder="Your Answer" value={resetAnswer} onChange={e => setResetAnswer(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full" required />
-                    <input type="password" placeholder="New Password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white w-full" required />
-
-                    <button disabled={isLoading} className="w-full bg-violet-600 text-white py-4 rounded-xl font-bold hover:bg-violet-700 transition-all flex items-center justify-center">
-                         {isLoading ? <Loader2 className="animate-spin" /> : 'Reset Password'}
-                    </button>
+              {/* FORGOT PASSWORD — email */}
+              {mode === 'forgot-init' && (
+                <form className="space-y-4" onSubmit={handleForgotInit}>
+                  <div><label className={label} htmlFor="f-email">Email</label><input id="f-email" type="email" autoComplete="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} className={field} required /></div>
+                  <button disabled={isLoading} className={primaryBtn}>{isLoading ? <Loader2 className="animate-spin" /> : 'Send code'}</button>
+                  <button type="button" onClick={() => { setError(null); setMode('login'); }} className="w-full h-12 rounded-full text-md-primary font-semibold hover:bg-md-primary/10">Back to sign in</button>
                 </form>
-            )}
+              )}
 
+              {/* FORGOT PASSWORD — question + new password */}
+              {mode === 'forgot-complete' && (
+                <form className="space-y-4" onSubmit={handleForgotComplete}>
+                  <div className="rounded-[20px] bg-md-secondary-container text-md-on-secondary-container p-4">
+                    <p className="text-xs font-semibold opacity-80 mb-1">Your security question</p>
+                    <p className="font-medium">{resetQuestion}</p>
+                  </div>
+                  <div><label className={label} htmlFor="f-ans">Answer</label><input id="f-ans" type="text" value={resetAnswer} onChange={e => setResetAnswer(e.target.value)} className={field} required /></div>
+                  <div><label className={label} htmlFor="f-new">New password</label><input id="f-new" type="password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className={field} required /></div>
+                  <button disabled={isLoading} className={primaryBtn}>{isLoading ? <Loader2 className="animate-spin" /> : 'Save new password'}</button>
+                </form>
+              )}
+            </div>
+            <p className="text-center text-xs text-md-on-surface-variant mt-5 px-6">Aastha is an AI companion, not a therapist. In crisis, call Tele-MANAS <a className="underline" href="tel:14416">14416</a>.</p>
+            <p className="text-center text-xs text-md-on-surface-variant mt-2"><Link to="/privacy" className="underline-offset-2 hover:underline">Privacy Policy</Link> · <Link to="/terms" className="underline-offset-2 hover:underline">Terms</Link></p>
           </FadeIn>
         </div>
       </div>

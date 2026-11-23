@@ -1,34 +1,18 @@
 import { Response } from 'express';
+import { searchYouTube } from '../services/youtubeSearch';
 import { AuthRequest } from '../middleware/authMiddleware';
 import User from '../models/User';
-import Chat from '../models/Chat';
+import { getRecentMessages } from '../services/messageStore';
 import Diary from '../models/Diary';
 import { extractThemeFromImage, getMusicRecommendation, analyzeDiaryEntries, analyzeChatHistory, getVibePlaylist } from '../services/geminiService';
 import { decrypt } from '../utils/serverEncryption';
-import axios from 'axios';
 
 // --- Helper: Internal YouTube Search ---
 // Defined ONCE here and used below
+// One cached YouTube lookup per song title (services/youtubeSearch.ts — A11)
 const searchYouTubeInternal = async (query: string) => {
-    try {
-        const apiKey = process.env.YOUTUBE_API_KEY;
-        if (!apiKey) return null;
-        
-        const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
-            params: { part: 'snippet', maxResults: 1, q: query + ' audio', type: 'video', key: apiKey }
-        });
-        
-        if (response.data.items.length > 0) {
-            const item = response.data.items[0];
-            return {
-                id: item.id.videoId,
-                title: item.snippet.title,
-                artist: item.snippet.channelTitle,
-                thumbnail: item.snippet.thumbnails.default.url
-            };
-        }
-        return null;
-    } catch (e) { return null; }
+    const [first] = await searchYouTube(`${query} audio`, { max: 1 });
+    return first || null;
 };
 
 export const generateTheme = async (req: AuthRequest, res: Response) => {
@@ -76,12 +60,12 @@ export const analyzeChat = async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
 
-        const chat = await Chat.findOne({ user: req.user._id });
-        if (!chat || chat.messages.length === 0) {
+        const latest = await getRecentMessages(req.user._id, 20);
+        if (latest.length === 0) {
             return (res as any).json({ result: "No chat history found yet." });
         }
 
-        const recentMessages = chat.messages.slice(-20).map(m => ({
+        const recentMessages = latest.map(m => ({
             role: m.role,
             content: decrypt(m.content)
         }));
@@ -103,11 +87,10 @@ export const generateVibePlaylist = async (req: AuthRequest, res: Response) => {
         const { languages, moods, genres, duration, year, specific_songs } = req.body; // Received from frontend
 
         // 1. Get Chat History
-        const chat = await Chat.findOne({ user: req.user._id });
-        const recentMessages = chat ? chat.messages.slice(-15).map(m => ({
+        const recentMessages = (await getRecentMessages(req.user._id, 15)).map(m => ({
             role: m.role,
             content: decrypt(m.content)
-        })) : [];
+        }));
 
         // 2. Ask AI for Song Titles
         // Pass arrays to service
@@ -115,7 +98,8 @@ export const generateVibePlaylist = async (req: AuthRequest, res: Response) => {
 
         // 3. Search YouTube
         // Uses the searchYouTubeInternal defined at the top of the file
-        const searchPromises = songTitles.map(title => searchYouTubeInternal(title));
+        // Cap at 10 songs per playlist — each uncached title costs 100 YouTube quota units
+        const searchPromises = (songTitles || []).slice(0, 10).map(title => searchYouTubeInternal(title));
         const results = await Promise.all(searchPromises);
         let tracks = results.filter(t => t !== null);
 

@@ -26,6 +26,13 @@ const api = axios.create({
 // This runs before EVERY single request to the server
 api.interceptors.request.use(
   (config) => {
+    // Device time zone → the server keeps streaks, check-ins and "today" on the user's own clock.
+    // Sent as a query value (not a custom header) so it never needs a CORS change: an app deployed before
+    // the server still works.
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) config.params = { ...(config.params || {}), _tz: tz };
+    } catch { /* ignore */ }
     // A. Look in Session Storage (Priority) for the data to ensure Tab Isolation
     // If not found, fall back to Local Storage (only for initial load, usually AuthContext handles this)
     const userInfoFromStorage = sessionStorage.getItem('userInfo') || localStorage.getItem('userInfo');

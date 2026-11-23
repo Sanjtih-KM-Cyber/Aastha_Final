@@ -61,7 +61,7 @@ export const Background: React.FC = () => {
       <div className="md:hidden absolute inset-0 bg-gradient-to-b from-teal-900/10 via-transparent to-violet-900/10" />
 
       {/* Grain overlay - kept as it hides banding */}
-      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay"></div>
+      <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-10 mix-blend-overlay"></div>
     </div>
   );
 };

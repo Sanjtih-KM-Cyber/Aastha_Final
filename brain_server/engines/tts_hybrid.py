@@ -3,9 +3,11 @@ import soundfile as sf
 import numpy as np
 import io
 import os
+import tempfile
 import requests
 from kokoro_onnx import Kokoro
 from transformers import AutoTokenizer
+from engines.routing import choose_engine, trim_for_speech
 
 # --- 1. CONFIGURATION ---
 KOKORO_MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
@@ -88,30 +90,28 @@ class HybridTTS:
                 print(f"[TTS] Indic Parler Init Failed: {e}")
 
     def generate(self, text, voice_sample_bytes=None, voice_preset="aastha", description=None):
+        """One consistent voice per persona; engine/language chosen by engines/routing.py (V1, V2)."""
         try:
-            # 1. Cloning (F5) - Highest Priority
-            if voice_sample_bytes and self.f5:
+            text = trim_for_speech(text)
+            route = choose_engine(text, bool(voice_sample_bytes and self.f5), voice_preset, description)
+
+            if route["engine"] == "f5":
                 return self._generate_clone(text, voice_sample_bytes)
-
-            # 2. Style/Expressive (Indic Parler) - If description provided
-            if description and self.parler_model:
-                return self._generate_parler(text, description, voice_preset)
-
-            # 3. Default (Kokoro)
-            return self._generate_default(text, voice_preset)
+            if route["engine"] == "parler":
+                if self.parler_model:
+                    return self._generate_parler(text, description, voice_preset)
+                print("[TTS] Parler unavailable for this script; skipping voice note.")
+                return None
+            return self._generate_default(text, route["voice"], route["lang"], route["speed"])
         except Exception as e:
             print(f"[TTS Error] {e}")
             return None
 
-    def _generate_default(self, text, preset):
+    def _generate_default(self, text, voice_code, lang="en-us", speed=1.0):
         if not self.kokoro: return None
 
-        voice_code = "af_bella"
-        if preset.lower() == "aastha": voice_code = "hf_alpha"
-        elif preset.lower() == "aastik": voice_code = "hm_omega"
-
-        print(f"[TTS] Kokoro ({voice_code}): {text[:30]}...")
-        samples, sample_rate = self.kokoro.create(text, voice=voice_code, speed=1.0, lang="en-us")
+        print(f"[TTS] Kokoro ({voice_code}, {lang}, x{speed}): {text[:30]}...")
+        samples, sample_rate = self.kokoro.create(text, voice=voice_code, speed=speed, lang=lang)
 
         buffer = io.BytesIO()
         sf.write(buffer, samples, sample_rate, format='WAV', subtype='PCM_16')
@@ -120,12 +120,14 @@ class HybridTTS:
 
     def _generate_clone(self, text, voice_bytes):
         print(f"[TTS] F5-TTS Cloning: {text[:30]}...")
-        temp_ref = "temp_ref.wav"
-        with open(temp_ref, "wb") as f:
+        # Unique temp file per request — a shared "temp_ref.wav" let concurrent users overwrite each other's sample (V4)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             f.write(voice_bytes)
-
-        wav, sr, _ = self.f5.infer(ref_file=temp_ref, ref_text="", gen_text=text)
-        if os.path.exists(temp_ref): os.remove(temp_ref)
+            temp_ref = f.name
+        try:
+            wav, sr, _ = self.f5.infer(ref_file=temp_ref, ref_text="", gen_text=text)
+        finally:
+            if os.path.exists(temp_ref): os.remove(temp_ref)
 
         buffer = io.BytesIO()
         sf.write(buffer, wav, sr, format='WAV', subtype='PCM_16')

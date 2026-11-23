@@ -1,36 +1,16 @@
-import Groq from 'groq-sdk';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import dotenv from 'dotenv';
+/**
+ * Chat-facing AI helpers. Provider selection, retries, cooldowns and failover live in ./llm.ts.
+ * (File name kept for import compatibility — it is no longer Groq-specific.)
+ */
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import crypto from 'crypto';
+import Groq from 'groq-sdk';
+import dotenv from 'dotenv';
+import { streamChat, completeChat, LlmMessage } from './llm';
 
 dotenv.config();
-
-// ==========================================
-// 0. CONFIGURATION & CLIENTS
-// ==========================================
-
-// GROQ KEYS (Load all available keys for rotation)
-const groqKeys = (process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '')
-  .split(',')
-  .map(key => key.trim())
-  .filter(key => key.length > 0);
-
-// Helper: Get a specific Groq client by index
-const getGroqClient = (index: number) => {
-  if (groqKeys.length === 0) {
-      return new Groq({ apiKey: 'dummy' });
-  }
-  const key = groqKeys[index % groqKeys.length];
-  return new Groq({ apiKey: key });
-};
-
-// GEMINI (The Ultimate Backup)
-const getGeminiClient = () => {
-    const keys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').split(',');
-    const key = keys[Math.floor(Math.random() * keys.length)]?.trim();
-    if (!key) return null;
-    return new GoogleGenerativeAI(key);
-};
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -51,364 +31,174 @@ export interface SubconsciousBlock {
     }[];
 }
 
-// ============================================================================
-// 2026 GOLDEN STACK ARCHITECTURE
-// ============================================================================
-const MODEL_CONFIG = {
-    soul: {
-        primary: 'qwen/qwen3-32b',
-        fallback: 'meta-llama/llama-4-maverick-17b-128e-instruct'
-    },
-    brain: {
-        primary: 'llama-3.1-8b-instant',
-        fallback: 'meta-llama/llama-4-scout-17b-16e-instruct'
-    },
-    hands: {
-        primary: 'groq/compound',
-        fallback: 'llama-3.3-70b-versatile'
-    },
-    subconscious: {
-        primary: 'openai/gpt-oss-20b',
-        fallback: 'llama-3.1-8b-instant'
-    }
-};
-
-type ModelCategory = keyof typeof MODEL_CONFIG;
+const VALID_MOODS = ['happy', 'sad', 'concerned', 'sassy', 'calm', 'excited', 'neutral', 'angry'];
 
 // ============================================================================
-// SAFE EXECUTION HELPERS
+// 1. THE BRAIN (mood / listen-vs-reply / reaction / suggestion chips)
 // ============================================================================
+
+const GREETING = /^(hi+|hey+|hello+|hii+|yo|sup|namaste|namaskar|vanakkam|good\s*(morning|afternoon|evening|night)|gm|gn)\b[\s!.,?🙂😊👋]*$/i;
 
 /**
- * Attempts to run a chat completion using the Primary model, failing over to Fallback.
+ * Cheap, deterministic cases where the brain call adds nothing — skipping it saves one LLM call
+ * (and its rate-limit budget) per message (ROADMAP A2). The reply model still chooses tools itself.
  */
-const safeChatCompletion = async (
-    category: ModelCategory,
-    messages: any[],
-    temperature: number = 0.6,
-    maxTokens: number = 500,
-    jsonMode: boolean = false
-): Promise<any> => {
-    const config = MODEL_CONFIG[category];
-    const modelsToTry = [config.primary, config.fallback];
-
-    for (let i = 0; i < modelsToTry.length; i++) {
-        const model = modelsToTry[i];
-
-        // Load Balance Keys
-        const start = Math.floor(Math.random() * groqKeys.length);
-
-        // Try up to 3 keys per model before switching models
-        for (let k = 0; k < Math.min(3, groqKeys.length); k++) {
-            const keyIndex = (start + k) % groqKeys.length;
-            try {
-                const client = getGroqClient(keyIndex);
-                // console.log(`[Groq] Attempting ${category} with ${model} (Key ${keyIndex})`);
-
-                const completion = await client.chat.completions.create({
-                    messages: messages,
-                    model: model,
-                    temperature: temperature,
-                    max_tokens: maxTokens,
-                    response_format: jsonMode ? { type: "json_object" } : undefined
-                });
-
-                return completion.choices[0]?.message?.content || "";
-
-            } catch (error: any) {
-                const isRateLimit = error?.status === 429;
-                const isNotFound = error?.status === 404;
-                console.warn(`[Groq] Failed ${model} (Key ${keyIndex}): ${error?.message || error}`);
-
-                // If 404 (Model not found), break key loop immediately and try next model
-                if (isNotFound) break;
-            }
-        }
-        console.warn(`[Groq] Dropping model ${model} for ${category}...`);
-    }
-
-    throw new Error(`All models failed for category: ${category}`);
+export const canSkipBrain = (message: string | undefined, forceReply: boolean, isVoiceMode: boolean): boolean => {
+    if (forceReply || isVoiceMode) return true;
+    const text = (message || '').trim();
+    if (!text) return false;
+    if (text.endsWith('?')) return true; // a direct question always gets a reply
+    if (GREETING.test(text)) return true;
+    return false;
 };
 
-/**
- * Attempts to stream a chat completion using Primary -> Fallback strategy.
- */
-async function* safeStreamCompletion(
-    category: ModelCategory,
-    messages: any[],
-    temperature: number = 0.7,
-    maxTokens: number = 1024
-) {
-    const config = MODEL_CONFIG[category];
-    const modelsToTry = [config.primary, config.fallback];
+export const defaultBrain = (previousMood?: string): SubconsciousBlock => ({
+    internal_monologue: '',
+    mood: (VALID_MOODS.includes(previousMood || '') ? previousMood : 'neutral') as SubconsciousBlock['mood'],
+    status_display: 'Typing...',
+    ui_action: 'none',
+    strategy: 'reply',
+    reaction: null,
+    suggested_replies: [],
+    tool_calls: [],
+});
 
-    // Last Resort Fallback (Real Model) if specific fallbacks fail
-    // This is crucial if the user provided "Future Models" that don't exist yet.
-    modelsToTry.push('llama-3.1-8b-instant');
+const BRAIN_PROMPT = (userContext: string) => `
+You read a chat between a user and their companion and decide how the companion should react.
+You never write the companion's reply. Output one JSON object only.
 
-    for (let i = 0; i < modelsToTry.length; i++) {
-        const model = modelsToTry[i];
+User context: ${userContext}
 
-        // Load Balance Keys
-        const start = Math.floor(Math.random() * groqKeys.length);
+Decide:
+- strategy: "listen" only if the user is clearly mid-thought (unfinished sentence, "and...", "wait", sending a vent in pieces). Otherwise "reply". Greetings, questions and short/dry messages ("ok", "nice") are always "reply".
+- mood: the USER's current emotional state, one of ${VALID_MOODS.join(', ')}.
+- reaction: one emoji the companion would react with, or null. Sad → 🫂 or 💔; ranting → 😯; funny → 😂; sweet → 🥰.
+- suggested_replies: 0-3 short things the USER might say next, written in the user's voice and language (e.g. "I feel anxious", "Play some music"). Never write them as the companion.
+- tool_calls: only if the user asked for something the app can do (music, soundscape, focus timer, breathing, diary, theme). Otherwise [].
+  Shapes: {"name":"control_widget","params":{"widget":"jam|soundscape|pomodoro|breathing","params":{...}}}, {"name":"change_theme","params":{"color":"blue"}}
+- internal_monologue: one short sentence on what the user needs right now.
 
-        for (let k = 0; k < Math.min(3, groqKeys.length); k++) {
-            const keyIndex = (start + k) % groqKeys.length;
-            try {
-                const client = getGroqClient(keyIndex);
-                // console.log(`[Stream] Attempting ${category} with ${model} (Key ${keyIndex})`);
+JSON shape:
+{"internal_monologue":"","mood":"neutral","strategy":"reply","reaction":null,"suggested_replies":[],"tool_calls":[]}
+`;
 
-                const completion = await client.chat.completions.create({
-                    messages: messages,
-                    model: model,
-                    temperature: temperature,
-                    max_tokens: maxTokens,
-                    stream: true,
-                });
+const parseJsonObject = (raw: string): any => {
+    try { return JSON.parse(raw); } catch { /* fall through */ }
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('No JSON object in brain output');
+    return JSON.parse(m[0]);
+};
 
-                for await (const chunk of completion) {
-                    const content = chunk.choices[0]?.delta?.content || "";
-                    if (content) yield content;
-                }
-                return; // Success!
-
-            } catch (error: any) {
-                console.warn(`[Stream] Failed ${model} (Key ${keyIndex}): ${error?.message}`);
-                // If 404, stop retrying keys for this model
-                if (error?.status === 404) break;
-            }
-        }
-    }
-
-    // If we get here, everything failed.
-    console.error("❌ safeStreamCompletion: All models exhausted.");
-    throw new Error("Brain Offline");
-}
-
-
-// ============================================================================
-// 1. THE BRAIN (Subconscious Decision Maker)
-// ============================================================================
 export const generateSubconscious = async (
     history: ChatMessage[],
     userContext: string,
     forceReply: boolean = false
 ): Promise<SubconsciousBlock> => {
-
-    const systemPrompt = `
-    You are the SUBCONSCIOUS BRAIN of a sophisticated AI companion named Aastha.
-    Your job is NOT to speak. Your job is to FEEL, DECIDE, and DIRECT the interface.
-
-    User Context:
-    ${userContext}
-
-    **1. GREETING PROTOCOL (PRIORITY #1):**
-    - If the input is a GREETING in ANY language/script -> **STRATEGY: 'reply'**.
-
-    **2. DRY TEXTING / BOREDOM PROTOCOL (PRIORITY #2):**
-    - **Is the user being "Dry"?** ("nice", "ok", "cool") -> **STRATEGY: 'reply'**.
-    - **GOAL:** CARRY the conversation.
-
-    **3. DECISION MATRIX (STRATEGY):**
-    - **'listen'**: Choose if user is **unfinished**, **hesitant**, or **venting**.
-    - **'reply'**: Choose if user is **waiting for you**, **asking a question**, **greeting**, or **DRY TEXTING**.
-
-    **4. REACTIONS (THE FACE):**
-    - SAD/CRYING -> 😢, 💔, 🫂
-    - ANGRY/RANTING -> 😯, 🤐, 💀 (Do NOT react with Angry).
-    - HAPPY/JOKING -> 😂, ✨, 🔥, 😄.
-    - FLIRTY -> 😳, 🥰, 😉.
-
-    **5. USER REPLY OPTIONS (suggested_replies):**
-    - **CRITICAL:** Must be **USER'S Perspective** (First Person).
-    - **Bad:** "I can help you", "Try this", "Do you want to talk?". (AI asking User)
-    - **Good:** "I feel anxious", "Play some music", "Tell me more". (User answering AI)
-
-    **6. GOD MODE TOOLS (The Hands):**
-    - **Music:** { "name": "control_widget", "params": { "widget": "jam", "params": { "languages": ["Tamil"], "genres": ["Melody"], "duration": 30, "autoplay": true } } }
-    - **Soundscape:** { "name": "control_widget", "params": { "widget": "soundscape", "params": { "preset": "rain:0.6" } } }
-    - **Focus:** { "name": "control_widget", "params": { "widget": "pomodoro", "params": { "action": "start", "focusDuration": 25 } } }
-    - **Breathing:** { "name": "control_widget", "params": { "widget": "breathing", "params": { "mode": "Relax" } } }
-    - **Diary:** { "name": "write_diary", "params": { "title": "Auto", "content": "...", "date": "YYYY-MM-DD" } }
-    - **Theme:** { "name": "change_theme", "params": { "color": "blue" } }
-
-    **OUTPUT JSON ONLY:**
-    {
-      "internal_monologue": "Raw thought process.",
-      "mood": "happy"|"sad"|"concerned"|"sassy"|"calm"|"excited"|"neutral"|"angry",
-      "status_display": "Thinking...",
-      "ui_action": "listen"|"none",
-      "strategy": "reply"|"listen",
-      "reaction": "string"|null,
-      "suggested_replies": ["..."],
-      "tool_calls": []
-    }
-    `;
-
-    // Construct Messages (Keep only last 5 turns)
-    const messages: any[] = [
-        { role: 'system', content: systemPrompt },
-        ...history.slice(-5).map(m => ({
-            role: m.role,
-            content: typeof m.content === 'string' ? m.content : '[Image/Media]'
-        }))
+    const messages: LlmMessage[] = [
+        { role: 'system', content: BRAIN_PROMPT(userContext) },
+        ...history.slice(-6).map(m => ({
+            role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
+            content: typeof m.content === 'string' ? m.content : '[image]'
+        })),
     ];
 
-    if (forceReply) {
-        messages.push({ role: "system", content: "USER FORCE TRIGGER: Stop listening. Reply now." });
-    }
-
     try {
-        // USE "THE BRAIN" (Logic/Routing)
-        const rawJson = await safeChatCompletion('brain', messages, 0.6, 500, true);
-        const parsed = JSON.parse(rawJson) as SubconsciousBlock;
+        const raw = await completeChat(messages, { task: 'brain', temperature: 0.3, maxTokens: 400, json: true });
+        const p = parseJsonObject(raw);
 
-        // Hard Overrides
-        if (forceReply) {
-            parsed.strategy = 'reply';
-            parsed.ui_action = 'none';
-            parsed.status_display = 'Thinking...';
-        } else {
-            if (parsed.strategy === 'listen') parsed.ui_action = 'listen'; else parsed.ui_action = 'none';
-        }
-
-        if (parsed.strategy === 'listen' && !parsed.reaction) {
-            parsed.reaction = '👇';
-        }
-
-        return parsed;
-
-    } catch (error) {
-        console.error("Subconscious Failed:", error);
-        // Emergency Fallback (Gemini could be added here, but keeping it simple as safeChatCompletion already has fallbacks)
-        return {
-            internal_monologue: "System Reboot...",
-            mood: "neutral",
-            status_display: "Rebooting...",
-            ui_action: "none",
-            strategy: "reply",
-            reaction: null,
-            suggested_replies: ["I'm here", "Wait", "Reload"],
-            tool_calls: []
+        const block: SubconsciousBlock = {
+            internal_monologue: String(p.internal_monologue || ''),
+            mood: VALID_MOODS.includes(p.mood) ? p.mood : 'neutral',
+            status_display: p.strategy === 'listen' ? 'Listening...' : 'Typing...',
+            strategy: p.strategy === 'listen' && !forceReply ? 'listen' : 'reply',
+            ui_action: 'none',
+            reaction: typeof p.reaction === 'string' && p.reaction.length <= 8 ? p.reaction : null,
+            suggested_replies: Array.isArray(p.suggested_replies) ? p.suggested_replies.slice(0, 3).map(String) : [],
+            tool_calls: Array.isArray(p.tool_calls) ? p.tool_calls : [],
         };
+        block.ui_action = block.strategy === 'listen' ? 'listen' : 'none';
+        if (block.strategy === 'listen' && !block.reaction) block.reaction = '👇';
+        return block;
+    } catch (error: any) {
+        console.error('Subconscious failed, defaulting to reply:', error?.message || error);
+        return defaultBrain();
     }
 };
 
 // ============================================================================
-// 2. THE VOICE DIRECTOR (The Streamer)
+// 2. REPLY STREAMING
 // ============================================================================
-export async function* streamGroq(history: ChatMessage[], systemPrompt: string, maxTokens?: number, model?: string) {
+const VOICE_TAG_INSTRUCTIONS = `
+[Voice output]
+If you reply in a regional language or Hinglish, add at the very end: [STYLE: <emotion>, <speed>][TTS: <the same reply written in native script>].
+For plain English replies add nothing.`;
 
-  // NOTE: The 'model' arg is preserved for backward compatibility but ignored in favor of Golden Stack
-  
-  let finalPrompt = systemPrompt;
-  // Inject Voice Tags Logic if not present (simplified check)
-  if (!systemPrompt.includes("Voice Director")) {
-      finalPrompt = `
-      You are the Voice Director.
-      **1. NO THINKING:** Do not output internal monologue or thoughts. Reply directly.
-      **2. DETECT LANGUAGE & SCRIPT:**
-      - English -> No Style Tags.
-      - Regional/Hinglish -> [STYLE: <emotion>, <speed>][TTS: <native_script>].
-      ${systemPrompt}`;
-  }
+const toLlmMessages = (history: ChatMessage[], systemPrompt: string): LlmMessage[] => [
+    { role: 'system', content: systemPrompt },
+    ...history
+        .filter(m => m.role !== 'system')
+        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content as LlmMessage['content'] })),
+];
 
-  const messages: any[] = [
-      { role: 'system', content: finalPrompt },
-      ...history.map(m => ({ 
-          role: m.role, 
-          content: typeof m.content === 'string' ? m.content : (m.content as any[]).find(c => c.type === 'text')?.text || "" 
-      }))
-  ];
-
-  // USE "THE SOUL" (Chat & Roleplay) for Voice
-  try {
-      const stream = safeStreamCompletion('soul', messages, 0.7, maxTokens || 1024);
-      for await (const chunk of stream) {
-          if (chunk) yield chunk;
-      }
-  } catch (e) {
-      console.error("Voice Stream Failed:", e);
-      throw e;
-  }
+/** Streams the companion's reply (images in the latest message are passed to a vision model). */
+export async function* streamReply(
+    history: ChatMessage[],
+    systemPrompt: string,
+    opts: { maxTokens?: number; voiceTags?: boolean; think?: boolean; onReasoning?: (t: string) => void } = {}
+) {
+    const prompt = opts.voiceTags ? `${systemPrompt}\n${VOICE_TAG_INSTRUCTIONS}` : systemPrompt;
+    const hasImages = history.some(m => Array.isArray(m.content) && m.content.some(p => p.type === 'image_url'));
+    // Think mode uses reasoning models (text only); images always go to the vision chain.
+    const task = opts.think && !hasImages ? 'think' : 'chat';
+    yield* streamChat(toLlmMessages(history, prompt), {
+        task,
+        temperature: task === 'think' ? 0.6 : 0.75,
+        maxTokens: opts.maxTokens || (task === 'think' ? 2048 : 1024),
+        onReasoning: task === 'think' ? opts.onReasoning : undefined,
+    });
 }
 
-// ============================================================================
-// 3. THE WORKHORSE (Legacy Name -> Now Uses Golden Stack)
-// ============================================================================
-export async function* streamWorkhorse(history: ChatMessage[], systemPrompt: string, maxTokens?: number) {
-  
-  const messages: any[] = [
-      { role: 'system', content: systemPrompt },
-      ...history.map(m => ({
-          role: m.role,
-          content: typeof m.content === 'string' ? m.content : (m.content as any[]).find(c => c.type === 'text')?.text || ""
-      }))
-  ];
+/** Heuristic: messages where slower, deeper reasoning genuinely helps (decisions, dilemmas). */
+export const wantsDeepThinking = (message?: string): boolean =>
+    /\b(should i|what should i do|help me (decide|choose|think)|confused (about|between)|which (one|option) should|pros and cons|torn between|dilemma|can'?t decide|kya karu|kya karun|samajh nahi aa raha)\b/i
+        .test(message || '');
 
-  // USE "THE SOUL" (Chat) OR "THE HANDS" (Complex)?
-  // ChatController uses Workhorse for non-voice/complex chats.
-  // We'll map it to 'soul' for consistency in personality, but could be 'hands' if tool use is heavy.
-  // Given user description: "THE SOUL (Chat & Roleplay)" fits best.
-
-  try {
-      const stream = safeStreamCompletion('soul', messages, 0.7, maxTokens || 1024);
-      for await (const chunk of stream) {
-          if (chunk) yield chunk;
-      }
-  } catch (e) {
-      console.error("Workhorse Stream Failed:", e);
-      
-      // Ultimate Fallback: Gemini Flash (if SafeStream completely died)
-      try {
-          const gemini = getGeminiClient();
-          if (!gemini) throw new Error("No Gemini");
-          const model = gemini.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-          const chatHistory = history.map(m => ({
-              role: m.role === 'user' ? 'user' : 'model',
-              parts: [{ text: typeof m.content === 'string' ? m.content : '[Image]' }]
-          }));
-
-          const chat = model.startChat({ history: chatHistory, systemInstruction: systemPrompt });
-          const result = await chat.sendMessageStream("Continue");
-          for await (const chunk of result.stream) {
-              const text = chunk.text();
-              if (text) yield text;
-          }
-      } catch (geminiError) {
-          console.error("Gemini Workhorse Error:", geminiError);
-          yield " [System: Brain Overload. Please try again in 5 minutes.] ";
-      }
-  }
-}
+// Backwards-compatible names
+export const streamGroq = (history: ChatMessage[], systemPrompt: string, maxTokens?: number) =>
+    streamReply(history, systemPrompt, { maxTokens, voiceTags: true });
+export const streamWorkhorse = (history: ChatMessage[], systemPrompt: string, maxTokens?: number) =>
+    streamReply(history, systemPrompt, { maxTokens, voiceTags: true });
 
 // ============================================================================
-// 4. WHISPER TRANSCRIPTION
+// 3. WHISPER TRANSCRIPTION
 // ============================================================================
-export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
-    // Rotation for Whisper too
-    const start = Math.floor(Math.random() * groqKeys.length);
-    for (let i = 0; i < groqKeys.length; i++) {
-        const keyIndex = (start + i) % groqKeys.length;
-        try {
-            const client = getGroqClient(keyIndex);
-            const tempPath = `/tmp/upload_${Date.now()}.m4a`;
-            fs.writeFileSync(tempPath, audioBuffer);
+const groqKeys = (process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '')
+  .split(',').map(k => k.trim()).filter(Boolean);
 
-            const transcription = await client.audio.transcriptions.create({
-                file: fs.createReadStream(tempPath),
-                model: "whisper-large-v3",
-                response_format: "json",
-                language: "en",
-                temperature: 0.0
-            });
-
-            fs.unlinkSync(tempPath);
-            return transcription.text;
-        } catch (error) {
-            console.warn(`Whisper Key ${keyIndex+1} Failed. Trying next...`);
+export const transcribeAudio = async (audioBuffer: Buffer, ext = 'm4a'): Promise<string> => {
+    if (groqKeys.length === 0) return "[Audio processing unavailable]";
+    // Unique temp file per request (concurrent uploads used to collide)
+    const tempPath = path.join(os.tmpdir(), `aastha_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.${/^[a-z0-9]{2,4}$/.test(ext) ? ext : 'm4a'}`);
+    fs.writeFileSync(tempPath, audioBuffer);
+    try {
+        const start = Math.floor(Math.random() * groqKeys.length);
+        for (let i = 0; i < Math.min(3, groqKeys.length); i++) {
+            const keyIndex = (start + i) % groqKeys.length;
+            try {
+                const client = new Groq({ apiKey: groqKeys[keyIndex], maxRetries: 0 });
+                const transcription: any = await client.audio.transcriptions.create({
+                    file: fs.createReadStream(tempPath),
+                    model: "whisper-large-v3",
+                    response_format: "json",
+                    temperature: 0.0
+                } as any);
+                return transcription.text;
+            } catch (error: any) {
+                console.warn(`Whisper key ${keyIndex + 1} failed (${error?.status ?? ''}). Trying next...`);
+            }
         }
+        return "[Audio processing failed due to server load]";
+    } finally {
+        fs.unlink(tempPath, () => {});
     }
-    return "[Audio processing failed due to server load]";
 };

@@ -61,6 +61,8 @@ export default defineConfig(({ mode }) => {
             ]
           },
           workbox: {
+            // Web Push handlers (push + notificationclick) — see public/push-sw.js
+            importScripts: ['push-sw.js'],
             runtimeCaching: [
               {
                 urlPattern: ({ url }) => url.pathname.startsWith('/api'),
@@ -84,10 +86,7 @@ export default defineConfig(({ mode }) => {
           }
         })
       ],
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
-      },
+      // NOTE: never inject server secrets (GEMINI/GROQ keys) via `define` — they'd ship in the public bundle.
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),

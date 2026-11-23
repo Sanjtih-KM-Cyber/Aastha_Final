@@ -11,6 +11,7 @@ import { Footer } from '../components/landing/Footer';
 import { OnboardingTour, TourStep } from '../components/landing/OnboardingTour';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext'; // Import Theme Context for Lite Mode
+import { usePublicTheme } from '../hooks/usePublicTheme';
 
 const LANDING_TOUR_STEPS: TourStep[] = [
   {
@@ -43,13 +44,14 @@ const Landing: React.FC = () => {
   const [isTourOpen, setIsTourOpen] = useState(false);
   const navigate = useNavigate();
   const { isLowPowerMode } = useTheme(); // Detect Lite Mode
+  const publicTheme = usePublicTheme(); // light / dark toggle (Material light scheme)
 
   const handleLoginNav = () => {
     navigate('/login');
   };
 
   return (
-      <div className="min-h-screen bg-white dark:bg-[#0B0F17] text-slate-900 font-sans selection:bg-violet-200 selection:text-violet-900 transition-colors duration-500">
+      <div style={publicTheme.style} data-public-theme={publicTheme.isLight ? 'light' : 'dark'} className="min-h-screen bg-md-surface text-md-on-surface font-sans selection:bg-md-primary/30 relative overflow-x-hidden transition-colors duration-300">
         <OnboardingTour
           isOpen={isTourOpen}
           steps={LANDING_TOUR_STEPS}
@@ -57,7 +59,7 @@ const Landing: React.FC = () => {
           onSkip={() => setIsTourOpen(false)}
         />
 
-        <Navbar onLogin={handleLoginNav} />
+        <Navbar onLogin={handleLoginNav} isLight={publicTheme.isLight} onToggleTheme={publicTheme.toggle} />
         <main>
           <Hero onLogin={handleLoginNav} />
           <Features />

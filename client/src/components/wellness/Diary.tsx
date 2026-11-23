@@ -1,3 +1,4 @@
+import { DiaryPasswordReset } from './DiaryPasswordReset';
 import React, { useState, useEffect, useRef } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,8 +15,10 @@ import {
   Calendar,
   X,
   Eye,
-  EyeOff
+  EyeOff,
+  Check
 } from 'lucide-react';
+import { Icons } from '../../design/icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useEncryption } from '../../context/EncryptionContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -60,12 +63,24 @@ const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string
   const { currentTheme } = useTheme();
   const [input, setInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showReset, setShowReset] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) { setError('Password required'); return; }
     onUnlock(input);
   };
+
+  if (showReset) {
+    return (
+      <div className="absolute inset-0 z-50 overflow-y-auto bg-[#1a1a1a] text-white rounded-b-xl p-6">
+        <div className="max-w-md mx-auto">
+          <button onClick={() => setShowReset(false)} className="text-xs text-white/60 hover:text-white mb-4">← Back to unlock</button>
+          <DiaryPasswordReset compact onDone={() => { setShowReset(false); setError(''); }} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#1a1a1a] text-white rounded-b-xl p-8">
@@ -96,6 +111,7 @@ const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string
 
           {error && <p className="text-red-400 text-xs text-center mt-4 flex items-center justify-center gap-1"><AlertCircle size={12} /> {error}</p>}
           <button type="submit" className="w-full mt-8 py-3 rounded-xl font-medium text-sm tracking-wide transition-all hover:scale-[1.02] shadow-lg" style={{ background: `linear-gradient(135deg, ${currentTheme.primaryColor}, ${currentTheme.primaryColor}80)`, color: '#000' }}>UNLOCK</button>
+          <button type="button" onClick={() => setShowReset(true)} className="w-full mt-4 text-xs text-white/50 hover:text-white underline">Forgot password?</button>
         </form>
       </motion.div>
     </div>
@@ -698,15 +714,14 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
 
   return (
     <DraggableWindow 
-      isOpen={isOpen} onClose={handleClose} title="Personal Diary"
+      isOpen={isOpen} onClose={handleClose} title="Diary"
       initialWidth={900} initialHeight={650} defaultPosition={{ x: 100, y: 80 }}
       zIndex={zIndex || 20} onFocus={onFocus || (() => {})}
-      icon={BookOpen}
-      color="#F59E0B"
+      icon={Icons.diary}
       persistenceKey={persistenceKey}
     >
       <div
-        className="flex h-full w-full bg-[#222] text-gray-800 relative overflow-hidden rounded-b-xl shadow-inner font-sans items-center justify-center"
+        className="flex h-full w-full bg-md-surface-container-low text-gray-800 relative overflow-hidden font-sans items-center justify-center"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
@@ -718,22 +733,23 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
             <div className={`relative w-full h-full flex shadow-2xl ${isMobile ? '' : 'rounded-r-lg perspective-2000 w-[95%] h-[90%]'}`}>
                 
                 {isMobile && (
-                    <div className="absolute top-0 left-0 right-0 h-14 bg-[#fdfdf6] border-b border-gray-200 z-50 flex items-center justify-between px-4">
-                        <div className="flex items-center gap-3">
-                             <span className="font-serif font-bold text-gray-800 text-lg">
-                                {activeDate.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}
-                             </span>
-                             <button onClick={() => setIsCalendarModalOpen(true)} className="p-2 bg-gray-100 rounded-full text-gray-600">
-                                <Calendar size={18} />
-                             </button>
-                        </div>
+                    <div className="absolute top-0 left-3 right-3 h-14 z-50 rounded-[20px] bg-md-surface-container-high border border-md-outline-variant/30 flex items-center gap-2 pl-1.5 pr-1.5">
+                        <button onClick={() => changeDay(-1)} disabled={!!isFlipping} aria-label="Previous day"
+                            className="w-10 h-10 rounded-full flex items-center justify-center text-md-on-surface-variant hover:bg-md-on-surface/10 disabled:opacity-40"><ChevronLeft size={20} /></button>
+                        <button onClick={() => setIsCalendarModalOpen(true)} aria-label="Pick a date"
+                            className="flex-1 min-w-0 h-10 px-3 rounded-full flex items-center justify-center gap-2 text-md-on-surface hover:bg-md-on-surface/10">
+                            <Calendar size={16} className="text-md-primary shrink-0" />
+                            <span className="text-sm font-medium truncate">{activeDate.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                        </button>
+                        <button onClick={() => changeDay(1)} disabled={!!isFlipping} aria-label="Next day"
+                            className="w-10 h-10 rounded-full flex items-center justify-center text-md-on-surface-variant hover:bg-md-on-surface/10 disabled:opacity-40"><ChevronRight size={20} /></button>
                         <button
                             onClick={() => handleSaveEntry(false)}
                             disabled={isSaving}
-                            className="px-4 py-1.5 text-white text-xs font-bold uppercase rounded-full shadow-sm transition-colors"
-                            style={{ backgroundColor: currentTheme.primaryColor }}
+                            className="h-10 px-4 rounded-full bg-md-primary text-md-on-primary text-sm font-medium inline-flex items-center gap-1.5 disabled:opacity-60 shrink-0"
                         >
-                            {isSaving ? "Saving..." : "Save"}
+                            {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={16} />}
+                            {isSaving ? 'Saving' : 'Save'}
                         </button>
                     </div>
                 )}
@@ -785,14 +801,21 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
                 </AnimatePresence>
 
                 {!isMobile && (
-                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white z-50">
-                      <button onClick={() => changeDay(-1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronLeft/></button>
-                      <span className="font-mono text-sm w-32 text-center">{getFormattedDate(activeDate).split(',')[1]}</span>
-                      <button onClick={() => changeDay(1)} disabled={!!isFlipping} className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50"><ChevronRight/></button>
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 glass glass-pill !bg-md-surface-container-high/90 flex items-center gap-1 p-1.5">
+                      <button onClick={() => changeDay(-1)} disabled={!!isFlipping} aria-label="Previous day"
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-md-on-surface hover:bg-md-on-surface/10 disabled:opacity-40"><ChevronLeft size={20} /></button>
+                      <span className="min-w-[150px] px-2 text-center text-sm font-medium text-md-on-surface tabular-nums">
+                          {activeDate.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'long' })}
+                      </span>
+                      <button onClick={() => changeDay(1)} disabled={!!isFlipping} aria-label="Next day"
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-md-on-surface hover:bg-md-on-surface/10 disabled:opacity-40"><ChevronRight size={20} /></button>
+                      <span className="w-px h-6 bg-md-outline-variant/60 mx-1" />
+                      <button onClick={() => setActiveDate(new Date())} disabled={!!isFlipping || toDateString(activeDate) === toDateString(new Date())}
+                          className="h-10 px-4 rounded-full bg-md-secondary-container text-md-on-secondary-container text-sm font-medium disabled:opacity-40">Today</button>
                   </div>
                 )}
 
-                <div className={`relative flex w-full h-full bg-[#2a2a2a] ${isMobile ? '' : 'rounded-lg shadow-2xl'}`} style={isMobile ? {} : { perspective: '2500px', transformStyle: 'preserve-3d' }}>
+                <div className={`relative flex w-full h-full ${isMobile ? 'bg-md-surface-container-low' : 'bg-[#2a2a2a] rounded-lg shadow-2xl'}`} style={isMobile ? {} : { perspective: '2500px', transformStyle: 'preserve-3d' }}>
                     
                     {isLoading && (
                         <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-lg pointer-events-none">
@@ -819,7 +842,7 @@ export const Diary: React.FC<DiaryProps> = ({ isOpen, onClose, zIndex, onFocus, 
                         )}
 
                         <div
-                          className={`${isMobile ? 'w-full pt-14' : 'w-1/2 border-l border-[#ccc] rounded-r-lg'} h-full overflow-hidden bg-[#fdfdf6]`}
+                          className={`${isMobile ? 'w-full mt-[64px] rounded-t-[20px] mx-0' : 'w-1/2 border-l border-[#ccc] rounded-r-lg'} h-full overflow-hidden bg-[#fdfdf6]`}
                         >
                              <PaperPage 
                                 date={isFlipping === 'next' ? dPlus1 : activeDate}

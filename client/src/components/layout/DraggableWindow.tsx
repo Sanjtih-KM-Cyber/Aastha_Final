@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { motion, AnimatePresence, useDragControls } from 'framer-motion';
-import { X, Minus } from 'lucide-react';
+import { motion, AnimatePresence, useDragControls, useMotionValue } from 'framer-motion';
+import { X, Minus, Maximize2 } from 'lucide-react';
+import { useWindowControls } from '../../hooks/useWindowControls';
 
 interface DraggableWindowProps {
   isOpen: boolean;
@@ -42,6 +43,12 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   persistenceKey
 }) => {
   const dragControls = useDragControls();
+  const controlsStyle = useWindowControls(); // 'mac' (traffic lights, left) | 'windows' (– ✕, right) — user setting, synced
+  // Drag offset lives in motion values so it is zeroed in the SAME frame top/left are committed.
+  // (Animating it back to 0 with a spring is what made windows bounce after you let go.)
+  const dragX = useMotionValue(0);
+  const dragY = useMotionValue(0);
+  const bubbleDragged = useRef(false);
   
   // Size State
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight });
@@ -185,8 +192,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
 
   // If not minimized, Mobile height is 100%. If minimized, desktop is 48px.
   // Note: logic below is for the MAIN window. The bubble is handled separately.
-  const minimizedHeight = isMobile ? 64 : 48;
-  const currentHeight = isMinimized ? minimizedHeight : (isMobile ? '100%' : size.height);
+  const minimizedHeight = 64; // glass title bar (48) + 8px inset top and bottom
+  const currentHeight = isMinimized ? minimizedHeight : (isMobile ? 'calc(100% - 8px)' : size.height);
 
   // MAXIMIZE FIX FOR MOBILE: Ensure position resets to 0,0 when un-minimizing
   const mobileStyle = isMobile && !isMinimized ? { top: 0, left: 0, x: 0, y: 0 } : {};
@@ -215,6 +222,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
       if (newY > maxY) newY = maxY;
 
       setPosition({ x: newX, y: newY });
+      dragX.set(0);
+      dragY.set(0);
       // We do NOT save state if we want it to reset on next open (per previous request)
       // But user said "sit where i leave it" during usage.
       // The previous logic ignored 'x/y' from localStorage on mount, but we set 'position' state here.
@@ -230,35 +239,39 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           // REMOVED constraintsRef to fix "rubber band" / snapping issues.
           // We handle bounds manually in onDragEnd or allow free drag with manual clamp.
           // Actually, purely free drag + manual clamp on release is the smoothest "OS-like" feel.
-          dragMomentum={false}
-          initial={isLiteMode ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
+          initial={isLiteMode ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
           animate={{
             opacity: 1, 
             scale: 1, 
-            width: isMobile ? '100%' : (isMinimized ? 250 : size.width),
+            width: isMobile ? '100%' : (isMinimized ? 300 : size.width),
             height: currentHeight,
-            top: isMobile ? 0 : effectivePos.y,
+            top: isMobile ? 8 : effectivePos.y,
             left: isMobile ? 0 : effectivePos.x,
-            // We set x/y to 0 because we update 'top/left' onDragEnd.
-            // This prevents "double" movement (transform + top/left).
-            x: 0,
-            y: 0,
-            borderRadius: isMobile ? 0 : 24,
+            borderRadius: isMobile ? '28px 28px 0 0' : 24,
             ...mobileStyle // Force reset on mobile maximize
           }}
           // --- MOBILE OPTIMIZATION 1: Fast Transitions & Simple Exit ---
           // Further reduced duration for even snappier feel
+          // Smooth, no bounce (Material "emphasized" easing); position changes apply instantly
           transition={isLiteMode
-            ? { duration: 0.1, ease: "linear" }
-            : { type: "spring", damping: 25, stiffness: 300 }
+            ? { duration: 0.1, ease: "linear", top: { duration: 0 }, left: { duration: 0 } }
+            : { type: "tween", duration: 0.22, ease: [0.2, 0, 0, 1], top: { duration: 0 }, left: { duration: 0 } }
           }
           exit={isLiteMode
             ? { opacity: 0, transition: { duration: 0.05 } }
-            : { opacity: 0, scale: 0.9, y: 20 }
+            : { opacity: 0, scale: 0.96, transition: { duration: 0.15 } }
           }
           drag={!isMobile && !isResizing}
           dragControls={dragControls}
           dragMomentum={false}
+          dragElastic={0}
+          // Hard stop at the screen edges while dragging: no rubber band, no snap on release
+          dragConstraints={isMobile ? undefined : {
+            left: -effectivePos.x,
+            right: Math.max(0, window.innerWidth - (isMinimized ? 300 : size.width) - effectivePos.x),
+            top: 60 - effectivePos.y,
+            bottom: Math.max(0, window.innerHeight - (isMinimized ? 64 : size.height) - effectivePos.y),
+          }}
           dragListener={false}
           onDragEnd={onDragEnd} // SAVE POSITION
           onPointerDownCapture={onFocus}
@@ -268,6 +281,8 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           // --- MOBILE OPTIMIZATION 2: Hardware Acceleration ---
           // FIX: Don't unmount on mobile minimize, just hide visibility to keep background processes (audio) alive
           style={{ 
+            x: isMobile ? 0 : dragX,
+            y: isMobile ? 0 : dragY,
             zIndex: zIndex,
             position: 'fixed',
             willChange: isMobile ? 'transform, opacity' : undefined,
@@ -276,65 +291,81 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           }}
         >
           <div className={`
-             relative w-full h-full flex flex-col overflow-hidden transition-all duration-300
-             ${isMobile ? 'rounded-none' : 'rounded-3xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)]'}
-             bg-[#121212]
+             relative w-full h-full flex flex-col overflow-hidden text-md-on-surface
+             ${isMobile ? 'rounded-t-[28px] shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.6)]' : 'rounded-[28px] border border-md-outline-variant/30 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)]'}
+             bg-md-surface-container-low
              ${className}
           `}>
             
-            {/* --- Window Header (Controls & Title) --- */}
-            <div 
+            {/* --- Window Header: Liquid Glass title bar (control layer) --- */}
+            <div
               onPointerDown={(e) => !isMobile && dragControls.start(e)}
-              // --- MOBILE OPTIMIZATION 3: Opaque Header (No Blur) ---
-              className={`
-                 ${isMobile
-                     ? 'absolute top-0 left-0 right-0 h-16 bg-[#121212] border-b border-white/10'
-                     : 'relative h-12 cursor-grab active:cursor-grabbing touch-none bg-transparent'
-                 }
-                 z-50 flex items-center justify-between px-4 shrink-0
-              `}
+              className={`absolute z-50 ${isMobile ? 'top-2 left-2 right-2' : 'top-2 left-2 right-2 cursor-grab active:cursor-grabbing touch-none'}`}
             >
-                {/* macOS Controls (Left) - RED & YELLOW ONLY */}
-                <div
-                   onPointerDown={(e) => e.stopPropagation()}
-                   className="flex items-center gap-2 group pointer-events-auto pl-2 z-10 shrink-0"
-                >
-                    {/* Red (Close) */}
-                    <button
-                       onClick={handleClose}
-                       className="w-3 h-3 rounded-full flex items-center justify-center bg-[#FF5F57] shadow-inner active:brightness-75 transition-all"
-                       title="Close"
-                    >
-                        <X size={8} className="text-black/60 transition-opacity" strokeWidth={3} />
-                    </button>
+              <div className={`glass rounded-[20px] h-12 flex items-center gap-2 ${controlsStyle === 'mac' ? 'pl-3.5 pr-2' : 'pl-2 pr-1.5'}`}>
+                {isMobile && <span aria-hidden className="absolute -top-1 left-1/2 -translate-x-1/2 w-9 h-1 rounded-full bg-md-on-surface-variant/40" />}
 
-                    {/* Yellow (Minimize) */}
-                    <button
-                       onClick={toggleMinimize}
-                       className="w-3 h-3 rounded-full flex items-center justify-center bg-[#FEBC2E] shadow-inner active:brightness-75 transition-all"
-                       title={isMinimized ? "Expand" : "Minimize"}
-                    >
-                        <Minus size={8} className="text-black/60 transition-opacity" strokeWidth={3} />
+                {/* macOS style: traffic lights on the LEFT, centred title */}
+                {controlsStyle === 'mac' && (
+                  <div onPointerDown={(e) => e.stopPropagation()} className="flex items-center gap-2 shrink-0 group/tl">
+                    <button onClick={handleClose} aria-label="Close" title="Close"
+                      className="w-3.5 h-3.5 rounded-full bg-[#FF5F57] flex items-center justify-center ring-1 ring-black/20">
+                      <X size={9} strokeWidth={3} className="text-black/60 opacity-0 group-hover/tl:opacity-100" />
                     </button>
+                    <button onClick={toggleMinimize} aria-label={isMinimized ? 'Expand' : 'Minimise'} title={isMinimized ? 'Expand' : 'Minimise'}
+                      className="w-3.5 h-3.5 rounded-full bg-[#FEBC2E] flex items-center justify-center ring-1 ring-black/20">
+                      <Minus size={9} strokeWidth={3} className="text-black/60 opacity-0 group-hover/tl:opacity-100" />
+                    </button>
+                    <button onClick={isMinimized ? toggleMinimize : undefined} disabled={!isMinimized} aria-label="Expand" title="Expand"
+                      className="w-3.5 h-3.5 rounded-full bg-[#28C840] flex items-center justify-center ring-1 ring-black/20 disabled:opacity-40">
+                      <Maximize2 size={8} strokeWidth={3} className="text-black/60 opacity-0 group-hover/tl:opacity-100" />
+                    </button>
+                  </div>
+                )}
+
+                {controlsStyle !== 'mac' && Icon && (
+                  <span className="shrink-0 w-8 h-8 rounded-[12px] bg-md-primary-container text-md-on-primary-container flex items-center justify-center">
+                    <Icon size={16} />
+                  </span>
+                )}
+                <div className={`flex-1 min-w-0 flex items-center ${controlsStyle === 'mac' ? 'justify-center' : ''}`}>
+                  {!isMobile && isMinimized && minimizedContent ? (
+                    <div onPointerDown={(e) => e.stopPropagation()} className="w-full flex items-center">{minimizedContent}</div>
+                  ) : (
+                    <span className={`text-sm font-medium text-md-on-surface truncate px-1 inline-flex items-center gap-2 ${controlsStyle === 'mac' ? 'pr-12' : ''}`}>
+                      {controlsStyle === 'mac' && Icon && <Icon size={14} className="text-md-primary shrink-0" />}{title}
+                    </span>
+                  )}
                 </div>
 
-                {/* Title (Centered) OR Minimized Content (If Desktop & Minimized) */}
-                <div className="absolute inset-x-0 mx-auto text-center pointer-events-none flex items-center justify-center h-full pl-16 pr-4">
-                    {!isMobile && isMinimized && minimizedContent ? (
-                        <div className="pointer-events-auto w-full h-full flex items-center justify-center">
-                            {minimizedContent}
-                        </div>
-                    ) : (
-                        <span className="font-serif text-white/60 text-sm font-medium tracking-wide">
-                            {title}
-                        </span>
-                    )}
-                </div>
+                {/* Windows style: minimise + close on the RIGHT */}
+                {controlsStyle !== 'mac' && (
+                  <div onPointerDown={(e) => e.stopPropagation()} className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      onClick={toggleMinimize}
+                      aria-label={isMinimized ? 'Expand' : 'Minimise'}
+                      title={isMinimized ? 'Expand' : 'Minimise'}
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-md-on-surface-variant hover:bg-md-on-surface/10 hover:text-md-on-surface transition-colors"
+                    >
+                      {isMinimized ? <Maximize2 size={16} /> : <Minus size={18} />}
+                    </button>
+                    <button
+                      onClick={handleClose}
+                      aria-label="Close"
+                      title="Close"
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-md-on-surface-variant hover:bg-md-error/15 hover:text-md-error transition-colors"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* --- Window Content --- */}
             <div
-               className={`flex-1 flex flex-col w-full overflow-hidden ${isMobile ? 'pt-16' : ''}`}
+               // content starts under the floating glass bar (it stays visible over scrolled content)
+               className={`flex-1 flex flex-col w-full overflow-hidden ${isMobile ? 'pt-16 pb-[calc(5.5rem+env(safe-area-inset-bottom))]' : 'pt-16'}`}
                style={{ display: isMinimized ? 'none' : 'flex' }}
             >
                {children}
@@ -343,7 +374,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
             {/* --- Resize Handles (Desktop Only) --- */}
             {!isMobile && !isMinimized && (
               <>
-                 <div onPointerDown={startResize} className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-50 hover:bg-white/10 rounded-tl-lg" />
+                 <div onPointerDown={startResize} className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-50 hover:bg-md-on-surface/10 rounded-tl-lg" />
                  <div onPointerDown={startResize} className="absolute top-10 bottom-6 right-0 w-2 cursor-ew-resize z-40 hover:bg-white/5" />
                  <div onPointerDown={startResize} className="absolute bottom-0 left-10 right-6 h-2 cursor-ns-resize z-40 hover:bg-white/5" />
               </>
@@ -368,9 +399,15 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
                 transition={isLiteMode ? { duration: 0.1 } : undefined}
                 drag
                 dragMomentum={false}
-                whileDrag={{ scale: 1.1 }}
-                onClick={(e) => { e.stopPropagation(); toggleMinimize(e); }} // Update to toggle logic
-                className="fixed z-[100] cursor-pointer shadow-2xl flex items-center justify-center overflow-hidden"
+                dragElastic={0}
+                whileDrag={{ scale: 1.05 }}
+                onDragStart={() => { bubbleDragged.current = true; }}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    if (bubbleDragged.current) { bubbleDragged.current = false; return; } // a drag, not a tap
+                    toggleMinimize(e);
+                }}
+                className="fixed z-[100] cursor-pointer shadow-2xl flex items-center justify-center overflow-hidden bg-md-primary-container text-md-on-primary-container ring-1 ring-md-outline-variant/40"
                 style={{
                     // DYNAMIC STYLE BASED ON TYPE
                     width: mobileMinimizedType === 'squircle' ? 'auto' : '48px', // Auto width for content
@@ -380,18 +417,16 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
                     right: '1.5rem',
                     // SQUIRCLE or CIRCLE logic
                     borderRadius: mobileMinimizedType === 'squircle' ? '16px' : '50%',
-                    backgroundColor: color || '#333',
                     touchAction: 'none',
-                    border: '2px solid rgba(255,255,255,0.2)',
                     padding: mobileMinimizedType === 'squircle' ? '0 12px' : '0'
                 }}
             >
                 {/* Icon Always Visible */}
-                <Icon size={24} className="text-white shrink-0" />
+                <Icon size={24} className="shrink-0" />
 
                 {/* Optional Content for Squircle Mode */}
                 {mobileMinimizedType === 'squircle' && minimizedContent && (
-                    <div className="ml-3 text-white">
+                    <div className="ml-3">
                         {minimizedContent}
                     </div>
                 )}

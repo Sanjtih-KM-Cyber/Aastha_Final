@@ -1,11 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-hot-toast';
 import { userService, MoodEntryDTO } from '../../services/userService';
 import { Check, Grid, BarChart2, Sparkles, Book, MessageCircle, ChevronLeft, ChevronRight, Loader2, Smile, RefreshCw } from 'lucide-react';
+import { Icons } from '../../design/icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useEncryption } from '../../context/EncryptionContext';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { Segmented, IconButton, ListGroup, ListItem } from '../../design/ui';
+import api from '../../services/api';
+import { deviceTimeZone } from '../../utils/timeZone';
+import { AddMoodSheet, CustomMood, moodColorForScore } from './AddMoodSheet';
+import { Plus } from 'lucide-react';
+
+type MoodItem = { emoji: string; label: string; score: number; color: string; customId?: string };
+
+/** Server: GET /data/moods/insights — 7-day averages + at most one honest pattern (7.4) */
+interface MoodInsights { week: { day: string; label: string; score: number | null }[]; insight: string | null; daysLogged28: number; note: string }
 
 interface MoodTrackerProps {
   isOpen: boolean;
@@ -44,12 +56,55 @@ const MOODS = [
   { emoji: '😶', label: 'Numb', score: 1, color: '#475569' },
 ];
 
+/**
+ * Tab content wrapper. MUST live at module level: it used to be defined inside MoodTracker, so every
+ * re-render (history/insights/custom moods loading, logging a mood) created a new component type and React
+ * tore down + rebuilt the whole tab — the "keeps refreshing" bug and the lag on Trends.
+ */
+const TransitionWrapper: React.FC<{ children: React.ReactNode; className?: string; lite?: boolean }> = ({ children, className, lite }) => {
+  if (lite) return <div className={className}>{children}</div>;
+  return (
+    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} className={className}>
+      {children}
+    </motion.div>
+  );
+};
+
 export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLogMood, zIndex, onFocus, persistenceKey }) => {
   const { currentTheme, isLowPowerMode } = useTheme();
   const { decrypt } = useEncryption();
   const [activeTab, setActiveTab] = useState<'log' | 'trends' | 'insights'>('log');
   const [history, setHistory] = useState<MoodEntryDTO[]>([]);
-  const [lastLogged, setLastLogged] = useState<typeof MOODS[0] | null>(null);
+  const [lastLogged, setLastLogged] = useState<MoodItem | null>(null);
+  // Your own mood types (synced to your account; names encrypted on the server)
+  const [customMoods, setCustomMoods] = useState<CustomMood[]>([]);
+  const [showAddMood, setShowAddMood] = useState(false);
+  useEffect(() => {
+    if (!isOpen) return;
+    api.get('/data/moods/custom').then(r => setCustomMoods(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+  }, [isOpen]);
+  const allMoods: MoodItem[] = useMemo(() => [
+    ...MOODS,
+    ...customMoods.filter(c => !MOODS.some(m => m.label.toLowerCase() === c.label.toLowerCase()))
+      .map(c => ({ emoji: c.emoji, label: c.label, score: c.score, color: moodColorForScore(c.score), customId: c.id })),
+  ], [customMoods]);
+  const addCustomMood = async (m: { label: string; emoji: string; score: number }) => {
+    try {
+      const r = await api.post('/data/moods/custom', m);
+      setCustomMoods(prev => [...prev, r.data]);
+      setShowAddMood(false);
+      setActiveTab('log');
+      toast.success(`${r.data.emoji} ${r.data.label} added — tap it to log`);
+      return null;
+    } catch (e: any) {
+      return e?.response?.data?.message || 'Could not save. Please try again.';
+    }
+  };
+  const deleteCustomMood = async (id: string) => {
+    const prev = customMoods;
+    setCustomMoods(cs => cs.filter(c => c.id !== id));
+    try { await api.delete(`/data/moods/custom/${id}`); } catch { setCustomMoods(prev); }
+  };
   const [weekOffset, setWeekOffset] = useState(0);
   
   // Loading States
@@ -57,6 +112,11 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
   const [isLoggingLabel, setIsLoggingLabel] = useState<string | null>(null); // Track WHICH mood is saving
   
   const [analysisResult, setAnalysisResult] = useState<string>("");
+  const [insights, setInsights] = useState<MoodInsights | null>(null);
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'trends') return;
+    api.get('/data/moods/insights', { params: { tz: deviceTimeZone() } }).then(r => setInsights(r.data)).catch(() => setInsights(null));
+  }, [isOpen, activeTab, history.length]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
@@ -94,7 +154,7 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
     }
   };
 
-  const handleLog = async (moodItem: typeof MOODS[0]) => {
+  const handleLog = async (moodItem: MoodItem) => {
     // 1. BLOCK UI - START LOADING (User requested visibility over blind speed)
     setIsLoggingLabel(moodItem.label);
 
@@ -181,7 +241,7 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
           };
 
           // Initialize all moods to 0
-          MOODS.forEach(m => dayData[m.label] = 0);
+          allMoods.forEach(m => dayData[m.label] = 0);
           
           // Match history entries
           history.forEach(h => {
@@ -191,7 +251,7 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
               // Compare Local Dates
               if (hDate.toDateString() === dateStr) {
                    // Case-Insensitive Matching
-                   const moodConfig = MOODS.find(m => m.label.toLowerCase() === h.mood.toLowerCase());
+                   const moodConfig = allMoods.find(m => m.label.toLowerCase() === h.mood.toLowerCase());
                    if (moodConfig) {
                        dayData[moodConfig.label] += 1;
                    }
@@ -201,152 +261,171 @@ export const MoodTracker: React.FC<MoodTrackerProps> = ({ isOpen, onClose, onLog
           days.push(dayData);
       }
       return days;
-  }, [history, weekOffset]);
+  }, [history, weekOffset, allMoods]);
 
+  const chartMoods = useMemo(() => allMoods.filter(m => weeklyData.some((d: any) => d[m.label] > 0)), [allMoods, weeklyData]);
   const dateRangeLabel = `${weeklyData[0].fullDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} - ${weeklyData[6].fullDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}`;
 
-  // LITE MODE WRAPPER
-  const TransitionWrapper: React.FC<{children: React.ReactNode, className?: string}> = ({children, className}) => {
-      if (isLowPowerMode) return <div className={className}>{children}</div>;
-      return (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className={className}
-          >
-              {children}
-          </motion.div>
-      );
-  };
-
   return (
-    <DraggableWindow 
-      isOpen={isOpen} onClose={onClose} title="Mood Tracker"
-      initialWidth={360} initialHeight={580} defaultPosition={{ x: 200, y: 150 }}
+    <DraggableWindow
+      isOpen={isOpen} onClose={onClose} title="Mood"
+      initialWidth={380} initialHeight={620} defaultPosition={{ x: 200, y: 150 }}
       zIndex={zIndex || 10} onFocus={onFocus || (() => {})}
-      icon={Smile}
-      color="#F97316"
+      icon={Icons.mood}
       persistenceKey={persistenceKey}
     >
-      <div className="flex flex-col h-full w-full rounded-3xl overflow-hidden font-sans shadow-2xl bg-[#111827]">
-        
-        {/* HEADER */}
-        <div className={`h-[40%] flex flex-col items-center justify-center p-6 relative transition-colors duration-700 ease-in-out text-center`} style={{ background: isLowPowerMode ? currentTheme.primaryColor : `linear-gradient(135deg, ${currentTheme.primaryColor}, #111827)` }}>
-            <AnimatePresence mode={isLowPowerMode ? undefined : "wait"}>
-                {activeTab === 'log' && lastLogged ? (
-                    <TransitionWrapper key="logged" className="flex flex-col items-center">
-                        <div className="text-8xl mb-4 filter drop-shadow-2xl animate-bounce-short">{lastLogged.emoji}</div>
-                        <h2 className="font-serif text-3xl text-white font-bold">{lastLogged.label}</h2>
-                        <div className="mt-2 px-3 py-1 bg-white/20 rounded-full text-xs font-medium text-white/90">
-                            Logged Successfully
-                        </div>
-                        <button onClick={() => setLastLogged(null)} className="mt-6 flex items-center gap-2 text-white/60 hover:text-white text-xs uppercase tracking-widest font-bold cursor-pointer z-10">
-                            <RefreshCw size={12} /> Log Another
-                        </button>
-                    </TransitionWrapper>
+      <div className="flex flex-col h-full w-full font-sans px-3 pb-3 gap-3">
+
+        {/* HERO — tonal primary container (content layer) */}
+        <div className="shrink-0 rounded-[28px] bg-md-primary-container text-md-on-primary-container px-5 py-5 min-h-[148px] flex flex-col justify-center relative overflow-hidden">
+          <div aria-hidden className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-md-primary/20" />
+          <AnimatePresence mode={isLowPowerMode ? undefined : 'wait'}>
+            {activeTab === 'log' && lastLogged ? (
+              <TransitionWrapper lite={isLowPowerMode} key="logged" className="relative flex items-center gap-4">
+                <span className="text-6xl leading-none drop-shadow">{lastLogged.emoji}</span>
+                <span className="flex-1 min-w-0">
+                  <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-md-primary text-md-on-primary text-[11px] font-medium"><Check size={12} /> Logged</span>
+                  <span className="block font-serif text-2xl mt-1 truncate">{lastLogged.label}</span>
+                  <button onClick={() => setLastLogged(null)} className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium underline-offset-2 hover:underline">
+                    <RefreshCw size={12} /> Log another
+                  </button>
+                </span>
+              </TransitionWrapper>
+            ) : (
+              <TransitionWrapper lite={isLowPowerMode} key={`hero-${activeTab}`} className="relative">
+                {activeTab === 'insights' ? (
+                  <>
+                    <p className="text-xs font-medium opacity-80">AI reflection</p>
+                    <h2 className="font-serif text-2xl mt-0.5">Deep insights</h2>
+                    {isAnalyzing && <div className="mt-3 flex items-center gap-2 text-sm"><Loader2 size={16} className="animate-spin" /> Reading gently…</div>}
+                    {!isAnalyzing && analysisResult && <p className="mt-2 text-sm leading-relaxed max-h-28 overflow-y-auto custom-scrollbar">“{analysisResult}”</p>}
+                    {!isAnalyzing && !analysisResult && <p className="mt-2 text-sm opacity-80">Choose what to look at below.</p>}
+                  </>
+                ) : activeTab === 'trends' ? (
+                  <>
+                    <p className="text-xs font-medium opacity-80">{dateRangeLabel}</p>
+                    <h2 className="font-serif text-2xl mt-0.5">Your flow</h2>
+                    {insights?.insight && <p className="mt-2 text-sm leading-snug">{insights.insight}</p>}
+                  </>
                 ) : (
-                    <TransitionWrapper key="header-default" className="w-full">
-                         {activeTab === 'insights' ? (
-                             <div className="px-4">
-                                 <h2 className="font-serif text-2xl text-white mb-2">Deep Insights</h2>
-                                 {isAnalyzing && <div className="flex justify-center"><Loader2 className="animate-spin text-white/50"/></div>}
-                                 {!isAnalyzing && analysisResult && <p className="text-sm text-white/90 italic leading-relaxed max-h-32 overflow-y-auto custom-scrollbar">"{analysisResult}"</p>}
-                                 {!isAnalyzing && !analysisResult && <p className="text-sm text-white/60">Select a source below to analyze.</p>}
-                             </div>
-                         ) : activeTab === 'trends' ? (
-                             <div className="w-full">
-                                <h2 className="font-serif text-3xl text-white mb-4">Your Flow</h2>
-                             </div>
-                         ) : (
-                             <h2 className="font-serif text-4xl text-white leading-tight">How is your <br/><span className="italic opacity-80">heart</span>?</h2>
-                         )}
-                    </TransitionWrapper>
+                  <>
+                    <p className="text-xs font-medium opacity-80">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                    <h2 className="font-serif text-3xl leading-tight mt-0.5">How is your <span className="italic">heart</span>?</h2>
+                  </>
                 )}
-            </AnimatePresence>
-            {!isLowPowerMode && <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] mix-blend-overlay pointer-events-none" />}
+              </TransitionWrapper>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* BODY */}
-        <div className="h-[60%] bg-[#0B0F17] flex flex-col p-4">
-            <div className="flex bg-white/5 p-1 rounded-xl mb-4 shrink-0 border border-white/10">
-                {['log', 'trends', 'insights'].map((tab) => (
-                    <button key={tab} onClick={() => setActiveTab(tab as any)} className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 ${activeTab === tab ? 'bg-white text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
-                        {tab === 'log' && <Grid size={12}/>}{tab === 'trends' && <BarChart2 size={12}/>}{tab === 'insights' && <Sparkles size={12}/>}{tab}
-                    </button>
-                ))}
-            </div>
+        <Segmented
+          className="shrink-0"
+          value={activeTab}
+          onChange={(v) => setActiveTab(v)}
+          options={[
+            { value: 'log', label: 'Log', icon: <Grid size={14} /> },
+            { value: 'trends', label: 'Trends', icon: <BarChart2 size={14} /> },
+            { value: 'insights', label: 'Insights', icon: <Sparkles size={14} /> },
+          ]}
+        />
 
-            <div className="flex-1 relative overflow-hidden">
-                <AnimatePresence mode={isLowPowerMode ? undefined : "wait"}>
-                    {/* LOG TAB */}
-                    {activeTab === 'log' && (
-                        <TransitionWrapper key="grid" className="h-full">
-                            <div className="grid grid-cols-3 gap-2 h-full overflow-y-auto scrollbar-hide pb-2 content-start">
-                                {MOODS.map((m) => {
-                                    const isSavingThis = isLoggingLabel === m.label;
-                                    const isSavingAny = isLoggingLabel !== null;
-                                    
-                                    return (
-                                        <button
-                                            key={m.label}
-                                            onClick={() => handleLog(m)}
-                                            disabled={isSavingAny}
-                                            className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all border bg-white/5 border-transparent ${
-                                                isSavingAny ? 'opacity-50 cursor-not-allowed' : 'active:scale-95 hover:bg-white/10 hover:border-white/20'
-                                            }`}
-                                        >
-                                            {isSavingThis ? (
-                                                <Loader2 className="animate-spin text-white/50 mb-1" size={30} />
-                                            ) : (
-                                                <span className="text-3xl mb-1 filter drop-shadow-md">{m.emoji}</span>
-                                            )}
-                                            <span className="text-[10px] text-white/60 font-medium uppercase tracking-wide">{m.label}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </TransitionWrapper>
-                    )}
+        <div className="flex-1 min-h-0 relative overflow-hidden">
+          <AnimatePresence>
+            {showAddMood && (
+              <AddMoodSheet custom={customMoods} onAdd={addCustomMood} onDelete={deleteCustomMood} onClose={() => setShowAddMood(false)} />
+            )}
+          </AnimatePresence>
+          <AnimatePresence mode={isLowPowerMode ? undefined : 'wait'}>
+            {/* LOG */}
+            {activeTab === 'log' && (
+              <TransitionWrapper lite={isLowPowerMode} key="grid" className="h-full">
+                <div className="grid grid-cols-3 gap-2 h-full overflow-y-auto scrollbar-hide pb-1 content-start">
+                  {allMoods.map((m) => {
+                    const isSavingThis = isLoggingLabel === m.label;
+                    const isSavingAny = isLoggingLabel !== null;
+                    const isLast = lastLogged?.label === m.label;
+                    return (
+                      <button
+                        key={m.label}
+                        onClick={() => handleLog(m)}
+                        disabled={isSavingAny}
+                        aria-label={`Log mood: ${m.label}`}
+                        className={`flex flex-col items-center justify-center gap-1 py-3 rounded-[20px] transition-all duration-200 ease-md-emphasized
+                          ${isLast ? 'bg-md-secondary-container text-md-on-secondary-container' : 'bg-md-surface-container hover:bg-md-surface-container-high text-md-on-surface'}
+                          ${isSavingAny ? 'opacity-50' : 'active:scale-95'}`}
+                      >
+                        {isSavingThis ? <Loader2 className="animate-spin text-md-primary" size={28} /> : <span className="text-3xl leading-none">{m.emoji}</span>}
+                        <span className="text-[11px] font-medium">{m.label}</span>
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setShowAddMood(true)}
+                    aria-label="Add your own mood"
+                    className="flex flex-col items-center justify-center gap-1 py-3 rounded-[20px] border-2 border-dashed border-md-outline-variant text-md-on-surface-variant hover:bg-md-on-surface/[0.06] active:scale-95 transition"
+                  >
+                    <Plus size={26} />
+                    <span className="text-[11px] font-medium">Add mood</span>
+                  </button>
+                </div>
+              </TransitionWrapper>
+            )}
 
-                    {/* TRENDS TAB - Stacked Bar Chart */}
-                    {activeTab === 'trends' && (
-                        <TransitionWrapper key="chart" className="h-full w-full pt-2 flex flex-col">
-                             <div className="flex justify-between items-center mb-2 px-2 select-none">
-                                <button onClick={() => setWeekOffset(prev => prev - 1)} className="p-2 hover:bg-white/10 rounded cursor-pointer z-10"><ChevronLeft size={16} className="text-white/70"/></button>
-                                <span className="text-[10px] text-white/40 uppercase font-mono">{dateRangeLabel}</span>
-                                <button onClick={() => setWeekOffset(prev => prev + 1)} disabled={weekOffset >= 0} className="p-2 hover:bg-white/10 rounded disabled:opacity-30 cursor-pointer z-10"><ChevronRight size={16} className="text-white/70"/></button>
-                             </div>
-                             
-                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={weeklyData} margin={{top: 10, bottom: 0}}>
-                                    <XAxis dataKey="dayLabel" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} dy={5} />
-                                    <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ backgroundColor: '#000', border: '1px solid #333', color: '#fff', fontSize: '10px' }} />
-                                    {/* Render a Bar for each mood type to create a stack */}
-                                    {MOODS.map((m) => (
-                                        <Bar key={m.label} dataKey={m.label} stackId="a" fill={m.color} radius={[2, 2, 0, 0]} />
-                                    ))}
-                                </BarChart>
-                             </ResponsiveContainer>
-                        </TransitionWrapper>
-                    )}
+            {/* TRENDS */}
+            {activeTab === 'trends' && (
+              <TransitionWrapper lite={isLowPowerMode} key="chart" className="h-full w-full flex flex-col gap-2">
+                <div className="flex items-center justify-between shrink-0">
+                  <IconButton label="Previous week" onClick={() => setWeekOffset(prev => prev - 1)}><ChevronLeft size={18} /></IconButton>
+                  <span className="text-xs font-medium text-md-on-surface-variant">{weekOffset === 0 ? 'This week' : dateRangeLabel}</span>
+                  <IconButton label="Next week" onClick={() => setWeekOffset(prev => prev + 1)} disabled={weekOffset >= 0}><ChevronRight size={18} /></IconButton>
+                </div>
 
-                    {/* INSIGHTS TAB */}
-                    {activeTab === 'insights' && (
-                        <TransitionWrapper key="insights" className="flex flex-col justify-center gap-4 h-full px-4">
-                            <button onClick={() => handleAnalyze('diary')} disabled={isAnalyzing} className="w-full py-4 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 rounded-2xl flex items-center justify-center gap-3 text-indigo-200 transition-all group disabled:opacity-50 active:scale-95">
-                                <Book size={20} className="group-hover:scale-110 transition-transform"/>
-                                <span className="font-bold">Analyze Diary</span>
-                            </button>
-                            <button onClick={() => handleAnalyze('chat')} disabled={isAnalyzing} className="w-full py-4 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 rounded-2xl flex items-center justify-center gap-3 text-teal-200 transition-all group disabled:opacity-50 active:scale-95">
-                                <MessageCircle size={20} className="group-hover:scale-110 transition-transform"/>
-                                <span className="font-bold">Analyze Chat</span>
-                            </button>
-                        </TransitionWrapper>
-                    )}
-                </AnimatePresence>
-            </div>
+                {weekOffset === 0 && insights && (
+                  <div className="shrink-0 rounded-[20px] bg-md-surface-container p-3" data-testid="mood-insight">
+                    <div className="flex items-end justify-between gap-1.5 h-12" aria-label="Your average mood each day this week">
+                      {insights.week.map(d => (
+                        <div key={d.day} className="flex-1 flex flex-col items-center gap-1" title={d.score === null ? `${d.label}: not logged` : `${d.label}: ${d.score}/10`}>
+                          <div className="w-full max-w-[22px] rounded-full bg-md-surface-container-highest relative overflow-hidden" style={{ height: 32 }}>
+                            {d.score !== null && <div className="absolute bottom-0 inset-x-0 rounded-full bg-md-primary" style={{ height: `${Math.max(12, d.score * 10)}%` }} />}
+                          </div>
+                          <span className="text-[10px] text-md-on-surface-variant">{d.label.slice(0, 2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-xs text-md-on-surface leading-relaxed">
+                      {insights.insight || (insights.daysLogged28 < 6
+                        ? 'Log your mood on a few more days and a pattern may show up here — no pressure.'
+                        : 'No clear pattern yet — your week looks fairly steady.')}
+                    </p>
+                    <p className="mt-1 text-[10px] text-md-on-surface-variant">{insights.note}</p>
+                  </div>
+                )}
+
+                <div className="flex-1 min-h-[120px] rounded-[20px] bg-md-surface-container p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={weeklyData} margin={{ top: 10, bottom: 0, left: 0, right: 0 }}>
+                      <XAxis dataKey="dayLabel" axisLine={false} tickLine={false} tick={{ fill: 'rgb(var(--md-on-surface-variant))', fontSize: 10 }} dy={5} />
+                      <Tooltip cursor={{ fill: 'rgb(var(--md-on-surface) / 0.06)' }} contentStyle={{ backgroundColor: 'rgb(var(--md-surface-container-highest))', border: 'none', borderRadius: 12, color: 'rgb(var(--md-on-surface))', fontSize: '11px' }} />
+                      {chartMoods.map((m) => (
+                        <Bar key={m.label} dataKey={m.label} stackId="a" fill={m.color} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </TransitionWrapper>
+            )}
+
+            {/* INSIGHTS */}
+            {activeTab === 'insights' && (
+              <TransitionWrapper lite={isLowPowerMode} key="insights" className="h-full flex flex-col gap-2">
+                <ListGroup>
+                  <ListItem icon={<Book size={18} />} title="Reflect on my diary" subtitle="A gentle read of your recent entries" onClick={isAnalyzing ? undefined : () => handleAnalyze('diary')} />
+                  <ListItem icon={<MessageCircle size={18} />} title="Reflect on our chats" subtitle="Themes from what you've shared lately" onClick={isAnalyzing ? undefined : () => handleAnalyze('chat')} />
+                </ListGroup>
+                <p className="px-2 text-[11px] text-md-on-surface-variant">An AI reflection, not a diagnosis.</p>
+              </TransitionWrapper>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </DraggableWindow>

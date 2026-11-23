@@ -8,10 +8,44 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
-        serif: ['Georgia', 'serif'], // Updated to user's preference (Georgia), kept existing structure
+        // Self-hosted (src/index.tsx imports @fontsource-variable/*): no Google Fonts requests, works offline in the app
+        // --app-font / --app-font-display = the user's choice, set on <html> only inside the Sanctuary (src/design/fonts.ts)
+        sans: ['var(--app-font, "Plus Jakarta Sans Variable")', '"Plus Jakarta Sans Variable"', '"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        serif: ['var(--app-font-display, "Fraunces Variable")', '"Fraunces Variable"', 'Fraunces', 'Georgia', 'serif'],   // soft display serif for headings
+        display: ['var(--app-font-display, "Fraunces Variable")', '"Fraunces Variable"', 'Fraunces', 'Georgia', 'serif'],
       },
       colors: {
+        // Material You tokens (src/design/materialTheme.ts) — e.g. bg-md-surface-container-high, text-md-on-surface, bg-md-primary/20
+        md: {
+          'primary': 'rgb(var(--md-primary) / <alpha-value>)',
+          'on-primary': 'rgb(var(--md-on-primary) / <alpha-value>)',
+          'primary-container': 'rgb(var(--md-primary-container) / <alpha-value>)',
+          'on-primary-container': 'rgb(var(--md-on-primary-container) / <alpha-value>)',
+          'secondary': 'rgb(var(--md-secondary) / <alpha-value>)',
+          'secondary-container': 'rgb(var(--md-secondary-container) / <alpha-value>)',
+          'on-secondary-container': 'rgb(var(--md-on-secondary-container) / <alpha-value>)',
+          'tertiary': 'rgb(var(--md-tertiary) / <alpha-value>)',
+          'tertiary-container': 'rgb(var(--md-tertiary-container) / <alpha-value>)',
+          'on-tertiary-container': 'rgb(var(--md-on-tertiary-container) / <alpha-value>)',
+          'surface': 'rgb(var(--md-surface) / <alpha-value>)',
+          'surface-dim': 'rgb(var(--md-surface-dim) / <alpha-value>)',
+          'surface-bright': 'rgb(var(--md-surface-bright) / <alpha-value>)',
+          'surface-container-lowest': 'rgb(var(--md-surface-container-lowest) / <alpha-value>)',
+          'surface-container-low': 'rgb(var(--md-surface-container-low) / <alpha-value>)',
+          'surface-container': 'rgb(var(--md-surface-container) / <alpha-value>)',
+          'surface-container-high': 'rgb(var(--md-surface-container-high) / <alpha-value>)',
+          'surface-container-highest': 'rgb(var(--md-surface-container-highest) / <alpha-value>)',
+          'on-surface': 'rgb(var(--md-on-surface) / <alpha-value>)',
+          'on-surface-variant': 'rgb(var(--md-on-surface-variant) / <alpha-value>)',
+          'outline': 'rgb(var(--md-outline) / <alpha-value>)',
+          'outline-variant': 'rgb(var(--md-outline-variant) / <alpha-value>)',
+          'error': 'rgb(var(--md-error) / <alpha-value>)',
+          'on-error': 'rgb(var(--md-on-error) / <alpha-value>)',
+          'error-container': 'rgb(var(--md-error-container) / <alpha-value>)',
+          'on-error-container': 'rgb(var(--md-on-error-container) / <alpha-value>)',
+          'on-secondary': 'rgb(var(--md-on-secondary) / <alpha-value>)',
+          'on-tertiary': 'rgb(var(--md-on-tertiary) / <alpha-value>)',
+        },
         // Existing app colors
         midnight: '#0a0e17',
         charcoal: '#121620',
@@ -32,6 +66,16 @@ export default {
           900: '#4c1d95',
           950: '#2e1065',
         },
+      },
+      borderRadius: {
+        // Material 3 shape scale
+        'md-sm': '12px',
+        'md-md': '16px',
+        'md-lg': '28px',
+      },
+      transitionTimingFunction: {
+        // Material 3 "emphasized" easing
+        'md-emphasized': 'cubic-bezier(0.2, 0, 0, 1)',
       },
       animation: {
         // Existing

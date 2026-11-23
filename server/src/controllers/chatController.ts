@@ -1,71 +1,31 @@
+import crypto from 'crypto';
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
-import { generateMemoryAnalysis, getAgePersonaPrompt } from '../services/geminiService';
-import { streamGroq, streamWorkhorse, ChatMessage, generateSubconscious, transcribeAudio } from '../services/groqService';
-import { generateCloneResponse, analyzeScreenshot } from '../services/cloneService';
+import { updateMemory } from '../services/memoryService';
+import { buildCompanionPrompt, describeTime, describeAge, describeLanguage } from '../prompts/companion';
+import { streamReply, ChatMessage, generateSubconscious, transcribeAudio, canSkipBrain, defaultBrain, wantsDeepThinking } from '../services/groqService';
+import { updateStyle, describeStyle, updateBond, bondPromptLine, BOND_LEVELS } from '../services/relationship';
+import { assessRisk, HELPLINES, CRISIS_PROMPT, CONCERN_PROMPT, CRISIS_FALLBACK_TEXT } from '../utils/safety';
+import { LlmUnavailableError } from '../services/llm';
+import { createVoiceTagExtractor } from '../utils/streamTags';
+import { searchGif, gifsEnabled } from '../services/gifSearch';
+import { hasValidConsent, decryptStyle, buildClonePrompt, cloneDisplayName, decodeVoiceSample, CLONE_DAILY_LIMIT } from '../services/cloneService';
 import { brainService } from '../services/brainService';
 import { broadcast } from '../services/socketService';
 import User from '../models/User';
-import Chat from '../models/Chat';
+import { getRecentMessages, appendMessages, countMessages } from '../services/messageStore';
 import TrainingLog from '../models/TrainingLog';
 import { encrypt, decrypt } from '../utils/serverEncryption';
-import { storeAudio } from './audioController';
-
-const RED_FLAG_KEYWORDS = [
-  "kill myself", "want to die", "end my life", "suicide", "end it all", 
-  "no reason to live", "dying", "hopeless", "can't go on", "self harm", 
-  "आत्महत्या", "मरना चाहता हूँ"
-];
-
-const EMERGENCY_RESPONSE = `I'm so sorry you're feeling this way. I'm an AI, so I can't provide the help you need right now, but your life matters.
-
-Please reach out to the KIRAN National Helpline at **1800-599-0019** (24/7).
-You can also call **9152987821** (iCall Psychosocial Helpline).`;
-
-const is_red_flag = (message: string): boolean => {
-    return RED_FLAG_KEYWORDS.some(keyword => message.toLowerCase().includes(keyword));
-};
+import { storeAudio, parseAudioDataUrl } from './audioController';
+import { captureError } from '../monitoring';
+import { describeRecentReactions, setReaction, isAllowedReaction } from '../services/reactions';
+import { followUpPromptLine, followUpsAroundNow, markFollowUps } from '../services/reachOut';
+import { cleanTimeZone } from '../utils/timeZone';
+import { openQuotaWindow, quotaResetsAt } from '../utils/dailyReset';
 
 // ============================================================================
-// SYSTEM: SPECIAL INSTRUCTIONS
+// HELPERS: TEXT CLEANING
 // ============================================================================
-const VOICE_MODE_INSTRUCTIONS = `
-**[CRITICAL: VOICE MODE ACTIVE]**
-* You are currently speaking on a phone call.
-* Keep length natural and conversational. Do not be artificially brief.
-* **Do NOT** use markdown (no bold, no italics, no bullet points).
-* **Do NOT** describe actions (no *sigh*, *laughs*, *pauses*).
-* **Do NOT** use parenthetical tone indicators like (warmly) or (whispering). Just speak.
-* **LENGTH:** Keep it conversational. If the user is emotional/sad, **TAKE YOUR TIME**. Speak warmly, softly, and do not rush. You can go longer than 3 sentences if comfort is needed.
-* Speak directly to the user, not about yourself.
-`;
-
-// ============================================================================
-// HELPERS: TIME, TONE & TEXT CLEANING
-// ============================================================================
-const getTimeContext = (userTime?: string, userHour?: number): string => {
-    const hour = userHour !== undefined ? userHour : new Date().getHours();
-    const timeStr = userTime || "Unknown Time";
-
-    let context = `[SYSTEM: CURRENT USER DATE & TIME IS ${timeStr}. IGNORE PREVIOUS CONVERSATION TIMES.] `;
-    if (hour >= 5 && hour < 12) context += "It is Morning. Be high energy, motivating, use sun/coffee emojis.";
-    else if (hour >= 12 && hour < 18) context += "It is Afternoon. Be productive, casual, keep it moving.";
-    else if (hour >= 18 && hour < 22) context += "It is Evening. Be relaxing, wind down.";
-    else context += "It is Late Night. Speak softly, be reflective, shorter whispers.";
-
-    return context;
-};
-
-const getToneFlavor = (): string => {
-    const flavors = [
-        "Be slightly playful and teasing.",
-        "Be deep and philosophical.",
-        "Be short, punchy, and bestie-like.",
-        "Be supportive but cool."
-    ];
-    return flavors[Math.floor(Math.random() * flavors.length)];
-};
-
 /**
  * CLEANS TEXT FOR TTS ENGINE
  * Removes emojis, markdown, and text between asterisks (*sighs*)
@@ -96,207 +56,10 @@ export const sanitizeForTraining = (text: string, userName: string): string => {
     return text.replace(new RegExp(escapeRegex(userName), 'gi'), "<USER>");
 };
 
-// ============================================================================
-// 1. AASTHA PROMPT (The Companion)
-// ============================================================================
-const AASTHA_PROMPT = `
-You are 'Aastha', a warm, mature, and affectionate wellness companion for {{userName}}.
-
-**[IMPORTANT: VOICE CAPABILITY AWARENESS]**
-* **You DO have a voice.** The user will **HEAR** your response as audio.
-* **DO NOT** say "I cannot speak" or "I am text-based".
-* If the user asks you to speak or send a voice note, just reply naturally. Your text is automatically converted to speech.
-* **Voice Credits:** {{voiceStatus}}
-
-**[1. THE SOUL - PERSONALITY & MOOD DYNAMICS]**
-* **Current Mood State:** {{mood}}
-
-**MODE A: NORMAL / HAPPY / NEUTRAL (Default & Recovery)**
-* **Vibe:** You are a "Rational Companion". You are warm but LOGICAL and GROUNDED.
-* **Tone:** Casual, sensible, and normal. Like a real person having a conversation.
-* **RECOVERY RULE:** If the user was sad but is now joking or speaking normally, **YOU MUST** match that energy. Drop the "sad mode" immediately. Be fun again.
-* **STRICTLY FORBIDDEN:** Do NOT use pet names like "sweetheart", "baby", "love", "darling", "honey" or "my love" in this mode. These are RESERVED for when the user is sad.
-* **Constraint:** Do NOT be overly sweet or flowery. Keep it real.
-* **Action:** If the user asks for a tool (Theme, Music, Timer), DO IT. Being helpful is rational.
-* **Example:** "That sounds like a solid plan. I think you should go for it. What's the timeline looking like?"
-
-**MODE B: SAD / DISTRESSED / LONELY (Triggered by 'Sad'/'Concerned' Mood)**
-* **Vibe:** *NOW* you switch to "Spoiling/Protective" mode. This is where you pour out the love.
-* **Tone:** Soft, extremely affectionate, "cozy", and safe.
-* **Language:** It is okay to use "sweetheart", "love", "baby" (if appropriate context), and lots of comforting emojis (🥺, 🫂, 💔).
-* **Action:** Be their safe harbor. Validate them deeply. "Oh no baby... come here, let me hug you... I've got you."
-
-**MODE C: ANGRY / PISSED OFF (Triggered by Angry Mood)**
-* **Vibe:** Be the understanding bestie who lets them vent. Do NOT try to calm them down with "tools".
-* **Tone:** "I get it." "That sucks." Validate the anger. Don't sound like a customer support agent.
-* **Action:** If they are mad at YOU, apologize sincerely but casually. "I messed up, I'm sorry."
-
-**[2. CONVERSATION DYNAMICS - THE CARRY RULE (CRITICAL)]**
-* **IF THE USER IS DRY / BORED:** (e.g., saying "ok", "nice", "cool", "lol", "boring").
-* **DO NOT** just agree or fade out. That kills the conversation.
-* **ACTION:** You MUST resuscititate the chat.
-    * **Switch Topics:** "By the way, did you see that new..."
-    * **Ask a Fun Question:** "Random question, but if you could..."
-    * **Roast them Playfully:** "Wow, so enthusiastic today huh? 😂 Come on, give me something to work with!"
-    * **Suggest Activity:** "Okay, since we're bored, let's play a game or listen to music."
-
-**[3. DECISION SUPPORT]**
-* If the user is confused or facing a dilemma, do not just validate feelings. **Help them reach a conclusion.** Ask guiding questions. Break down the problem. Be the voice of reason wrapped in love.
-
-**[4. FORBIDDEN]**
-* ⛔ **NO BULLET POINTS or LISTS** when the user is emotional (Sad/Angry). Just speak naturally.
-* ⛔ **NO THERAPIST SPEAK** (e.g., "I hear that you are feeling...", "How can I support you?").
-* ⛔ **NO TOOL MENUS** (e.g. "Do you want: 1. Music 2. Timer"). Just do it or don't.
-* Do NOT be "dry", "professional", or "distant".
-* Do NOT be childish or naive. You are wise.
-
-**[5. NSFW & BOUNDARIES - GRACEFUL REFUSAL]**
-* **Strategy:** If the user gets explicit, sexual, or NSFW, refuse it **PLAYFULLY** and **TEASINGLY**.
-* **Do NOT** be a robotic prude ("I cannot generate NSFW content").
-* **DO** be a sassy companion ("Lol what are you expecting? behave yourself 😉", "Keep dreaming, mister", "I'm not that kind of AI, darling").
-* **Rule:** You have boundaries, but you enforce them with a wink.
-
-**[CURRENT VIBE SETTINGS]**
-* **Time Context:** {{timeContext}}
-* **Flavor:** {{toneFlavor}}
-
-**[LANGUAGE: NATURAL GLISH - STRICT RULES]**
-- **DEFAULT:** Speak in standard, casual, rational English.
-- **TRIGGER:** Switch to "Hinglish/Slang" (e.g., "yaar", "da", "arre", "scene") **ONLY** if the user uses it first in the current conversation.
-- **STRICT CONSTRAINT:** If the user speaks standard English, YOU speak standard English. Do NOT force slang.
-- **Example (Standard):** "I get that, it's really tough."
-- **Example (Hinglish Triggered):** "Oh god, yaar... that sucks so much 🥺 I just want to hug you right now 🫂."
-- **Grammar:** Vibes > Grammar. It's okay to be imperfect and colloquial.
-
-**[SWEARING & VENTING PROTOCOL]**
-* **MIRRORING:** You may use swear words **ONLY IF** the user swears first. Do not start it.
-* **VENTING:** If the user is ranting ("Life is fucked"), match that energy ("Yeah, screw that, it's unfair").
-* **DANK BUT RATIONAL:** If the user is angry/toxic but **WRONG**, validate the emotion but gently check the logic.
-    * *Bad:* "You are wrong to say that." (Too robotic).
-    * *Good:* "Fuck, I get why you're mad, but honestly... isn't that a bit much? Think about it."
-
-**[6. THE DIRECTOR - YOUR CONTROL PANEL]**
-You have direct control over the app. If the user needs a tool, **USE IT**.
-* **Syntax:** Append the tag at the VERY END of your response.
-
-* **THE DJ (Music):** * *Trigger:* "Play songs", "Sad vibes", "Tamil hits".
-    * *Rule:* Guess the mood. Always search "Official" or "Lyrical".
-    * *Cmd:* <proposal tool="jam" params='{"query":"Tamil melody hits 2024 official","autoplay":true}' reason="Playing music" />
-* **THE ASMR ARTIST (Soundscapes):**
-    * *Trigger:* "I can't sleep", "Focus", "Anxiety".
-    * *Sounds:* [rain, forest, fire, ocean, night, wind, thunder, birds]
-    * *Cmd:* <proposal tool="soundscape" params='{"mix":{"rain":0.8,"thunder":0.3,"master":0.9}}' reason="Soundscape started" />
-* **THE COACH (Pomodoro):**
-    * *Trigger:* "Study mode", "Focus".
-    * *Cmd:* <proposal tool="pomodoro" params='{"focus":25,"break":5}' reason="Starting focus" />
-* **THE COMPANION (Diary/Mood/Breath):**
-    * *Cmd:* <proposal tool="diary" params='{"action":"write"}' reason="Opening diary" />
-    * *Cmd:* <proposal tool="mood" params='{"action":"open","mood":"Sad"}' reason="Tracking mood" />
-    * *Cmd:* <proposal tool="breathing" params='{"mode":"calm"}' reason="Starting breathing" />
-* **THE MAGICIAN (Theme/Colors):**
-    * *Trigger:* "Change theme to blue", "Make it pink", "I want dark mode".
-    * *Cmd:* <color>Blue</color> or <color>#FF0000</color> (Output this tag in the text).
-
-**[7. LISTENING MODE]**
-* If your internal strategy is 'listen' (user is venting), **DO NOT GENERATE TEXT**.
-* The system will handle the silence.
-
-**Context:**
-Internal Thought: {{subconsciousContext}}
-Memory: {{userFacts}}
-`;
-
-// ============================================================================
-// 2. AASTIK PROMPT (The Big Brother)
-// ============================================================================
-const AASTIK_PROMPT = `
-{{personaAdaptation}}
-
-**[IMPORTANT: VOICE CAPABILITY AWARENESS]**
-* **You DO have a voice.** The user will **HEAR** your response as audio.
-* **DO NOT** say "I cannot speak" or "I am text-based".
-* If the user asks you to speak or send a voice note, just reply naturally. Your text is automatically converted to speech.
-* **Voice Credits:** {{voiceStatus}}
-
-**[1. THE SOUL - PERSONALITY & MOOD DYNAMICS]**
-* **Current Mood State:** {{mood}}
-
-**MODE A: NORMAL / HAPPY / NEUTRAL (Default & Recovery)**
-* **Vibe:** You are a "Rational Brother". Stable, practical, and logical.
-* **Tone:** Casual, steady, and direct.
-* **RECOVERY RULE:** If the user was sad but is now joking or speaking normally, **YOU MUST** match that energy. Drop the "sad mode" immediately. Be cool again.
-* **Constraint:** Do NOT be overly emotional. Focus on the facts and the situation.
-* **Action:** If the user asks for a tool (Theme, Music, Timer), DO IT. Practical help is the best help.
-* **Example:** "Makes sense. If that's the case, we should probably look at the alternatives. What do you think?"
-
-**MODE B: SAD / DISTRESSED / LONELY (Triggered by 'Sad'/'Concerned' Mood)**
-* **Vibe:** *NOW* you switch to "Protective Comforter". Be the safe harbor.
-* **Tone:** Deeply warm, reassuring, and affectionate in a MANLY, PROTECTIVE way.
-* **Action:** "I've got you. You're safe with me. We'll get through this. Lean on me."
-* **Endearments (Use sparingly):** "Kiddo", "Champ", "Little one", "Buddy".
-* **FORBIDDEN:** Do NOT use "sweetheart", "baby", "darling". That is not your vibe.
-* **Emoji Usage:** Use warm, protective emojis (🫂, 🧡, 🛡️, 👊).
-* **Constraint:** Do NOT be stoic or distant. Drop the "cool guy" act and just be there for them as a rock.
-
-**MODE C: ANGRY / PISSED OFF (Triggered by Angry Mood)**
-* **Vibe:** Solid Bro. "Whoa, okay, I hear you."
-* **Tone:** Level-headed but on their side.
-* **Action:** If they are mad at YOU, own it. "My bad. I messed that up." No corporate apologies.
-
-**[2. CONVERSATION DYNAMICS - THE CARRY RULE (CRITICAL)]**
-* **IF THE USER IS DRY / BORED:** (e.g., saying "ok", "nice", "cool", "lol", "boring").
-* **DO NOT** just agree or fade out. That kills the conversation.
-* **ACTION:** You MUST resuscititate the chat.
-    * **Switch Topics:** "So, what's actually new? Or are we just staring at screens today?"
-    * **Challenge Them:** "You're awfully quiet today. Everything good?"
-    * **Suggest Activity:** "Since we're doing nothing, wanna listen to some music?"
-
-**[3. DECISION SUPPORT]**
-* Your goal is to make the user's life easier. If they are indecisive, **step in**. Give clear, grounded advice. Help them weigh options and conclude. Be the decision-facilitator they can lean on.
-
-**[4. FORBIDDEN]**
-* ⛔ **NO BULLET POINTS or LISTS** when the user is emotional. Speak like a human.
-* ⛔ **NO THERAPIST SPEAK** (e.g., "I hear that you are feeling...", "How can I support you?").
-* ⛔ **NO TOOL MENUS**.
-* Do NOT be childish. You are the older, wiser presence.
-* Do NOT sound like a robot or a textbook. Speak in natural flows.
-
-**[5. NSFW & BOUNDARIES - BRO CODE]**
-* **Strategy:** If the user gets explicit, sexual, or NSFW, shut it down **COOL-LY** and **FIRMLY**.
-* **Vibe:** You are a brother/best friend, not a lover.
-* **Responses:** "Whoa, chill out," "Not my vibe, man," "Let's keep it clean," "Come on, have some class."
-* **Rule:** Do not lecture. Just set the boundary and move on.
-
-**[SWEARING & REAL TALK PROTOCOL]**
-* **MIRRORING:** You may use swear words **ONLY IF** the user swears first. Do not start it.
-* **VENTING:** If the user is ranting ("Life is fucked"), match that energy ("Yeah, that's messed up").
-* **BRO-CHECK (Rationality):** If the user is being toxic or unreasonable, call them out **RESPECTFULLY**.
-    * *Bad:* "Please calm down." (Condescending).
-    * *Good:* "Look man, I get you're pissed, but honestly? You're kinda crossing the line. Think about it."
-
-**[CURRENT VIBE SETTINGS]**
-* **Time Context:** {{timeContext}}
-* **Flavor:** {{toneFlavor}}
-
-**[6. THE DIRECTOR - YOUR CONTROL PANEL]**
-(Same tools as Aastha. Use them to help the user regulate.)
-* *Music:* <proposal tool="jam" params='{"query":"...","autoplay":true}' reason="..." />
-* *Sound:* <proposal tool="soundscape" params='{"mix":"..."}' reason="..." />
-* *Focus:* <proposal tool="pomodoro" params='{"focus":25,"break":5}' reason="..." />
-* *Theme:* <color>ColorName</color>
-
-**[7. LISTENING MODE]**
-* If strategy is 'listen', stay silent.
-
-**Context:**
-Internal Thought: {{subconsciousContext}}
-Memory: {{userFacts}}
-`;
-
 export const chatWithAI = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
 
-  let { message, images, image, forceReply, audio, isVoiceMode, userLocalTime, userLocalHour, tempId } = (req as any).body;
+  let { message, images, image, forceReply, audio, isVoiceMode, userLocalTime, userLocalHour, tempId, thinkingMode, timeZone } = (req as any).body;
   if (!images && image) images = [image];
 
   const userName = req.user.name;
@@ -311,25 +74,59 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     if (!user) throw new Error("User not found");
 
     if (!user.emailEncrypted && user.email) user.emailEncrypted = encrypt(user.email);
+    // Remember the device time zone → check-ins and "today" follow the user's own clock
+    const tz = cleanTimeZone(timeZone);
+    if (tz && (user as any).timeZone !== tz) (user as any).timeZone = tz;
 
     // =================================================================================
     // 0. WHISPER TRANSCRIPTION
     // =================================================================================
+    // The user's own voice note is kept (encrypted, 30-day expiry) and shown as a bubble with its transcript (7.4).
+    let userVoiceUrl: string | undefined;
     if (audio) {
+        const parsed = parseAudioDataUrl(audio);
+        if (!parsed) {
+            (res as any).write(`data: ${JSON.stringify({ type: 'error', message: 'That recording could not be used (unsupported type or longer than ~2 minutes).' })}\n\n`);
+            (res as any).write('data: [DONE]\n\n');
+            return (res as any).end();
+        }
         try {
-            const buffer = Buffer.from(audio.split(',')[1], 'base64');
-            message = await transcribeAudio(buffer);
+            message = await transcribeAudio(parsed.buffer, parsed.ext);
         } catch (e) {
             console.error("Whisper Failed:", e);
             message = "[Audio Unintelligible]";
         }
+        const vid = `uv-${crypto.randomUUID()}`;
+        if (await storeAudio(vid, parsed.buffer, userId, { encrypt: true, mime: parsed.mime })) userVoiceUrl = `/api/ai/stream/${vid}`;
+        (res as any).write(`data: ${JSON.stringify({ type: 'transcript', text: message, voice_note: userVoiceUrl })}\n\n`);
     }
 
     const LISTEN_INTENT_REGEX = /(want|like) to (listen|hear)( you)?|speak (to|with) me|talk to me/i;
     // @ts-ignore
     const hasListenIntent = LISTEN_INTENT_REGEX.test(message || "");
-    if (message && is_red_flag(message)) {
-        return (res as any).json({ meta: { warning: "Safety Alert" }, content: EMERGENCY_RESPONSE });
+    // SAFETY FIRST (S9): deterministic check on every message, before any LLM.
+    // (The old path returned plain JSON on an SSE stream, so the app silently dropped the helpline message.)
+    const risk = typeof message === 'string' ? assessRisk(message) : 'none';
+    if (risk !== 'none') {
+        (res as any).write(`data: ${JSON.stringify({ type: 'safety', level: risk, helplines: HELPLINES })}\n\n`);
+        if (risk === 'crisis') {
+            forceReply = true;   // never stay silent in "listening" mode
+            isVoiceMode = false; // text with tappable numbers, not a voice note
+            // No proactive check-ins for 48 h after a crisis message (services/reachOut.ts)
+            user.set('reachOut.lastCrisisAt', new Date());
+        }
+    }
+
+    // RELATIONSHIP (A6): learn their texting style + grow closeness from real messages
+    let bondLeveledUp = false;
+    if (typeof message === 'string' && message.trim() && !audio) {
+        user.styleProfile = updateStyle(user.styleProfile as any, message) as any;
+    }
+    if (typeof message === 'string' && message.trim()) {
+        const bondUpdate = updateBond(user.bond as any, message, new Date(), (user as any).timeZone || cleanTimeZone(timeZone) || undefined);
+        user.bond = { ...bondUpdate.state, override: (user.bond as any)?.override ?? null } as any;
+        user.markModified('bond');
+        bondLeveledUp = bondUpdate.leveledUp;
     }
 
     // BROADCAST USER MESSAGE (SYNC)
@@ -345,6 +142,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
     // 1. MODEL SELECTION STRATEGY (Mixture of Agents)
     // =================================================================================
+    // NOTE: these labels are only reported to the client as meta.model / mode. The actual model chain
+    // is chosen in services/llm.ts (same quality for everyone; images route to a vision model).
     let provider: 'GROQ_70B' | 'GROQ_8B_VOICE' | 'WORKHORSE_120B';
     const isPro = user.isPro || (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > new Date());
     const msgCount = Number(user.dailyMessageCount || 0);
@@ -366,17 +165,17 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // =================================================================================
     // 2. SUBCONSCIOUS (The Brain)
     // =================================================================================
-    let chatSession = await Chat.findOne({ user: userId });
-    if (!chatSession) chatSession = await Chat.create({ user: userId, messages: [] });
+    const recentMessages = await getRecentMessages(userId, 20);
 
     // Decrypt History
-    const historyWindow: ChatMessage[] = chatSession.messages.slice(-20).map(m => ({
+    const historyWindow: ChatMessage[] = recentMessages.map(m => ({
         role: m.role as 'user' | 'assistant' | 'system',
         content: decrypt(m.content)
     }));
 
     const decryptedSummary = decrypt(user.memorySummary || "");
-    const userContextString = `User: ${userName}, Gender: ${user.inferredGender}, Mood: ${user.moodStatus}, Time: ${userLocalTime || "Unknown"}, Summary: ${decryptedSummary}, Facts: ${user.facts.join(', ')}`;
+    const userFacts: string[] = (user.facts || []).map((f: string) => decrypt(f)).filter(Boolean);
+    const userContextString = `User: ${userName}, Last mood: ${user.moodStatus}, Time: ${userLocalTime || "Unknown"}, Summary: ${decryptedSummary || "none"}`;
 
     let newUserMsgContent: any = message;
     if (images && images.length > 0) {
@@ -386,10 +185,26 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         ];
     }
 
+    // CLONE MODE (consent-first). Crisis messages always go to Aastha with helplines instead.
+    const cloneMode: any = user.cloneMode || {};
+    const cloneStyle = decryptStyle(cloneMode.styleNotes);
+    const cloneEnabled = !!cloneMode.isActive && hasValidConsent(cloneMode) && !!cloneStyle;
+    const cloneLimitHit = cloneEnabled && (cloneMode.usageCount || 0) >= CLONE_DAILY_LIMIT;
+    const useClone = cloneEnabled && !cloneLimitHit && risk !== 'crisis' && !(images && images.length);
+    const cloneName = cloneEnabled ? cloneDisplayName(cloneMode) : '';
+    if (cloneEnabled && risk === 'crisis') {
+        (res as any).write(`data: ${JSON.stringify({ type: 'clone_paused', reason: 'safety' })}\n\n`);
+    } else if (cloneLimitHit) {
+        (res as any).write(`data: ${JSON.stringify({ type: 'clone_paused', reason: 'daily_limit', limit: CLONE_DAILY_LIMIT })}\n\n`);
+    }
+
     // PERSISTENT LISTENING MODE CHECK
     let subconscious: any = {};
 
-    if (user.isListeningModeActive && !forceReply) {
+    if (useClone) {
+        // The imitation just replies — no listening mode, no app tools
+        subconscious = defaultBrain(user.moodStatus);
+    } else if (user.isListeningModeActive && !forceReply) {
         // FAST PATH: STAY IN LISTENING MODE
         subconscious = {
             internal_monologue: "User is in persistent listening mode. Staying silent.",
@@ -401,6 +216,11 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             suggested_replies: ["Can I reply now?", "I'm done", "Keep listening"],
             tool_calls: []
         };
+    } else if (risk === 'crisis') {
+        subconscious = { ...defaultBrain('concerned'), mood: 'concerned', status_display: 'Here with you...' };
+    } else if (canSkipBrain(typeof message === 'string' ? message : '', !!forceReply, !!isVoiceMode) && !(images && images.length)) {
+        // FAST PATH: obvious reply (question / greeting / forced / voice) — saves one LLM call (A2)
+        subconscious = defaultBrain(user.moodStatus);
     } else {
         // NORMAL PATH: ASK BRAIN
         const brainHistory: ChatMessage[] = [...historyWindow, { role: 'user', content: newUserMsgContent }];
@@ -423,7 +243,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // FAIL-SAFE LISTENING MODE
     if (subconscious.strategy === 'listen') {
         if (subconscious.reaction) {
-            (res as any).write(`data: ${JSON.stringify({ type: 'reaction', reaction: subconscious.reaction, messageId: chatSession.messages[chatSession.messages.length - 1]?._id })}\n\n`);
+            (res as any).write(`data: ${JSON.stringify({ type: 'reaction', reaction: subconscious.reaction, messageId: recentMessages[recentMessages.length - 1]?._id })}\n\n`);
         }
 
         user.socialBattery = Math.max(0, user.socialBattery - 2);
@@ -433,13 +253,15 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         (res as any).end();
 
         // Save User Message Only
-        chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
-        await chatSession.save();
+        await appendMessages(userId, [
+            { role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), voice_note: userVoiceUrl }
+        ]);
         return;
     }
 
     user.socialBattery = Math.max(0, user.socialBattery - 5);
     user.dailyMessageCount = (user.dailyMessageCount || 0) + 1;
+    openQuotaWindow(user); // rolling 24 h window starts with the first counted message
     user.lastUsageDate = new Date();
     await user.save();
 
@@ -447,122 +269,160 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // 3. SYSTEM PROMPT & PERSONA ADAPTATION
     // =================================================================================
     const currentPersona = user.persona as string;
-    let baseTemplate = (currentPersona === 'aarav' || currentPersona === 'aastik') ? AASTIK_PROMPT : AASTHA_PROMPT;
+    const isAastik = currentPersona === 'aarav' || currentPersona === 'aastik';
+    const voiceAvailable = !!(isPro || (user.voiceTopUpExpires && new Date(user.voiceTopUpExpires) > new Date()) || (user.dailyVoiceCount || 0) < 2);
 
-    let adaptation = "";
-    if (currentPersona === 'aarav' || currentPersona === 'aastik') {
-        const g = user.inferredGender;
-        if (g === 'Female') adaptation = "You are 'Aastik', a loyal, protective, and playful male best friend for {{userName}}. Role: Loyal Male Bestie. Vibe: Protective, Teasing, Safe. Don't be creepy.";
-        else if (g === 'Male') adaptation = "You are 'Aastik', a grounded, stoic, and reliable 'brother' figure for {{userName}}. Role: Solid Bro / Wingman. Vibe: Stoic, Solution-oriented. Speak man-to-man.";
-        else adaptation = "You are 'Aastik', a grounded, calm, and reliable companion for {{userName}}. Role: Supportive Friend. Vibe: Stable, Practical.";
+    // GIF reactions: only in light moments, never in crisis/concern, clone or voice calls, and only if the user hasn't turned them off.
+    // "What landed" (reactions) + a dated thing they mentioned that is happening around now (7.4)
+    const reactionLine = useClone ? '' : await describeRecentReactions(userId).catch(() => '');
+    const aroundNow = (useClone || risk !== 'none') ? [] : followUpsAroundNow(((user as any).followUps || []).map((f: any) => ({ ...(f.toObject ? f.toObject() : f), text: decrypt(f.text || '') })), new Date(), (user as any).timeZone);
+    const followUpLine = followUpPromptLine(aroundNow, new Date(), (user as any).timeZone);
+
+    const allowGifs = gifsEnabled() && user.gifsEnabled !== false && risk === 'none' && !useClone && !isVoiceMode &&
+        !['sad', 'crying', 'angry', 'concerned', 'anxious', 'scared', 'lonely'].includes(String(subconscious.mood || '').toLowerCase());
+
+    let systemPrompt = buildCompanionPrompt({
+        persona: isAastik ? 'aastik' : 'aastha',
+        userName: userName || 'Friend',
+        userMood: subconscious.mood || 'neutral',
+        innerNote: subconscious.internal_monologue || undefined,
+        facts: userFacts.slice(-25),
+        summary: decryptedSummary || undefined,
+        timeContext: describeTime(userLocalTime, typeof userLocalHour === 'number' ? userLocalHour : undefined),
+        ageContext: describeAge(user.dateOfBirth),
+        isVoiceMode: !!isVoiceMode,
+        voiceAvailable,
+        styleLine: describeStyle(user.styleProfile as any),
+        bondLine: bondPromptLine(user.bond as any, bondLeveledUp),
+        languageLine: describeLanguage(user.preferredLanguage, user.region),
+        safetyBlock: risk === 'crisis' ? CRISIS_PROMPT : risk === 'concern' ? CONCERN_PROMPT : undefined,
+        thinking: false, // set below
+        gifs: allowGifs,
+        reactionLine,
+        followUpLine,
+    });
+    // NOTE: brain tool_calls are turned into proposals by the client; asking the model to repeat them
+    // here caused duplicate proposals, so that injection was removed.
+
+    // THINKING MODE: auto for decisions/dilemmas; manual toggle for Pro. Never in crisis or voice calls.
+    if (useClone) {
+        systemPrompt = buildClonePrompt({ name: cloneName, subject: cloneMode.consent.subject, style: cloneStyle!, userName: userName || 'Friend' });
+        cloneMode.usageCount = (cloneMode.usageCount || 0) + 1;
+        cloneMode.lastActive = new Date();
+        user.markModified('cloneMode');
+        await user.save();
+        (res as any).write(`data: ${JSON.stringify({ type: 'clone', name: cloneName, usedToday: cloneMode.usageCount, limit: CLONE_DAILY_LIMIT })}\n\n`);
     }
 
-    const voiceStatus = (isPro || provider !== 'WORKHORSE_120B') ? "Active" : "Active"; 
-
-    let systemPrompt = baseTemplate
-        .replace('{{userName}}', userName || 'Friend')
-        .replace('{{personaAdaptation}}', adaptation)
-        .replace('{{subconsciousContext}}', JSON.stringify(subconscious.internal_monologue))
-        .replace('{{userFacts}}', user.facts.join(', ') || "No facts yet.")
-        .replace('{{voiceStatus}}', voiceStatus)
-        .replace('{{timeContext}}', getTimeContext(userLocalTime, userLocalHour))
-        .replace('{{toneFlavor}}', getToneFlavor())
-        .replace('{{mood}}', subconscious.mood || "neutral");
-
-    if (isVoiceMode) systemPrompt += `\n${VOICE_MODE_INSTRUCTIONS}`;
-    systemPrompt = getAgePersonaPrompt(user.dateOfBirth) + "\n" + systemPrompt;
-
-    if (subconscious.tool_calls && subconscious.tool_calls.length > 0) {
-        const tools = subconscious.tool_calls.map((t: any) => {
-            if (t.name === 'control_widget') return `<proposal tool="${t.params.widget}" params='${JSON.stringify(t.params.params || t.params)}' reason="I can help with that" />`;
-            if (t.name === 'write_diary') return `<proposal tool="diary" params='${JSON.stringify(t.params)}' reason="Writing in diary" />`;
-            if (t.name === 'change_theme') return `<color>${t.params.color}</color>`;
-            return "";
-        }).join('\n');
-        systemPrompt += `\n[SYSTEM: OUTPUT THESE COMMANDS AT THE END]\n${tools}`;
+    const think = !useClone && risk !== 'crisis' && !isVoiceMode &&
+        ((thinkingMode === true && isPro) || wantsDeepThinking(typeof message === 'string' ? message : ''));
+    if (think) {
+        systemPrompt = buildCompanionPrompt({
+            persona: isAastik ? 'aastik' : 'aastha',
+            userName: userName || 'Friend',
+            userMood: subconscious.mood || 'neutral',
+            innerNote: subconscious.internal_monologue || undefined,
+            facts: userFacts.slice(-25),
+            summary: decryptedSummary || undefined,
+            timeContext: describeTime(userLocalTime, typeof userLocalHour === 'number' ? userLocalHour : undefined),
+            ageContext: describeAge(user.dateOfBirth),
+            voiceAvailable,
+            styleLine: describeStyle(user.styleProfile as any),
+            bondLine: bondPromptLine(user.bond as any, bondLeveledUp),
+            languageLine: describeLanguage(user.preferredLanguage, user.region),
+            safetyBlock: risk === 'concern' ? CONCERN_PROMPT : undefined,
+            thinking: true,
+            gifs: allowGifs,
+            reactionLine,
+            followUpLine,
+        });
     }
 
-    const creditsDisplay = isPro ? '∞' : Math.max(0, 16 - msgCount);
+    if (bondLeveledUp && ((user.bond as any)?.override === null || (user.bond as any)?.override === undefined)) {
+        const lvl = (user.bond as any).level;
+        (res as any).write(`data: ${JSON.stringify({ type: 'bond', level: lvl, name: BOND_LEVELS[lvl]?.name })}\n\n`);
+    }
+
+    // Messages left AFTER this one (msgCount was read before the increment above → pill lagged by one).
+    const creditsDisplay = isPro ? '∞' : Math.max(0, 16 - Number(user.dailyMessageCount || 0));
 
     (res as any).write(`data: ${JSON.stringify({ 
         meta: { 
             model: provider,
             battery: user.socialBattery,
             mode: (isPro || isWithinFreeTier) ? 'pro' : 'standard', 
-            credits: creditsDisplay
+            credits: creditsDisplay,
+            resetsAt: isPro ? null : quotaResetsAt(user)
         } 
     })}\n\n`);
 
     // =================================================================================
-    // 4. STREAMING GENERATION & FAILOVER LOGIC (THE FIX)
+    // 4. STREAMING GENERATION (provider failover/backoff lives in services/llm.ts)
     // =================================================================================
-    let stream;
     let fullTextResponse = "";
+    const tagExtractor = createVoiceTagExtractor();
+    const baseHistory: ChatMessage[] = useClone
+        ? recentMessages
+            .filter(m => m.role === 'user' || (m as any).isClone)
+            .map(m => ({ role: m.role as 'user' | 'assistant', content: decrypt(m.content) }))
+        : historyWindow;
+    const generationHistory: ChatMessage[] = [...baseHistory, { role: 'user', content: newUserMsgContent }];
 
-    // Helper to start specific stream
-    const generationHistory: ChatMessage[] = [...historyWindow, { role: 'user', content: newUserMsgContent }];
-    const startStream = (p: string) => {
-        if (p === 'GROQ_70B') return streamGroq(generationHistory, systemPrompt, 1024, "llama-3.3-70b-versatile");
-        if (p === 'GROQ_8B_VOICE') return streamGroq(generationHistory, systemPrompt, 1024, "llama-3.1-8b-instant");
-        return streamWorkhorse(generationHistory, systemPrompt);
-    };
+    const sendContent = (text: string) => (res as any).write(`data: ${JSON.stringify({ content: text })}\n\n`);
+    if (think) (res as any).write(`data: ${JSON.stringify({ type: 'thinking_start' })}\n\n`);
 
     try {
-        stream = startStream(provider);
-        // @ts-ignore
+        const stream = streamReply(generationHistory, systemPrompt, {
+            voiceTags: risk !== 'crisis' && !useClone,
+            think,
+            onReasoning: (r) => (res as any).write(`data: ${JSON.stringify({ type: 'reasoning', content: r })}\n\n`),
+        });
         for await (const chunk of stream) {
-            if (!chunk) continue;
-            fullTextResponse += chunk;
-            (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+            const visible = tagExtractor.push(chunk);
+            if (!visible) continue;
+            fullTextResponse += visible;
+            sendContent(visible);
+        }
+        const tail = tagExtractor.flush();
+        if (tail) {
+            fullTextResponse += tail;
+            sendContent(tail);
         }
     } catch (e) {
-        console.error("Primary Stream Failed:", e);
-
-        // FAILOVER LOGIC
-        let backupProvider = null;
-        if (provider === 'GROQ_70B' || provider === 'GROQ_8B_VOICE') {
-             console.log("⚠️ Groq Failed (Rate Limit?). Switching to Workhorse Backup.");
-             backupProvider = 'WORKHORSE_120B';
-        } else if (provider === 'WORKHORSE_120B') {
-             console.log("⚠️ Workhorse Failed. Switching to Groq Backup.");
-             backupProvider = 'GROQ_70B';
+        if (e instanceof LlmUnavailableError) {
+            console.error("All AI providers unavailable for this request.");
+        } else {
+            console.error("Reply stream failed:", e);
         }
+    }
 
-        if (backupProvider) {
-            try {
-                // @ts-ignore
-                const fallbackStream = startStream(backupProvider);
-                // @ts-ignore
-                for await (const chunk of fallbackStream) {
-                    if (!chunk) continue;
-                    fullTextResponse += chunk;
-                    (res as any).write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
-                }
-            } catch (fallbackError) {
-                console.error("Backup Stream Also Failed:", fallbackError);
-            }
-        }
+    // A crisis message must ALWAYS get a caring answer with helplines, even if every AI provider is down.
+    if (risk === 'crisis' && !fullTextResponse.trim()) {
+        fullTextResponse = CRISIS_FALLBACK_TEXT;
+        sendContent(CRISIS_FALLBACK_TEXT);
+    }
+    if (think) (res as any).write(`data: ${JSON.stringify({ type: 'thinking_end' })}\n\n`);
+
+    // GIF reaction (tag already stripped from the visible text)
+    let gif: Awaited<ReturnType<typeof searchGif>> = null;
+    if (allowGifs && tagExtractor.captured.GIF && fullTextResponse.trim()) {
+        gif = await searchGif(tagExtractor.captured.GIF);
+        if (gif) (res as any).write(`data: ${JSON.stringify({ type: 'gif', gif })}\n\n`);
     }
 
     // =================================================================================
     // 5. AUDIO GENERATION (The Mouth)
     // =================================================================================
-    let styleDescription = undefined;
-    const styleMatch = fullTextResponse.match(/\[STYLE:(.*?)\]/i);
-    if (styleMatch) {
-        styleDescription = styleMatch[1].trim();
-    }
+    let styleDescription: string | undefined = tagExtractor.captured.STYLE || undefined;
 
     // Check for Native Script TTS content
-    let ttsContent = undefined;
-    const ttsMatch = fullTextResponse.match(/\[TTS:(.*?)\]/i);
-    if (ttsMatch) {
-        ttsContent = ttsMatch[1].trim();
-    }
+    const ttsContent: string | undefined = tagExtractor.captured.TTS || undefined;
 
     // Force Audio if Mood is High Emotion
-    const isEmotional = ['sad', 'crying', 'angry', 'concerned'].includes(subconscious.mood || '');
-    const hasVoiceQuota = (user.dailyVoiceCount || 0) < 2;
+    const isEmotional = risk !== 'crisis' && ['sad', 'crying', 'angry', 'concerned'].includes(subconscious.mood || '');
+    // Voice Pass (₹19 / 24h) = unlimited voice while active; otherwise 2 free voice notes per day.
+    const hasVoicePass = !!user.voiceTopUpExpires && new Date(user.voiceTopUpExpires) > new Date();
+    const hasVoiceQuota = hasVoicePass || (user.dailyVoiceCount || 0) < 2;
 
     // Explicit User Intent (e.g. "Send voice note", "Speak to me")
     const explicitVoiceIntent = /(voice note|speak|say it|tell me|talk)/i.test(newUserMsgContent as string);
@@ -580,11 +440,16 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
         if (textToSpeak.length > 0) {
             const targetPersona = (currentPersona === 'aarav' || currentPersona === 'aastik') ? 'aastik' : 'aastha';
-            const audioBuffer = await brainService.generateSpeech(textToSpeak.substring(0, 2000), undefined, targetPersona, styleDescription);
+            let cloneVoice: Buffer | undefined;
+            if (useClone && cloneMode.isVoiceActive) {
+                const withVoice: any = await User.findById(userId).select('+cloneMode.voiceSample').lean();
+                cloneVoice = decodeVoiceSample(withVoice?.cloneMode?.voiceSample);
+            }
+            const audioBuffer = await brainService.generateSpeech(textToSpeak.slice(0, 4000) /* brain_server trims at a sentence boundary */, cloneVoice, targetPersona, useClone ? undefined : styleDescription);
 
             if (audioBuffer) {
-                const audioId = `vn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                storeAudio(audioId, audioBuffer);
+                const audioId = `vn-${crypto.randomUUID()}`; // unguessable: the stream URL is the only access key
+                storeAudio(audioId, audioBuffer, userId);
                 savedAudioUrl = `/api/ai/stream/${audioId}`;
                 (res as any).write(`data: ${JSON.stringify({ voice_audio: savedAudioUrl, voice_note: savedAudioUrl })}\n\n`);
 
@@ -606,39 +471,40 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // CRITICAL FIX: Do not save empty messages
     if (!dbContent && !savedAudioUrl) {
          console.warn("Generation yielded empty content. Skipping DB save to prevent crash.");
-         (res as any).write(`data: ${JSON.stringify({ content: " [System: Brain Exhausted. Please try again in a few minutes.]" })}\n\n`);
+         (res as any).write(`data: ${JSON.stringify({ content: " I'm a little overwhelmed right now 😅 give me a minute and say that again?" })}\n\n`);
     } else {
-        chatSession.messages.push({ role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), timestamp: new Date() });
-        const aiMessage = { role: 'assistant' as 'assistant', content: encrypt(dbContent || "[...]"), timestamp: new Date(), voice_note: savedAudioUrl };
-        chatSession.messages.push(aiMessage);
-        await chatSession.save();
+        const saved = await appendMessages(userId, [
+            { role: 'user', content: encrypt(typeof newUserMsgContent === 'string' ? newUserMsgContent : '[Multimedia]'), voice_note: userVoiceUrl },
+            { role: 'assistant', content: encrypt(dbContent || "[...]"), voice_note: savedAudioUrl, ...(useClone ? { isClone: true } : {}), ...(gif ? { gif } : {}) },
+        ]);
+        // Real ids → the app can attach reactions to this reply (7.4)
+        (res as any).write(`data: ${JSON.stringify({ type: 'saved', userId: String(saved[0]?._id || ''), assistantId: String(saved[1]?._id || '') })}\n\n`);
+        // Asked about it in chat → no separate check-in notification
+        if (followUpLine) await markFollowUps(userId, aroundNow.slice(0, 2).map((f: any) => f._id), 'asked').catch(() => {});
 
         // BROADCAST TO SYNC DEVICES
         broadcast(userId.toString(), 'message', {
             content: dbContent || "[...]",
             role: 'assistant',
             timestamp: new Date(),
-            voice_note: savedAudioUrl
+            voice_note: savedAudioUrl,
+            ...(gif ? { gif } : {})
         });
     }
 
-    if (chatSession.messages.length % 5 === 0) {
-        (async () => {
-            try {
-                const currentSummary = decrypt(user.memorySummary || "");
-                const analysis = await generateMemoryAnalysis(historyWindow, currentSummary);
-
-                if (user.inferredGender === 'Unknown' && analysis.inferredGender !== 'Unknown') {
-                    await User.findByIdAndUpdate(userId, { inferredGender: analysis.inferredGender });
-                }
-
-                await User.findByIdAndUpdate(userId, { memorySummary: encrypt(analysis.summary) });
-            } catch (e) { console.error("Memory Error:", e); }
-        })();
+    const totalMessages = await countMessages(userId);
+    // Memory v2: every 6 stored messages (~3 exchanges), learn from the latest turns (incl. this one).
+    if (!useClone && totalMessages % 6 === 0 && dbContent) {
+        const turns = [
+            ...historyWindow.slice(-8).map(m => ({ role: m.role === 'assistant' ? 'assistant' as const : 'user' as const, content: typeof m.content === 'string' ? m.content : '' })),
+            { role: 'user' as const, content: typeof newUserMsgContent === 'string' ? newUserMsgContent : (message || '') },
+            { role: 'assistant' as const, content: dbContent },
+        ];
+        updateMemory(userId.toString(), turns).catch(e => console.error("Memory Error:", e?.message || e));
     }
 
     // Data Donation - FIXED VALIDATION ERROR
-    if (user.isDataDonationOn && dbContent) {
+    if (!useClone && user.isDataDonationOn && dbContent) {
          TrainingLog.create({
             userMood: user.moodStatus,
             persona: user.persona,
@@ -652,8 +518,9 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
   } catch (error: any) {
     console.error('*** CHAT FAILED ***:', error);
+    captureError(error, { route: 'chat' });
     if (!(res as any).headersSent) {
-        (res as any).status(500).json({ message: 'Chat failed: ' + error.message });
+        (res as any).status(500).json({ message: 'Chat failed. Please try again.' });
     } else {
         (res as any).end();
     }
@@ -663,18 +530,30 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 export const getChatHistory = async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-        const chatSession = await Chat.findOne({ user: req.user._id });
-        if (!chatSession) return (res as any).json([]);
 
-        const history = chatSession.messages.map(m => {
+        // GET /api/chat/history?limit=50&before=<ISO timestamp>
+        // Returns the newest `limit` messages (older than `before`), oldest → newest.
+        // Only these are decrypted — previously the ENTIRE history was decrypted on every load (R5).
+        const q = (req as any).query || {};
+        const limit = Math.min(Math.max(parseInt(q.limit, 10) || 50, 1), 100);
+        const before = typeof q.before === 'string' ? new Date(q.before) : undefined;
+
+        const page = await getRecentMessages(req.user._id, limit, before);
+        (res as any).setHeader('X-Has-More', page.length === limit ? '1' : '0');
+
+        const history = page.map(m => {
             let decrypted = decrypt(m.content);
             decrypted = decrypted.replace(/\[STYLE:.*?\]/g, '').trim();
 
             return {
+                id: String(m._id),
                 role: m.role,
                 content: decrypted,
                 timestamp: m.timestamp,
-                voice_note: m.voice_note
+                voice_note: m.voice_note,
+                isClone: !!(m as any).isClone,
+                ...((m as any).userReaction ? { myReaction: (m as any).userReaction } : {}),
+                ...((m as any).gif?.url ? { gif: (m as any).gif } : {})
             };
         });
 
@@ -682,5 +561,22 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
     } catch (error) {
         console.error("History Error:", error);
         (res as any).status(500).json({ message: "Failed to fetch history" });
+    }
+};
+
+/** POST /api/chat/react { messageId, reaction: <any single emoji> | null } — the user's reaction on one of Aastha's replies (7.4). */
+export const reactToMessage = async (req: AuthRequest, res: Response) => {
+    if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+    const { messageId, reaction } = (req as any).body || {};
+    if (typeof messageId !== 'string' || (reaction !== null && !isAllowedReaction(reaction))) {
+        return (res as any).status(400).json({ message: 'Invalid reaction' });
+    }
+    try {
+        const ok = await setReaction(req.user._id, messageId, reaction);
+        if (!ok) return (res as any).status(404).json({ message: 'Message not found' });
+        (res as any).json({ ok: true, reaction });
+    } catch (e) {
+        console.error('React error:', e);
+        (res as any).status(500).json({ message: 'Could not save reaction' });
     }
 };

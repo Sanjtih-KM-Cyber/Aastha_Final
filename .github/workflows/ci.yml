@@ -1,0 +1,65 @@
+name: CI
+
+# ROADMAP 7.2 — runs on every push and pull request: server typecheck + integration tests, client typecheck,
+# client unit tests and a production build. No secrets needed (tests use an in-memory MongoDB + fake AI).
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+      - name: Cache MongoDB test binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}-v1
+      - run: npm ci
+      - name: Typecheck (must stay clean)
+        run: npx tsc --noEmit
+      - name: Integration tests
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - name: Typecheck (Q10 fixed — keep at 0 errors)
+        run: npx tsc --noEmit
+      - name: Unit tests (Vitest)
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: No API keys in the bundle
+        run: |
+          if grep -rEl "gsk_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|rzp_live_[A-Za-z0-9]+" dist; then
+            echo "::error::Something that looks like an API key is in the web bundle"; exit 1
+          fi

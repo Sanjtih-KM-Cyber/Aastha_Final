@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
+import { verifyJwt } from '../utils/jwtKeys';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
+import { applyDailyReset } from '../utils/dailyReset';
+import { cleanTimeZone } from '../utils/timeZone';
 
 export interface AuthRequest extends Request {
   user?: any;
@@ -24,12 +27,24 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
         throw new Error('Server misconfiguration: Missing JWT_SECRET');
       }
 
-      const decoded: any = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded: any = verifyJwt(token);
+
+      // Special-purpose tokens (e.g. 'reset-verified', issued after the reset OTP but BEFORE the
+      // security answer) must never work as login sessions.
+      if (decoded.purpose) {
+          return (res as any).status(401).json({ message: 'Not authorized' });
+      }
 
       const user = await User.findById(decoded.id).select('-passwordHash');
-      
+
       if (!user) {
           return (res as any).status(401).json({ message: 'Not authorized' });
+      }
+
+      // Revocation: tokens issued before the last tokenVersion bump (password reset, "log out everywhere")
+      // are rejected. Legacy tokens without `tv` count as version 0.
+      if ((decoded.tv ?? 0) !== (user.tokenVersion ?? 0)) {
+          return (res as any).status(401).json({ message: 'Session expired. Please log in again.' });
       }
 
       // --- EMPIRE BUSINESS LOGIC: DAILY RESET & EXPIRY ---
@@ -37,32 +52,25 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
       let needsSave = false;
 
       // 1. Daily Reset Logic (The Reset)
-      const lastUsage = new Date(user.lastUsageDate || user.createdAt || Date.now());
-      if (lastUsage.getDate() !== now.getDate() ||
-          lastUsage.getMonth() !== now.getMonth() ||
-          lastUsage.getFullYear() !== now.getFullYear()) {
+      // Rolling 24 h quota window (utils/dailyReset.ts) — writes at most once per window (plus on subscription expiry).
+      if (applyDailyReset(user, now)) needsSave = true;
 
-          user.dailyPremiumUsage = 0;
-          user.voiceHugs = { count: 0, lastReset: now }; // Reset Voice Hugs
-          if (user.cloneMode) {
-             user.cloneMode.usageCount = 0; // Reset Clone Mode
-          }
-          user.lastUsageDate = now;
-          needsSave = true;
-      }
+      // The app sends its device time zone on every request → streak, check-ins, "today" follow the user's clock
+      const tz = cleanTimeZone((req as any).query?._tz || (req as any).headers?.['x-time-zone']);
+      if (tz && (user as any).timeZone !== tz) { (user as any).timeZone = tz; needsSave = true; }
 
       // 2. Subscription Expiry (The Gate)
-      if (user.isPro && user.subscriptionDate) {
-          const subDate = new Date(user.subscriptionDate);
-          // Calculate difference in milliseconds
-          const diffTime = now.getTime() - subDate.getTime();
-          // Convert to days
-          const diffDays = diffTime / (1000 * 3600 * 24);
+      // Prefer the explicit expiry (supports stacked renewals); fall back to purchase date + 30 days for legacy users.
+      if (user.isPro) {
+          const expiresAt = user.subscriptionExpiresAt
+              ? new Date(user.subscriptionExpiresAt)
+              : user.subscriptionDate
+                  ? new Date(new Date(user.subscriptionDate).getTime() + 30 * 24 * 60 * 60 * 1000)
+                  : null;
 
-          if (diffDays > 30) {
-              console.log(`[Empire] User ${user._id} subscription expired (${diffDays.toFixed(1)} days). Revoking Pro.`);
+          if (expiresAt && now > expiresAt) {
+              console.log(`[Subscription] User ${user._id} Pro expired at ${expiresAt.toISOString()}. Revoking.`);
               user.isPro = false;
-              // We do NOT reset dailyPremiumUsage here, so they instantly hit the wall if they've used it.
               needsSave = true;
           }
       }

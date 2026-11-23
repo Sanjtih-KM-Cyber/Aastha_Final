@@ -4,7 +4,12 @@ import { ChatView } from '../components/chat/ChatView';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
 import { useSync } from '../context/SyncContext';
 import { OnboardingTour, TourStep } from '../components/landing/OnboardingTour';
+import { SafetyIntroCard } from '../components/SafetyIntroCard';
+import { LegalConsentDialog } from '../components/LegalConsentDialog';
+import { useSanctuaryFonts } from '../hooks/useAppFonts';
+import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { MobileTabBar, TabKey } from '../components/layout/MobileTabBar';
 
 // ✅ DIRECT IMPORTS (Fix for Widgets Not Opening)
 // Lazy load widgets for better error isolation
@@ -124,7 +129,8 @@ const MOBILE_TOUR_STEPS: TourStep[] = [
 
 export const Sanctuary: React.FC = () => {
   const { emit, subscribe } = useSync();
-  const { user, completeOnboarding } = useAuth();
+  const { user, completeOnboarding, updateUser, logout } = useAuth();
+  useSanctuaryFonts(); // user's font choice — Sanctuary only (removed again on the public pages)
 
   // Mobile Sidebar State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -150,6 +156,24 @@ export const Sanctuary: React.FC = () => {
   const handleTourComplete = async () => {
       setShowTour(false);
       await completeOnboarding();
+  };
+
+  // "How Aastha keeps you safe" — once per account, after the tour (7.5)
+  const safetyKey = user?._id ? `aastha_safety_intro_seen:${user._id}` : '';
+  const [showSafetyIntro, setShowSafetyIntro] = useState(false);
+  useEffect(() => {
+    if (!user || showTour || user.isOnboardingComplete === false || user.safetyIntroSeen) return;
+    let seen = false;
+    try { seen = !!safetyKey && localStorage.getItem(safetyKey) === '1'; } catch { /* ignore */ }
+    if (seen) return;
+    const t = setTimeout(() => setShowSafetyIntro(true), 800);
+    return () => clearTimeout(t);
+  }, [user, showTour, safetyKey]);
+  const closeSafetyIntro = () => {
+    setShowSafetyIntro(false);
+    try { if (safetyKey) localStorage.setItem(safetyKey, '1'); } catch { /* ignore */ }
+    updateUser({ safetyIntroSeen: true });
+    api.post('/users/safety-intro').catch(() => {});
   };
 
   const [widgets, setWidgets] = useState<Record<string, boolean>>({
@@ -243,6 +267,30 @@ export const Sanctuary: React.FC = () => {
     });
   };
 
+  // --- PHONE TAB BAR (Phase 5) ---
+  const RELAX_WIDGETS = ['pomodoro', 'jam', 'soundscape', 'breathing', 'lore'];
+  const topOpenWidget = Object.keys(widgets)
+    .filter((k) => widgets[k])
+    .sort((a, b) => (zIndices[b] || 0) - (zIndices[a] || 0))[0];
+  const activeTab: TabKey = isSettingsOpen ? 'me'
+    : isMobileMenuOpen ? 'relax'
+    : topOpenWidget === 'diary' ? 'diary'
+    : topOpenWidget === 'mood' ? 'mood'
+    : topOpenWidget && RELAX_WIDGETS.includes(topOpenWidget) ? 'relax'
+    : 'chat';
+
+  const handleTabSelect = (tab: TabKey) => {
+    if (tab === 'chat') {
+      // back to the conversation: close every full-screen widget sheet
+      setWidgets(prev => Object.fromEntries(Object.keys(prev).map(k => [k, false])) as typeof prev);
+      return;
+    }
+    if (tab === 'diary') return openWidget('diary');
+    if (tab === 'mood') return openWidget('mood');
+    if (tab === 'relax') return setIsMobileMenuOpen(true);
+    if (tab === 'me') return setIsSettingsOpen(true);
+  };
+
   // MEMOIZED HANDLERS
   const focusDiary = React.useCallback(() => bringToFront('diary'), [bringToFront]);
   const focusPomodoro = React.useCallback(() => bringToFront('pomodoro'), [bringToFront]);
@@ -255,6 +303,11 @@ export const Sanctuary: React.FC = () => {
   return (
     <div className="relative w-full h-screen flex bg-transparent overflow-hidden">
       
+      {user && user.legalConsentCurrent === false && (
+        <LegalConsentDialog onAccepted={() => updateUser({ legalConsentCurrent: true })} onLogout={() => logout()} />
+      )}
+      {showSafetyIntro && user?.legalConsentCurrent !== false && <SafetyIntroCard botName={user?.persona === 'aarav' ? 'Aastik' : 'Aastha'} onClose={closeSafetyIntro} />}
+
       <OnboardingTour
          isOpen={showTour}
          steps={isMobile ? MOBILE_TOUR_STEPS : DESKTOP_TOUR_STEPS}
@@ -378,6 +431,13 @@ export const Sanctuary: React.FC = () => {
       
       {/* 4. Global Settings Modal - System Layer (z-100) */}
       <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+
+      {/* 5. Phone-first navigation (Phase 5) — hidden while full-screen overlays are open */}
+      {isMobile && !isSettingsOpen && !isMobileMenuOpen && (
+        <div className="relative z-[200]">
+          <MobileTabBar active={activeTab} onSelect={handleTabSelect} />
+        </div>
+      )}
 
     </div>
   );

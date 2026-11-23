@@ -2,10 +2,10 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
 import Diary from '../models/Diary';
 import Mood from '../models/Mood';
-import { Person } from '../models/Person';
-import axios from 'axios';
+import { searchYouTube } from '../services/youtubeSearch';
 import { encrypt, decrypt } from '../utils/serverEncryption';
-import { detectiveService } from '../services/detectiveService';
+import { detectiveService, MAX_MUGSHOT_CHARS } from '../services/detectiveService';
+import mongoose from 'mongoose';
 
 // --- Diary Controllers ---
 
@@ -113,7 +113,7 @@ export const createDiaryEntry = async (req: AuthRequest, res: Response) => {
             title: encTitle,
             content: encContent,
             tags: tags || [],
-            moodKeywords: moodKeywords || "",
+            moodKeywords: moodKeywords ? encrypt(String(moodKeywords).slice(0, 200)) : "", // encrypted (S13)
             entryDate: targetDate // Explicitly save the logic date
         }
       },
@@ -201,30 +201,8 @@ export const searchVideos = async (req: AuthRequest, res: Response) => {
 
     if (!q) return (res as any).json([]);
 
-    const apiKey = process.env.YOUTUBE_API_KEY;
-    if (!apiKey) {
-        console.error("YOUTUBE_API_KEY is missing.");
-        return (res as any).json([]);
-    }
-
-    // Call YouTube Data API
-    const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
-        params: {
-            part: 'snippet',
-            q: q,
-            type: 'video',
-            videoCategoryId: '10', // <--- THIS ID (10) FILTERS FOR MUSIC
-            key: apiKey,
-            maxResults: 15
-        }
-    });
-
-    const videos = response.data.items.map((item: any) => ({
-        id: item.id.videoId,
-        title: item.snippet.title,
-        artist: item.snippet.channelTitle,
-        thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url
-    }));
+    // Cached + quota-protected (services/youtubeSearch.ts — A11)
+    const videos = await searchYouTube(String(q), { max: 15, musicOnly: true });
 
     (res as any).json(videos);
 
@@ -267,12 +245,13 @@ export const updateMugshot = async (req: AuthRequest, res: Response) => {
 
         const { personId, image } = (req as any).body;
         if (!personId || !image) return (res as any).status(400).json({ message: 'Missing Data' });
+        if (typeof image !== 'string' || !/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(image) || image.length > MAX_MUGSHOT_CHARS) {
+            return (res as any).status(400).json({ message: 'Please upload a PNG/JPEG/WebP image under ~1.8 MB.' });
+        }
+        if (!mongoose.isValidObjectId(personId)) return (res as any).status(400).json({ message: 'Invalid person' });
 
-        const person = await Person.findOneAndUpdate(
-            { _id: personId, userId: req.user._id },
-            { mugshot: image }, // Base64 string storage
-            { new: true }
-        );
+        // Stored encrypted (third-party photo) — S7
+        const person = await detectiveService.setMugshot(req.user._id, personId, image);
 
         if (!person) return (res as any).status(404).json({ message: 'Person not found' });
 
@@ -280,5 +259,22 @@ export const updateMugshot = async (req: AuthRequest, res: Response) => {
     } catch (e) {
         console.error("Mugshot Error:", e);
         (res as any).status(500).json({ message: 'Upload failed' });
+    }
+};
+
+
+// PUT /api/data/web/:id { role?, roleLabel?, vibe? } — the user corrects the AI's classification
+export const updatePersonClassification = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+        const id = String((req as any).params?.id || '');
+        if (!mongoose.isValidObjectId(id)) return (res as any).status(400).json({ message: 'Invalid id' });
+        const { role, roleLabel, vibe } = (req as any).body || {};
+        const person = await detectiveService.setClassification(String(req.user._id), id, { role, roleLabel, vibe });
+        if (!person) return (res as any).status(404).json({ message: 'Not found' });
+        (res as any).json(person);
+    } catch (e) {
+        console.error('Update person failed:', e);
+        (res as any).status(500).json({ message: 'Could not update' });
     }
 };

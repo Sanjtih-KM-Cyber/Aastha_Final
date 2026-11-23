@@ -61,11 +61,11 @@ export const DemoPomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onCl
       onFocus={onFocus}
       resizable={true}
     >
-      <div className="flex flex-col h-full bg-[#0B0F17] relative font-sans overflow-hidden">
+      <div className="flex flex-col h-full bg-md-surface relative font-sans overflow-hidden">
          {/* Background Glow */}
-         <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3/4 h-3/4 bg-${isActive ? 'violet' : 'slate'}-500/10 rounded-full blur-[60px] transition-colors duration-1000`} />
+         <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3/4 h-3/4 ${isActive ? 'bg-md-primary/10' : 'bg-md-on-surface/5'} rounded-full blur-[60px] transition-colors duration-1000`} />
 
-         <button onClick={() => setIsEditing(!isEditing)} className="absolute top-4 right-4 z-20 text-white/20 hover:text-white transition-colors">
+         <button onClick={() => setIsEditing(!isEditing)} className="absolute top-4 right-4 z-20 text-md-on-surface-variant/50 hover:text-md-on-surface transition-colors">
             <Settings size={18}/>
          </button>
 
@@ -91,7 +91,7 @@ export const DemoPomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onCl
                             cy="130"
                             r={radius}
                             fill="none"
-                            stroke={mode === 'focus' ? '#8b5cf6' : '#14b8a6'}
+                            stroke={mode === 'focus' ? 'rgb(var(--md-primary))' : 'rgb(var(--md-tertiary))'}
                             strokeWidth="4"
                             strokeDasharray={circumference}
                             strokeDashoffset={strokeDashoffset}
@@ -101,10 +101,10 @@ export const DemoPomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onCl
                     </svg>
 
                     <div className="text-center absolute inset-0 flex flex-col items-center justify-center">
-                        <div className="text-5xl md:text-6xl lg:text-7xl font-light font-mono text-white mb-2 tracking-tighter tabular-nums drop-shadow-lg">
+                        <div className="text-5xl md:text-6xl lg:text-7xl font-light font-mono text-md-on-surface mb-2 tracking-tighter tabular-nums drop-shadow-lg">
                             {formatTime(timeLeft)}
                         </div>
-                        <p className={`text-xs md:text-sm uppercase tracking-[0.3em] font-bold ${mode === 'focus' ? 'text-violet-400' : 'text-teal-400'}`}>
+                        <p className={`text-xs md:text-sm uppercase tracking-[0.3em] font-bold ${mode === 'focus' ? 'text-md-primary' : 'text-md-primary'}`}>
                             {isActive ? 'Running' : mode}
                         </p>
                     </div>
@@ -112,14 +112,14 @@ export const DemoPomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onCl
 
                 {/* Controls */}
                 <div className="flex items-center gap-8 mb-4">
-                    <button onClick={resetTimer} className="p-4 rounded-full text-white/30 hover:text-white hover:bg-white/5 transition-all">
+                    <button onClick={resetTimer} className="p-4 rounded-full text-md-on-surface-variant/70 hover:text-md-on-surface hover:bg-md-on-surface/[0.06] transition-all">
                         <RotateCcw size={20}/>
                     </button>
                     <button
                         onClick={toggleTimer}
                         className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all ${
                             isActive
-                                ? 'bg-white/10 text-white border border-white/20'
+                                ? 'bg-md-surface-container-highest text-md-on-surface border border-md-outline-variant'
                                 : 'bg-white text-black'
                         }`}
                     >
@@ -130,16 +130,16 @@ export const DemoPomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onCl
              </div>
          ) : (
              <div className="flex-1 flex flex-col p-8 z-10 overflow-y-auto custom-scrollbar">
-                 <h4 className="text-white font-medium text-lg mb-8 flex items-center gap-2">
+                 <h4 className="text-md-on-surface font-medium text-lg mb-8 flex items-center gap-2">
                     <Settings size={18} className="text-violet-500"/>
                     Timer Settings
                  </h4>
 
                  <div className="space-y-8">
-                     <div className="bg-white/5 p-6 rounded-2xl border border-white/5">
+                     <div className="bg-md-surface-container p-6 rounded-2xl border border-md-outline-variant/30">
                          <div className="flex justify-between items-center mb-4">
-                             <span className="text-sm font-medium text-slate-300">Focus Duration</span>
-                             <span className="text-sm font-bold text-violet-400">{focusDuration} min</span>
+                             <span className="text-sm font-medium text-md-on-surface-variant">Focus Duration</span>
+                             <span className="text-sm font-bold text-md-primary">{focusDuration} min</span>
                          </div>
                          <input
                             type="range"
@@ -147,18 +147,18 @@ export const DemoPomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onCl
                             max="90"
                             value={focusDuration}
                             onChange={e => setFocusDuration(Number(e.target.value))}
-                            className="w-full h-1.5 bg-black rounded-full accent-violet-500 appearance-none cursor-pointer"
+                            className="w-full h-1.5 bg-md-surface-container-lowest rounded-full accent-violet-500 appearance-none cursor-pointer"
                          />
-                         <div className="flex justify-between text-[10px] text-white/20 mt-2 font-mono">
+                         <div className="flex justify-between text-[10px] text-md-on-surface-variant/50 mt-2 font-mono">
                              <span>1m</span>
                              <span>90m</span>
                          </div>
                      </div>
 
-                     <div className="bg-white/5 p-6 rounded-2xl border border-white/5">
+                     <div className="bg-md-surface-container p-6 rounded-2xl border border-md-outline-variant/30">
                          <div className="flex justify-between items-center mb-4">
-                             <span className="text-sm font-medium text-slate-300">Break Duration</span>
-                             <span className="text-sm font-bold text-teal-400">{breakDuration} min</span>
+                             <span className="text-sm font-medium text-md-on-surface-variant">Break Duration</span>
+                             <span className="text-sm font-bold text-md-primary">{breakDuration} min</span>
                          </div>
                          <input
                             type="range"
@@ -166,9 +166,9 @@ export const DemoPomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onCl
                             max="30"
                             value={breakDuration}
                             onChange={e => setBreakDuration(Number(e.target.value))}
-                            className="w-full h-1.5 bg-black rounded-full accent-teal-500 appearance-none cursor-pointer"
+                            className="w-full h-1.5 bg-md-surface-container-lowest rounded-full accent-teal-500 appearance-none cursor-pointer"
                          />
-                         <div className="flex justify-between text-[10px] text-white/20 mt-2 font-mono">
+                         <div className="flex justify-between text-[10px] text-md-on-surface-variant/50 mt-2 font-mono">
                              <span>1m</span>
                              <span>30m</span>
                          </div>
@@ -177,7 +177,7 @@ export const DemoPomodoroWidget: React.FC<PomodoroWidgetProps> = ({ isOpen, onCl
 
                  <button
                     onClick={() => { setIsEditing(false); resetTimer(); }}
-                    className="w-full py-4 bg-violet-600 hover:bg-violet-700 rounded-xl font-bold text-white mt-8 transition-colors shadow-lg shadow-violet-900/20"
+                    className="w-full py-4 bg-md-primary text-md-on-primary hover:brightness-110 rounded-xl font-bold text-md-on-surface mt-8 transition-colors shadow-lg shadow-violet-900/20"
                 >
                     Save Changes
                 </button>

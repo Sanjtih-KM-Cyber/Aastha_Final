@@ -4,6 +4,8 @@ import Diary from '../models/Diary';
 import { sendGhostEmail } from './emailService';
 import { generateGhostEmailContent } from './geminiService';
 import { decrypt } from '../utils/serverEncryption';
+import { isWebPushConfigured, sendToUser } from './webPush';
+import { runReachOutSweep } from './reachOut';
 import dotenv from 'dotenv';
 // import { sendPushNotification } from './notificationService'; // Placeholder for Firebase
 
@@ -13,13 +15,16 @@ dotenv.config();
 export const init = () => {
     console.log('[GhostService] Initialized. Watching for inactive souls...');
 
+    // 7.4 follow-up check-ins (web push). Caps/quiet hours/crisis cooldown live in reachOut.ts.
+    cron.schedule('*/15 * * * *', () => {
+        runReachOutSweep().then(n => { if (n) console.log(`[ReachOut] sent ${n} check-in(s)`); }).catch(e => console.error('[ReachOut] sweep failed:', e?.message || e));
+    });
+
     // Run every 10 minutes
     cron.schedule('*/10 * * * *', async () => {
-        // Optimization: Fail fast if we can't send emails via Resend
-        if (!process.env.RESEND_API_KEY) {
-             console.warn("[GhostService] Skipping check: No RESEND_API_KEY found in environment.");
-             return;
-        }
+        const canEmail = !!process.env.RESEND_API_KEY;
+        const canPush = isWebPushConfigured();
+        if (!canEmail && !canPush) return; // nothing to send with
 
         try {
             console.log('[GhostService] Running check...');
@@ -57,23 +62,22 @@ export const init = () => {
 
                     // 1. Get Keywords from latest diary entry
                     const latestEntry = await Diary.findOne({ user: user._id }).sort({ createdAt: -1 });
-                    const keywords = latestEntry && latestEntry.moodKeywords ? latestEntry.moodKeywords : "life";
+                    const keywords = latestEntry && latestEntry.moodKeywords ? decrypt(latestEntry.moodKeywords) : "life"; // legacy plaintext decrypts as-is
 
                     // 2. Prepare Rich Context from User Memory
                     const context = {
                         name: user.name.split(' ')[0], // First name only
                         keywords: keywords,
-                        facts: user.facts || [],
+                        facts: (user.facts || []).map((f: string) => decrypt(f)),
                         lore: (user.lore || [])
                             .filter(l => l.isUnlocked) // Only use unlocked lore
                             .sort((a, b) => b.mentionCount - a.mentionCount) // Prioritize most mentioned
                             .slice(0, 3)
-                            .map(l => l.topic),
+                            .map(l => decrypt(l.topic)),
                         openLoop: user.openLoops && user.openLoops.length > 0
-                            ? user.openLoops.filter(l => l.status === 'pending')[0]?.event
+                            ? decrypt(user.openLoops.filter(l => l.status === 'pending')[0]?.event || '') || undefined
                             : undefined,
-                        persona: (user.persona || 'aastha') as any,
-                        inferredGender: (user.inferredGender || 'Unknown') as any
+                        persona: (user.persona || 'aastha') as any
                     };
 
                     // 3. Generate Unique Content via Gemini
@@ -82,7 +86,12 @@ export const init = () => {
                     // 4. Send Email
                     // @ts-ignore: TS thinks persona is only 'aastha' because of default but it can be 'aarav'/'aastik'
                     const senderName = (user.persona === 'aarav' || user.persona === 'aastik') ? 'Aastik' : 'Aastha';
-                    const sent = await sendGhostEmail(email, user.name, emailBody, senderName);
+                    // Web Push first (instant, on their phone/browser), email as well if configured
+                    const pushed = canPush
+                        ? await sendToUser(user._id.toString(), { title: senderName, body: emailBody, tag: 'aastha-checkin' })
+                        : 0;
+                    const emailed = canEmail ? await sendGhostEmail(email, user.name, emailBody, senderName) : false;
+                    const sent = pushed > 0 || emailed;
 
                     /*
                     // --- FUTURE FIREBASE INTEGRATION STUB ---
@@ -99,7 +108,6 @@ export const init = () => {
                     if (sent) {
                         // 5. Update User State
                         user.ghostNotificationSent = true;
-                        user.moodStatus = 'mad';
                         await user.save();
                     }
 

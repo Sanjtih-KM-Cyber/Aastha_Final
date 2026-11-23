@@ -7,10 +7,17 @@
     "start": "node dist/app.js",
     "dev": "nodemon src/app.ts",
     "build": "tsc",
+    "migrate:chats": "ts-node src/scripts/migrateChats.ts",
+    "keys:generate": "ts-node --transpile-only src/scripts/keys.ts generate",
+    "keys:status": "ts-node --transpile-only src/scripts/keys.ts status",
+    "keys:rotate": "ts-node --transpile-only src/scripts/keys.ts rotate",
+    "dev:sandbox": "ts-node --transpile-only dev/sandbox.ts",
+    "test": "ts-node --transpile-only tests/integration/phase1.test.ts && ts-node --transpile-only tests/integration/auth.test.ts && ts-node --transpile-only tests/integration/phase2.test.ts && ts-node --transpile-only tests/integration/phase3.test.ts && ts-node --transpile-only tests/integration/phase4.test.ts && ts-node --transpile-only tests/integration/phase6.test.ts && ts-node --transpile-only tests/integration/clone.test.ts && ts-node --transpile-only tests/integration/extras.test.ts && ts-node --transpile-only tests/integration/phase7.test.ts && ts-node --transpile-only tests/integration/phase8.test.ts && ts-node --transpile-only tests/integration/keys.test.ts",
     "lint": "eslint src/**/*.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@sentry/node": "^9.47.2",
     "@types/ws": "^8.18.1",
     "axios": "^1.6.0",
     "bcryptjs": "^2.4.3",
@@ -31,6 +38,7 @@
     "rate-limit-redis": "^4.3.1",
     "razorpay": "^2.9.6",
     "resend": "^6.6.0",
+    "web-push": "^3.6.7",
     "ws": "^8.18.3"
   },
   "devDependencies": {
@@ -45,6 +53,8 @@
     "@types/node": "^20.10.5",
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^7.0.4",
+    "@types/web-push": "^3.6.4",
+    "mongodb-memory-server-core": "^10.1.4",
     "nodemon": "^3.0.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"

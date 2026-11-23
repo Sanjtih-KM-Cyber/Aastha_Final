@@ -1,58 +1,45 @@
-import { LocalNotifications } from '@capacitor/local-notifications';
 import { Preferences } from '@capacitor/preferences';
+import { NOTIF_IDS, cancelIds, ensureChannels, requestPermission, scheduleOne, isNative } from './notifications';
 
 const NOTIFICATION_ENABLED_KEY = 'notifications_enabled';
 
+/** Daily morning/evening reminders (opt-in from Settings). Only touches its own IDs. */
 export const notificationService = {
     async init() {
-        // Request permissions on init if not already granted
-        const perm = await LocalNotifications.checkPermissions();
-        if (perm.display === 'prompt') {
-           // We don't auto-prompt on init to avoid annoyance, user must enable in settings
-        }
+        if (!isNative()) return;
+        await ensureChannels();
+        // Re-schedule on launch if the user opted in (keeps reminders alive after updates/reinstalls)
+        const { value } = await Preferences.get({ key: NOTIFICATION_ENABLED_KEY });
+        if (value === 'true') await this.scheduleDailyReminders();
     },
 
     async requestPermission(): Promise<boolean> {
-        const result = await LocalNotifications.requestPermissions();
-        if (result.display === 'granted') {
+        const granted = await requestPermission();
+        if (granted) {
             await Preferences.set({ key: NOTIFICATION_ENABLED_KEY, value: 'true' });
-            this.scheduleDailyReminders();
-            return true;
+            await this.scheduleDailyReminders();
         }
-        return false;
+        return granted;
     },
 
     async scheduleDailyReminders() {
-        // Clear existing to avoid duplicates
-        await LocalNotifications.cancel(await LocalNotifications.getPending());
-
-        // Schedule for 9 PM
-        await LocalNotifications.schedule({
-            notifications: [
-                {
-                    title: "How was your day? 🌙",
-                    body: "Aastha is here to listen. Take a moment to reflect.",
-                    id: 1,
-                    schedule: {
-                        on: { hour: 21, minute: 0 },
-                        allowWhileIdle: true
-                    }
-                },
-                {
-                     title: "Good Morning ☀️",
-                     body: "Start your day with intention. Aastha is with you.",
-                     id: 2,
-                     schedule: {
-                         on: { hour: 8, minute: 30 },
-                         allowWhileIdle: true
-                     }
-                }
-            ]
+        await cancelIds([NOTIF_IDS.DAILY_EVENING, NOTIF_IDS.DAILY_MORNING]);
+        await scheduleOne({
+            id: NOTIF_IDS.DAILY_EVENING,
+            title: "How was your day? 🌙",
+            body: "No pressure — if you feel like talking it out, I'm here.",
+            every: { hour: 21, minute: 0 },
+        });
+        await scheduleOne({
+            id: NOTIF_IDS.DAILY_MORNING,
+            title: "Good morning ☀️",
+            body: "Wishing you an easy day. I'm around if you need me.",
+            every: { hour: 8, minute: 30 },
         });
     },
 
     async disable() {
-        await LocalNotifications.cancel(await LocalNotifications.getPending());
+        await cancelIds([NOTIF_IDS.DAILY_EVENING, NOTIF_IDS.DAILY_MORNING]);
         await Preferences.set({ key: NOTIFICATION_ENABLED_KEY, value: 'false' });
     }
 };

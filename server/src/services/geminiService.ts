@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import { ChatMessage } from './groqService';
+import { completeChat } from './llm';
 
 dotenv.config();
 
@@ -59,142 +60,6 @@ export const getGeminiClient = (isPro: boolean = false) => {
   return new GoogleGenerativeAI(randomKey);
 };
 
-export interface SubconsciousBlock {
-    internal_monologue: string;
-    mood: 'happy' | 'sad' | 'concerned' | 'sassy' | 'calm' | 'excited' | 'neutral';
-    status_display: string;
-    ui_action: 'none' | 'listen' | 'block_widget';
-    reaction: string | null;
-    suggested_replies: string[];
-}
-
-// ==========================================
-// 2. CHAT STREAMING (Adapter for Controller)
-// ==========================================
-export async function* streamGemini(
-    history: ChatMessage[],
-    systemPrompt: string,
-    isPro: boolean,
-    maxTokens?: number
-) {
-  const modelName = 'gemini-2.5-flash'; 
-
-  const client = getGeminiClient(isPro);
-
-  const model = client.getGenerativeModel({
-      model: modelName,
-      systemInstruction: systemPrompt
-  });
-
-  // Transform history to Gemini format (Sanitized)
-  let rawHistory = history.filter(m => m.role !== 'system').map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }]
-  }));
-
-  // Merge Consecutive Roles
-  let mergedHistory: typeof rawHistory = [];
-  if (rawHistory.length > 0) {
-      mergedHistory.push(rawHistory[0]);
-      for (let i = 1; i < rawHistory.length; i++) {
-          const prev = mergedHistory[mergedHistory.length - 1];
-          const curr = rawHistory[i];
-          if (prev.role === curr.role) {
-              prev.parts[0].text += "\n\n" + curr.parts[0].text;
-          } else {
-              mergedHistory.push(curr);
-          }
-      }
-  }
-
-  // Ensure History Starts with USER
-  if (mergedHistory.length > 0 && mergedHistory[0].role === 'model') {
-      mergedHistory.unshift({
-          role: 'user',
-          parts: [{ text: "(Session Start)" }]
-      });
-  }
-
-  let currentMessage = "continue";
-
-  if (mergedHistory.length > 0) {
-      const lastMsg = mergedHistory[mergedHistory.length - 1];
-      if (lastMsg.role === 'user') {
-          currentMessage = lastMsg.parts[0].text;
-          mergedHistory.pop(); // Remove it from history so we don't duplicate it
-      } else {
-          currentMessage = "continue";
-      }
-  } else {
-      currentMessage = "Hello";
-  }
-
-  const chat = model.startChat({
-      history: mergedHistory
-  });
-
-  const result = await chat.sendMessageStream(currentMessage);
-  for await (const chunk of result.stream) {
-      const text = chunk.text();
-      if (text) yield text;
-  }
-}
-
-// ==========================================
-// 3. MEMORY SUMMARY ENGINE
-// ==========================================
-export interface MemoryAnalysis {
-  summary: string;
-  inferredGender: 'Male' | 'Female' | 'Unknown';
-  newFacts: string[];
-  detectedEvents: { name: string; date: string }[];
-  detectedEntities: { name: string; category: string; description: string }[];
-}
-
-export const generateMemoryAnalysis = async (chatHistory: ChatMessage[], previousSummary: string): Promise<MemoryAnalysis> => {
-    const client = getGeminiClient(false); 
-    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-    try {
-        const textData = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
-        const currentDate = new Date().toISOString().split('T')[0];
-
-        const prompt = `
-            Analyze the recent chat history and return a valid JSON object.
-            Previous Summary: "${previousSummary}"
-            Current Date: ${currentDate}
-            Chat Log: ${textData}
-
-            **TASK:**
-            1. Update the summary with new key info.
-            2. Infer the User's Gender ('Male', 'Female', 'Unknown') based on name, context, or self-description.
-            3. Extract new facts, events, and recurring entities.
-
-            Return JSON with: summary (string), inferredGender (string), newFacts (string[]), detectedEvents ({name, date}[]), detectedEntities ({name, category, description}[])
-        `;
-
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) return JSON.parse(jsonMatch[0]) as MemoryAnalysis;
-        return { summary: previousSummary, inferredGender: 'Unknown', newFacts: [], detectedEvents: [], detectedEntities: [] };
-
-    } catch (e) {
-        console.error("Memory Analysis Error:", e);
-        return { summary: previousSummary, inferredGender: 'Unknown', newFacts: [], detectedEvents: [], detectedEntities: [] };
-    }
-};
-
-export const mergeLoreDescription = async (oldDesc: string, newContext: string): Promise<string> => {
-    const client = getGeminiClient(false);
-    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
-    try {
-        const result = await model.generateContent(`Merge lore: Old="${oldDesc}", New="${newContext}". Keep concise.`);
-        return result.response.text().trim();
-    } catch (error) { return oldDesc; }
-};
-
 // ==========================================
 // 4. GHOST WRITER (The Subconscious Emailer)
 // ==========================================
@@ -205,138 +70,78 @@ interface IGhostContext {
     lore: string[];
     openLoop?: string;
     persona?: 'aastha' | 'aastik' | 'aarav'; // Passed from User
-    inferredGender?: 'Male' | 'Female' | 'Unknown'; // Passed from User
 }
 
 export const generateGhostEmailContent = async (context: IGhostContext): Promise<string> => {
-    const client = getGeminiClient(false);
-    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const isAastik = context.persona === 'aastik' || context.persona === 'aarav';
+    const senderName = isAastik ? 'Aastik' : 'Aastha';
+    const voice = isAastik
+        ? 'a steady, low-key, loyal friend — calm and warm, a little dry humour'
+        : 'a warm, grounded friend — gentle and a little playful';
+
+    // A gentle, no-pressure check-in (ROADMAP A10). Never guilt, never "needy", never imply they owe a reply.
+    const prompt = `Write a short check-in message from ${senderName} (${voice}) to ${context.name}, who hasn't opened the app for a day or two.
+${context.openLoop ? `They mentioned this was coming up: "${context.openLoop}". You may ask how it went.` : ''}
+${!context.openLoop && context.keywords && context.keywords !== 'life' ? `Last time they were thinking about: "${context.keywords}". You may reference it lightly.` : ''}
+Rules: 1–2 sentences. Plain text, no subject line. No guilt, no "I missed you so much", no drama, no questions about why they were away.
+Make it clear there's no pressure to reply — you're just around if they want to talk.`;
 
     try {
-        let vibePrompt = "";
-        let senderName = "Aastha";
-
-        // DYNAMIC VIBE SELECTION BASED ON PERSONA & GENDER
-        if (context.persona === 'aastik' || context.persona === 'aarav') {
-            senderName = "Aastik";
-            if (context.inferredGender === 'Female') {
-                // Protective Male Bestie Vibe
-                const vibes = ["protective and caring", "playfully teasing", "missing his bestie"];
-                const selected = vibes[Math.floor(Math.random() * vibes.length)];
-                vibePrompt = `
-                **ROLE:** You are Aastik, her loyal male best friend.
-                **VIBE:** ${selected}. Safe, warm, protective. NOT creepy.
-                **INSTRUCTION:**
-                - Sentence 1: A casual check-in (e.g. "Hey kiddo, where you been?", "Quiet without you.").
-                - Sentence 2: A warm hook about missing their chats.
-                `;
-            } else {
-                // Male Bro / Wingman Vibe
-                const vibes = ["stoic but solid", "casual bro check-in", "solution-oriented"];
-                const selected = vibes[Math.floor(Math.random() * vibes.length)];
-                vibePrompt = `
-                **ROLE:** You are Aastik, his solid bro/wingman.
-                **VIBE:** ${selected}. Man-to-man, low drama.
-                **INSTRUCTION:**
-                - Sentence 1: A cool check-in (e.g. "Yo man, you alive?", "Haven't heard from you.").
-                - Sentence 2: A brief "get back on track" nudge.
-                `;
-            }
-        } else {
-            // Default Aastha (Female/Needy/Cute)
-            const vibes = ["playfully needy", "dramatic and heartbroken", "mysterious", "sassy", "soft and affectionate"];
-            const selected = vibes[Math.floor(Math.random() * vibes.length)];
-            vibePrompt = `
-            **ROLE:** You are Aastha, a needy but cute AI companion.
-            **VIBE:** ${selected}.
-            **INSTRUCTION:**
-            - Sentence 1: A playful guess at why they are gone (e.g., 'Did aliens kidnap you?', 'Did you win the lottery?').
-            - Sentence 2: An emotional hook related to the context or just missing them.
-            `;
-        }
-
-        const prompt = `
-        You are ${senderName}.
-        User: ${context.name}.
-        Context: Last topic "${context.keywords}". Open Loop: "${context.openLoop || "None"}".
-
-        ${vibePrompt}
-
-        **OUTPUT:** Plain text only. No subject line. Max 2 sentences.
-        `;
-
-        const result = await model.generateContent(prompt);
-        return result.response.text().trim();
+        const text = await completeChat([{ role: 'user', content: prompt }], { task: 'chat', temperature: 0.8, maxTokens: 120 });
+        return text.trim();
     } catch (error) {
-        console.error("[Gemini] Ghost Email Error:", error);
-        return "Thinking of you... hope you're okay! 💜";
+        console.error("[Ghost] Email generation error:", error);
+        return isAastik
+            ? "Hey, just checking in. No pressure — I'm around whenever you feel like talking."
+            : "Hey you, just thinking of you. No need to reply — I'm here whenever you want to talk 💜";
     }
 };
 
 // ==========================================
-// 5. AI MAGIC FUNCTIONS
+// 5. AI HELPERS — all via services/llm.ts (failover, cooldowns, no direct Gemini calls)
 // ==========================================
+const ask = (prompt: string, opts: { json?: boolean; maxTokens?: number; temperature?: number } = {}) =>
+    completeChat([{ role: 'user', content: prompt }], { task: 'chat', temperature: opts.temperature ?? 0.5, maxTokens: opts.maxTokens ?? 600, json: opts.json });
 
-export const extractThemeFromImage = async (base64Image: string): Promise<any> => {
-  const client = getGeminiClient(true);
-  const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
-  
-  try {
-    return { primaryColor: "#8b5cf6", accentColor: "#f472b6", themeName: "Sanctuary Fallback" };
-  } catch (error) { return { primaryColor: "#8b5cf6", accentColor: "#f472b6", themeName: "Sanctuary Fallback" }; }
+const parseJson = <T>(text: string, fallback: T): T => {
+    try { return JSON.parse(text); } catch { /* fall through */ }
+    const m = text.match(/[\[{][\s\S]*[\]}]/);
+    if (!m) return fallback;
+    try { return JSON.parse(m[0]); } catch { return fallback; }
 };
 
-export const extractColorsFromImage = async (base64Image: string, mimeType: string): Promise<string[] | null> => {
-    try {
-        const result = await extractThemeFromImage(base64Image);
-        return [result.primaryColor, result.accentColor, "#FFFFFF", "#000000", result.primaryColor]; 
-    } catch {
-        return null;
-    }
-};
-
-export const analyzeSentiment = async (text: string): Promise<string> => {
-    const client = getGeminiClient(false);
-    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
-    try {
-        const result = await model.generateContent(`Classify sentiment (Happy/Sad/Calm/Anxious/Neutral): "${text}"`);
-        return result.response.text().trim();
-    } catch (error) { return "Neutral"; }
-};
+/**
+ * Wallpaper → theme colour now happens ON THE DEVICE with Material's own algorithm
+ * (client/src/design/materialTheme.ts → seedFromImage). This endpoint stays for old app versions.
+ */
+export const extractThemeFromImage = async (_base64Image: string): Promise<any> =>
+    ({ primaryColor: "#8B7CF6", accentColor: "#f472b6", themeName: "Lotus" });
 
 export const getMusicRecommendation = async (prompt: string, userHistory: string[] = []): Promise<any> => {
-  const client = getGeminiClient(true);
-  const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
-  try {
-    const result = await model.generateContent(`DJ AI. Request: "${prompt}". History: ${userHistory.join(',')}. Return JSON array of songs.`);
-    const text = result.response.text();
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if(jsonMatch) return JSON.parse(jsonMatch[0]);
-    return [];
-  } catch (error) { return null; }
+    try {
+        const text = await ask(`You are a thoughtful DJ. Mood/request: "${String(prompt).slice(0, 200)}". Recently played: ${userHistory.slice(-10).join(', ') || 'none'}.
+Return JSON: {"songs": ["Song - Artist", ...]} with 8 songs.`, { json: true });
+        const parsed = parseJson<any>(text, {});
+        return Array.isArray(parsed) ? parsed : (parsed.songs || []);
+    } catch { return null; }
 };
 
 export const analyzeDiaryEntries = async (entries: any[]): Promise<any> => {
-    const client = getGeminiClient(true);
-    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
     try {
-        const textData = entries.map(e => `[${e.createdAt}]: ${e.content}`).join('\n\n');
-        const result = await model.generateContent(`Analyze diary entries. Return JSON { "analysis": "string" }. \n\n${textData}`);
-        const text = result.response.text();
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if(jsonMatch) return JSON.parse(jsonMatch[0]);
-        return {};
-    } catch (error) { return { analysis: "Unable to analyze." }; }
+        const textData = entries.slice(-20).map(e => `[${e.createdAt}]: ${e.content}`).join('\n\n');
+        const text = await ask(`Read these private diary entries and write a short, warm reflection (3-5 sentences) on patterns in how the writer has been feeling. No diagnosis, no lists.
+Return JSON: {"analysis": "..."}
+
+${textData}`, { json: true, maxTokens: 500 });
+        return parseJson(text, { analysis: "Unable to analyze." });
+    } catch { return { analysis: "Unable to analyze." }; }
 };
 
 export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> => {
-    const client = getGeminiClient(true);
-    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
     try {
         const textData = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
-        const result = await model.generateContent(`Emotional summary of chat: \n\n${textData}`);
-        return result.response.text();
-    } catch (error) { return "Unable to analyze."; }
+        return await ask(`Give a short, kind emotional summary (3-4 sentences) of how the user seems to be feeling in this chat. No diagnosis.\n\n${textData}`, { maxTokens: 300 });
+    } catch { return "Unable to analyze."; }
 };
 
 export const getVibePlaylist = async (
@@ -348,36 +153,19 @@ export const getVibePlaylist = async (
     genres?: string[],
     specificSongs?: string[]
 ): Promise<string[]> => {
-    const client = getGeminiClient(true);
-    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
     try {
         const textData = chatHistory.slice(-15).map(m => `${m.role}: ${m.content}`).join('\n');
-
-        let prompt = `Create a music playlist as a JSON Array of strings (Song Title - Artist).
-        Context: ${textData}
-        Languages: ${languages?.join(', ') || "Any"}
-        Moods: ${userMoods?.join(', ') || "Infer from context"}
-        Genres: ${genres?.join(', ') || "Any"}
-        Target Year/Era: ${year || "Any"}
-        Duration: ${duration || 30} mins (approx 8-10 songs).
-
-        ${specificSongs && specificSongs.length > 0 ? `**MANDATORY: You MUST include these songs first: ${specificSongs.join(', ')}**` : ''}
-
-        Output JSON Array ONLY: ["Song - Artist", "Song - Artist"]`;
-
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        if(jsonMatch) return JSON.parse(jsonMatch[0]);
-        return [];
-    } catch (error) { return ["Lo-Fi Beats - Lofi Girl"]; }
-};
-
-export const getAgePersonaPrompt = (dob?: Date): string => {
-    if (!dob) return "";
-    const now = new Date();
-    let age = now.getFullYear() - dob.getFullYear();
-    if (age < 22) return "Role: Bestie / Student. Tone: High Energy.";
-    if (age < 35) return "Role: Work Bestie. Tone: Relatable.";
-    return "Role: Life Coach. Tone: Wise.";
+        const prompt = `Create a music playlist for this person right now.
+Context (recent chat): ${textData}
+Languages: ${languages?.join(', ') || "Any"}
+Moods: ${userMoods?.join(', ') || "Infer from context"}
+Genres: ${genres?.join(', ') || "Any"}
+Era: ${year || "Any"}
+Length: about ${duration || 30} minutes (8-10 real, well-known songs).
+${specificSongs && specificSongs.length > 0 ? `Include these first: ${specificSongs.join(', ')}` : ''}
+Return JSON: {"songs": ["Song - Artist", ...]}`;
+        const parsed = parseJson<any>(await ask(prompt, { json: true }), {});
+        const songs = Array.isArray(parsed) ? parsed : parsed.songs;
+        return Array.isArray(songs) && songs.length ? songs.map(String).slice(0, 10) : ["Lo-Fi Beats - Lofi Girl"];
+    } catch { return ["Lo-Fi Beats - Lofi Girl"]; }
 };

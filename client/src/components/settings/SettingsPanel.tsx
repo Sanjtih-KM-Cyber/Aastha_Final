@@ -4,15 +4,29 @@ import {
   X, Upload, Trash2, Shield, User, Palette, Check,
   ToggleLeft, ToggleRight, AlertTriangle, Mic, Edit2,
   Save, Camera, CreditCard, Sparkles, Zap, Image as ImageIcon,
-  Headphones, ChevronLeft, ChevronRight, Clock, UserPlus // <--- Added UserPlus
+  Headphones, ChevronLeft, ChevronRight, Clock, UserPlus, LogOut, Database, Minus
 } from 'lucide-react';
+import { Card, SectionTitle, Switch, Button, IconButton, ListItem, ListGroup, GlassBar, fieldClass } from '../../design/ui';
+import { useWindowControls, saveWindowControls, WindowControls } from '../../hooks/useWindowControls';
+import { useAppFontChoice, saveAppFonts } from '../../hooks/useAppFonts';
+import { TEXT_FONTS, HEADING_FONTS, loadAllFonts, textFont } from '../../design/fonts';
+import { ColorWheel } from '../../design/ColorWheel';
+import { Icons } from '../../design/icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 // import { useLowPowerMode } from '../../hooks/useLowPowerMode'; // REMOVED
 import { useBiometrics } from '../../hooks/useBiometrics';
 import { notificationService } from '../../services/notificationService';
+import { exactAlarmsAllowed, openExactAlarmSettings } from '../../services/notifications';
+import { webPush } from '../../services/webPush';
+import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
+import { toast } from 'react-hot-toast';
 import api from '../../services/api';
-import { PersonaSettings } from './PersonaSettings'; // <--- Import New Component
+import { CloneSettings } from './CloneSettings';
+import { DiaryPasswordReset } from '../wellness/DiaryPasswordReset';
+import { RelationshipSettings } from './RelationshipSettings';
+import { PrivacyCenter } from './PrivacyCenter';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -20,13 +34,13 @@ interface SettingsPanelProps {
 }
 
 const tabs = [
-  { id: 'appearance', label: 'Appearance', icon: Palette, desc: 'Themes & Wallpaper' },
-  { id: 'voice', label: 'Voice & Sound', icon: Mic, desc: 'TTS & Persona' },
-  { id: 'persona', label: 'Clone & Persona', icon: UserPlus, desc: 'Mimicry & Voice Cloning' }, // <--- New Tab
-  { id: 'account', label: 'Account', icon: User, desc: 'Profile & Details' },
-  { id: 'security', label: 'Security', icon: Shield, desc: 'Password & Diary' },
-  { id: 'subscription', label: 'Subscription', icon: CreditCard, desc: 'Pro Access' },
-  { id: 'data', label: 'Data & Privacy', icon: Shield, desc: 'Delete Account' },
+  { id: 'appearance', label: 'Appearance', icon: Icons.appearance, desc: 'Theme colour, wallpaper, lite mode' },
+  { id: 'voice', label: 'Voice & Sound', icon: Icons.voice, desc: 'Companion and read-aloud' },
+  { id: 'persona', label: 'Connection', icon: Icons.connection, desc: 'Closeness, language, check-ins, Clone Mode' },
+  { id: 'account', label: 'Account', icon: Icons.me, desc: 'Name, username, photo' },
+  { id: 'security', label: 'Security', icon: Icons.security, desc: 'App lock, reminders, diary password' },
+  { id: 'subscription', label: 'Plan', icon: Icons.plan, desc: 'Free, Pro and Voice Pass' },
+  { id: 'data', label: 'Data & Privacy', icon: Icons.data, desc: 'What we store, export, delete' },
 ];
 
 declare global {
@@ -51,8 +65,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
 
   // Fix: Default to FALSE for TTS if not set
   const [ttsEnabled, setTtsEnabled] = useState(() => {
-      const saved = localStorage.getItem('user_tts_enabled');
-      return saved === 'true'; // If null, returns false.
+      try { return localStorage.getItem('user_tts_enabled_v2') === 'true'; } catch { return false; } // off unless turned on here
   });
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(localStorage.getItem('user_voice_uri'));
@@ -135,7 +148,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   const toggleTTS = () => {
       const newState = !ttsEnabled;
       setTtsEnabled(newState);
-      localStorage.setItem('user_tts_enabled', String(newState));
+      try { localStorage.setItem('user_tts_enabled_v2', String(newState)); localStorage.removeItem('user_tts_enabled'); } catch { /* ignore */ }
+      window.dispatchEvent(new Event('aastha:tts-changed')); // chat screen picks it up immediately
   };
 
   const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -153,14 +167,63 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       localStorage.setItem('auth_last_active', Date.now().toString());
   };
 
+  // Load the real notification state (the toggle used to always start "off")
+  useEffect(() => {
+      (async () => {
+          try {
+              if (Capacitor.isNativePlatform()) {
+                  const { value } = await Preferences.get({ key: 'notifications_enabled' });
+                  setNotificationsEnabled(value === 'true');
+              } else {
+                  setNotificationsEnabled(await webPush.isSubscribed());
+              }
+          } catch { /* ignore */ }
+      })();
+  }, []);
+
   const toggleNotifications = async () => {
-      if (!notificationsEnabled) {
-          const granted = await notificationService.requestPermission();
-          if (granted) setNotificationsEnabled(true);
-          else alert("Permission denied. Enable in device settings.");
-      } else {
-          await notificationService.disable();
+      // --- Native app: local notifications (+ ask for on-time "Alarms & reminders" on Android 12+) ---
+      if (Capacitor.isNativePlatform()) {
+          if (!notificationsEnabled) {
+              const granted = await notificationService.requestPermission();
+              if (!granted) { alert("Notifications are blocked. Please allow them for Aastha in your phone's settings."); return; }
+              setNotificationsEnabled(true);
+              if (!(await exactAlarmsAllowed())) {
+                  const ok = confirm("To get reminders on time (not hours late), allow \"Alarms & reminders\" for Aastha on the next screen.");
+                  if (ok) await openExactAlarmSettings();
+              }
+          } else {
+              await notificationService.disable();
+              setNotificationsEnabled(false);
+          }
+          return;
+      }
+
+      // --- Website / installed web app: Web Push (no Firebase needed) ---
+      if (notificationsEnabled) {
+          await webPush.unsubscribe();
           setNotificationsEnabled(false);
+          return;
+      }
+      if (!webPush.isSupported()) {
+          alert("This browser doesn't support notifications. Try Chrome, Edge or Firefox.");
+          return;
+      }
+      if (webPush.needsHomeScreenInstall()) {
+          alert("On iPhone, first add Aastha to your Home Screen (Share → Add to Home Screen), open it from there, then turn notifications on.");
+          return;
+      }
+      const result = await webPush.subscribe();
+      if (result === 'subscribed') {
+          setNotificationsEnabled(true);
+          toast.success("Notifications are on 🌸");
+          webPush.sendTest().catch(() => {});
+      } else if (result === 'denied') {
+          alert("Notifications are blocked for this site. Allow them in your browser's site settings and try again.");
+      } else if (result === 'not-configured') {
+          alert("Notifications aren't available yet — please try again later.");
+      } else {
+          alert("Couldn't turn on notifications. Please try again.");
       }
   };
 
@@ -212,17 +275,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       }
   };
 
-  const handleInitiateDiaryReset = async () => {
-      try {
-          if (!user?.email) return;
-          const res = await api.post('/users/reset-init', { email: user.email });
-          setSecurityQuestion(res.data.question);
-          setResetStep(1);
-      } catch (e) {
-          alert("Could not initiate reset. Check connection.");
-      }
-  };
-
   // OTP Handling (Shared with Login)
   const handleOtpChange = (index: number, value: string) => {
     if (isNaN(Number(value))) return;
@@ -249,36 +301,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       // Focus the next empty box or the last box
       const nextFocus = Math.min(digits.length, 5);
       otpRefs.current[nextFocus]?.focus();
-  };
-
-  const handleVerifyAnswer = async () => {
-      try {
-          // Note: If using public flow, we use 'completeReset' with token.
-          // But 'reset-diary-nuclear' is for logged-in users.
-          // The goal is to verify Identity (OTP) -> Verify Security Answer -> Wipe & Reset.
-
-          // Since we are logged in, we CAN use 'verify-security-answer'.
-          // But to be consistent with the "Forgot Password" flow we just started:
-          // The user expects the question we just fetched.
-
-          await api.post('/users/verify-security-answer', { answer: securityAnswer });
-          setResetStep(2);
-      } catch (e) {
-          alert("Incorrect answer.");
-      }
-  };
-
-  const handleResetDiary = async () => {
-      try {
-          await api.post('/users/reset-diary-nuclear', { newPassword: newDiaryPassword });
-          alert("Diary password has been reset. Your previous entries were wiped for security.");
-          setResetStep(0);
-          setSecurityAnswer('');
-          setNewDiaryPassword('');
-          setOtp(['', '', '', '', '', '']);
-      } catch (e) {
-          alert("Failed to reset diary.");
-      }
   };
 
   const handleChangeDiaryPassword = async () => {
@@ -346,7 +368,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
               amount: amount,
               currency: "INR",
               name: "Aastha Wellness",
-              description: planType === 'voice' ? "3-Day Voice Pass" : "Early Bird Pro Access",
+              description: planType === 'voice' ? "1-Day Voice Pass" : "Pro Access (1 month)",
               image: "https://placehold.co/256?text=Aastha",
               order_id: orderId,
               handler: async (response: any) => {
@@ -354,8 +376,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                       const verifyRes = await api.post('/users/verify-payment', {
                           razorpay_order_id: response.razorpay_order_id,
                           razorpay_payment_id: response.razorpay_payment_id,
-                          razorpay_signature: response.razorpay_signature,
-                          planType: planType // Pass plan type to verification
+                          razorpay_signature: response.razorpay_signature
+                          // Plan is determined server-side from the Razorpay order — never sent by the client.
                       });
 
                       if (verifyRes.data.success) {
@@ -401,54 +423,176 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       setIsMobileDetail(false);
   };
 
-  // --- CONTENT RENDERER (Shared) ---
+  // --- CONTENT RENDERER (Shared) --- Material You content on tonal cards (design/ui.tsx)
+  const activeMeta = tabs.find(t => t.id === activeTab);
+  const windowControls = useWindowControls();
+  const chooseWindowControls = (v: WindowControls) => {
+    saveWindowControls(v, updateUser).catch(() => toast.error('Saved on this device — will sync when you are back online'));
+  };
+  const fonts = useAppFontChoice();
+  // Colour wheel: live preview while dragging (one theme update per frame), saved on release
+  const isCustomColour = currentTheme.id === 'custom';
+  const [wheelOpen, setWheelOpen] = useState(isCustomColour);
+  const [hexDraft, setHexDraft] = useState(isCustomColour ? currentTheme.primaryColor : '');
+  const wheelFrame = useRef<number | null>(null);
+  const previewColour = (hex: string) => {
+    setHexDraft(hex);
+    if (wheelFrame.current) cancelAnimationFrame(wheelFrame.current);
+    wheelFrame.current = requestAnimationFrame(() => setTheme(hex));
+  };
+  useEffect(() => { if (activeTab === 'appearance') loadAllFonts(); }, [activeTab]); // each name previews in its own face
+  const chooseFont = (change: { appFont?: string; headingFont?: string }) => {
+    saveAppFonts(change, updateUser).catch(() => toast.error('Saved on this device — will sync when you are back online'));
+  };
+  const voicePassActive = !!(user?.voicePassExpiresAt && new Date(user.voicePassExpiresAt) > new Date());
   const renderContent = () => (
-      <div className={`space-y-8 animate-fade-in ${isMobile ? 'pb-20' : ''}`}>
-
-          {isMobile && activeTab === 'appearance' && (
-             <section className="mb-8 p-4 rounded-xl bg-white/5 border border-white/5">
-                <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Performance</h3>
-                <div className="flex justify-between items-center mb-2">
-                    <span className="text-white font-medium">Lite Mode</span>
-                    <button onClick={() => setLowPowerMode(!isLowPowerMode)} className={`text-teal-400 transition-transform active:scale-95`}>
-                        {isLowPowerMode ? <ToggleRight size={32} /> : <ToggleLeft size={32} className="text-white/20" />}
-                    </button>
-                </div>
-                <p className="text-xs text-white/50 leading-relaxed">
-                    {isLowPowerMode
-                        ? "Lite Mode is Active. Blur effects are disabled to maximize speed and battery."
-                        : "High Quality Mode is Active. Full visual effects enabled."}
-                </p>
-             </section>
-          )}
+      <div className={`space-y-7 animate-fade-in ${isMobile ? 'pb-24' : 'pb-6'}`}>
 
           {activeTab === 'appearance' && (
               <>
                 <section>
-                  <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Theme Gems</h3>
-                  <div className="flex gap-4">
-                    {['aurora', 'sunset', 'ocean', 'midnight'].map((themeId) => {
-                      const colors: Record<string, string> = { aurora: 'bg-teal-400', sunset: 'bg-rose-400', ocean: 'bg-sky-400', midnight: 'bg-violet-400' };
+                  <SectionTitle>Theme colour</SectionTitle>
+                  <Card>
+                    <p className="text-xs text-md-on-surface-variant mb-4">The whole app re-colours from one seed — Material You.</p>
+                    <div className="flex flex-wrap gap-3">
+                      {(['lotus', 'aurora', 'sunset', 'ocean', 'midnight'] as const).map((themeId) => {
+                        const swatch: Record<string, string> = { lotus: '#8B7CF6', aurora: '#2dd4bf', sunset: '#fb7185', ocean: '#38bdf8', midnight: '#a78bfa' };
+                        const on = currentTheme.id === themeId;
+                        return (
+                          <button key={themeId} onClick={() => setTheme(themeId)} aria-pressed={on} aria-label={`${themeId} theme`}
+                            className={`flex flex-col items-center gap-1.5 group`}>
+                            <span className={`w-14 h-14 rounded-[18px] flex items-center justify-center transition-all duration-200 ease-md-emphasized ${on ? 'ring-2 ring-md-primary ring-offset-2 ring-offset-md-surface-container rounded-[22px]' : 'group-hover:scale-105'}`}
+                              style={{ background: `linear-gradient(135deg, ${swatch[themeId]}, ${swatch[themeId]}99)` }}>
+                              {on && <Check size={22} className="text-black/70" />}
+                            </span>
+                            <span className={`text-[11px] capitalize ${on ? 'text-md-on-surface font-medium' : 'text-md-on-surface-variant'}`}>{themeId}</span>
+                          </button>
+                        );
+                      })}
+                      <button onClick={() => setWheelOpen((v) => !v)} aria-pressed={isCustomColour} aria-expanded={wheelOpen} aria-label="Pick any colour"
+                        className="flex flex-col items-center gap-1.5 group">
+                        <span className={`w-14 h-14 rounded-[18px] flex items-center justify-center transition-all duration-200 ease-md-emphasized ${isCustomColour ? 'ring-2 ring-md-primary ring-offset-2 ring-offset-md-surface-container rounded-[22px]' : 'group-hover:scale-105'}`}
+                          style={{ background: isCustomColour ? currentTheme.primaryColor : 'conic-gradient(from 0deg, #ff5f6d, #ffc371, #a8ff78, #43e8d8, #6a8bff, #c56cf0, #ff5f6d)' }}>
+                          {isCustomColour ? <Check size={22} className="text-black/70" /> : <span className="w-6 h-6 rounded-full bg-md-surface-container/80 flex items-center justify-center text-md-on-surface text-base leading-none">+</span>}
+                        </span>
+                        <span className={`text-[11px] ${isCustomColour ? 'text-md-on-surface font-medium' : 'text-md-on-surface-variant'}`}>Any colour</span>
+                      </button>
+                    </div>
+                    {wheelOpen && (
+                      <div className="mt-5 pt-5 border-t border-md-outline-variant/30 flex flex-col sm:flex-row items-center gap-5">
+                        <ColorWheel value={isCustomColour ? currentTheme.primaryColor : (hexDraft || '#8b7cf6')} onChange={previewColour} size={isMobile ? 210 : 190} />
+                        <div className="flex-1 w-full space-y-3">
+                          <p className="text-sm text-md-on-surface">Drag around the wheel</p>
+                          <p className="text-xs text-md-on-surface-variant leading-relaxed">Around = colour, towards the middle = softer. The whole Sanctuary re-colours as you go — your home and sign-in pages stay the same.</p>
+                          <label className="flex items-center gap-2">
+                            <span className="text-xs text-md-on-surface-variant w-8">Hex</span>
+                            <input value={hexDraft} onChange={(e) => { const v = e.target.value.trim(); setHexDraft(v); if (/^#[0-9a-f]{6}$/i.test(v)) setTheme(v.toLowerCase()); }}
+                              placeholder="#8b7cf6" maxLength={7} spellCheck={false} aria-label="Hex colour"
+                              className={`${fieldClass} !h-10 font-mono text-sm !w-32`} />
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+                </section>
+                <section>
+                  <SectionTitle>Wallpaper</SectionTitle>
+                  <Card padded={false} className="overflow-hidden">
+                    <button onClick={() => fileInputRef.current?.click()} className="relative w-full h-40 flex items-center justify-center group">
+                      {wallpaper ? (
+                        <>
+                          <img src={wallpaper} alt="" className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-50 transition-opacity" />
+                          <span className="relative glass glass-pill px-4 h-10 inline-flex items-center gap-2 text-sm text-md-on-surface"><Check size={16} /> Wallpaper on · Change</span>
+                        </>
+                      ) : (
+                        <span className="flex flex-col items-center gap-2 text-md-on-surface-variant">
+                          <span className="w-12 h-12 rounded-full bg-md-secondary-container text-md-on-secondary-container flex items-center justify-center"><Upload size={20} /></span>
+                          <span className="text-sm">Upload a background</span>
+                          <span className="text-[11px] opacity-70">The theme colour is taken from it</span>
+                        </span>
+                      )}
+                    </button>
+                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && setWallpaper(e.target.files[0])} />
+                  </Card>
+                  {wallpaper && <Button variant="text" className="mt-2" icon={<Trash2 size={14} />} onClick={handleRemoveWallpaper}>Remove wallpaper</Button>}
+                </section>
+                <section>
+                  <SectionTitle>Text font</SectionTitle>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5" role="radiogroup" aria-label="Text font">
+                    {TEXT_FONTS.map((f) => {
+                      const on = fonts.text === f.id;
                       return (
-                        <button key={themeId} onClick={() => setTheme(themeId)} className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all ${currentTheme.id === themeId ? 'border-white scale-110' : 'border-transparent opacity-50 hover:opacity-100'}`}>
-                          <div className={`w-8 h-8 rounded-full ${colors[themeId]} shadow-[0_0_15px_currentColor]`} />
+                        <button key={f.id} role="radio" aria-checked={on} onClick={() => chooseFont({ appFont: f.id })}
+                          className={`rounded-[20px] px-3.5 py-3 text-left border transition-colors ${on ? 'bg-md-secondary-container border-transparent' : 'bg-md-surface-container border-md-outline-variant/30 hover:bg-md-surface-container-high'}`}>
+                          <span className={`flex items-center gap-1.5 text-[17px] leading-tight ${on ? 'text-md-on-secondary-container' : 'text-md-on-surface'}`} style={{ fontFamily: f.family }}>
+                            {on && <Check size={14} className="shrink-0" />}{f.label}
+                          </span>
+                          <span className="block text-[11px] text-md-on-surface-variant mt-1" style={{ fontFamily: f.family }}>{f.hint}</span>
                         </button>
-                      )
+                      );
                     })}
                   </div>
                 </section>
                 <section>
-                  <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Wallpaper</h3>
-                  <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center gap-4 hover:bg-white/5 transition-colors cursor-pointer group relative overflow-hidden">
-                    {wallpaper ? (
-                      <>
-                        <img src={wallpaper} alt="Wallpaper" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-30 transition-opacity" />
-                        <div className="relative z-10 flex flex-col items-center"><Check className="text-teal-400 mb-2" size={32} /><span className="text-sm font-medium text-white">Wallpaper Active</span></div>
-                      </>
-                    ) : <div className="text-center"><Upload size={20} className="mx-auto mb-2 opacity-50 text-white" /><p className="text-sm text-white">Upload Background</p></div>}
-                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && setWallpaper(e.target.files[0])} />
+                  <SectionTitle>Heading font</SectionTitle>
+                  <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="Heading font">
+                    {HEADING_FONTS.map((f) => {
+                      const on = fonts.heading === f.id;
+                      const family = f.id === 'same' ? textFont(fonts.text).family : f.family;
+                      return (
+                        <button key={f.id} role="radio" aria-checked={on} onClick={() => chooseFont({ headingFont: f.id })}
+                          className={`rounded-[20px] px-3.5 py-3 text-left border transition-colors ${on ? 'bg-md-secondary-container border-transparent' : 'bg-md-surface-container border-md-outline-variant/30 hover:bg-md-surface-container-high'}`}>
+                          <span className={`flex items-center gap-1.5 text-xl leading-tight ${on ? 'text-md-on-secondary-container' : 'text-md-on-surface'}`} style={{ fontFamily: family }}>
+                            {on && <Check size={14} className="shrink-0" />}{f.id === 'same' ? 'Aa' : 'Good evening'}
+                          </span>
+                          <span className="block text-[11px] text-md-on-surface-variant mt-1">{f.label} · {f.hint}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  {wallpaper && <button onClick={handleRemoveWallpaper} className="flex items-center gap-2 text-xs text-red-400 mt-3 hover:text-red-300 transition-colors ml-1"><Trash2 size={12}/> Remove Wallpaper</button>}
+                  <p className="text-[11px] text-md-on-surface-variant mt-2 px-1">Only inside your Sanctuary — the home and sign-in pages keep Aastha's look. Synced to your phone and the web.</p>
+                </section>
+                <section>
+                  <SectionTitle>Window buttons</SectionTitle>
+                  <div className="grid grid-cols-2 gap-3">
+                    {([
+                      { v: 'mac' as const, name: 'Mac', hint: 'Coloured dots on the left' },
+                      { v: 'windows' as const, name: 'Windows', hint: 'Minimise and close on the right' },
+                    ]).map((o) => {
+                      const on = windowControls === o.v;
+                      return (
+                        <button key={o.v} onClick={() => chooseWindowControls(o.v)} aria-pressed={on}
+                          className={`rounded-[24px] p-3 text-left border transition-colors ${on ? 'bg-md-secondary-container border-transparent' : 'bg-md-surface-container border-md-outline-variant/30 hover:bg-md-surface-container-high'}`}>
+                          {/* mini preview of a widget title bar */}
+                          <div className="glass rounded-[12px] h-8 flex items-center gap-1.5 px-2 mb-3">
+                            {o.v === 'mac' ? (
+                              <>
+                                <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]" /><span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]" /><span className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
+                                <span className="flex-1 text-center text-[10px] text-md-on-surface-variant pr-6">Mood</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="w-4 h-4 rounded-[5px] bg-md-primary-container" />
+                                <span className="flex-1 text-[10px] text-md-on-surface-variant">Mood</span>
+                                <Minus size={10} className="text-md-on-surface-variant" /><X size={10} className="text-md-on-surface-variant ml-1" />
+                              </>
+                            )}
+                          </div>
+                          <span className={`flex items-center gap-1.5 text-sm font-medium ${on ? 'text-md-on-secondary-container' : 'text-md-on-surface'}`}>{on && <Check size={14} />}{o.name}</span>
+                          <span className="block text-[11px] text-md-on-surface-variant mt-0.5">{o.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-md-on-surface-variant mt-2 px-1">Saved to your account — your phone and the web stay the same.</p>
+                </section>
+                <section>
+                  <SectionTitle>Performance</SectionTitle>
+                  <ListGroup>
+                    <ListItem icon={<Zap size={18} />} title="Lite mode"
+                      subtitle={isLowPowerMode ? 'On — blur and animations off for speed and battery.' : 'Off — full glass effects. Turns on by itself on slower phones.'}
+                      trailing={<Switch checked={isLowPowerMode} onChange={(v) => setLowPowerMode(v)} label="Lite mode" />} />
+                  </ListGroup>
                 </section>
               </>
           )}
@@ -456,271 +600,220 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
           {activeTab === 'voice' && (
               <>
                    <section>
-                       <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Companion Persona</h3>
-                       <div className="grid grid-cols-2 gap-4 mb-8">
-                           <button
-                               onClick={() => savePersona('aastha')}
-                               className={`p-4 rounded-xl border flex flex-col items-center gap-3 transition-all ${user?.persona !== 'aarav' ? 'bg-teal-500/20 border-teal-500 text-teal-200 shadow-[0_0_15px_rgba(20,184,166,0.2)]' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'}`}
-                           >
-                               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center text-xl shadow-lg">🌸</div>
-                               <div className="text-center">
-                                   <div className="font-bold text-sm mb-1">Aastha</div>
-                                   <div className="text-[10px] opacity-70">Calm, Sisterly, Warm</div>
-                               </div>
-                           </button>
-
-                           <button
-                               onClick={() => savePersona('aarav')}
-                               className={`p-4 rounded-xl border flex flex-col items-center gap-3 transition-all ${user?.persona === 'aarav' ? 'bg-indigo-500/20 border-indigo-500 text-indigo-200 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'}`}
-                           >
-                               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-violet-600 flex items-center justify-center text-xl shadow-lg">🧘‍♂️</div>
-                               <div className="text-center">
-                                   <div className="font-bold text-sm mb-1">Aastik</div>
-                                   <div className="text-[10px] opacity-70">Grounded, Brotherly, Protective</div>
-                               </div>
-                           </button>
+                       <SectionTitle>Companion</SectionTitle>
+                       <div className="grid grid-cols-2 gap-3">
+                           {([
+                             { id: 'aastha' as const, name: 'Aastha', blurb: 'Calm, warm, sisterly', emoji: '🌸' },
+                             { id: 'aarav' as const, name: 'Aastik', blurb: 'Grounded, steady, brotherly', emoji: '🧘‍♂️' },
+                           ]).map((p) => {
+                             const on = p.id === 'aarav' ? user?.persona === 'aarav' : user?.persona !== 'aarav';
+                             return (
+                               <button key={p.id} onClick={() => savePersona(p.id)} aria-pressed={on}
+                                 className={`p-4 rounded-[24px] flex flex-col items-center gap-3 border transition-all duration-200 ease-md-emphasized ${on ? 'bg-md-primary-container text-md-on-primary-container border-transparent' : 'bg-md-surface-container border-md-outline-variant/30 text-md-on-surface hover:bg-md-surface-container-high'}`}>
+                                 <span className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl ${on ? 'bg-md-primary/25' : 'bg-md-surface-container-highest'}`}>{p.emoji}</span>
+                                 <span className="text-center">
+                                   <span className="block font-semibold text-sm">{p.name}</span>
+                                   <span className="block text-[11px] opacity-75 mt-0.5">{p.blurb}</span>
+                                 </span>
+                                 {on && <span className="text-[11px] font-medium inline-flex items-center gap-1"><Check size={12} /> Selected</span>}
+                               </button>
+                             );
+                           })}
                        </div>
                    </section>
 
                    <section>
-                       <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">AI Voice Settings</h3>
-                       <div className="flex justify-between items-center p-4 rounded-xl bg-white/5 mb-4">
-                            <div><span className="block text-white/90 font-medium">Auto-Read Responses</span></div>
-                            <button onClick={toggleTTS} className="text-teal-400">{ttsEnabled ? <ToggleRight size={28} /> : <ToggleLeft size={28} className="text-white/20" />}</button>
-                       </div>
-                       <select className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white" value={selectedVoiceURI || ''} onChange={handleVoiceChange}>
-                           <option value="" disabled>Select a voice...</option>
-                           {availableVoices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}
-                       </select>
+                       <SectionTitle>Voice</SectionTitle>
+                       <ListGroup>
+                         <ListItem icon={<Headphones size={18} />} title="Read replies aloud" subtitle="Off by default. Voice calls always speak."
+                           trailing={<Switch checked={ttsEnabled} onChange={() => toggleTTS()} label="Read replies aloud" />} />
+                         <div className="px-4 py-3">
+                           <label className="block text-xs text-md-on-surface-variant mb-2" htmlFor="voice-select">Device voice (used when the voice server is busy)</label>
+                           <select id="voice-select" className={fieldClass} value={selectedVoiceURI || ''} onChange={handleVoiceChange}>
+                             <option value="" disabled>Select a voice…</option>
+                             {availableVoices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}
+                           </select>
+                         </div>
+                       </ListGroup>
                    </section>
               </>
           )}
 
-          {activeTab === 'persona' && <PersonaSettings />}
+          {activeTab === 'persona' && (
+              <div className="space-y-8">
+                  <RelationshipSettings />
+                  <CloneSettings />
+              </div>
+          )}
 
           {activeTab === 'account' && (
             <>
-               <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5 relative">
-                    <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
+               <Card className="flex items-center gap-4">
+                    <button className="relative group shrink-0" onClick={() => avatarInputRef.current?.click()} aria-label="Change photo">
                         {newAvatar || user?.avatar ? (
-                            <img src={newAvatar || user?.avatar} className="w-16 h-16 rounded-full object-cover border-2 border-white/10" alt="Avatar" />
+                            <img src={newAvatar || user?.avatar} className="w-16 h-16 rounded-full object-cover" alt="" />
                         ) : (
-                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-2xl font-bold text-white">{user?.name?.charAt(0) || 'U'}</div>
+                            <span className="w-16 h-16 rounded-full bg-md-primary-container text-md-on-primary-container flex items-center justify-center text-2xl font-semibold">{user?.name?.charAt(0) || 'U'}</span>
                         )}
-                        <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera size={16} className="text-white"/></div>
+                        <span className="absolute -bottom-0.5 -right-0.5 w-7 h-7 rounded-full bg-md-primary text-md-on-primary flex items-center justify-center shadow"><Camera size={14} /></span>
                         <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={handleAvatarSelect} />
-                    </div>
-                    <div className="flex-1">
+                    </button>
+                    <div className="flex-1 min-w-0">
                          {isEditingProfile ? (
                              <div className="space-y-2">
-                                 <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full bg-black/40 border border-white/20 rounded p-1 text-sm text-white" placeholder="Name" />
-                                 <input value={editUsername} onChange={e => setEditUsername(e.target.value)} className="w-full bg-black/40 border border-white/20 rounded p-1 text-sm text-white" placeholder="Username" />
+                                 <input value={editName} onChange={e => setEditName(e.target.value)} className={fieldClass + ' h-10'} placeholder="Name" />
+                                 <input value={editUsername} onChange={e => setEditUsername(e.target.value)} className={fieldClass + ' h-10'} placeholder="Username" />
                              </div>
                          ) : (
-                             <><h4 className="text-lg font-medium text-white">{user?.name}</h4><p className="text-sm text-white/50">@{user?.username}</p></>
+                             <><h4 className="text-lg font-medium text-md-on-surface truncate">{user?.name}</h4><p className="text-sm text-md-on-surface-variant truncate">@{user?.username}</p></>
                          )}
                     </div>
-                    <button onClick={() => isEditingProfile ? saveProfile() : setIsEditingProfile(true)} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60">{isEditingProfile ? <Save size={18} className="text-teal-400"/> : <Edit2 size={16} />}</button>
-               </div>
-               <div className="flex justify-between p-3 rounded-xl bg-white/5"><span className="text-white/70">Joined</span><span className="text-white/40 font-mono">{(user as any)?.createdAt ? new Date((user as any).createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric'}) : 'Recently'}</span></div>
+                    <IconButton variant={isEditingProfile ? 'filled' : 'tonal'} label={isEditingProfile ? 'Save profile' : 'Edit profile'} onClick={() => isEditingProfile ? saveProfile() : setIsEditingProfile(true)}>
+                      {isEditingProfile ? <Save size={18} /> : <Edit2 size={16} />}
+                    </IconButton>
+               </Card>
+               <ListGroup>
+                 <ListItem icon={<Clock size={18} />} title="Member since" trailing={<span className="text-sm text-md-on-surface-variant">{(user as any)?.createdAt ? new Date((user as any).createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric'}) : 'Recently'}</span>} />
+               </ListGroup>
             </>
           )}
 
           {activeTab === 'security' && (
               <>
                   <section>
-                       {/* --- NOTIFICATIONS SECTION --- */}
-                       <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Daily Reminders</h3>
-                       <div className="flex justify-between items-center p-4 rounded-xl bg-white/5 border border-white/5 mb-8">
-                          <div className="flex items-center gap-3">
-                              <div className="p-2 bg-pink-500/20 rounded-lg text-pink-400">
-                                  <Sparkles size={20} />
-                              </div>
-                              <div>
-                                  <h4 className="text-white font-medium text-sm">Mindful Check-ins</h4>
-                                  <p className="text-xs text-white/50">Morning & Nightly nudges</p>
-                              </div>
-                          </div>
-                          <button
-                              onClick={toggleNotifications}
-                              className={`text-teal-400 transition-colors ${!notificationsEnabled ? 'opacity-50 grayscale' : ''}`}
-                          >
-                              {notificationsEnabled ? <ToggleRight size={32} /> : <ToggleLeft size={32} className="text-white/20" />}
-                          </button>
-                      </div>
-
-                      {/* --- NEW AUTO LOCK SECTION --- */}
-                      <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">App Security</h3>
-                      <div className="flex justify-between items-center p-4 rounded-xl bg-white/5 border border-white/5 mb-4">
-                          <div className="flex items-center gap-3">
-                              <div className="p-2 bg-teal-500/20 rounded-lg text-teal-400">
-                                  <Clock size={20} />
-                              </div>
-                              <div>
-                                  <h4 className="text-white font-medium text-sm">Auto-Lock Timer</h4>
-                                  <p className="text-xs text-white/50">Lock app after inactivity</p>
-                              </div>
-                          </div>
-                          <select 
-                              value={autoLockDuration} 
-                              onChange={handleAutoLockChange}
-                              className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50"
-                          >
-                              <option value="0">Disabled</option>
-                              <option value="15000">15 Seconds</option>
-                              <option value="30000">30 Seconds</option>
-                              <option value="60000">1 Minute</option>
-                              <option value="120000">2 Minutes</option>
-                              <option value="30000">5 Minutes</option>
-                              <option value="600000">10 Minutes</option>
-                          </select>
-                      </div>
-
-                      {isBiometricAvailable && (
-                          <div className="flex justify-between items-center p-4 rounded-xl bg-white/5 border border-white/5 mb-8">
-                              <div className="flex items-center gap-3">
-                                  <div className="p-2 bg-violet-500/20 rounded-lg text-violet-400">
-                                      <Shield size={20} />
-                                  </div>
-                                  <div>
-                                      <h4 className="text-white font-medium text-sm">Biometric Lock</h4>
-                                      <p className="text-xs text-white/50">FaceID / Fingerprint on Launch</p>
-                                  </div>
-                              </div>
-                              <button
-                                  onClick={handleToggleBiometrics}
-                                  className={`text-teal-400 transition-colors ${!isBiometricEnabled ? 'opacity-50 grayscale' : ''}`}
-                              >
-                                  {isBiometricEnabled ? <ToggleRight size={32} /> : <ToggleLeft size={32} className="text-white/20" />}
-                              </button>
-                          </div>
-                      )}
-
-                      <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Diary Security</h3>
-
-                      <div className="p-6 bg-white/5 rounded-2xl border border-white/5 mb-6">
-                          <h4 className="text-lg font-medium text-white mb-2">Change Diary Password</h4>
-                          <p className="text-sm text-white/60 mb-4">Update your password without losing your data.</p>
-                          <div className="space-y-3">
-                              <input type="password" value={oldDiaryPassword} onChange={e => setOldDiaryPassword(e.target.value)} placeholder="Old Password" className="w-full bg-black/40 border border-white/20 rounded p-2 text-white text-sm" />
-                              <input type="password" value={newDiaryPassword} onChange={e => setNewDiaryPassword(e.target.value)} placeholder="New Password" className="w-full bg-black/40 border border-white/20 rounded p-2 text-white text-sm" />
-                              <button onClick={handleChangeDiaryPassword} disabled={!oldDiaryPassword || !newDiaryPassword} className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg transition-colors text-sm disabled:opacity-50">Update Password</button>
-                          </div>
-                      </div>
-
-                      <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
-                          <h4 className="text-lg font-medium text-white mb-2">Forgot Password (Nuclear Reset)</h4>
-                          <p className="text-sm text-white/60 mb-6">Use this if you cannot remember your old password. <br/><span className="text-red-400">Warning: This will wipe your existing diary entries.</span></p>
-                          
-                          {resetStep === 0 && (
-                              <button onClick={handleInitiateDiaryReset} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors text-sm">Start Recovery Process</button>
-                          )}
-
-                          {resetStep === 1 && (
-                              <div className="space-y-4">
-                                  <p className="text-teal-400 font-medium">{securityQuestion}</p>
-                                  <input type="text" value={securityAnswer} onChange={e => setSecurityAnswer(e.target.value)} placeholder="Your Answer" className="w-full bg-black/40 border border-white/20 rounded p-2 text-white" />
-                                  <button onClick={handleVerifyAnswer} className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg">Verify</button>
-                              </div>
-                          )}
-
-                          {resetStep === 2 && (
-                              <div className="space-y-4">
-                                  <input type="password" value={newDiaryPassword} onChange={e => setNewDiaryPassword(e.target.value)} placeholder="New Diary Password" className="w-full bg-black/40 border border-white/20 rounded p-2 text-white" />
-                                  <button onClick={handleResetDiary} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg">Reset & Wipe Diary</button>
-                              </div>
-                          )}
-                      </div>
+                      <SectionTitle>Reminders</SectionTitle>
+                      <ListGroup>
+                        <ListItem icon={<Sparkles size={18} />} title="Mindful check-ins" subtitle="Morning and night nudges"
+                          trailing={<Switch checked={notificationsEnabled} onChange={() => toggleNotifications()} label="Mindful check-ins" />} />
+                      </ListGroup>
                   </section>
+
+                  <section>
+                      <SectionTitle>App lock</SectionTitle>
+                      <ListGroup>
+                        <ListItem icon={<Clock size={18} />} title="Auto-lock" subtitle="Lock the app after inactivity"
+                          trailing={
+                            <select value={autoLockDuration} onChange={handleAutoLockChange} aria-label="Auto-lock timer"
+                              className="h-10 px-3 rounded-[12px] bg-md-surface-container-highest text-md-on-surface text-sm border border-transparent focus:border-md-primary focus:outline-none">
+                              <option value="0">Off</option>
+                              <option value="15000">15 seconds</option>
+                              <option value="30000">30 seconds</option>
+                              <option value="60000">1 minute</option>
+                              <option value="120000">2 minutes</option>
+                              <option value="300000">5 minutes</option>
+                              <option value="600000">10 minutes</option>
+                            </select>
+                          } />
+                        {isBiometricAvailable && (
+                          <ListItem icon={<Shield size={18} />} title="Biometric lock" subtitle="Fingerprint / Face ID when the app opens"
+                            trailing={<Switch checked={isBiometricEnabled} onChange={() => handleToggleBiometrics()} label="Biometric lock" />} />
+                        )}
+                      </ListGroup>
+                  </section>
+
+                  <section>
+                      <SectionTitle>Diary password</SectionTitle>
+                      <Card>
+                          <p className="text-sm text-md-on-surface-variant mb-4">Change it any time — your entries stay as they are.</p>
+                          <div className="space-y-3">
+                              <input type="password" value={oldDiaryPassword} onChange={e => setOldDiaryPassword(e.target.value)} placeholder="Current password" className={fieldClass} />
+                              <input type="password" value={newDiaryPassword} onChange={e => setNewDiaryPassword(e.target.value)} placeholder="New password" className={fieldClass} />
+                              <Button onClick={handleChangeDiaryPassword} disabled={!oldDiaryPassword || !newDiaryPassword}>Update password</Button>
+                          </div>
+                      </Card>
+                  </section>
+
+                  {/* Reworked: server-verified, entries kept (components/wellness/DiaryPasswordReset.tsx) */}
+                  <DiaryPasswordReset />
               </>
           )}
 
           {activeTab === 'subscription' && (
               <>
                   <section>
-                      <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Membership Plan</h3>
-
-                      {/* --- VOICE PASS CARD (NEW) --- */}
-                      {!user?.isPro && (
-                          <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-500/10 to-indigo-500/10 border border-purple-500/30 relative overflow-hidden mb-6">
-                              <div className="absolute top-0 right-0 p-3 opacity-10"><Headphones size={64} /></div>
-                              <h2 className="text-2xl font-serif text-white mb-2">₹19 <span className="text-sm text-white/60 font-sans font-normal">/ 3 Days</span></h2>
-                              <p className="text-sm text-white/70 mb-4">Get unlimited High-Quality Voice Calls and Voice Notes for 3 days. Perfect for a quick vent session.</p>
-
-                              <button onClick={() => handleSubscribe('voice')} disabled={isProcessing} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all border border-white/10 flex items-center justify-center gap-2">
-                                  {isProcessing ? <span className="animate-spin">⟳</span> : <><Headphones size={16} /> Get Voice Pass</>}
-                              </button>
+                      <SectionTitle>Your plan</SectionTitle>
+                      <Card className={user?.isPro ? 'bg-md-primary-container border-transparent' : ''}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h2 className={`text-xl font-semibold ${user?.isPro ? 'text-md-on-primary-container' : 'text-md-on-surface'}`}>{user?.isPro ? 'Pro' : voicePassActive ? 'Free + Voice Pass' : 'Free'}</h2>
+                            <p className={`text-sm mt-1 ${user?.isPro ? 'text-md-on-primary-container/80' : 'text-md-on-surface-variant'}`}>
+                              {user?.isPro
+                                ? (user?.subscriptionExpiresAt ? `Active until ${new Date(user.subscriptionExpiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Active')
+                                : `16 messages every 24 hours${user?.quotaResetsAt && Date.parse(user.quotaResetsAt) > Date.now() ? ` · refills ${new Date(user.quotaResetsAt).toLocaleString('en-IN', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}` : ''}. After that, replies continue in Eco mode.`}
+                            </p>
                           </div>
-                      )}
-
-                      {user?.isPro ? (
-                          <div className="p-6 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/30">
-                              <div className="flex justify-between items-start mb-4">
-                                  <div>
-                                      <h2 className="text-2xl font-serif text-white mb-1">Pro Member</h2>
-                                      <p className="text-sm text-white/60">You have unlimited access to Aastha.</p>
-                                  </div>
-                                  <Sparkles className="text-amber-400" size={28} />
-                              </div>
-                              <div className="flex items-center gap-2 text-amber-200 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
-                                  <Check size={16} />
-                                  <span className="text-sm font-medium">Active Subscription</span>
-                              </div>
-                          </div>
-                      ) : (
-                          <div className="p-6 rounded-2xl bg-gradient-to-br from-teal-500/10 to-violet-500/10 border border-teal-500/30 relative overflow-hidden">
-                              <div className="absolute top-4 right-4 bg-gradient-to-r from-teal-400 to-amber-300 text-black text-[10px] font-bold px-3 py-1 rounded-full shadow-lg">EARLY BIRD OFFER</div>
-                              <h2 className="text-3xl font-serif text-white mb-2">₹49 <span className="text-lg text-white/40 font-sans font-normal line-through">₹199</span> <span className="text-sm text-white/60 font-sans font-normal">/ month</span></h2>
-                              <p className="text-sm text-white/70 mb-6">Unlock the full healing potential of Aastha.</p>
-
-                              <div className="space-y-3 mb-8">
-                                  <div className="flex items-center gap-3 text-sm text-white/80"><Zap size={16} className="text-amber-400"/> Unlimited AI Chat</div>
-                                  <div className="flex items-center gap-3 text-sm text-white/80"><ImageIcon size={16} className="text-teal-400"/> Vision Support</div>
-                                  <div className="flex items-center gap-3 text-sm text-white/80"><Headphones size={16} className="text-violet-400"/> Voice Mode</div>
-                              </div>
-
-                              <button onClick={() => handleSubscribe('pro')} disabled={isProcessing} className="w-full py-4 bg-white text-black font-bold rounded-xl hover:scale-[1.02] transition-transform shadow-[0_0_20px_rgba(255,255,255,0.3)] flex items-center justify-center gap-2">
-                                  {isProcessing ? <span className="animate-spin">⟳</span> : <><Sparkles size={18} className="text-amber-600" /> Unlock Pro Access</>}
-                              </button>
-                          </div>
-                      )}
+                          {user?.isPro && <Sparkles className="text-md-on-primary-container shrink-0" size={24} />}
+                        </div>
+                      </Card>
                   </section>
+
+                  {!user?.isPro && (
+                    <section>
+                      <SectionTitle>Upgrade</SectionTitle>
+                      <div className="space-y-3">
+                        <Card level={3} className="relative overflow-hidden">
+                          <span className="absolute top-4 right-4 px-2.5 py-1 rounded-full bg-md-tertiary-container text-md-on-tertiary-container text-[10px] font-semibold tracking-wide">EARLY BIRD</span>
+                          <h3 className="text-md-on-surface text-lg font-semibold">Pro</h3>
+                          <p className="mt-1 text-md-on-surface"><span className="text-3xl font-semibold">₹49</span> <span className="text-sm text-md-on-surface-variant line-through">₹199</span> <span className="text-sm text-md-on-surface-variant">/ month</span></p>
+                          <ul className="mt-4 space-y-2.5">
+                            {[{ i: <Zap size={16} />, t: 'Unlimited chat on the best models' }, { i: <ImageIcon size={16} />, t: 'Send photos — Aastha can see them' }, { i: <Headphones size={16} />, t: 'Voice mode and voice notes' }].map((f, k) => (
+                              <li key={k} className="flex items-center gap-3 text-sm text-md-on-surface"><span className="w-7 h-7 rounded-full bg-md-primary/15 text-md-primary flex items-center justify-center">{f.i}</span>{f.t}</li>
+                            ))}
+                          </ul>
+                          <Button size="lg" className="w-full mt-5" onClick={() => handleSubscribe('pro')} disabled={isProcessing} icon={isProcessing ? <span className="animate-spin">⟳</span> : <Sparkles size={18} />}>
+                            {isProcessing ? 'Opening…' : 'Get Pro'}
+                          </Button>
+                        </Card>
+
+                        <Card>
+                          <div className="flex items-start gap-3">
+                            <span className="w-10 h-10 rounded-full bg-md-secondary-container text-md-on-secondary-container flex items-center justify-center shrink-0"><Headphones size={18} /></span>
+                            <div className="flex-1">
+                              <h3 className="text-md-on-surface font-semibold">Voice Pass <span className="font-normal text-md-on-surface-variant">· ₹19 / day</span></h3>
+                              <p className="text-sm text-md-on-surface-variant mt-1">Unlimited voice calls and voice notes for 24 hours.</p>
+                              {voicePassActive && (
+                                <p className="text-xs text-md-primary mt-2">
+                                  Active until {new Date(user!.voicePassExpiresAt!).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}. Buying again adds 24 hours.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <Button variant="tonal" className="w-full mt-4" onClick={() => handleSubscribe('voice')} disabled={isProcessing}>{isProcessing ? 'Opening…' : voicePassActive ? 'Add 24 hours' : 'Get Voice Pass'}</Button>
+                        </Card>
+                      </div>
+                    </section>
+                  )}
               </>
           )}
 
           {activeTab === 'data' && (
             <>
-                <section className="mb-8">
-                    <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Data Donation</h3>
-                    <div className="p-5 rounded-2xl bg-white/5 border border-white/5 flex flex-col gap-4">
-                        <div className="flex justify-between items-start">
-                            <div className="flex-1 pr-4">
-                                <h4 className="text-white font-medium mb-1">Help Aastha Grow Up</h4>
-                                <p className="text-sm text-white/60 leading-relaxed">
-                                    Aastha learns from the collective wisdom of humanity. By sharing anonymized snippets of your conversations, you help her understand nuance, slang, and true empathy. We strip away your name and identity—only the vibe remains.
-                                </p>
-                            </div>
-                            <button onClick={toggleDataDonation} className="text-teal-400 shrink-0">
-                                {isDataDonationOn ? <ToggleRight size={32} /> : <ToggleLeft size={32} className="text-white/20" />}
-                            </button>
-                        </div>
-                    </div>
+                <PrivacyCenter />
+                <section>
+                    <SectionTitle>Data donation</SectionTitle>
+                    <ListGroup>
+                      <ListItem icon={<Sparkles size={18} />} title="Help improve Aastha"
+                        subtitle="Off unless you turn it on. Short snippets with your name removed, not linked to your account, kept up to a year."
+                        trailing={<Switch checked={isDataDonationOn} onChange={() => toggleDataDonation()} label="Data donation" />} />
+                    </ListGroup>
                 </section>
 
                 <section>
-                    <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Danger Zone</h3>
+                    <SectionTitle>Delete account</SectionTitle>
                     {showDeleteModal ? (
-                        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6">
-                            <h4 className="font-medium text-red-100 mb-2">We are sad to see you go.</h4>
-                            <p className="text-xs text-red-300 mb-4">This action will permanently delete your account, chats, diary entries, and mood logs. This cannot be undone.</p>
-                            <textarea className="w-full bg-black/40 border border-red-500/20 rounded-lg p-2 text-sm text-white mb-4" placeholder="Reason..." value={deleteReason} onChange={e => setDeleteReason(e.target.value)} />
+                        <Card className="bg-md-error-container/40 border-md-error/40">
+                            <h4 className="font-medium text-md-on-surface mb-1">We're sad to see you go.</h4>
+                            <p className="text-xs text-md-on-surface-variant mb-4">This permanently deletes your account, chats, diary, moods, memories and voice notes. It can't be undone.</p>
+                            <textarea className={fieldClass + ' h-24 py-3 mb-4 resize-none'} placeholder="Why are you leaving? (required)" value={deleteReason} onChange={e => setDeleteReason(e.target.value)} />
                             <div className="flex gap-2">
-                                <button onClick={handleSoftDelete} disabled={!deleteReason || isDeleting} className="px-4 py-2 bg-red-600 rounded text-sm text-white font-medium">{isDeleting ? 'Processing...' : 'Delete Forever'}</button>
-                                <button onClick={() => setShowDeleteModal(false)} className="px-4 py-2 text-white/60 text-sm">Cancel</button>
+                                <Button variant="danger" onClick={handleSoftDelete} disabled={!deleteReason || isDeleting}>{isDeleting ? 'Deleting…' : 'Delete forever'}</Button>
+                                <Button variant="text" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
                             </div>
-                        </div>
+                        </Card>
                     ) : (
-                        <button onClick={() => setShowDeleteModal(true)} className="flex items-center gap-3 px-4 py-3 border border-red-500/30 text-red-400 rounded-xl hover:bg-red-500/10 w-full transition-colors"><AlertTriangle size={20} /> Delete Account</button>
+                        <ListGroup>
+                          <ListItem danger icon={<AlertTriangle size={18} />} title="Delete my account" subtitle="Export your data first if you want a copy" onClick={() => setShowDeleteModal(true)} />
+                        </ListGroup>
                     )}
                 </section>
             </>
@@ -728,48 +821,54 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       </div>
   );
 
+  const planText = user?.isPro ? 'Pro' : voicePassActive ? 'Free · Voice Pass' : 'Free plan';
+  const profileHeader = (
+    <button onClick={() => handleTabClick('account')} className="w-full flex items-center gap-3 p-3 rounded-[24px] bg-md-surface-container-high hover:brightness-110 transition text-left">
+      {user?.avatar ? <img src={user.avatar} alt="" className="w-12 h-12 rounded-full object-cover" />
+        : <span className="w-12 h-12 rounded-full bg-md-primary-container text-md-on-primary-container flex items-center justify-center text-lg font-semibold">{user?.name?.charAt(0) || 'U'}</span>}
+      <span className="flex-1 min-w-0">
+        <span className="block font-medium text-md-on-surface truncate">{user?.name}</span>
+        <span className="block text-xs text-md-on-surface-variant truncate">{planText}</span>
+      </span>
+      <ChevronRight size={18} className="text-md-on-surface-variant" />
+    </button>
+  );
+
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 md:p-4">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-6">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/55" />
 
           <motion.div
-            initial={isMobile ? { y: '100%' } : { scale: 0.9, opacity: 0, y: 20 }}
-            animate={isMobile ? { y: 0 } : { scale: 1, opacity: 1, y: 0 }}
-            exit={isMobile ? { y: '100%' } : { scale: 0.9, opacity: 0, y: 20 }}
-            className={`
-                relative w-full max-w-2xl bg-[#0a0e17] md:bg-[#0a0e17]/90 backdrop-blur-2xl
-                border-t border-white/10 md:border md:rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row
-                ${isMobile ? 'h-full rounded-t-3xl' : 'h-[600px]'}
-            `}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Settings"
+            initial={isMobile ? { y: '100%' } : { scale: 0.96, opacity: 0 }}
+            animate={isMobile ? { y: 0 } : { scale: 1, opacity: 1 }}
+            exit={isMobile ? { y: '100%' } : { scale: 0.96, opacity: 0 }}
+            transition={{ duration: 0.28, ease: [0.2, 0, 0, 1] }}
+            className={`relative w-full bg-md-surface-container-low text-md-on-surface shadow-2xl overflow-hidden flex
+                ${isMobile ? 'h-[100dvh] flex-col' : 'max-w-4xl h-[min(720px,88vh)] rounded-[28px] border border-md-outline-variant/30 flex-row'}`}
           >
 
             {/* --- MOBILE ROOT VIEW --- */}
             {isMobile && !isMobileDetail && (
-                <div className="flex flex-col h-full w-full p-6 animate-fade-in">
-                    <div className="flex items-center justify-between mb-8">
-                        <h2 className="font-serif text-3xl tracking-tight text-white">Settings</h2>
-                        <button onClick={onClose} className="p-2 bg-white/5 rounded-full text-white/60 hover:text-white"><X size={20} /></button>
+                <div className="flex flex-col h-full w-full">
+                    <div className="px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+                      <GlassBar title={<span className="text-lg">Settings</span>} trailing={<IconButton label="Close settings" onClick={onClose}><X size={20} /></IconButton>} />
                     </div>
-
-                    <div className="flex-1 overflow-y-auto space-y-3">
-                        {tabs.map((tab) => (
-                            <button key={tab.id} onClick={() => handleTabClick(tab.id)} className="w-full flex items-center gap-4 p-5 rounded-2xl bg-white/5 hover:bg-white/10 transition-all border border-white/5 text-left group">
-                                <div className="w-10 h-10 rounded-full bg-black/40 flex items-center justify-center text-white/70 group-hover:text-white">
-                                    <tab.icon size={20} />
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="font-bold text-white text-base">{tab.label}</h3>
-                                    <p className="text-xs text-white/40">{tab.desc}</p>
-                                </div>
-                                <ChevronRight className="text-white/20" size={16} />
-                            </button>
-                        ))}
-                         <button onClick={() => logout()} className="w-full flex items-center gap-4 p-5 rounded-2xl bg-red-500/5 hover:bg-red-500/10 transition-all border border-red-500/10 text-left mt-6">
-                            <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-400"><User size={20} /></div>
-                            <div className="flex-1"><h3 className="font-bold text-red-300">Log Out</h3></div>
-                        </button>
+                    <div className="flex-1 overflow-y-auto px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] space-y-4">
+                        {profileHeader}
+                        <ListGroup>
+                          {tabs.map((tab) => (
+                            <ListItem key={tab.id} icon={<tab.icon size={18} />} title={tab.label} subtitle={tab.desc} onClick={() => handleTabClick(tab.id)}
+                              trailing={<ChevronRight size={18} className="text-md-on-surface-variant" />} />
+                          ))}
+                        </ListGroup>
+                        <ListGroup>
+                          <ListItem danger icon={<LogOut size={18} />} title="Log out" onClick={() => logout()} />
+                        </ListGroup>
                     </div>
                 </div>
             )}
@@ -777,34 +876,48 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
             {/* --- MOBILE DETAIL VIEW --- */}
             {isMobile && isMobileDetail && (
                 <div className="flex flex-col h-full w-full animate-slide-in-right">
-                    <div className="flex items-center gap-3 p-6 border-b border-white/5">
-                        <button onClick={handleBack} className="p-2 -ml-2 rounded-full hover:bg-white/5 text-white/80"><ChevronLeft size={24} /></button>
-                        <h2 className="font-bold text-lg text-white">{tabs.find(t => t.id === activeTab)?.label}</h2>
+                    <div className="px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+                      <GlassBar leading={<IconButton label="Back" onClick={handleBack}><ChevronLeft size={22} /></IconButton>} title={activeMeta?.label}
+                        trailing={<IconButton label="Close settings" onClick={onClose}><X size={20} /></IconButton>} />
                     </div>
-                    <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto px-4 pt-5 pb-[env(safe-area-inset-bottom)]">
                         {renderContent()}
                     </div>
                 </div>
             )}
 
-            {/* --- DESKTOP VIEW --- */}
+            {/* --- DESKTOP VIEW: M3 navigation drawer + content pane --- */}
             {!isMobile && (
                 <>
-                    <div className="w-64 bg-white/5 border-r border-white/5 p-6 flex flex-col">
-                    <h2 className="font-serif text-2xl mb-8 tracking-tight text-white">Settings</h2>
-                    <div className="space-y-2">
-                        {tabs.map((tab) => (
-                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === tab.id ? 'bg-white/10 text-white shadow-inner' : 'text-white/50 hover:text-white hover:bg-white/5'}`}>
-                            <tab.icon size={18} /> <span className="text-sm font-medium">{tab.label}</span>
+                    <nav aria-label="Settings sections" className="w-72 shrink-0 bg-md-surface-container p-3 flex flex-col gap-1 overflow-y-auto">
+                        <h2 className="px-4 pt-3 pb-4 text-2xl font-serif text-md-on-surface">Settings</h2>
+                        <div className="px-1 pb-3">{profileHeader}</div>
+                        {tabs.map((tab) => {
+                          const on = activeTab === tab.id;
+                          return (
+                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} aria-current={on ? 'page' : undefined}
+                              className={`w-full h-14 flex items-center gap-3 px-4 rounded-full text-left transition-colors duration-200 ${on ? 'bg-md-secondary-container text-md-on-secondary-container' : 'text-md-on-surface-variant hover:bg-md-on-surface/[0.06] hover:text-md-on-surface'}`}>
+                              <tab.icon size={20} className="shrink-0" />
+                              <span className="text-sm font-medium truncate">{tab.label}</span>
                             </button>
-                        ))}
-                    </div>
-                    <button onClick={() => logout()} className="mt-auto flex items-center gap-3 px-4 py-3 text-red-300 hover:text-red-200 hover:bg-red-500/10 rounded-xl transition-all"><span className="text-sm font-medium">Log Out</span></button>
-                    </div>
+                          );
+                        })}
+                        <div className="mt-auto pt-3">
+                          <button onClick={() => logout()} className="w-full h-14 flex items-center gap-3 px-4 rounded-full text-left text-md-error hover:bg-md-error/10 transition-colors">
+                            <LogOut size={20} /><span className="text-sm font-medium">Log out</span>
+                          </button>
+                        </div>
+                    </nav>
 
-                    <div className="flex-1 p-8 overflow-y-auto relative custom-scrollbar">
-                        <button onClick={onClose} className="absolute top-6 right-6 text-white/40 hover:text-white transition-colors"><X size={20} /></button>
-                        {renderContent()}
+                    <div className="flex-1 min-w-0 flex flex-col">
+                        <div className="px-4 pt-4">
+                          <GlassBar title={<span className="text-lg">{activeMeta?.label}</span>}
+                            trailing={<IconButton label="Close settings" onClick={onClose}><X size={20} /></IconButton>} />
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-8 pt-6 custom-scrollbar">
+                          <p className="text-sm text-md-on-surface-variant -mt-2 mb-6">{activeMeta?.desc}</p>
+                          {renderContent()}
+                        </div>
                     </div>
                 </>
             )}

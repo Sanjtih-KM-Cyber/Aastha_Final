@@ -125,11 +125,11 @@ export const LandingDraggableWindow: React.FC<DraggableWindowProps> = ({
           }}
           exit={{ opacity: 0, scale: 0.9 }}
           onPointerDown={onFocus}
-          className="bg-[#0B0F17]/90 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col ring-1 ring-white/5 transition-[box-shadow] duration-200"
+          className="bg-md-surface-container-low border border-md-outline-variant/30 rounded-[28px] shadow-2xl overflow-hidden flex flex-col transition-[box-shadow] duration-200"
         >
           {/* Header */}
           <div
-            className="h-12 bg-white/5 border-b border-white/5 flex items-center justify-between px-4 cursor-move shrink-0 select-none group"
+            className="glass m-2 mb-0 rounded-[20px] h-12 flex items-center justify-between px-4 cursor-move shrink-0 select-none group"
             onPointerDown={(e) => {
               onFocus?.();
               dragControls.start(e);
@@ -139,14 +139,14 @@ export const LandingDraggableWindow: React.FC<DraggableWindowProps> = ({
                 <div className="flex gap-1.5 group-hover:opacity-100 transition-opacity">
                     <button
                         onClick={(e) => { e.stopPropagation(); onClose(); }}
-                        className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/50 hover:bg-red-500 transition-colors"
+                        className="w-3 h-3 rounded-full bg-[#FF5F57] ring-1 ring-black/20"
                     />
                     <button
                         onClick={(e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }}
-                        className="w-2.5 h-2.5 rounded-full bg-yellow-500/20 border border-yellow-500/50 hover:bg-yellow-500 transition-colors"
+                        className="w-3 h-3 rounded-full bg-[#FEBC2E] ring-1 ring-black/20"
                     />
                 </div>
-                <span className="text-xs font-bold text-white/40 uppercase tracking-wider ml-2">{title}</span>
+                <span className="text-sm font-medium text-md-on-surface ml-2">{title}</span>
              </div>
           </div>
 
@@ -159,7 +159,7 @@ export const LandingDraggableWindow: React.FC<DraggableWindowProps> = ({
                 <>
                     {/* Bottom Right */}
                     <div
-                        className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize z-50 flex items-center justify-center text-white/10 hover:text-white/40 transition-colors"
+                        className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize z-50 flex items-center justify-center text-md-on-surface-variant/30 hover:text-md-on-surface-variant/80 transition-colors"
                         onPointerDown={startResize('se')}
                     >
                          <div className="w-2 h-2 border-b-2 border-r-2 border-current" />
@@ -167,7 +167,7 @@ export const LandingDraggableWindow: React.FC<DraggableWindowProps> = ({
 
                     {/* Bottom Left */}
                     <div
-                        className="absolute bottom-0 left-0 w-6 h-6 cursor-sw-resize z-50 flex items-center justify-center text-white/10 hover:text-white/40 transition-colors"
+                        className="absolute bottom-0 left-0 w-6 h-6 cursor-sw-resize z-50 flex items-center justify-center text-md-on-surface-variant/30 hover:text-md-on-surface-variant/80 transition-colors"
                         onPointerDown={startResize('sw')}
                     >
                          {/* Invisible hit area */}
@@ -175,7 +175,7 @@ export const LandingDraggableWindow: React.FC<DraggableWindowProps> = ({
 
                     {/* Top Right */}
                     <div
-                        className="absolute top-0 right-0 w-6 h-6 cursor-ne-resize z-50 flex items-center justify-center text-white/10 hover:text-white/40 transition-colors"
+                        className="absolute top-0 right-0 w-6 h-6 cursor-ne-resize z-50 flex items-center justify-center text-md-on-surface-variant/30 hover:text-md-on-surface-variant/80 transition-colors"
                         onPointerDown={startResize('ne')}
                     >
                         {/* Invisible hit area */}
@@ -183,7 +183,7 @@ export const LandingDraggableWindow: React.FC<DraggableWindowProps> = ({
 
                     {/* Top Left */}
                     <div
-                        className="absolute top-0 left-0 w-6 h-6 cursor-nw-resize z-50 flex items-center justify-center text-white/10 hover:text-white/40 transition-colors"
+                        className="absolute top-0 left-0 w-6 h-6 cursor-nw-resize z-50 flex items-center justify-center text-md-on-surface-variant/30 hover:text-md-on-surface-variant/80 transition-colors"
                         onPointerDown={startResize('nw')}
                     >
                         {/* Invisible hit area */}

@@ -17,7 +17,7 @@ const diaryEntrySchema = new Schema<IDiaryEntry>({
   title: { type: String, required: true }, // Encrypted
   content: { type: String, required: true }, // Encrypted
   mood: { type: String, required: false },
-  moodKeywords: { type: String, required: false }, // Unencrypted keywords for Ghosting Service
+  moodKeywords: { type: String, required: false }, // encrypted; decrypted by ghostService for gentle check-ins (S13)
   tags: [{ type: String }],
   entryDate: { type: Date, required: true, default: Date.now, index: true } // Index for fast lookup
 }, {

@@ -9,21 +9,19 @@ import {
   initiateReset,
   completeReset,
   verifyResetOTP,
-  verifySecurityAnswer,
-  resetDiaryNuclear,
   changeDiaryPassword,
   updateProfile,
-  upgradeToPro,
   verifyOTP,
   resendOTP,
   completeOnboarding,
-  uploadPersonaVoice,
-  uploadPersonaScreenshot,
-  updateCloneSettings,
   toggleDataDonation
 } from '../controllers/authController';
 import { createOrder, verifyPayment, createVoiceOrder } from '../controllers/paymentController';
 import { protect } from '../middleware/authMiddleware';
+import { getDiaryResetOptions, sendDiaryResetCode, resetDiaryPassword, startFreshDiary } from '../controllers/diaryController';
+import { getClone, saveCloneConsent, uploadCloneScreenshot, uploadCloneChatSample, uploadCloneVoice, updateCloneSettings, deleteClone } from '../controllers/cloneController';
+import { getPushKey, subscribePush, unsubscribePush, testPush } from '../controllers/pushController';
+import { getReachOut, updateReachOut, exportMyData, markSafetyIntroSeen, updatePreferences, acceptLegal } from '../controllers/meController';
 
 const router = express.Router();
 
@@ -42,13 +40,31 @@ router.put('/profile', protect, updateProfile);
 router.post('/create-order', protect, createOrder);
 router.post('/create-voice-order', protect, createVoiceOrder);
 router.post('/verify-payment', protect, verifyPayment);
-router.post('/upgrade', protect, upgradeToPro);
+
+// Web Push (browser / PWA) — no Firebase needed
+router.get('/push/key', getPushKey);
+router.post('/push/subscribe', protect, subscribePush);
+router.post('/push/unsubscribe', protect, unsubscribePush);
+router.post('/push/test', protect, testPush);
 
 // Persona Uploads (New)
-router.post('/persona-voice', protect, uploadPersonaVoice);
-router.post('/persona-screenshot', protect, uploadPersonaScreenshot);
+// Clone Mode (consent-first; see services/cloneService.ts)
+router.get('/clone', protect, getClone);
+router.post('/clone/consent', protect, saveCloneConsent);
+router.post('/persona-screenshot', protect, uploadCloneScreenshot);
+router.post('/clone/chat-sample', protect, uploadCloneChatSample);
+router.post('/persona-voice', protect, uploadCloneVoice);
 router.put('/clone-settings', protect, updateCloneSettings);
+router.delete('/clone', protect, deleteClone);
 router.post('/toggle-data-donation', protect, toggleDataDonation);
+
+// Phase 7: check-ins, export, safety intro
+router.get('/reach-out', protect, getReachOut);
+router.put('/reach-out', protect, updateReachOut);
+router.get('/export', protect, exportMyData);
+router.post('/safety-intro', protect, markSafetyIntroSeen);
+router.put('/preferences', protect, updatePreferences);
+router.post('/legal-consent', protect, acceptLegal);
 
 // Account management
 router.post('/delete-account', protect, softDeleteUser);
@@ -57,8 +73,11 @@ router.post('/reset-verify-otp', verifyResetOTP);
 router.post('/reset-complete', completeReset);
 
 // Diary reset
-router.post('/verify-security-answer', protect, verifySecurityAnswer);
-router.post('/reset-diary-nuclear', protect, resetDiaryNuclear);
+// Diary forgot-password (verified on the server; entries are kept unless the user chooses "start fresh")
+router.get('/diary/reset-options', protect, getDiaryResetOptions);
+router.post('/diary/reset-code', protect, sendDiaryResetCode);
+router.post('/diary/reset-password', protect, resetDiaryPassword);
+router.post('/diary/start-fresh', protect, startFreshDiary);
 router.post('/change-diary-password', protect, changeDiaryPassword);
 router.post('/complete-onboarding', protect, completeOnboarding);
 

@@ -161,7 +161,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, onComplet
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/70 transition-all duration-300 ease-out"
+                className="absolute inset-0 bg-md-surface-container-lowest/70 transition-all duration-300 ease-out"
                 style={{
                     clipPath: `polygon(
                         0% 0%,
@@ -182,7 +182,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, onComplet
         {/* Highlight Border */}
         {coords && (
             <motion.div
-                className="absolute border-2 border-violet-500 rounded-xl shadow-[0_0_30px_rgba(139,92,246,0.5)] pointer-events-none"
+                className="absolute border-2 border-md-primary rounded-xl shadow-[0_0_30px_rgba(139,92,246,0.5)] pointer-events-none"
                 initial={false}
                 animate={{
                     left: coords.x - 4,
@@ -233,27 +233,27 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, onComplet
                 animate={{ opacity: 1, scale: 1, ...tooltipStyle }}
                 transition={{ duration: 0.3 }}
             >
-                <div className="w-[85vw] md:w-[90vw] max-w-[320px] bg-slate-900 border border-violet-500/30 rounded-2xl p-6 shadow-2xl relative">
+                <div className="w-[85vw] md:w-[90vw] max-w-[320px] bg-slate-900 border border-md-primary/30 rounded-2xl p-6 shadow-2xl relative">
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-violet-300 tracking-wide">
+                            <span className="text-sm font-bold text-md-primary tracking-wide">
                                 Step {currentStepIndex + 1} of {steps.length}
                             </span>
                         </div>
-                        <button onClick={onSkip} className="text-slate-500 hover:text-white transition-colors">
+                        <button onClick={onSkip} className="text-md-on-surface-variant hover:text-white transition-colors">
                             <X size={16} />
                         </button>
                     </div>
 
-                    <h3 className="text-xl font-bold text-white mb-2">{currentStep.title}</h3>
-                    <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                    <h3 className="text-xl font-bold text-md-on-surface mb-2">{currentStep.title}</h3>
+                    <p className="text-md-on-surface-variant text-sm mb-6 leading-relaxed">
                         {currentStep.content}
                     </p>
 
                     <div className="flex flex-col gap-3 mt-4">
                         <button
                             onClick={handleNext}
-                            className="w-full py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-900/20"
+                            className="w-full py-3 bg-md-primary text-md-on-primary hover:brightness-110 text-md-on-surface rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-900/20"
                         >
                             {isLastStep ? 'Start My Journey' : 'Next'}
                             {isLastStep ? <Check size={16}/> : <ChevronRight size={16}/>}
@@ -262,7 +262,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, onComplet
                         {!isLastStep && (
                             <button
                                 onClick={onSkip}
-                                className="text-slate-500 hover:text-white text-xs font-medium py-2 transition-colors"
+                                className="text-md-on-surface-variant hover:text-white text-xs font-medium py-2 transition-colors"
                             >
                                 I will explore by myself
                             </button>
@@ -270,7 +270,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ steps, onComplet
                     </div>
 
                     {/* Arrow (Desktop Only Visual decoration) */}
-                    {!isMobile && <div className="absolute w-4 h-4 bg-slate-900 border-l border-t border-violet-500/30 transform rotate-45 -top-2 left-8" />}
+                    {!isMobile && <div className="absolute w-4 h-4 bg-slate-900 border-l border-t border-md-primary/30 transform rotate-45 -top-2 left-8" />}
                 </div>
             </motion.div>
         )}

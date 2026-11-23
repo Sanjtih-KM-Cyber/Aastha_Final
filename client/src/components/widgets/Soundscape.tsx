@@ -16,6 +16,7 @@ import {
   Music, 
   Sliders
 } from 'lucide-react';
+import { Icons } from '../../design/icons';
 
 interface SoundscapeProps {
   isOpen: boolean;
@@ -274,190 +275,129 @@ export const Soundscape: React.FC<SoundscapeProps> = ({ isOpen, onClose, zIndex,
   };
 
   const activeCount = Object.keys(activeLoops).length;
+  const EMOJI: Record<string, string> = { rain: '🌧️', forest: '🌲', fire: '🔥', ocean: '🌊', night: '🌙', wind: '🍃', thunder: '⛈️', birds: '🐦' };
+  const fill = (v: number) => ({ ['--fill' as any]: `${Math.round(v * 100)}%` } as React.CSSProperties);
 
   return (
-    <DraggableWindow 
-      isOpen={isOpen} 
-      onClose={onClose} 
-      title="Ambient Mixer"
-      initialWidth={360}
-      initialHeight={600}
+    <DraggableWindow
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Sounds"
+      initialWidth={380}
+      initialHeight={620}
       defaultPosition={{ x: 850, y: 150 }}
       zIndex={zIndex || 10}
       onFocus={onFocus || (() => {})}
-      icon={Sliders}
-      color="#06B6D4"
+      icon={Icons.sounds}
       persistenceKey={persistenceKey}
     >
-      <div className="flex flex-col h-full w-full font-sans select-none">
-        
-        {/* --- TOP 35%: Master Control --- */}
-        <div 
-            className="h-[35%] relative flex flex-col items-center justify-center p-6 transition-colors duration-700 overflow-hidden"
-            style={{ 
-                background: `linear-gradient(180deg, ${currentTheme.primaryColor}20, #111827)` 
-            }}
-        >
-            <div className="relative mb-6">
-                <div className="w-20 h-20 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center relative z-10 shadow-2xl">
-                    <Music size={32} className="text-white opacity-80" />
-                </div>
-                {activeCount > 0 && (
-                    <motion.div 
-                        animate={{ scale: [1, 1.5, 1], opacity: [0.6, 0, 0.6] }}
-                        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                        className="absolute inset-0 rounded-full border border-white/30"
-                        style={{ borderColor: currentTheme.primaryColor }}
-                    />
-                )}
-                {activeCount > 0 && (
-                    <motion.div 
-                        animate={{ scale: [1, 2, 1], opacity: [0.3, 0, 0.3] }}
-                        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-                        className="absolute inset-0 rounded-full border border-white/10"
-                    />
-                )}
-            </div>
+      <div className="flex flex-col h-full w-full font-sans select-none px-3 pb-3 gap-3">
 
-            <div className="w-full max-w-[200px] flex items-center gap-3 relative z-10">
-                <VolumeX size={16} className="text-white/40" />
-                <div className="flex-1 h-1.5 bg-black/40 rounded-full relative group cursor-pointer">
-                    <div 
-                        className="absolute inset-y-0 left-0 rounded-full transition-all duration-100" 
-                        style={{ width: `${masterVolume * 100}%`, backgroundColor: currentTheme.primaryColor }} 
-                    />
-                    <div 
-                        className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
-                        style={{ left: `${masterVolume * 100}%`, transform: 'translate(-50%, -50%)' }}
-                    />
-                    <input 
-                        type="range" min="0" max="1" step="0.01"
-                        value={masterVolume}
-                        onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-                </div>
-                <Volume2 size={16} className="text-white/80" />
+        {/* MASTER — tonal hero card */}
+        <div className="shrink-0 rounded-[28px] bg-md-primary-container text-md-on-primary-container p-5">
+          <div className="flex items-center gap-4">
+            <div className="relative shrink-0">
+              <span className="w-14 h-14 rounded-[20px] bg-md-primary text-md-on-primary flex items-center justify-center relative z-10"><Music size={24} /></span>
+              {activeCount > 0 && (
+                <motion.span
+                  aria-hidden
+                  animate={{ scale: [1, 1.35, 1], opacity: [0.5, 0, 0.5] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                  className="absolute inset-0 rounded-[20px] border-2 border-md-primary"
+                />
+              )}
             </div>
-            
-            <p className="text-[10px] text-white/30 mt-3 uppercase tracking-widest font-medium">
-                {activeCount === 0 ? 'Silence' : `${activeCount} Active Layers`}
-            </p>
-
-            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay pointer-events-none" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium opacity-80">{activeCount === 0 ? 'Nothing playing' : `${activeCount} layer${activeCount === 1 ? '' : 's'} playing`}</p>
+              <h2 className="font-serif text-2xl leading-tight">Your mix</h2>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-3">
+            <button onClick={() => setMasterVolume(masterVolume > 0 ? 0 : 0.5)} aria-label={masterVolume > 0 ? 'Mute' : 'Unmute'} className="shrink-0">
+              {masterVolume > 0 ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            </button>
+            <input
+              type="range" min="0" max="1" step="0.01"
+              value={masterVolume}
+              aria-label="Master volume"
+              onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
+              className="m3-slider flex-1"
+              style={fill(masterVolume)}
+            />
+            <span className="w-9 text-right text-xs font-medium tabular-nums">{Math.round(masterVolume * 100)}%</span>
+          </div>
         </div>
 
-        {/* --- BOTTOM 65%: Sound Library --- */}
-        <div className="h-[65%] bg-gray-900 p-4 overflow-y-auto custom-scrollbar">
-            <div className="space-y-3">
-                {SOUNDS.map((sound) => {
-                    const isActive = activeLoops.hasOwnProperty(sound.id);
-                    const isPreviewing = previewId === sound.id;
-                    const isError = erroredSounds.has(sound.id);
-                    const volume = activeLoops[sound.id] || 0.5;
-
-                    return (
-                        <motion.div 
-                            key={sound.id}
-                            initial={false}
-                            animate={{ 
-                                backgroundColor: isActive ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.02)',
-                                borderColor: isActive ? sound.color : 'transparent'
-                            }}
-                            className={`
-                                relative rounded-2xl border border-white/5 overflow-hidden transition-colors duration-300
-                                ${isError ? 'opacity-50 cursor-not-allowed grayscale' : ''}
-                            `}
-                        >
-                            <div className="flex items-center p-3 gap-4">
-                                <div 
-                                    className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shadow-inner shrink-0"
-                                    style={{ backgroundColor: isActive ? `${sound.color}30` : 'rgba(255,255,255,0.05)' }}
-                                >
-                                    {isError ? (
-                                        <AlertCircle size={18} className="text-red-400" />
-                                    ) : (
-                                        <div 
-                                            className="w-3 h-3 rounded-full transition-all duration-500"
-                                            style={{ 
-                                                backgroundColor: isActive ? sound.color : '#525252',
-                                                boxShadow: isActive ? `0 0 10px ${sound.color}` : 'none',
-                                                scale: isActive || isPreviewing ? 1.2 : 1
-                                            }}
-                                        />
-                                    )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className={`text-sm font-medium truncate ${isActive ? 'text-white' : 'text-white/60'}`}>
-                                            {sound.label}
-                                        </span>
-                                        {isPreviewing && <span className="text-[9px] text-teal-400 animate-pulse">Previewing...</span>}
-                                    </div>
-                                    {isActive && (
-                                        <div className="flex items-center gap-2 h-4">
-                                            <Sliders size={10} className="text-white/30" />
-                                            <div className="flex-1 h-1 bg-white/10 rounded-full relative group">
-                                                <div 
-                                                    className="absolute inset-y-0 left-0 rounded-full" 
-                                                    style={{ width: `${volume * 100}%`, backgroundColor: sound.color }} 
-                                                />
-                                                <input 
-                                                    type="range" min="0" max="1" step="0.05"
-                                                    value={volume}
-                                                    onChange={(e) => updateTrackVolume(sound.id, parseFloat(e.target.value))}
-                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    {!isActive && !isError && (
-                                        <button 
-                                            onClick={() => handlePreview(sound.id)}
-                                            className={`p-2 rounded-full hover:bg-white/10 transition-colors ${isPreviewing ? 'text-teal-400' : 'text-white/40'}`}
-                                            title="Preview (5s)"
-                                        >
-                                            <Ear size={16} />
-                                        </button>
-                                    )}
-                                    <button 
-                                        onClick={() => toggleLoop(sound.id)}
-                                        disabled={isError}
-                                        className={`
-                                            w-8 h-8 rounded-full flex items-center justify-center transition-all
-                                            ${isActive 
-                                                ? 'bg-white text-black hover:scale-105' 
-                                                : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}
-                                        `}
-                                    >
-                                        {isActive ? <X size={14} /> : <Plus size={14} />}
-                                    </button>
-                                </div>
-                            </div>
-                            {isActive && (
-                                <motion.div 
-                                    layoutId={`bar-${sound.id}`}
-                                    className="h-0.5 w-full opacity-50"
-                                    style={{ backgroundColor: sound.color }}
-                                />
-                            )}
-                        </motion.div>
-                    );
-                })}
-            </div>
-            {erroredSounds.size > 0 && (
-                <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
-                    <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
-                    <div>
-                        <p className="text-xs text-red-200 font-medium">Safe Mode Active</p>
-                        <p className="text-[10px] text-red-200/60 leading-relaxed">
-                            Some sounds failed to load and have been disabled to prevent crashes.
-                        </p>
+        {/* LIBRARY — tiles; tap to add/remove, ear to preview */}
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+          <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(230px,1fr))]">
+            {SOUNDS.map((sound) => {
+              const isActive = Object.prototype.hasOwnProperty.call(activeLoops, sound.id);
+              const isPreviewing = previewId === sound.id;
+              const isError = erroredSounds.has(sound.id);
+              const vol = activeLoops[sound.id] || 0.5;
+              return (
+                <div
+                  key={sound.id}
+                  className={`rounded-[24px] p-3 transition-colors duration-200 ease-md-emphasized
+                    ${isActive ? 'bg-md-secondary-container text-md-on-secondary-container col-span-full' : 'bg-md-surface-container text-md-on-surface'}
+                    ${isError ? 'opacity-50' : ''}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => toggleLoop(sound.id)}
+                      disabled={isError}
+                      aria-pressed={isActive}
+                      aria-label={isActive ? `Stop ${sound.label}` : `Play ${sound.label}`}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                    >
+                      <span className={`w-11 h-11 rounded-[16px] flex items-center justify-center text-xl shrink-0 ${isActive ? 'bg-md-primary/25' : 'bg-md-surface-container-highest'}`}>
+                        {isError ? <AlertCircle size={18} className="text-md-error" /> : EMOJI[sound.id] || '🎵'}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium truncate">{sound.label}</span>
+                        <span className="block text-[11px] opacity-70">{isError ? 'Unavailable' : isActive ? 'Playing' : isPreviewing ? 'Previewing…' : 'Tap to add'}</span>
+                      </span>
+                    </button>
+                    {!isActive && !isError && (
+                      <button
+                        onClick={() => handlePreview(sound.id)}
+                        aria-label={`Preview ${sound.label} for 5 seconds`}
+                        title="Preview (5 s)"
+                        className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors ${isPreviewing ? 'bg-md-primary text-md-on-primary' : 'text-md-on-surface-variant hover:bg-md-on-surface/10'}`}
+                      >
+                        <Ear size={16} />
+                      </button>
+                    )}
+                    {isActive && (
+                      <button onClick={() => toggleLoop(sound.id)} aria-label={`Remove ${sound.label}`} className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 hover:bg-md-on-surface/10">
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                  {isActive && (
+                    <div className="mt-2 flex items-center gap-3 pl-1">
+                      <Sliders size={14} className="opacity-70 shrink-0" />
+                      <input
+                        type="range" min="0" max="1" step="0.05"
+                        value={vol}
+                        aria-label={`${sound.label} volume`}
+                        onChange={(e) => updateTrackVolume(sound.id, parseFloat(e.target.value))}
+                        className="m3-slider flex-1"
+                        style={fill(vol)}
+                      />
                     </div>
+                  )}
                 </div>
-            )}
+              );
+            })}
+          </div>
+          {erroredSounds.size > 0 && (
+            <div className="mt-3 p-3 rounded-[20px] bg-md-error-container text-md-on-error-container flex items-start gap-3">
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+              <p className="text-xs leading-relaxed">Some sounds couldn't load, so they're turned off for now. The rest keep playing.</p>
+            </div>
+          )}
         </div>
       </div>
     </DraggableWindow>

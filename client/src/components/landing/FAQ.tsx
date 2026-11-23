@@ -1,82 +1,62 @@
 import React, { useState } from 'react';
-import { ChevronDown, HelpCircle } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { FadeIn } from './FadeIn';
 
+// Every answer must stay TRUE to the code (ROADMAP S8 / Privacy Center).
 const faqs = [
   {
-    question: "Is this just for students?",
-    answer: "No. Aastha is trained for all life stages. Whether you are debugging code at 2 AM, preparing for competitive exams, or managing a team deadline, Aastha understands the pressure and provides relevant emotional support."
+    question: 'Is this just for students?',
+    answer: 'No. Aastha is designed for every stage — exam pressure, a first job, a heavy week at work, or just a lonely evening. It adapts to how you talk and what you share.',
   },
   {
-    question: "Is Aastha a replacement for a therapist?",
-    answer: "No. Aastha is a wellness tool and emotional companion, not a medical device. It is designed to help with daily stress, anxiety, and self-reflection, but it does not replace professional clinical therapy or psychiatric care."
+    question: 'Is Aastha a replacement for a therapist?',
+    answer: 'No. Aastha is an AI wellness companion, not a medical service. It helps with everyday stress and reflection, but it doesn’t replace a therapist or doctor. If you’re in crisis, call Tele-MANAS 14416 (free, 24/7) or 112.',
   },
   {
-    question: "Is my data really private?",
-    answer: "Absolutely. We use Zero-Knowledge Encryption. Your chats and journals are encrypted on your device before they ever reach our servers. We have no way to read your conversations—your sanctuary is truly private."
+    question: 'Is my data really private?',
+    answer: 'We’ll be straight with you. Your chats, diary entries and moods are encrypted (AES-256) whenever they’re stored on our servers, and your diary has its own password. To reply to you, your messages are processed by our AI providers — so this is not end-to-end encryption. Data donation is strictly opt-in, and you can export or permanently delete everything from Settings at any time.',
   },
   {
-    question: "How can Aastha help with professional burnout?",
-    answer: "Aastha offers a safe, judgment-free space to decompress after work. You can vent about office stress, practice difficult conversations, or use the focus tools to regain mental clarity without the fear of being judged."
+    question: 'How does Aastha help with burnout?',
+    answer: 'It gives you a judgment-free place to decompress, rehearse a difficult conversation, or reset with a focus round, breathing or ambient sound — and it remembers what’s been weighing on you so you don’t have to start over each time.',
   },
   {
-    question: "What makes Aastha different from other AI?",
-    answer: "Aastha is specifically fine-tuned for Emotional Intelligence (EQ). Unlike generic assistants, it remembers your emotional history, tracks your mood trends, and responds with deep empathy rather than just facts."
-  }
+    question: 'What makes Aastha different from a general AI chat?',
+    answer: 'It’s built around being a good friend rather than an assistant: it remembers what you tell it (you can see and delete it), mirrors how you text, grows closer over time, follows up on things you mentioned, and always puts your safety first.',
+  },
 ];
 
 export const FAQ: React.FC = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
-
   return (
-    <section className="py-24 bg-slate-900 relative overflow-hidden">
-      {/* Background Decor */}
-      <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-slate-700 to-transparent" />
-      <div className="absolute -left-20 top-40 w-64 h-64 bg-violet-900/40 rounded-full blur-[80px]" />
-      <div className="absolute -right-20 bottom-40 w-64 h-64 bg-teal-900/40 rounded-full blur-[80px]" />
-
-      <div className="max-w-3xl mx-auto px-6 relative z-10">
-        <FadeIn className="text-center mb-16">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-slate-800 text-violet-400 mb-6 ring-1 ring-slate-700">
-            <HelpCircle size={24} />
-          </div>
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Frequently Asked Questions</h2>
-          <p className="text-slate-400">Everything you need to know about your new sanctuary.</p>
+    <section id="faq-section" className="py-20 md:py-28 scroll-mt-24">
+      <div className="max-w-3xl mx-auto px-5">
+        <FadeIn className="text-center mb-12">
+          <span className="inline-flex h-8 px-3 items-center rounded-full bg-md-secondary-container text-md-on-secondary-container text-sm font-medium">FAQ</span>
+          <h2 className="font-serif text-4xl md:text-5xl text-md-on-surface mt-5">Questions, answered honestly</h2>
         </FadeIn>
-
-        <div className="space-y-4">
-          {faqs.map((faq, idx) => (
-            <FadeIn key={idx} delay={idx * 50}>
-              <div className={`rounded-2xl border transition-all duration-300 ${
-                openIndex === idx
-                  ? 'bg-slate-800/50 border-violet-500/30 shadow-lg shadow-violet-900/10'
-                  : 'bg-slate-800/20 border-slate-700 hover:border-slate-600'
-              }`}>
-                <button
-                  onClick={() => setOpenIndex(openIndex === idx ? null : idx)}
-                  className="w-full flex items-center justify-between p-6 text-left"
-                >
-                  <span className={`font-medium text-lg transition-colors ${openIndex === idx ? 'text-violet-200' : 'text-slate-300'}`}>
-                    {faq.question}
-                  </span>
-                  <ChevronDown
-                    className={`text-slate-500 transition-transform duration-300 ${openIndex === idx ? 'rotate-180 text-violet-400' : ''}`}
-                  />
-                </button>
-                <div
-                  className={`grid transition-all duration-300 ease-in-out ${
-                    openIndex === idx ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-                  }`}
-                >
-                  <div className="overflow-hidden">
-                    <p className="px-6 pb-6 text-slate-400 leading-relaxed">
-                      {faq.answer}
-                    </p>
+        <div className="space-y-3">
+          {faqs.map((faq, idx) => {
+            const open = openIndex === idx;
+            return (
+              <FadeIn key={idx} delay={idx * 50}>
+                <div className={`rounded-[24px] transition-colors ${open ? 'bg-md-surface-container-high' : 'bg-md-surface-container hover:bg-md-surface-container-high'}`}>
+                  <button onClick={() => setOpenIndex(open ? null : idx)} aria-expanded={open}
+                    className="w-full flex items-center justify-between gap-4 p-5 md:p-6 text-left">
+                    <span className="font-semibold text-lg text-md-on-surface">{faq.question}</span>
+                    <span className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all ${open ? 'bg-md-primary text-md-on-primary rotate-180' : 'bg-md-surface-container-highest text-md-on-surface-variant'}`}>
+                      <ChevronDown size={18} />
+                    </span>
+                  </button>
+                  <div className={`grid transition-all duration-300 ease-md-emphasized ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                    <div className="overflow-hidden">
+                      <p className="px-5 md:px-6 pb-6 text-md-on-surface-variant leading-relaxed">{faq.answer}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </FadeIn>
-          ))}
+              </FadeIn>
+            );
+          })}
         </div>
       </div>
     </section>

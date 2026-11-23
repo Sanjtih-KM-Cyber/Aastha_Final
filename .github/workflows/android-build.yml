@@ -19,6 +19,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -26,29 +28,46 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Install Dependencies
-        run: |
-          cd client
-          npm install
+      - name: Install Dependencies (exact versions from lockfile)
+        working-directory: client
+        run: npm ci
 
       - name: Build Web Assets
-        run: |
-          cd client
-          npm run build
+        working-directory: client
+        run: npm run build
 
-      - name: Sync Capacitor
+      - name: Sync Capacitor (copies web build + registers native plugins)
+        working-directory: client
         run: |
-          cd client
           npx cap sync android
+          node scripts/update-manifest.js
+
+      # The committed debug APK once shipped with ZERO native plugins (no notifications, no biometrics).
+      # Fail the build if any required plugin is missing from the generated plugin registry.
+      - name: Verify native plugins are registered
+        working-directory: client
+        run: |
+          PLUGINS=android/app/src/main/assets/capacitor.plugins.json
+          test -f "$PLUGINS" || { echo "::error::$PLUGINS missing — cap sync failed"; exit 1; }
+          cat "$PLUGINS"
+          for p in "@capacitor/local-notifications" "@capacitor/preferences" "@capacitor/app" \
+                   "@capgo/capacitor-native-biometric" "@anuradev/capacitor-background-mode" \
+                   "@capacitor-community/privacy-screen" "@capacitor/filesystem" "@capacitor/share"; do
+            grep -q "\"$p\"" "$PLUGINS" || { echo "::error::Native plugin $p is not registered"; exit 1; }
+          done
+          test -f android/app/src/main/assets/public/index.html || { echo "::error::Web build not copied into APK"; exit 1; }
+          grep -q "SCHEDULE_EXACT_ALARM" android/app/src/main/AndroidManifest.xml || { echo "::error::Exact alarm permission missing"; exit 1; }
+          grep -q "RECORD_AUDIO" android/app/src/main/AndroidManifest.xml || { echo "::error::Microphone permission missing (voice notes)"; exit 1; }
 
       - name: Build APK
+        working-directory: client/android
         run: |
-          cd client/android
           chmod +x gradlew
           ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: aastha-debug-apk
+          name: aastha-debug-apk-${{ github.run_number }}
           path: client/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30

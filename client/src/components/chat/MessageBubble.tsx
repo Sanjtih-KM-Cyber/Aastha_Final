@@ -1,6 +1,8 @@
+import { MiniMarkdown, stripMarkdown } from '../../utils/miniMarkdown';
 import React, { useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Copy, Reply, Sparkles, Wand2 } from 'lucide-react';
+import { Copy, Reply, Sparkles, Wand2, SmilePlus } from 'lucide-react';
+import { ReactionPicker } from './ReactionPicker';
 import { useTheme } from '../../context/ThemeContext';
 import { VoiceNotePlayer } from './VoiceNotePlayer';
 
@@ -17,7 +19,17 @@ interface MessageBubbleProps {
   isStreaming?: boolean;
   currentMatchIndex?: number;
   isMobile?: boolean;
+  voice_note?: string;
+  reasoning?: string;   // "think deeper" reasoning, shown collapsed
+  isClone?: boolean;    // Clone Mode reply → labelled as an AI imitation
+  gif?: { url: string; width?: number; height?: number; title?: string; source?: string };
+  cloneName?: string;
+  isDeepThinking?: boolean;
+  myReaction?: string | null;            // the user's emoji reaction on Aastha's message (7.4)
+  onReact?: (emoji: string | null) => void;
 }
+
+export { QUICK_REACTIONS } from './ReactionPicker';
 
 // --- NEW: Emoji Mapper ---
 // This translates the backend "text" reaction into an actual Emoji
@@ -151,12 +163,19 @@ const extractProposals = (text: string) => {
     return { cleanText, proposals };
 };
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({
+const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
   role,
   content,
   timestamp,
   reaction,
   voice_note,
+  reasoning,
+  isDeepThinking,
+  myReaction,
+  onReact,
+  isClone,
+  cloneName,
+  gif,
   mood,
   onReply,
   onCopy,
@@ -169,37 +188,56 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const isUser = role === 'user';
   const { currentTheme, isLowPowerMode } = useTheme(); // Consume isLowPowerMode
   const [isHovered, setIsHovered] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false); // voice notes: text hidden behind "Show text" (7.1)
 
-  // Long Press Logic for Mobile
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
-  const isLongPressRef = useRef(false);
+  // Reactions + actions (WhatsApp-style): long-press on phones, 🙂 button on desktop, double-tap = ❤️
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null);
+  const openPicker = () => { if (bubbleRef.current) setPickerAnchor(bubbleRef.current.getBoundingClientRect()); setIsHovered(false); };
 
-  const handleTouchStart = () => {
-      if (!isMobile) return;
-      isLongPressRef.current = false;
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const lastTapRef = useRef(0);
+  const cancelLongPress = () => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } };
+
+  // Pointer events (not touch-only): long-press works with a finger, a stylus AND a mouse held down
+  // (phone-sized browser windows / the desktop preview). Right-click also opens it in the phone layout.
+  const openedByPress = useRef(false);
+  // React bubbles events from PORTALS (the reaction bar) up to this bubble — a tap that closes the bar must not
+  // start a new long-press here (it re-opened the bar 450 ms later). Only react to presses on the bubble itself.
+  const fromThisBubble = (e: React.SyntheticEvent) => (e.currentTarget as Node).contains(e.target as Node);
+  const handlePointerDown = (e: React.PointerEvent) => {
+      if (!isMobile || (e.pointerType === 'mouse' && e.button !== 0) || !fromThisBubble(e) || pickerAnchor) return;
+      touchStartPos.current = { x: e.clientX, y: e.clientY };
+      openedByPress.current = false;
+      cancelLongPress();
       longPressTimer.current = setTimeout(() => {
-          isLongPressRef.current = true;
-          setIsHovered(true); // Show options on long press
-          if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback
-      }, 500); // 500ms Long Press
-  };
-
-  const handleTouchEnd = () => {
-      if (longPressTimer.current) {
-          clearTimeout(longPressTimer.current);
           longPressTimer.current = null;
-      }
+          // Android also fires `contextmenu` ~after a long-press: ignore it for a moment so it doesn't toggle twice
+          openedByPress.current = true;
+          setTimeout(() => { openedByPress.current = false; }, 1000);
+          openPicker();
+          if (navigator.vibrate) navigator.vibrate(30); // haptic tick
+      }, 450);
   };
-
-  const handleClick = () => {
-      if (!isMobile) return;
-      if (isLongPressRef.current) {
-          // If a long press just happened, don't immediately hide
-          isLongPressRef.current = false;
-          return;
-      }
-      // If short tap, hide interactions
-      setIsHovered(false);
+  // Scrolling must not turn into a long-press
+  const handlePointerMove = (e: React.PointerEvent) => {
+      const s0 = touchStartPos.current;
+      if (longPressTimer.current && s0 && Math.hypot(e.clientX - s0.x, e.clientY - s0.y) > 10) cancelLongPress();
+  };
+  const handlePointerUp = () => {
+      const wasPending = !!longPressTimer.current;
+      cancelLongPress();
+      if (!isMobile || !wasPending || isUser || !onReact) return;
+      // Double-tap Aastha's message = ❤️ (tap again to remove)
+      const now = Date.now();
+      if (now - lastTapRef.current < 300) { lastTapRef.current = 0; onReact(myReaction === '❤️' ? null : '❤️'); if (navigator.vibrate) navigator.vibrate(15); }
+      else lastTapRef.current = now;
+  };
+  const handleContextMenu = (e: React.MouseEvent) => {
+      if (!isMobile || !fromThisBubble(e)) return;
+      e.preventDefault(); // the browser's own menu would cover our bar
+      if (!openedByPress.current && !pickerAnchor) { cancelLongPress(); openPicker(); }
   };
 
   // Parse Content for Proposals
@@ -292,9 +330,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       } ${isMobile ? 'mb-10' : 'mb-6'}`}
       onMouseEnter={() => !isMobile && setIsHovered(true)}
       onMouseLeave={() => !isMobile && setIsHovered(false)}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onClick={handleClick}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={cancelLongPress}
+      onPointerLeave={cancelLongPress}
+      onContextMenu={handleContextMenu}
     >
       {/* Assistant avatar (Left Side) */}
       {!isUser && (
@@ -324,11 +365,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
       {/* Bubble wrapper (Relative parent for bubble + reactions) */}
       <div
+        ref={bubbleRef}
         className={`
           relative
           w-fit
+          min-w-0
           break-words
-          min-w-[100px]
           max-w-[85%]
           sm:max-w-[80%]
           md:max-w-[70%]
@@ -336,10 +378,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           xl:max-w-[55%]
         `}
         style={{
-          maxWidth: isMobile ? '85vw' : undefined,
+          // M6: was `maxWidth: 85vw` on mobile, which ignores the chat's side padding and pushed
+          // bubbles past the right edge on narrow phones. A % of the row always fits.
           wordBreak: 'break-word',
-          overflowWrap: 'anywhere'
-        }}
+          overflowWrap: 'anywhere',
+          ...(isMobile ? { WebkitTouchCallout: 'none' } : {}), // no native long-press menu over our reaction bar
+        } as React.CSSProperties}
       >
         {/* Actual Message Bubble */}
         <div
@@ -350,36 +394,54 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             md:px-5 md:py-3.5
             text-[15px] md:text-base
             leading-relaxed
-            shadow-lg
             ${
               isUser
-                ? 'rounded-[22px] rounded-br-none border border-white/10'
-                : 'rounded-[22px] rounded-bl-none border border-white/10'
+                // Material You content layer: tonal containers, no blur (glass is reserved for controls)
+                ? 'rounded-[22px] rounded-br-[6px] text-md-on-primary-container'
+                : 'rounded-[22px] rounded-bl-[6px] text-md-on-surface'
             }
-            ${!isMobile && !isLowPowerMode ? 'backdrop-blur-xl' : 'backdrop-blur-none'}
           `}
           style={{
-             ...( !isUser
+             // Tonal layers (no blur per bubble — 50 blurs would lag phones). The user's bubble is a lit
+             // primary-container gradient; Aastha's is a translucent surface so the chat background breathes
+             // through. A 1px top highlight gives both the same glassy edge as the bars.
+             ...(isUser
               ? {
-                  background: isMobile || isLowPowerMode
-                    ? 'rgba(10, 14, 23, 0.7)' // See-through dark tint in Lite Mode
-                    : `linear-gradient(135deg, ${moodColor}15, #00000080)`,
-                  borderLeft: `3px solid ${moodColor}`,
+                  background: 'linear-gradient(160deg, rgb(var(--md-primary-container)) 0%, rgb(var(--md-primary-container) / 0.82) 100%)',
+                  boxShadow: 'inset 0 1px 0 rgb(255 255 255 / 0.12), 0 8px 22px -14px rgb(var(--md-primary) / 0.7)',
                 }
               : {
-                  background: isMobile || isLowPowerMode
-                    ? 'rgba(31, 41, 55, 0.7)' // See-through gray tint in Lite Mode
-                    : `linear-gradient(135deg, #1f293780, #11182780)`,
+                  background: 'rgb(var(--md-surface-container-high) / 0.74)',
+                  boxShadow: 'inset 0 1px 0 rgb(255 255 255 / 0.07), inset 0 0 0 1px rgb(var(--md-outline-variant) / 0.22), 0 8px 22px -16px rgb(0 0 0 / 0.8)',
                 }),
                 wordBreak: 'break-word',
                 overflowWrap: 'anywhere',
                 maxWidth: '100%'
           }}
         >
+          {!isUser && isClone && (
+            <div className="mb-1.5 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-md-tertiary">
+              🎭 AI imitation{cloneName ? ` · ${cloneName}` : ''}
+            </div>
+          )}
+          {!isUser && (reasoning || isDeepThinking) && (
+            <details className="mb-2 group/think">
+              <summary className="cursor-pointer list-none text-xs text-violet-200/80 flex items-center gap-1.5 select-none">
+                <span>💭</span>
+                <span>{isDeepThinking ? 'Thinking it through…' : 'Thought it through'}</span>
+                {reasoning && <span className="text-white/30 group-open/think:hidden">· tap to see</span>}
+              </summary>
+              {reasoning && (
+                <p className="mt-2 text-xs leading-relaxed text-white/50 whitespace-pre-wrap border-l border-white/10 pl-3 max-h-48 overflow-y-auto">
+                  {reasoning}
+                </p>
+              )}
+            </details>
+          )}
           {isThinking ? (
             <div className="flex items-center gap-3 h-6">
               <span className="text-xs text-white/50 font-medium">
-                Thinking
+                {isDeepThinking ? 'Thinking it through' : 'Thinking'}
               </span>
               <div className="flex gap-1">
                 {/* LITE MODE: Simplify thinking animation */}
@@ -389,13 +451,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               </div>
             </div>
           ) : (
-            // Hide Text if Voice Note is present (for clean look), unless it's the User
-            (!voice_note || isUser) && (
+            // Voice notes keep a clean look: text sits behind "Show text" under the player (7.1)
+            (!voice_note || showTranscript) && (
+                searchQuery ? (
                 <div className="space-y-1" style={{ maxWidth: '100%', overflowWrap: 'anywhere' }}>
-                {visibleContent.split('\n').map((line, i) => (
+                {stripMarkdown(visibleContent).split('\n').map((line, i) => (
                     <p
                     key={i}
-                    className="text-white/95 font-light select-text"
+                    className="font-normal select-text"
                     style={{
                         whiteSpace: 'pre-wrap',
                         wordBreak: 'break-word',
@@ -407,7 +470,29 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     </p>
                 ))}
                 </div>
+                ) : (
+                  // Bold, italics, lists etc. rendered properly — no raw ** or _ (utils/miniMarkdown.tsx)
+                  <MiniMarkdown text={visibleContent} streaming={isStreaming} className="font-normal" />
+                )
             )
+          )}
+
+          {/* GIF REACTION (only https URLs from GIPHY/Tenor, resolved by the server) */}
+          {!isUser && gif?.url && /^https:\/\//.test(gif.url) && (
+            <figure className="mt-2 max-w-[220px]">
+              <img
+                src={gif.url}
+                alt={gif.title || 'GIF'}
+                loading="lazy"
+                decoding="async"
+                referrerPolicy="no-referrer"
+                width={gif.width}
+                height={gif.height}
+                className="rounded-xl w-full h-auto bg-white/5"
+                style={gif.width && gif.height ? { aspectRatio: `${gif.width} / ${gif.height}` } : undefined}
+              />
+              <figcaption className="mt-0.5 text-[9px] text-white/35">{gif.source === 'tenor' ? 'via Tenor' : 'Powered by GIPHY'}</figcaption>
+            </figure>
           )}
 
           {/* SMART ACTION CHIPS */}
@@ -417,7 +502,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                       <button
                           key={idx}
                           onClick={() => onOpenWidget?.(p.tool, p.params)}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition-colors text-xs font-medium text-white/90"
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-md-secondary-container text-md-on-secondary-container hover:brightness-110 transition text-xs font-medium"
                       >
                           <Wand2 size={12} className="text-teal-400" />
                           <span>
@@ -437,15 +522,27 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           {voice_note && (
              <div className="mt-3 mb-1 w-full max-w-[280px]">
                 <VoiceNotePlayer src={voice_note} accentColor={moodColor} />
+                {visibleContent && visibleContent.trim() && visibleContent.trim() !== '[Voice Note]' && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowTranscript(v => !v); }}
+                    aria-expanded={showTranscript}
+                    className="mt-1.5 text-[11px] font-medium opacity-60 hover:opacity-100 underline-offset-2 hover:underline"
+                  >
+                    {showTranscript ? 'Hide text' : 'Show text'}
+                  </button>
+                )}
              </div>
           )}
 
           <div
-            className={`text-[10px] mt-2 opacity-40 font-medium ${
-              isUser ? 'text-right' : 'text-left'
+            className={`text-[10px] mt-2 font-medium flex items-center gap-1.5 ${
+              isUser ? 'justify-end' : 'justify-start'
             }`}
           >
-            {timeString}
+            {/* Aastha's mood colour lives here now (was a stripe down the bubble's edge) */}
+            {!isUser && mood && <span aria-hidden className="w-1.5 h-1.5 rounded-full" style={{ background: moodColor, boxShadow: `0 0 6px ${moodColor}` }} />}
+            <span className="opacity-50">{timeString}</span>
           </div>
         </div>
 
@@ -463,9 +560,34 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
         </AnimatePresence>
 
+        {/* Your reaction on Aastha's message (7.4) — tap to change or remove */}
+        {!isUser && myReaction && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); openPicker(); }}
+            aria-label={`Your reaction ${myReaction}. Change or remove`}
+            className="absolute left-3 -bottom-4 z-20 text-[15px] leading-none bg-md-surface-container-highest rounded-full px-1.5 py-1 border border-md-outline-variant/50 shadow-md"
+          >
+            {myReaction}
+          </button>
+        )}
+
+        {pickerAnchor && (
+          <ReactionPicker
+            anchor={pickerAnchor}
+            align={isUser ? 'right' : 'left'}
+            current={myReaction}
+            canReact={!isUser && !!onReact}
+            onPick={(emo) => onReact?.(emo)}
+            onReply={onReply ? () => onReply(content) : undefined}
+            onCopy={onCopy ? () => onCopy(content) : undefined}
+            onClose={() => setPickerAnchor(null)}
+          />
+        )}
+
         {/* Hover Actions (Reply/Copy) */}
         <AnimatePresence>
-          {(isHovered || (isMobile && isHovered)) && !isThinking && (
+          {!isMobile && isHovered && !isThinking && !pickerAnchor && (
             <motion.div
               initial={isMobile ? { opacity: 0, y: -8 } : { opacity: 0, scale: 0.85 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -481,6 +603,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 }
               `}
             >
+              {!isUser && onReact && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); openPicker(); }}
+                  aria-label="React"
+                  title="React"
+                  className="p-2 rounded-full bg-md-surface-container-high border border-md-outline-variant/40 text-md-on-surface-variant hover:text-md-on-surface shadow-lg"
+                >
+                  <SmilePlus size={14} />
+                </button>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); onReply?.(content); }}
                 className="p-2 rounded-full bg-zinc-800 border border-white/10 text-white/70 hover:text-white shadow-lg"
@@ -500,3 +632,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     </Wrapper>
   );
 };
+
+/**
+ * Memoized (ROADMAP P2): while a reply streams, only the streaming bubble re-renders instead of all ~50.
+ * Callback props are intentionally ignored in the comparison — they're recreated every render but
+ * behave identically for the same message content.
+ */
+const DATA_PROPS: (keyof MessageBubbleProps)[] = [
+  'role', 'content', 'timestamp', 'reaction', 'mood', 'searchQuery', 'isStreaming',
+  'currentMatchIndex', 'isMobile', 'voice_note', 'reasoning', 'isDeepThinking', 'isClone', 'cloneName', 'gif', 'myReaction',
+];
+export const MessageBubble = React.memo(MessageBubbleInner, (prev, next) =>
+  DATA_PROPS.every((k) => prev[k] === next[k])
+);
