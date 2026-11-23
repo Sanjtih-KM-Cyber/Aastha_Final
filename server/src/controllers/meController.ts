@@ -6,6 +6,7 @@
  *  - GET     /api/data/moods/insights weekly mood view + one honest insight (7.4)
  */
 import { Response } from 'express';
+import bcrypt from 'bcryptjs';
 import { AuthRequest } from '../middleware/authMiddleware';
 import User from '../models/User';
 import Mood from '../models/Mood';
@@ -223,6 +224,28 @@ export const updateNickname = async (req: AuthRequest, res: Response) => {
   await user.save();
   const n = user.nickname || {};
   (res as any).json({ nickname: { value: n.value || '', by: n.by || 'aastha', off: !!n.off } });
+};
+
+// POST /api/users/verify-password { password } — unlocks the app-lock screen with the account password.
+// Already signed in (protect), so it only confirms it's still you. 5 wrong tries → 15 min cool-down per account.
+const unlockFails = new Map<string, { n: number; until: number }>();
+export const _resetUnlockLimiter = () => unlockFails.clear();
+export const verifyAccountPassword = async (req: AuthRequest, res: Response) => {
+  if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+  const id = String(req.user._id);
+  const f = unlockFails.get(id);
+  if (f && f.until > Date.now()) return (res as any).status(429).json({ message: 'Too many tries. Please wait a few minutes.' });
+  const password = String((req as any).body?.password || '');
+  const u: any = await User.findById(id).select('+passwordHash');
+  const ok = !!u?.passwordHash && password.length > 0 && password.length <= 200 && await bcrypt.compare(password, u.passwordHash);
+  if (!ok) {
+    const n = (f && f.until <= Date.now() && f.n >= 5 ? 0 : f?.n || 0) + 1;
+    unlockFails.set(id, { n, until: n >= 5 ? Date.now() + 15 * 60_000 : 0 });
+    // 422, not 401: the app treats 401/403 as "session expired" and signs you out — a typo must not do that
+    return (res as any).status(422).json({ message: 'Wrong password' });
+  }
+  unlockFails.delete(id);
+  (res as any).json({ ok: true });
 };
 
 // POST /api/users/legal-consent { accept: true } — records acceptance of the current Terms + Privacy Policy

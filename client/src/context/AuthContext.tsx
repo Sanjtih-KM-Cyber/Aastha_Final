@@ -36,6 +36,7 @@ interface AuthContextType extends AuthState {
   getUserDisplayEmail: () => string;
   updateUser: (data: Partial<User>) => void;
   setPreventAutoLock: (id: string, prevent: boolean) => void; // New method
+  isAutoLockBlocked: () => boolean; // music / focus timer running → idle lock waits
   completeOnboarding: () => Promise<void>;
 }
 
@@ -105,63 +106,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // ---------- AUTO-LOCK SYSTEM ----------
-  useEffect(() => {
-      if (!state.isAuthenticated) return;
-
-      const checkInactivity = () => {
-          // CHECK IF PREVENTED
-          if (preventLockIds.current.size > 0) {
-              // If widgets are active, update "last active" so the timer effectively resets
-              // This ensures that the moment the music stops, the timer starts counting from *now*
-              // rather than from when the user last clicked the mouse 30 mins ago.
-              lastActiveRef.current = Date.now();
-              localStorage.setItem('auth_last_active', Date.now().toString());
-              return;
-          }
-
-          const lockSetting = localStorage.getItem('settings_autoLock');
-          if (!lockSetting || lockSetting === '0') return;
-
-          const duration = parseInt(lockSetting, 10);
-          const lastActiveStr = localStorage.getItem('auth_last_active');
-          const lastActive = lastActiveStr ? parseInt(lastActiveStr, 10) : Date.now();
-          const now = Date.now();
-
-          if (now - lastActive > duration) {
-              console.log("Auto-Lock Triggered");
-              logout();
-          }
-      };
-
-      // ✅ FIX: REMOVED immediate checkInactivity() call here.
-      // This prevents the "Logout Loop" when resuming the app after 5 mins.
-      // We rely on the interval to check eventually, or BiometricGuard to handle the immediate "Lock Screen".
-
-      const activityInterval = setInterval(checkInactivity, 5000); // Check every 5s
-
-      // Activity Listener
-      const updateActivity = () => {
-          const now = Date.now();
-          // Throttle updates to once per second
-          if (now - lastActiveRef.current > 1000) {
-              lastActiveRef.current = now;
-              localStorage.setItem('auth_last_active', now.toString());
-          }
-      };
-
-      window.addEventListener('mousedown', updateActivity);
-      window.addEventListener('keydown', updateActivity);
-      window.addEventListener('touchstart', updateActivity);
-
-      return () => {
-          clearInterval(activityInterval);
-          window.removeEventListener('mousedown', updateActivity);
-          window.removeEventListener('keydown', updateActivity);
-          window.removeEventListener('touchstart', updateActivity);
-      };
-  }, [state.isAuthenticated, logout]);
-
+  // Auto-lock lives in components/auth/BiometricGuard.tsx now (locks the screen instead of LOGGING YOU OUT after
+  // inactivity). Widgets that keep the app "busy" (music, focus timer) still pause the idle lock via setPreventAutoLock.
+  const isAutoLockBlocked = useCallback(() => preventLockIds.current.size > 0, []);
 
   // ---------- CHECK AUTH ----------
   useEffect(() => {
@@ -314,6 +261,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!user.hasDiarySetup) key = deriveKey(password, salt);
     }
 
+    // Just proved who you are with the password → the app lock skips its start-up lock (components/auth/BiometricGuard.tsx)
+    try { sessionStorage.setItem('aastha_fresh_sign_in', String(Date.now())); } catch { /* ignore */ }
     setState({
       user,
       isAuthenticated: true,
@@ -351,6 +300,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         key = deriveKey(pwdToUse, salt);
     }
 
+    // Just proved who you are with the password → the app lock skips its start-up lock (components/auth/BiometricGuard.tsx)
+    try { sessionStorage.setItem('aastha_fresh_sign_in', String(Date.now())); } catch { /* ignore */ }
     setState({
       user,
       isAuthenticated: true,
@@ -439,6 +390,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getUserDisplayEmail,
       updateUser,
       setPreventAutoLock,
+      isAutoLockBlocked,
       completeOnboarding
     }}>
       {children}

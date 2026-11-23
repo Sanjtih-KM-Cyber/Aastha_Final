@@ -6,6 +6,8 @@ import {
   Save, Camera, CreditCard, Sparkles, Zap, Image as ImageIcon,
   Headphones, ChevronLeft, ChevronRight, Clock, UserPlus, LogOut, Database, Minus
 } from 'lucide-react';
+import { FingerprintPattern, ScanFace, Lock, EyeOff } from 'lucide-react';
+import { loadLockSettings, saveLockSettings, LockSettings, LOCK_AFTER_OPTIONS, LOCK_NOW_EVENT, describeLockAfter } from '../../security/appLock';
 import { Card, SectionTitle, Switch, Button, IconButton, ListItem, ListGroup, GlassBar, fieldClass } from '../../design/ui';
 import { useWindowControls, saveWindowControls, WindowControls } from '../../hooks/useWindowControls';
 import { useAppFontChoice, saveAppFonts } from '../../hooks/useAppFonts';
@@ -94,11 +96,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   
   // Auto Lock State
-  const [autoLockDuration, setAutoLockDuration] = useState<string>(() => {
-      return localStorage.getItem('settings_autoLock') || '0';
-  });
+  // App lock (components/auth/BiometricGuard.tsx + security/appLock.ts)
+  const [lock, setLock] = useState<LockSettings>(() => loadLockSettings());
+  const updateLock = (next: LockSettings) => { setLock(next); saveLockSettings(next); };
 
-  const { isAvailable: isBiometricAvailable, isEnabled: isBiometricEnabled, toggleBiometrics, promptBiometrics } = useBiometrics();
+  const { isAvailable: isBiometricAvailable, toggleBiometrics, promptBiometrics, kind: biometricKind } = useBiometrics();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   
   // Subscription
@@ -158,14 +160,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       localStorage.setItem('user_voice_uri', uri);
   };
 
-  // Handle Auto Lock Change
-  const handleAutoLockChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-      const val = e.target.value;
-      setAutoLockDuration(val);
-      localStorage.setItem('settings_autoLock', val);
-      // We also update the timestamp immediately to prevent immediate lock upon switching
-      localStorage.setItem('auth_last_active', Date.now().toString());
-  };
+
 
   // Load the real notification state (the toggle used to always start "off")
   useEffect(() => {
@@ -227,19 +222,22 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
       }
   };
 
-  const handleToggleBiometrics = async () => {
-      if (!isBiometricEnabled) {
-          // Enforce verification before enabling to prevent lockout
-          const success = await promptBiometrics();
-          if (success) {
-              toggleBiometrics(true);
-          } else {
-              alert("Verification failed. Biometric lock could not be enabled.");
-          }
-      } else {
-          toggleBiometrics(false);
+  // Turning the lock on: on a phone with a sensor, prove it works first (so nobody locks themselves out)
+  const toggleAppLock = async () => {
+      if (lock.enabled) {
+          updateLock({ ...lock, enabled: false });
+          if (isBiometricAvailable) toggleBiometrics(false);
+          return;
       }
+      if (isBiometricAvailable) {
+          const ok = await promptBiometrics();
+          if (!ok) { toast.error('Couldn’t verify — the lock is still off'); return; }
+          await toggleBiometrics(true);
+      }
+      updateLock({ ...lock, enabled: true });
+      toast.success(isBiometricAvailable ? 'Aastha is locked with your ' + (biometricKind === 'face' ? 'face' : 'fingerprint') : 'App lock is on');
   };
+
 
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
@@ -690,25 +688,49 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
 
                   <section>
                       <SectionTitle>App lock</SectionTitle>
-                      <ListGroup>
-                        <ListItem icon={<Clock size={18} />} title="Auto-lock" subtitle="Lock the app after inactivity"
-                          trailing={
-                            <select value={autoLockDuration} onChange={handleAutoLockChange} aria-label="Auto-lock timer"
-                              className="h-10 px-3 rounded-[12px] bg-md-surface-container-highest text-md-on-surface text-sm border border-transparent focus:border-md-primary focus:outline-none">
-                              <option value="0">Off</option>
-                              <option value="15000">15 seconds</option>
-                              <option value="30000">30 seconds</option>
-                              <option value="60000">1 minute</option>
-                              <option value="120000">2 minutes</option>
-                              <option value="300000">5 minutes</option>
-                              <option value="600000">10 minutes</option>
-                            </select>
-                          } />
-                        {isBiometricAvailable && (
-                          <ListItem icon={<Shield size={18} />} title="Biometric lock" subtitle="Fingerprint / Face ID when the app opens"
-                            trailing={<Switch checked={isBiometricEnabled} onChange={() => handleToggleBiometrics()} label="Biometric lock" />} />
+                      <Card padded={false} className="overflow-hidden">
+                        <div className="p-4 flex items-center gap-4">
+                          <span className="w-12 h-12 shrink-0 rounded-[16px] bg-md-primary-container text-md-on-primary-container flex items-center justify-center">
+                            {isBiometricAvailable ? (biometricKind === 'face' ? <ScanFace size={24} /> : <FingerprintPattern size={24} />) : <Lock size={22} />}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-md-on-surface font-medium">Lock Aastha</p>
+                            <p className="text-xs text-md-on-surface-variant mt-0.5">
+                              {isBiometricAvailable
+                                ? `Unlock with your ${biometricKind === 'face' ? 'face' : biometricKind === 'fingerprint' ? 'fingerprint' : 'fingerprint or face'} — your phone's PIN and your password work too.`
+                                : 'Unlock with your account password.'}
+                            </p>
+                          </div>
+                          <Switch checked={lock.enabled} onChange={() => toggleAppLock()} label="Lock Aastha" />
+                        </div>
+                        {lock.enabled && (
+                          <div className="px-4 pb-4 pt-1 border-t border-md-outline-variant/30">
+                            <p className="text-sm text-md-on-surface mt-3 mb-2.5">Lock after</p>
+                            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Lock after">
+                              {LOCK_AFTER_OPTIONS.map((o) => {
+                                const on = lock.afterMs === o.ms;
+                                return (
+                                  <button key={o.ms} type="button" role="radio" aria-checked={on} onClick={() => updateLock({ ...lock, afterMs: o.ms })}
+                                    className={`h-9 px-3.5 rounded-full text-sm transition-colors inline-flex items-center gap-1.5 ${on ? 'bg-md-secondary-container text-md-on-secondary-container font-medium' : 'border border-md-outline-variant/50 text-md-on-surface-variant hover:bg-md-on-surface/[0.06]'}`}>
+                                    {on && <Check size={14} />}{o.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[11px] text-md-on-surface-variant mt-2.5 px-0.5">{describeLockAfter(lock)} Music and focus timers keep it open.</p>
+                          </div>
                         )}
-                      </ListGroup>
+                      </Card>
+                      {lock.enabled && (
+                        <ListGroup className="mt-3">
+                          {Capacitor.isNativePlatform() && (
+                            <ListItem icon={<EyeOff size={18} />} title="Hide in recent apps" subtitle="Blank preview in the app switcher (also blocks screenshots)"
+                              trailing={<Switch checked={lock.hideInSwitcher} onChange={(v) => updateLock({ ...lock, hideInSwitcher: v })} label="Hide in recent apps" />} />
+                          )}
+                          <ListItem icon={<Lock size={18} />} title="Lock now" subtitle="Lock the app straight away"
+                            onClick={() => { onClose(); setTimeout(() => window.dispatchEvent(new Event(LOCK_NOW_EVENT)), 250); }} />
+                        </ListGroup>
+                      )}
                   </section>
 
                   <section>

@@ -104,6 +104,7 @@
 49m. [ ] Set closeness to Bestie (Settings → Connection) → within a couple of messages she tells you your nickname; "Another one", "Choose my own" and "Don't use a nickname" work.
 49n. [ ] Forgot password → set a new one → the sign-in form is already filled; tap Enter Sanctuary. Diary → forgot diary password → after reset the unlock box is filled.
 49o. [ ] New account on the **phone**: tour = welcome → message box → animated gestures → bottom tabs → headphones → done; the card never covers what it points at; "Skip tour" works. On **PC**: welcome → sidebar → message box → headphones → Settings → done, each card next to its target.
+49p. [ ] **APK:** Settings → Security → turn on **Lock Aastha** (fingerprint check once). Close and reopen the app → ONE fingerprint sheet, unlocks on the first good touch (a smudged touch lets you retry in the same sheet; phone PIN works too). Leave for longer than "Lock after" → locked; quick switch away and back → not locked. Wrong password on the lock screen → "didn't match", you stay signed in. Signing in with your password → no extra lock.
 49. [ ] Settings → Data & Privacy → Export: name, date of birth, city, avatar come out readable.
 
 ## 16. Crash reporting (only if `SENTRY_DSN` / `VITE_SENTRY_DSN` are set)

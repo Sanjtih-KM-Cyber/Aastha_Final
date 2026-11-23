@@ -100,6 +100,16 @@ const mockRes = () => {
   r = await call(chat.sendNudge, { reason: 'seen' });
   check('daily cap (6) respected', r.statusCode === 204);
 
+  // ---------------- app lock: unlock with the account password ----------------
+  const bcrypt = require('bcryptjs');
+  const pw = await User.create({ name: 'Lock', emailEncrypted: encrypt('l@x.com'), passwordHash: await bcrypt.hash('right-pass', 4), isVerified: true });
+  const vp = async (password: string) => { const res = mockRes(); await me.verifyAccountPassword({ user: pw, body: { password }, params: {}, query: {} } as any, res); return res.statusCode; };
+  check('lock screen: right password unlocks', (await vp('right-pass')) === 200);
+  check('lock screen: wrong password refused with 422 (not 401 — that would sign the user out)', (await vp('nope')) === 422);
+  for (let k = 0; k < 4; k++) await vp('nope');
+  check('lock screen: 5 wrong tries → cool-down (even the right one waits)', (await vp('right-pass')) === 429);
+  me._resetUnlockLimiter();
+
   await mongoose.disconnect();
   await mongod.stop();
   console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');

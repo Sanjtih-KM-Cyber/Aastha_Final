@@ -1,17 +1,21 @@
-import { NativeBiometric } from '@capgo/capacitor-native-biometric';
+import { NativeBiometric, BiometryType } from '@capgo/capacitor-native-biometric';
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
 import { useState, useEffect } from 'react';
 
-const BIOMETRIC_ENABLED_KEY = 'biometric_enabled';
+const BIOMETRIC_ENABLED_KEY = 'biometric_enabled'; // "Lock Aastha" on a phone (also lets the Diary unlock with a fingerprint)
 
-// SHARED STATE: Persists across component mounts (Diary vs Guard)
+// SHARED STATE: persists across component mounts (Diary vs lock screen)
 let lastSuccessTime = 0;
+let inFlight: Promise<boolean> | null = null; // ONE system prompt at a time, app-wide
+
+export type BiometricKind = 'fingerprint' | 'face' | 'biometric';
 
 export const useBiometrics = () => {
     const [isAvailable, setIsAvailable] = useState(false);
     const [isEnabled, setIsEnabled] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [kind, setKind] = useState<BiometricKind>('biometric');
 
     useEffect(() => {
         const init = async () => {
@@ -22,15 +26,13 @@ export const useBiometrics = () => {
     }, []);
 
     const checkAvailability = async () => {
-        // WEB GUARD: Do not call native plugin on web
-        if (!Capacitor.isNativePlatform()) {
-            setIsAvailable(false);
-            return;
-        }
-
+        if (!Capacitor.isNativePlatform()) { setIsAvailable(false); return; } // web: password lock instead
         try {
-            const result = await NativeBiometric.isAvailable();
+            const result = await NativeBiometric.isAvailable({ useFallback: true } as any);
             setIsAvailable(result.isAvailable);
+            const t = result.biometryType;
+            setKind(t === BiometryType.FACE_ID || t === BiometryType.FACE_AUTHENTICATION ? 'face'
+                : t === BiometryType.FINGERPRINT || t === BiometryType.TOUCH_ID ? 'fingerprint' : 'biometric');
         } catch (e) {
             console.log('Biometric not available:', e);
             setIsAvailable(false);
@@ -43,36 +45,42 @@ export const useBiometrics = () => {
     };
 
     const toggleBiometrics = async (enable: boolean) => {
-        await Preferences.set({
-            key: BIOMETRIC_ENABLED_KEY,
-            value: String(enable)
-        });
+        await Preferences.set({ key: BIOMETRIC_ENABLED_KEY, value: String(enable) });
         setIsEnabled(enable);
     };
 
+    /**
+     * Shows the system prompt ONCE. Up to 5 tries inside the same sheet (the plugin's default was 1, so one
+     * smudged touch closed it and you had to start over = "it takes 2 times"), and the phone's PIN/pattern as a
+     * fallback. Concurrent callers share the same prompt instead of stacking a second one.
+     */
     const promptBiometrics = async (): Promise<boolean> => {
-        // Double check platform availability to be safe
         if (!isAvailable || !Capacitor.isNativePlatform()) return true;
-
-        try {
-            const result = await NativeBiometric.verifyIdentity({
-                reason: "Unlock Aastha",
-                title: "Authentication Required",
-                subtitle: "Confirm your identity to access your sanctuary",
-                description: "Please authenticate to continue"
-            });
-            // SUCCESS: Update global timestamp
-            lastSuccessTime = Date.now();
-            return true;
-        } catch (error) {
-            console.error("Authentication failed", error);
-            return false;
-        }
+        if (inFlight) return inFlight;
+        inFlight = (async () => {
+            try {
+                await NativeBiometric.verifyIdentity({
+                    reason: 'Unlock Aastha',
+                    title: 'Unlock Aastha',
+                    subtitle: 'Your sanctuary is locked',
+                    description: '',
+                    negativeButtonText: 'Use password',
+                    useFallback: true,   // phone PIN / pattern if the sensor won't cooperate
+                    maxAttempts: 5,
+                });
+                lastSuccessTime = Date.now();
+                return true;
+            } catch (error) {
+                console.warn('Authentication cancelled or failed', error);
+                return false;
+            } finally {
+                setTimeout(() => { inFlight = null; }, 0);
+            }
+        })();
+        return inFlight;
     };
 
-    const isRecentSuccess = (gracePeriodMs = 3000) => {
-        return (Date.now() - lastSuccessTime) < gracePeriodMs;
-    };
+    const isRecentSuccess = (gracePeriodMs = 3000) => (Date.now() - lastSuccessTime) < gracePeriodMs;
 
-    return { isAvailable, isEnabled, toggleBiometrics, promptBiometrics, isLoading, isRecentSuccess };
+    return { isAvailable, isEnabled, toggleBiometrics, promptBiometrics, isLoading, isRecentSuccess, kind };
 };
