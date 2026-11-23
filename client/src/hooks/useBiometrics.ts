@@ -8,6 +8,9 @@ const BIOMETRIC_ENABLED_KEY = 'biometric_enabled'; // "Lock Aastha" on a phone (
 // SHARED STATE: persists across component mounts (Diary vs lock screen)
 let lastSuccessTime = 0;
 let inFlight: Promise<boolean> | null = null; // ONE system prompt at a time, app-wide
+// The "enabled" preference is SHARED live between every component using this hook. Before, each copy read it once
+// at mount — so turning the lock on in Settings left the lock screen thinking fingerprint was off (password only).
+const prefListeners = new Set<(v: boolean) => void>();
 
 export type BiometricKind = 'fingerprint' | 'face' | 'biometric';
 
@@ -23,12 +26,14 @@ export const useBiometrics = () => {
             setIsLoading(false);
         };
         init();
+        prefListeners.add(setIsEnabled);
+        return () => { prefListeners.delete(setIsEnabled); };
     }, []);
 
     const checkAvailability = async () => {
         if (!Capacitor.isNativePlatform()) { setIsAvailable(false); return; } // web: password lock instead
         try {
-            const result = await NativeBiometric.isAvailable({ useFallback: true } as any);
+            const result = await NativeBiometric.isAvailable({ useFallback: true });
             setIsAvailable(result.isAvailable);
             const t = result.biometryType;
             setKind(t === BiometryType.FACE_ID || t === BiometryType.FACE_AUTHENTICATION ? 'face'
@@ -46,7 +51,7 @@ export const useBiometrics = () => {
 
     const toggleBiometrics = async (enable: boolean) => {
         await Preferences.set({ key: BIOMETRIC_ENABLED_KEY, value: String(enable) });
-        setIsEnabled(enable);
+        prefListeners.forEach((fn) => fn(enable)); // every screen updates at once (lock screen, Diary, Settings)
     };
 
     /**

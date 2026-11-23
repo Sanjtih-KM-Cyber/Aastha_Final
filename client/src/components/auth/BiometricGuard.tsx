@@ -14,7 +14,8 @@ import {
 /**
  * APP LOCK (phone + web) — one controller, one lock screen.
  *  - Locks on a cold start, when you come back after the chosen grace period, after idling, or via "Lock now".
- *  - Phone: fingerprint / face (5 tries in ONE system sheet + the phone's PIN as fallback). Web / fallback: account password.
+ *  - Phone: tap the fingerprint button → fingerprint / face (5 tries in ONE system sheet + the phone's PIN as fallback).
+ *    The sheet never opens by itself. Web: account password only (no biometrics on the website — owner decision).
  *  - The app stays MOUNTED under the lock screen (your chat, music and widgets don't reset when you unlock).
  *  - Double-prompt fix: the system sheet closing fires a "resume" on some phones; resumes during a prompt and for
  *    1.5 s after it are ignored, and only one system prompt can exist at a time (hooks/useBiometrics.ts).
@@ -24,7 +25,8 @@ export const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({ childr
   const bio = useBiometrics();
   const native = Capacitor.isNativePlatform();
   const [settings, setSettings] = useState<LockSettings>(() => loadLockSettings());
-  const useBio = native && bio.isAvailable && bio.isEnabled;
+  // Phone with a sensor (or PIN) → the lock screen ALWAYS offers fingerprint/face; password is the backup
+  const useBio = native && bio.isAvailable;
 
   // Cold start → locked; but NOT right after signing in with the password (you just proved it's you)
   const [locked, setLocked] = useState<boolean>(() => {
@@ -37,7 +39,6 @@ export const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({ childr
   });
   // consume the "just signed in" flag AFTER mounting (initialisers can run twice in dev — StrictMode)
   useEffect(() => { const t = setTimeout(() => { try { sessionStorage.removeItem('aastha_fresh_sign_in'); } catch { /* ignore */ } }, 0); return () => clearTimeout(t); }, []);
-  const autoPrompt = useRef<boolean>(true);
   const prompting = useRef(false);
   const ignoreUntil = useRef(0);
   const hiddenAt = useRef<number | null>(null);
@@ -48,7 +49,7 @@ export const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({ childr
     const reload = () => setSettings(loadLockSettings());
     window.addEventListener(LOCK_EVENT, reload);
     window.addEventListener('storage', reload);
-    const lockNow = () => { if (loadLockSettings().enabled) { autoPrompt.current = false; setLocked(true); } };
+    const lockNow = () => { if (loadLockSettings().enabled) { setLocked(true); } };
     window.addEventListener(LOCK_NOW_EVENT, lockNow);
     return () => { window.removeEventListener(LOCK_EVENT, reload); window.removeEventListener('storage', reload); window.removeEventListener(LOCK_NOW_EVENT, lockNow); };
   }, []);
@@ -57,7 +58,7 @@ export const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     if (bio.isLoading || !native || !bio.isEnabled) return;
     let has = false; try { has = localStorage.getItem('aastha_app_lock') !== null; } catch { /* ignore */ }
-    if (!has) { saveLockSettings({ enabled: true, afterMs: 0, hideInSwitcher: false }); setSettings(loadLockSettings()); autoPrompt.current = true; setLocked(true); }
+    if (!has) { saveLockSettings({ enabled: true, afterMs: 0, hideInSwitcher: false }); setSettings(loadLockSettings()); setLocked(true); }
   }, [bio.isLoading, bio.isEnabled, native]);
 
   // Hide the app in "recent apps" (Android also blocks screenshots while on)
@@ -86,14 +87,8 @@ export const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [useBio, bio, unlocked]);
 
-  // Auto-show the system sheet when we lock for a cold start / return (not for idle — you may not be looking)
-  useEffect(() => {
-    if (locked && useBio && autoPrompt.current && !bio.isLoading) {
-      autoPrompt.current = false;
-      const t = setTimeout(tryBiometric, 250); // let the activity settle (S23/Android resume lag)
-      return () => clearTimeout(t);
-    }
-  }, [locked, useBio, bio.isLoading, tryBiometric]);
+  // Owner decision: the system fingerprint sheet NEVER opens by itself — the lock screen shows first and the sheet
+  // only appears when you tap the fingerprint button (cold start, coming back from the background, idle, Lock now).
 
   // Leave / come back
   useEffect(() => {
@@ -104,7 +99,7 @@ export const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({ childr
     const onShow = () => {
       if (prompting.current || Date.now() < ignoreUntil.current) { hiddenAt.current = null; return; }
       const s = loadLockSettings();
-      if (!locked && shouldLockOnReturn(s, hiddenAt.current, Date.now())) { autoPrompt.current = true; setLocked(true); }
+      if (!locked && shouldLockOnReturn(s, hiddenAt.current, Date.now())) { setLocked(true); }
       hiddenAt.current = null;
       lastActivity.current = Date.now();
     };
@@ -128,7 +123,7 @@ export const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({ childr
     const t = setInterval(() => {
       if (locked || prompting.current || document.visibilityState === 'hidden') return;
       const busy = typeof isAutoLockBlocked === 'function' ? isAutoLockBlocked() : false; // music / focus timer running
-      if (shouldLockForIdle(loadLockSettings(), lastActivity.current, Date.now(), busy)) { autoPrompt.current = false; setLocked(true); }
+      if (shouldLockForIdle(loadLockSettings(), lastActivity.current, Date.now(), busy)) { setLocked(true); }
     }, 5000);
     return () => { evs.forEach((e) => window.removeEventListener(e, touch)); clearInterval(t); };
   }, [locked, isAutoLockBlocked]);
