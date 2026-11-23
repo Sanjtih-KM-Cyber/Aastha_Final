@@ -40,7 +40,7 @@ jobs:
         working-directory: client
         run: |
           npx cap sync android
-          node scripts/update-manifest.js
+          node scripts/update-manifest.cjs
 
       # The committed debug APK once shipped with ZERO native plugins (no notifications, no biometrics).
       # Fail the build if any required plugin is missing from the generated plugin registry.
