@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
 import { Icons } from '../../design/icons';
 import { useSpecular } from '../../design/LiquidGlass';
 
@@ -29,6 +28,11 @@ export const SCROLL_EVENT = 'aastha:chat-scroll';
 export const MobileTabBar: React.FC<Props> = ({ active, onSelect }) => {
   const [compact, setCompact] = useState(false);
   const specular = useSpecular();
+  const activeIndex = TABS.findIndex((t) => t.key === active);
+  // Pill geometry from the bar's own spacing (px-2/gap-1/60px buttons expanded, px-1.5/gap-0.5/44px compact)
+  const pill: React.CSSProperties = compact
+    ? { left: 6 + activeIndex * 46 + 4, top: 4 + 4, width: 36, height: 36 }
+    : { left: 8 + activeIndex * 64 + 2, top: 6 + 6, width: 56, height: 32 };
 
   useEffect(() => {
     const onScroll = (e: Event) => {
@@ -48,13 +52,26 @@ export const MobileTabBar: React.FC<Props> = ({ active, onSelect }) => {
       // --vv-bottom (set by ChatView) keeps the bar on the VISIBLE screen even if Chrome pans the page
       style={{ bottom: 'calc(var(--vv-bottom, 0px) + env(safe-area-inset-bottom) + 12px)' }}
     >
-      <motion.div
-        layout
-        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+      {/* Same look + motion as before (bar shrinks/grows, the highlight pill slides between tabs with a little
+          spring), but with plain CSS transitions instead of framer-motion `layout`/`layoutId`: on Android Chrome
+          that FLIP animation could get stuck mid-way on this fixed bar and leave it shifted half off the screen
+          (only with animations on — Lite mode never showed it). Positions are computed, not measured. */}
+      <div
         onPointerMove={specular}
         onClick={() => compact && setCompact(false)}
-        className={`glass glass-clear glass-pill glass-specular glass-refract pointer-events-auto flex items-center ${compact ? 'gap-0.5 px-1.5 py-1' : 'gap-1 px-2 py-1.5'}`}
+        className={`relative glass glass-clear glass-pill glass-specular glass-refract pointer-events-auto flex items-center transition-[padding,gap] duration-300 ease-md-emphasized ${compact ? 'gap-0.5 px-1.5 py-1' : 'gap-1 px-2 py-1.5'}`}
       >
+        {/* sliding active pill (springy ease = the old layoutId feel) */}
+        {activeIndex >= 0 && (
+          <span
+            aria-hidden
+            className="absolute bg-md-secondary-container rounded-full pointer-events-none"
+            style={{
+              ...pill,
+              transition: 'left 420ms cubic-bezier(0.34, 1.45, 0.64, 1), top 300ms cubic-bezier(0.2, 0, 0, 1), width 300ms cubic-bezier(0.2, 0, 0, 1), height 300ms cubic-bezier(0.2, 0, 0, 1)',
+            }}
+          />
+        )}
         {TABS.map(({ key, label, Icon }) => {
           const isActive = active === key;
           return (
@@ -64,21 +81,15 @@ export const MobileTabBar: React.FC<Props> = ({ active, onSelect }) => {
               aria-label={label}
               aria-current={isActive ? 'page' : undefined}
               onClick={(e) => { e.stopPropagation(); onSelect(key); }}
-              className={`relative flex flex-col items-center justify-center rounded-full transition-colors duration-200 ease-md-emphasized ${compact ? 'w-11 h-11' : 'w-[3.75rem] h-14'} ${isActive ? 'text-md-on-secondary-container' : 'text-md-on-surface-variant hover:text-md-on-surface'}`}
+              className={`relative flex flex-col items-center justify-center rounded-full transition-all duration-300 ease-md-emphasized ${compact ? 'w-11 h-11' : 'w-[3.75rem] h-14'} ${isActive ? 'text-md-on-secondary-container' : 'text-md-on-surface-variant hover:text-md-on-surface'}`}
             >
-              {isActive && (
-                <motion.span
-                  layoutId="tab-indicator"
-                  transition={{ type: 'spring', stiffness: 500, damping: 38 }}
-                  className={`absolute bg-md-secondary-container rounded-full ${compact ? 'inset-1' : 'top-1.5 h-8 w-14'}`}
-                />
-              )}
-              <Icon size={compact ? 22 : 24} className={`relative ${compact ? '' : 'mt-0.5'}`} />
-              {!compact && <span className={`relative text-[11px] leading-none mt-1.5 ${isActive ? 'font-semibold' : 'font-medium'}`}>{label}</span>}
+              <Icon size={compact ? 22 : 24} className={`relative transition-[margin] duration-300 ${compact ? '' : 'mt-0.5'}`} />
+              {/* label folds away instead of popping */}
+              <span className={`relative text-[11px] leading-none overflow-hidden transition-all duration-300 ease-md-emphasized ${compact ? 'max-h-0 mt-0 opacity-0' : 'max-h-4 mt-1.5 opacity-100'} ${isActive ? 'font-semibold' : 'font-medium'}`}>{label}</span>
             </button>
           );
         })}
-      </motion.div>
+      </div>
     </nav>
   );
 };
