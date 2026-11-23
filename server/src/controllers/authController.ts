@@ -55,6 +55,7 @@ const relationshipFields = (user: any) => {
     region: user.region || '',
     thinkingMode: !!user.thinkingMode,
     gifsEnabled: user.gifsEnabled !== false,
+    nickname: user.nickname?.value ? { value: user.nickname.value, by: user.nickname.by || 'aastha', off: !!user.nickname.off } : (user.nickname?.off ? { value: '', by: 'aastha', off: true } : null),
   };
 };
 

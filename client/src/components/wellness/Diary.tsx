@@ -64,6 +64,7 @@ const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string
   const [input, setInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showReset, setShowReset] = useState(false);
+  const [filled, setFilled] = useState(false); // new password filled in after a reset
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +77,7 @@ const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string
       <div className="absolute inset-0 z-50 overflow-y-auto bg-[#1a1a1a] text-white rounded-b-xl p-6">
         <div className="max-w-md mx-auto">
           <button onClick={() => setShowReset(false)} className="text-xs text-white/60 hover:text-white mb-4">← Back to unlock</button>
-          <DiaryPasswordReset compact onDone={() => { setShowReset(false); setError(''); }} />
+          <DiaryPasswordReset compact onDone={(pw) => { setShowReset(false); setError(''); if (pw) { setInput(pw); setFilled(true); } }} />
         </div>
       </div>
     );
@@ -89,7 +90,7 @@ const DiaryLockScreen: React.FC<{ onUnlock: (pwd: string) => void; error: string
           <Lock size={32} style={{ color: currentTheme.primaryColor }} />
         </div>
         <h2 className="text-3xl font-serif mb-2">Sanctuary Vault</h2>
-        <p className="text-white/50 text-center mb-8 text-sm">Enter your unique diary password to decrypt your diary.</p>
+        <p className="text-white/50 text-center mb-8 text-sm">{filled ? 'New diary password set — it’s filled in below. Tap unlock.' : 'Enter your unique diary password to decrypt your diary.'}</p>
         <form onSubmit={handleSubmit} className="w-full relative">
           <div className="relative">
               <input

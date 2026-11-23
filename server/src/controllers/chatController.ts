@@ -22,6 +22,11 @@ import { describeRecentReactions, setReaction, isAllowedReaction } from '../serv
 import { followUpPromptLine, followUpsAroundNow, markFollowUps } from '../services/reachOut';
 import { cleanTimeZone } from '../utils/timeZone';
 import { openQuotaWindow, quotaResetsAt } from '../utils/dailyReset';
+import { suggestReplies, makeNickname, nicknamePromptLine, nudgeInstruction, NudgeReason } from '../services/companionExtras';
+import { effectiveLevel } from '../services/relationship';
+import { PERSONA_VOICE } from '../prompts/companion';
+import { completeChat } from '../services/llm';
+import MessageModel from '../models/Message';
 
 // ============================================================================
 // HELPERS: TEXT CLEANING
@@ -127,6 +132,13 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         user.bond = { ...bondUpdate.state, override: (user.bond as any)?.override ?? null } as any;
         user.markModified('bond');
         bondLeveledUp = bondUpdate.leveledUp;
+    }
+    // BESTIE NICKNAME: first time they're at Bestie, invent one (background — the next reply introduces it)
+    if (effectiveLevel(user.bond as any) >= 4 && !(user as any).nickname?.value && !(user as any).nickname?.off) {
+        const uidForNick = user._id;
+        makeNickname({ name: user.name, facts: ((user as any).facts || []).map((f: string) => decrypt(f)), persona: (String(user.persona) === 'aarav' || String(user.persona) === 'aastik') ? 'aastik' : 'aastha' })
+          .then(async (nick) => { if (nick) await User.updateOne({ _id: uidForNick, 'nickname.value': { $exists: false } }, { $set: { nickname: { value: nick, by: 'aastha', setAt: new Date(), announced: false, off: false } } }); })
+          .catch(() => {});
     }
 
     // BROADCAST USER MESSAGE (SYNC)
@@ -281,6 +293,12 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     const allowGifs = gifsEnabled() && user.gifsEnabled !== false && risk === 'none' && !useClone && !isVoiceMode &&
         !['sad', 'crying', 'angry', 'concerned', 'anxious', 'scared', 'lonely'].includes(String(subconscious.mood || '').toLowerCase());
 
+    // Bestie nickname in the prompt (only at Bestie, only if not turned off, never in a crisis turn)
+    const nick: any = (user as any).nickname || {};
+    const nicknameLine = effectiveLevel(user.bond as any) >= 4 && nick.value && !nick.off && risk !== 'crisis' && !useClone
+        ? nicknamePromptLine(nick.value, !!nick.announced, isAastik ? 'aastik' : 'aastha') : '';
+    if (nicknameLine && !nick.announced) User.updateOne({ _id: user._id }, { $set: { 'nickname.announced': true } }).catch(() => {});
+
     let systemPrompt = buildCompanionPrompt({
         persona: isAastik ? 'aastik' : 'aastha',
         userName: userName || 'Friend',
@@ -295,6 +313,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         styleLine: describeStyle(user.styleProfile as any),
         bondLine: bondPromptLine(user.bond as any, bondLeveledUp),
         languageLine: describeLanguage(user.preferredLanguage, user.region),
+        nicknameLine: nicknameLine || undefined,
         safetyBlock: risk === 'crisis' ? CRISIS_PROMPT : risk === 'concern' ? CONCERN_PROMPT : undefined,
         thinking: false, // set below
         gifs: allowGifs,
@@ -513,6 +532,12 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         }).catch(console.error);
     }
 
+    // Quick replies for the USER, written from the reply they just got (not before it, like the old brain chips)
+    if (!useClone && risk === 'none' && !isVoiceMode && dbContent && typeof newUserMsgContent === 'string') {
+        const chips = await suggestReplies({ botName: isAastik ? 'Aastik' : 'Aastha', userText: newUserMsgContent, reply: dbContent, ms: 3000 }).catch(() => []);
+        if (chips.length) (res as any).write(`data: ${JSON.stringify({ type: 'suggestions', items: chips })}\n\n`);
+    }
+
     (res as any).write('data: [DONE]\n\n');
     (res as any).end();
 
@@ -578,5 +603,50 @@ export const reactToMessage = async (req: AuthRequest, res: Response) => {
     } catch (e) {
         console.error('React error:', e);
         (res as any).status(500).json({ message: 'Could not save reaction' });
+    }
+};
+
+
+// =====================================================================================================
+// FOLLOW-UP NUDGE — they reacted to the last reply (or read it) and went quiet. The app calls this after
+// ~15 s (reaction) / ~45 s (seen). At most ONE nudge per reply, 6 per day, never after a recent crisis.
+// Doesn't use the user's message quota (it's the companion talking, not them).
+// =====================================================================================================
+const NUDGES_PER_DAY = 6;
+export const sendNudge = async (req: AuthRequest, res: Response) => {
+    if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+    const reason: NudgeReason = (req as any).body?.reason === 'reaction' ? 'reaction' : 'seen';
+    const forId = String((req as any).body?.messageId || '');
+    try {
+        const user: any = await User.findById(req.user._id);
+        if (!user) return (res as any).status(404).json({ message: 'Not found' });
+        const lastCrisis = user.reachOut?.lastCrisisAt ? new Date(user.reachOut.lastCrisisAt).getTime() : 0;
+        if (Date.now() - lastCrisis < 12 * 3_600_000) return (res as any).status(204).end();
+
+        const recent: any[] = await getRecentMessages(user._id, 10);
+        const last = recent[recent.length - 1];
+        // Only right after the companion's reply: not if they already answered, not twice in a row
+        if (!last || last.role !== 'assistant' || last.isNudge || last.isClone || (forId && String(last._id) !== forId)) {
+            return (res as any).status(204).end();
+        }
+        const today = await MessageModel.countDocuments({ user: user._id, isNudge: true, timestamp: { $gt: new Date(Date.now() - 86_400_000) } });
+        if (today >= NUDGES_PER_DAY) return (res as any).status(204).end();
+
+        const isAastik = user.persona === 'aarav' || user.persona === 'aastik';
+        const nick: any = user.nickname || {};
+        const history = recent.slice(-8).map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' as const : 'user' as const, content: decrypt(m.content || '').slice(0, 600) }));
+        const system = `${PERSONA_VOICE[isAastik ? 'aastik' : 'aastha'].trim()}
+You're texting your friend ${String(user.name || '').split(' ')[0] || 'them'}. Write like a real friend texting: short, natural, no assistant filler, at most one emoji and only if they use them. Reply in the language and script they use.${effectiveLevel(user.bond) >= 4 && nick.value && !nick.off ? ` You sometimes call them "${nick.value}".` : ''}
+${nudgeInstruction(reason, last.userReaction)}`;
+        const text = (await completeChat([{ role: 'system', content: system }, ...history], { task: 'chat', temperature: 0.9, maxTokens: 80 }))
+            .replace(/<[^>]+>/g, '').replace(/\[[A-Z]+:[^\]]*\]/g, '').trim().slice(0, 300);
+        if (!text) return (res as any).status(204).end();
+
+        const [saved] = await appendMessages(user._id, [{ role: 'assistant', content: encrypt(text), isNudge: true }]);
+        broadcast(String(user._id), 'message', { id: String(saved?._id || ''), content: text, role: 'assistant', timestamp: saved?.timestamp || new Date() });
+        (res as any).json({ id: String(saved?._id || ''), content: text, timestamp: saved?.timestamp || new Date() });
+    } catch (e: any) {
+        if (!(e instanceof LlmUnavailableError)) console.error('Nudge error:', e?.message || e);
+        (res as any).status(204).end();
     }
 };

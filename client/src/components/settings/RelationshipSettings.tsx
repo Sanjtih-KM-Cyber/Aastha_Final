@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { followUpCheckIns } from '../../services/followUpCheckIns';
 import { deviceTimeZone } from '../../utils/timeZone';
-import { Heart, Languages, MapPin, Brain, Loader2, Check } from 'lucide-react';
+import { Heart, Languages, MapPin, Brain, Loader2, Check, Sparkles, Pencil, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 
@@ -102,6 +102,22 @@ export const RelationshipSettings: React.FC = () => {
   const earned: number = bond.earnedLevel ?? bond.level ?? 0;
   const isPro = !!u.isPro || (u.subscriptionExpiresAt && new Date(u.subscriptionExpiresAt) > new Date());
 
+  // Bestie nickname (server: PUT /users/nickname). Aastha invents one at Bestie; you can change it, ask for another, or turn it off.
+  const nick: { value: string; by: string; off: boolean } | null = u.nickname || null;
+  const atBestie = (bond.level ?? 0) >= 4;
+  const [nickDraft, setNickDraft] = useState<string | null>(null);
+  const nickAction = async (payload: Record<string, any>) => {
+    setSaving('nickname');
+    try {
+      const r = await api.put('/users/nickname', payload);
+      updateUser({ nickname: r.data?.nickname } as any);
+      setNickDraft(null);
+      setSaved('nickname'); setTimeout(() => setSaved(null), 1800);
+    } catch (e: any) {
+      alert(e?.response?.data?.message || 'Could not save. Please try again.');
+    } finally { setSaving(null); }
+  };
+
   const status = (field: string) =>
     saving === field ? <Loader2 size={14} className="animate-spin text-md-on-surface-variant" /> :
     saved === field ? <Check size={14} className="text-green-400" /> : null;
@@ -136,6 +152,39 @@ export const RelationshipSettings: React.FC = () => {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Bestie nickname */}
+      <div className="p-5 rounded-[24px] bg-md-surface-container border border-md-outline-variant/30">
+        <div className="flex items-center justify-between mb-1">
+          <h4 className="text-md-on-surface font-medium flex items-center gap-2"><Sparkles size={16} className="text-md-primary" /> Your nickname</h4>
+          {status('nickname')}
+        </div>
+        {!atBestie ? (
+          <p className="text-xs text-md-on-surface-variant">Unlocks at <span className="text-md-on-surface">Bestie</span> — {botName} will come up with a nickname that's just yours.</p>
+        ) : nickDraft !== null ? (
+          <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); nickAction({ action: 'set', value: nickDraft }); }}>
+            <input autoFocus value={nickDraft} maxLength={20} onChange={(e) => setNickDraft(e.target.value)} placeholder="What should they call you?"
+              className="flex-1 min-w-0 bg-md-surface-container-highest border border-md-outline-variant/40 rounded-xl px-3 py-2.5 text-md-on-surface text-sm focus:outline-none focus:border-md-primary" />
+            <button type="submit" className="px-4 rounded-full bg-md-primary text-md-on-primary text-sm font-medium">Save</button>
+            <button type="button" onClick={() => setNickDraft(null)} className="px-3 rounded-full text-md-on-surface-variant text-sm">Cancel</button>
+          </form>
+        ) : (
+          <>
+            <p className="text-xs text-md-on-surface-variant mb-3">
+              {nick?.value
+                ? <>{botName} calls you <span className="text-md-on-surface font-medium">“{nick.value}”</span>{nick.by === 'user' ? ' (your pick)' : ''}{nick.off ? ' — turned off' : ''}.</>
+                : `${botName} is still thinking of one — it'll show up in chat soon.`}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => nickAction({ action: 'regenerate' })} className="h-9 px-3.5 rounded-full bg-md-secondary-container text-md-on-secondary-container text-sm font-medium inline-flex items-center gap-1.5"><RefreshCw size={14} /> Another one</button>
+              <button onClick={() => setNickDraft(nick?.value || '')} className="h-9 px-3.5 rounded-full border border-md-outline-variant/50 text-md-on-surface text-sm inline-flex items-center gap-1.5"><Pencil size={14} /> Choose my own</button>
+              {nick?.value && (
+                <button onClick={() => nickAction({ action: nick.off ? 'on' : 'off' })} className="h-9 px-3.5 rounded-full text-md-on-surface-variant text-sm hover:bg-md-on-surface/[0.06]">{nick.off ? 'Use it again' : 'Don’t use a nickname'}</button>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Language + region */}

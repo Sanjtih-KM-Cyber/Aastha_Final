@@ -196,6 +196,35 @@ export const updatePreferences = async (req: AuthRequest, res: Response) => {
 };
 
 
+// PUT /api/users/nickname — { action: 'set', value } | { action: 'regenerate' } | { action: 'off' } | { action: 'on' }
+export const updateNickname = async (req: AuthRequest, res: Response) => {
+  if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+  const { action, value } = (req as any).body || {};
+  const user: any = await User.findById(req.user._id);
+  if (!user) return (res as any).status(404).json({ message: 'Not found' });
+  const cur = user.nickname || {};
+  const { makeNickname } = await import('../services/companionExtras');
+  const { effectiveLevel } = await import('../services/relationship');
+  if (action === 'set') {
+    const v = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!/^[\p{L}\p{M}][\p{L}\p{M} '’.-]{1,19}$/u.test(v) || v.split(' ').length > 3) return (res as any).status(400).json({ message: 'Use 2–20 letters (up to 3 words).' });
+    user.nickname = { value: v, by: 'user', setAt: new Date(), announced: true, off: false };
+  } else if (action === 'regenerate') {
+    if (effectiveLevel(user.bond) < 4) return (res as any).status(400).json({ message: 'Nicknames unlock at Bestie.' });
+    const nick = await makeNickname({ name: user.name, facts: (user.facts || []).map((f: string) => decrypt(f)), persona: user.persona === 'aarav' || user.persona === 'aastik' ? 'aastik' : 'aastha', avoid: cur.value ? [cur.value] : [] });
+    if (!nick) return (res as any).status(503).json({ message: 'Couldn’t think of one right now — try again in a moment.' });
+    user.nickname = { value: nick, by: 'aastha', setAt: new Date(), announced: true, off: false };
+  } else if (action === 'off' || action === 'on') {
+    user.set('nickname.off', action === 'off');
+  } else {
+    return (res as any).status(400).json({ message: 'Unknown action' });
+  }
+  user.markModified('nickname');
+  await user.save();
+  const n = user.nickname || {};
+  (res as any).json({ nickname: { value: n.value || '', by: n.by || 'aastha', off: !!n.off } });
+};
+
 // POST /api/users/legal-consent { accept: true } — records acceptance of the current Terms + Privacy Policy
 export const acceptLegal = async (req: AuthRequest, res: Response) => {
   if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });

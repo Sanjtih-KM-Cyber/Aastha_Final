@@ -12,7 +12,7 @@
     "keys:status": "ts-node --transpile-only src/scripts/keys.ts status",
     "keys:rotate": "ts-node --transpile-only src/scripts/keys.ts rotate",
     "dev:sandbox": "ts-node --transpile-only dev/sandbox.ts",
-    "test": "ts-node --transpile-only tests/integration/phase1.test.ts && ts-node --transpile-only tests/integration/auth.test.ts && ts-node --transpile-only tests/integration/phase2.test.ts && ts-node --transpile-only tests/integration/phase3.test.ts && ts-node --transpile-only tests/integration/phase4.test.ts && ts-node --transpile-only tests/integration/phase6.test.ts && ts-node --transpile-only tests/integration/clone.test.ts && ts-node --transpile-only tests/integration/extras.test.ts && ts-node --transpile-only tests/integration/phase7.test.ts && ts-node --transpile-only tests/integration/phase8.test.ts && ts-node --transpile-only tests/integration/keys.test.ts",
+    "test": "ts-node --transpile-only tests/integration/phase1.test.ts && ts-node --transpile-only tests/integration/auth.test.ts && ts-node --transpile-only tests/integration/phase2.test.ts && ts-node --transpile-only tests/integration/phase3.test.ts && ts-node --transpile-only tests/integration/phase4.test.ts && ts-node --transpile-only tests/integration/phase6.test.ts && ts-node --transpile-only tests/integration/clone.test.ts && ts-node --transpile-only tests/integration/extras.test.ts && ts-node --transpile-only tests/integration/phase7.test.ts && ts-node --transpile-only tests/integration/phase8.test.ts && ts-node --transpile-only tests/integration/keys.test.ts && ts-node --transpile-only tests/integration/companion.test.ts",
     "lint": "eslint src/**/*.ts"
   },
   "dependencies": {

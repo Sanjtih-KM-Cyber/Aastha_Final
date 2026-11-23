@@ -187,6 +187,7 @@ export interface IUser extends Document {
   safetyIntroSeenAt?: Date; // "How Aastha keeps you safe" card (7.5)
   customMoods?: { id: string; label: string; emoji: string; score: number }[]; // label encrypted (services/customMoods.ts)
   windowControls?: 'mac' | 'windows'; // widget window buttons style, synced across devices
+  nickname?: { value?: string; by?: 'aastha' | 'user'; setAt?: Date; announced?: boolean; off?: boolean }; // Bestie nickname (value encrypted)
   themeColor?: string;  // Sanctuary colour: preset id or #rrggbb (colour wheel), synced across devices
   appFont?: string;     // Sanctuary text font id (client/src/design/fonts.ts), synced across devices
   headingFont?: string; // Sanctuary heading font id
@@ -387,6 +388,13 @@ const userSchema = new Schema<IUser>({
     default: [],
   },
   windowControls: { type: String, enum: ['mac', 'windows'], default: 'windows' },
+  nickname: {
+    value: { type: String, ...encString }, // encrypted
+    by: { type: String, enum: ['aastha', 'user'] },
+    setAt: Date,
+    announced: { type: Boolean, default: false },
+    off: { type: Boolean, default: false },
+  },
   themeColor: { type: String }, // no default: an unset account adopts the device's current colour once
   appFont: { type: String, default: 'jakarta' },
   headingFont: { type: String, default: 'fraunces' },

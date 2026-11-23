@@ -10,6 +10,7 @@ export interface NewMessage {
   timestamp?: Date;
   voice_note?: string;
   isClone?: boolean;
+  isNudge?: boolean;
   gif?: { url: string; width?: number; height?: number; title?: string; source?: string };
 }
 

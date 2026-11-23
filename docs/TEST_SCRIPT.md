@@ -99,6 +99,10 @@
 49h. [ ] Phone: send a message, open/close the keyboard a few times → header stays at the top, input sits right above the tab bar (no gap); while typing the tab bar hides.
 49i. [ ] Sign-up/forgot password code screen fits the phone; paste the code (or tap the keyboard's code suggestion) → all 6 boxes fill. The email looks branded and lands in **Inbox** (after the DMARC record).
 49j. [ ] Phone chat: swipe a message right → reply; tap → Copy → "Copied"; long-press Aastha's message → only emojis; double-tap → ❤️.
+49k. [ ] Chat feels like a friend: short replies, ≤1 emoji, has opinions; say "cringe" → it laughs it off instead of apologising. The chips under the input are things **you** would say.
+49l. [ ] React to Aastha's reply and don't type for 15 s → she follows up once about the reaction. Leave a reply on seen ~45 s → one easy follow-up. Start typing → nothing comes.
+49m. [ ] Set closeness to Bestie (Settings → Connection) → within a couple of messages she tells you your nickname; "Another one", "Choose my own" and "Don't use a nickname" work.
+49n. [ ] Forgot password → set a new one → the sign-in form is already filled; tap Enter Sanctuary. Diary → forgot diary password → after reset the unlock box is filled.
 49. [ ] Settings → Data & Privacy → Export: name, date of birth, city, avatar come out readable.
 
 ## 16. Crash reporting (only if `SENTRY_DSN` / `VITE_SENTRY_DSN` are set)

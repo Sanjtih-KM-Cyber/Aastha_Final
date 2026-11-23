@@ -71,6 +71,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   const [resetToken, setResetToken] = useState('');
   const [resetAnswer, setResetAnswer] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [notice, setNotice] = useState<string | null>(null); // calm success line (e.g. after a password reset)
   const [quote, setQuote] = useState(MOTIVATIONAL_QUOTES[0]);
 
   useEffect(() => {
@@ -101,7 +102,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   }, [mode]);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault(); setIsLoading(true); setError(null);
+    e.preventDefault(); setIsLoading(true); setError(null); setNotice(null);
     try {
         const res = await login(identifier, password);
         if (res && res.requiresVerification) {
@@ -245,8 +246,17 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
             newPassword,
             resetToken: resetToken
           });
-          alert('Password reset successful. Please login.');
+          // Fill the sign-in form with what they just chose (nothing is stored by us), and let the browser's
+          // password manager update its saved password where supported (Chrome/Android).
+          setIdentifier(resetEmail);
+          setPassword(newPassword);
+          try {
+            const PC = (window as any).PasswordCredential;
+            if (PC && navigator.credentials?.store) await navigator.credentials.store(new PC({ id: resetEmail, password: newPassword, name: resetEmail }));
+          } catch { /* not supported / declined — the form is filled anyway */ }
+          setNewPassword(''); setResetAnswer('');
           setMode('login');
+          setNotice('Password changed — we filled it in for you. Tap Enter Sanctuary.');
       } catch (err: any) {
           setError(err.response?.data?.message || 'Incorrect answer');
       } finally {
@@ -397,6 +407,9 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
                 <p className="text-sm text-md-on-surface-variant mt-1.5">{formSub[mode]}</p>
               </div>
 
+              {notice && !error && mode === 'login' && (
+                <div role="status" className="mb-5 p-3 rounded-[16px] bg-md-secondary-container text-md-on-secondary-container text-sm text-center">{notice}</div>
+              )}
               {error && (
                 <div role="alert" className="mb-5 p-3 rounded-[16px] bg-md-error-container text-md-on-error-container text-sm text-center">{error}</div>
               )}

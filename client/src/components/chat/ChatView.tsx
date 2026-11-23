@@ -113,6 +113,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  messagesRef.current = messages;
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFlash, setShowFlash] = useState(false);
@@ -208,6 +210,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     window.addEventListener('resize', measure);
     return () => { ro?.disconnect(); window.removeEventListener('resize', measure); };
   }, [isMobile]);
+  // Bar grew (chips, reply preview, photo) while reading the newest message → keep it in view
+  useEffect(() => { if (stickToBottomRef.current) scrollToBottom(); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chromeH.bottom]);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedTagsRef = useRef<Set<string>>(new Set());
@@ -253,6 +258,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  });
             } else {
                 // ASSISTANT MESSAGE BROADCAST
+                if (data.id && messagesRef.current.some(m => m.id === data.id)) return; // already shown (e.g. a follow-up nudge)
                 setMessages(prev => {
                     // Reverse search for a matching temp message or identical content
                     // We search the last 5 messages to handle potential race conditions where user typed more
@@ -418,9 +424,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   }, [user]);
 
   // --- MOBILE KEYBOARD ---
-  // Android Chrome resizes the page for the keyboard (index.html: interactive-widget=resizes-content). Other
-  // browsers (iOS Safari) only shrink the *visual* viewport and pan the page — there we pin the chat to the visible
-  // area while the keyboard is open. When it closes, EVERY override is removed and any pan is undone.
+  // Mobile browsers shrink the *visual* viewport for the keyboard and may pan the page — we pin the chat to the
+  // visible area while the keyboard is open. (Don't use interactive-widget=resizes-content: on Android 15 Chrome
+  // edge-to-edge it pushed the fixed tab bar under the system gesture bar.) When it closes, EVERY override is removed and any pan is undone.
   // (The old version set a pixel height on every resize/scroll and never reset it → after one message the header
   // was pushed off-screen and a big gap appeared above the tab bar.)
   // While the keyboard is open, <html data-keyboard="open"> hides the tab bar and drops the space reserved for it.
@@ -820,7 +826,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
               // Saved ids → reactions are stored against the real message (7.4)
               if (data.type === 'saved' && data.assistantId) {
                   setMessages(prev => prev.map(m => m.id === tempBotId ? { ...m, id: data.assistantId } : m));
+                  scheduleNudge('seen', data.assistantId, NUDGE_SEEN_MS); // left on seen → one gentle follow-up
               }
+              // Quick replies in YOUR voice, written from the reply you just got
+              if (data.type === 'suggestions' && Array.isArray(data.items)) setSuggestedChips(data.items.slice(0, 3).map(String));
               if (data.type === 'clone_paused') {
                   toast(data.reason === 'safety'
                       ? `I've paused the imitation — ${botName} is here with you now.`
@@ -845,7 +854,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                   setLastSubconscious(brain);
                   if (brain.mood) setCurrentMood(brain.mood);
                   if (brain.status_display) setStatusDisplay(brain.status_display);
-                  if (brain.suggested_replies) setSuggestedChips(brain.suggested_replies);
                   if (brain.ui_action) setUiAction(brain.ui_action as any);
 
                   // Sticky Reaction on the last user message (the one we just sent)
@@ -957,7 +965,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     const SLICE_LIMIT = 50;
     
     // Clear Input
-    setInput(''); setAttachedImage(null); setShowEmojiPicker(false);
+    setInput(''); setAttachedImage(null); setShowEmojiPicker(false); setSuggestedChips([]); cancelNudge();
     setError(null);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
     if (isMobile) textareaRef.current?.blur();
@@ -1029,12 +1037,43 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   };
 
   // --- REACTIONS on Aastha's replies (7.4) ---
+  // --- FOLLOW-UP NUDGE: they reacted (15 s) or left the reply on seen (45 s) and haven't typed ---
+  // One per reply (the server enforces it too), only while the app is open and visible, never while typing.
+  const NUDGE_REACTION_MS = 15_000, NUDGE_SEEN_MS = 45_000;
+  const nudgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nudged = useRef<Set<string>>(new Set());
+  const inputValueRef = useRef('');
+  inputValueRef.current = input;
+  const cancelNudge = () => { if (nudgeTimer.current) { clearTimeout(nudgeTimer.current); nudgeTimer.current = null; } };
+  const scheduleNudge = (reason: 'reaction' | 'seen', msgId: string, delay: number) => {
+      if (!msgId || !/^[0-9a-f]{24}$/i.test(msgId) || nudged.current.has(msgId)) return;
+      cancelNudge();
+      nudgeTimer.current = setTimeout(async () => {
+          nudgeTimer.current = null;
+          const list = messagesRef.current;
+          const last = list[list.length - 1];
+          if (!last || last.id !== msgId || inputValueRef.current.trim() || document.visibilityState !== 'visible') return;
+          nudged.current.add(msgId);
+          try {
+              const r = await api.post('/chat/nudge', { reason, messageId: msgId });
+              if (r.status === 200 && r.data?.content) {
+                  const m: ChatMessage = { role: 'assistant', content: r.data.content, timestamp: r.data.timestamp ? new Date(r.data.timestamp).getTime() : Date.now(), id: r.data.id || `nudge-${Date.now()}` };
+                  setMessages(prev => (prev.some(x => x.id === m.id) || prev[prev.length - 1]?.id !== msgId) ? prev : [...prev, m]);
+              }
+          } catch { /* silent: it's only a nicety */ }
+      }, delay);
+  };
+  useEffect(() => { if (input.trim()) cancelNudge(); }, [input]);
+  useEffect(() => () => cancelNudge(), []);
+
   const reactTo = async (msgId: string | undefined, emoji: string | null) => {
       if (!msgId || !/^[0-9a-f]{24}$/i.test(msgId)) { toast('One sec — still saving that message…', { icon: '⏳' }); return; }
       let previous: string | null | undefined;
       setMessages(prev => prev.map(m => { if (m.id !== msgId) return m; previous = m.myReaction; return { ...m, myReaction: emoji }; }));
       try {
           await api.post('/chat/react', { messageId: msgId, reaction: emoji });
+          // Reacted to the latest reply and then went quiet → a follow-up after 15 s (cancelled as soon as they type)
+          if (emoji && messagesRef.current[messagesRef.current.length - 1]?.id === msgId) scheduleNudge('reaction', msgId, NUDGE_REACTION_MS);
       } catch {
           setMessages(prev => prev.map(m => m.id === msgId ? { ...m, myReaction: previous ?? null } : m));
           toast.error("Couldn't save that reaction");
@@ -1522,38 +1561,34 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
              {/* SMART CONTEXT CHIPS */}
              <AnimatePresence>
-             {suggestedChips.length > 0 || messages.length <= 2 ? (
+             {(suggestedChips.length > 0 || messages.length <= 2) && !isTyping ? (
                 <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="overflow-x-auto scrollbar-hide flex gap-2 mb-2 px-1 relative pr-8"
+                    className="overflow-x-auto scrollbar-hide flex items-center gap-2 mb-2 px-1"
                 >
+                    {/* Dismiss — first, so it never sits on top of a chip's text */}
+                    <button onClick={() => setSuggestedChips([])} aria-label="Hide suggestions"
+                        className="glass glass-clear shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-md-on-surface-variant hover:text-md-on-surface">
+                        <X size={13} />
+                    </button>
                     {(() => {
                         const isNewUser = messages.length <= 2;
-                        let chips = suggestedChips.length > 0 ? suggestedChips : (
-                             isNewUser ? ["Who are you?", "What can you do?", "I'm stressed"] :
-                             ["Roast me", "Inspire me", "Let's jam"]
-                        );
+                        const chips = suggestedChips.length > 0 ? suggestedChips : (isNewUser ? ["Who are you?", "What can you do?", "I'm stressed"] : []);
 
                         return chips.map((chip, i) => (
                             <button
                                 key={i}
                                 onClick={() => handleSend(undefined, chip)}
-                                className="shrink-0 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-xs text-white/70 whitespace-nowrap transition-colors"
+                                className="glass glass-clear shrink-0 h-8 px-3.5 rounded-full text-xs text-md-on-surface whitespace-nowrap"
                             >
                                 {chip}
                             </button>
                         ));
                     })()}
 
-                    {/* Dismiss Button */}
-                    <button
-                        onClick={() => setSuggestedChips([])}
-                        className={`sticky right-0 bg-black/40 p-1.5 rounded-full border border-white/10 text-white/40 hover:text-white hover:bg-white/10 ml-2 ${!isLowPowerMode ? 'backdrop-blur-sm' : ''}`}
-                    >
-                        <X size={12} />
-                    </button>
+
                 </motion.div>
              ) : null}
              </AnimatePresence>

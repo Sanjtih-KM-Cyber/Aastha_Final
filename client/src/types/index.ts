@@ -26,6 +26,7 @@ export interface User {
   isDataDonationOn?: boolean;
   thinkingMode?: boolean;
   gifsEnabled?: boolean;
+  nickname?: { value: string; by: string; off: boolean } | null; // Bestie nickname (Settings → Connection)
   safetyIntroSeen?: boolean;   // "How Aastha keeps you safe" card (7.5)
   windowControls?: 'mac' | 'windows'; // widget window buttons (synced across devices)
   themeColor?: string | null; // Sanctuary colour: preset id or #rrggbb (synced)

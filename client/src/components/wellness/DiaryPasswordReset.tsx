@@ -13,7 +13,7 @@ interface Options { question: string | null; canEmail: boolean; emailHint: strin
 
 const input = 'w-full bg-md-surface-container-highest border border-white/15 rounded-xl px-3 py-2.5 text-md-on-surface text-sm placeholder:text-white/35 focus:outline-none focus:border-white/40';
 
-export const DiaryPasswordReset: React.FC<{ onDone?: () => void; compact?: boolean }> = ({ onDone, compact }) => {
+export const DiaryPasswordReset: React.FC<{ onDone?: (newPassword?: string) => void; compact?: boolean }> = ({ onDone, compact }) => {
   const { user } = useAuth();
   const [opts, setOpts] = useState<Options | null>(null);
   const [method, setMethod] = useState<Method>('account_password');
@@ -49,8 +49,9 @@ export const DiaryPasswordReset: React.FC<{ onDone?: () => void; compact?: boole
     const data = await run(fresh ? 'fresh' : 'reset', () => api.post(fresh ? '/users/diary/start-fresh' : '/users/diary/reset-password', { method, secret, newPassword: pw }));
     if (data?.success) {
       setMsg({ kind: 'ok', text: data.message });
+      const chosen = pw;
       setSecret(''); setPw(''); setPw2('');
-      setTimeout(() => onDone?.(), 1500);
+      setTimeout(() => onDone?.(chosen), 1200); // the lock screen fills it in for you
     }
   };
 

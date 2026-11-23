@@ -11,6 +11,7 @@ export interface IMessageDoc extends Document {
   content: string;
   timestamp: Date;
   voice_note?: string;
+  isNudge?: boolean; // a follow-up the companion sent after they reacted / left it on seen (one per reply)
   isClone?: boolean; // reply written by Clone Mode (labelled "AI imitation" in the app)
   gif?: { url: string; width?: number; height?: number; title?: string; source?: string }; // GIF reaction (services/gifSearch)
   userReaction?: string; // the user's ❤️ 😂 👍 on an assistant message (services/reactions.ts)
@@ -25,6 +26,7 @@ const messageSchema = new Schema<IMessageDoc>(
     timestamp: { type: Date, default: Date.now },
     voice_note: { type: String },
     isClone: { type: Boolean },
+    isNudge: { type: Boolean },
     gif: { type: { url: String, width: Number, height: Number, title: String, source: String, _id: false }, required: false },
     userReaction: { type: String },
     reactedAt: { type: Date },
