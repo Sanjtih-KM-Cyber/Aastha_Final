@@ -138,6 +138,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const [uiAction, setUiAction] = useState<'none' | 'listen' | 'block_widget'>('none');
   const [currentMood, setCurrentMood] = useState('neutral');
   const [suggestedChips, setSuggestedChips] = useState<string[]>([]);
+  const [chipsDismissed, setChipsDismissed] = useState(false); // ✕ hides the row (incl. starter chips) until new suggestions arrive
 
   // Thought Cloud
   const [showThoughtCloud, setShowThoughtCloud] = useState(false);
@@ -846,7 +847,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                   scheduleNudge('seen', data.assistantId, NUDGE_SEEN_MS); // left on seen → one gentle follow-up
               }
               // Quick replies in YOUR voice, written from the reply you just got
-              if (data.type === 'suggestions' && Array.isArray(data.items)) setSuggestedChips(data.items.slice(0, 3).map(String));
+              if (data.type === 'suggestions' && Array.isArray(data.items)) { setSuggestedChips(data.items.slice(0, 3).map(String)); setChipsDismissed(false); }
               if (data.type === 'clone_paused') {
                   toast(data.reason === 'safety'
                       ? `I've paused the imitation — ${botName} is here with you now.`
@@ -1579,7 +1580,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
              {/* SMART CONTEXT CHIPS */}
              <AnimatePresence>
-             {(suggestedChips.length > 0 || messages.length <= 2) && !isTyping ? (
+             {(suggestedChips.length > 0 || messages.length <= 2) && !isTyping && !chipsDismissed ? (
                 <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
@@ -1587,7 +1588,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                     className="overflow-x-auto scrollbar-hide flex items-center gap-2 mb-2 px-1"
                 >
                     {/* Dismiss — first, so it never sits on top of a chip's text */}
-                    <button onClick={() => setSuggestedChips([])} aria-label="Hide suggestions"
+                    <button type="button" onClick={() => { setSuggestedChips([]); setChipsDismissed(true); }} aria-label="Hide suggestions"
                         className="glass glass-clear shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-md-on-surface-variant hover:text-md-on-surface">
                         <X size={13} />
                     </button>
