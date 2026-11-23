@@ -114,6 +114,8 @@ html.lite .glass-clear { background-image: none; }
 /* Phone keyboard open (ChatView sets the flag): the tab bar would sit on top of the keyboard — hide it and give
    its space back to the chat. */
 html[data-keyboard='open'] .mobile-tab-bar { display: none; }
+/* Phone Sanctuary: the document itself never scrolls (only the message list does) */
+@media (max-width: 767px) { html:has(#chat-view-container), html:has(#chat-view-container) body { overflow: hidden; overscroll-behavior: none; height: 100%; } }
 html[data-keyboard='open'] .chat-input-bar { padding-bottom: 0.5rem !important; }
 html.lite .glass-specular::before { display: none; }
 @media (prefers-reduced-transparency: reduce) {

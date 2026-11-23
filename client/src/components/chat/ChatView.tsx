@@ -423,50 +423,66 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       return () => { listener.then(l => l.remove()); };
   }, [user]);
 
-  // --- MOBILE KEYBOARD ---
-  // Mobile browsers shrink the *visual* viewport for the keyboard and may pan the page — we pin the chat to the
-  // visible area while the keyboard is open. (Don't use interactive-widget=resizes-content: on Android 15 Chrome
-  // edge-to-edge it pushed the fixed tab bar under the system gesture bar.) When it closes, EVERY override is removed and any pan is undone.
-  // (The old version set a pixel height on every resize/scroll and never reset it → after one message the header
-  // was pushed off-screen and a big gap appeared above the tab bar.)
-  // While the keyboard is open, <html data-keyboard="open"> hides the tab bar and drops the space reserved for it.
+  // --- PHONE: PIN THE CHAT + TAB BAR TO THE *VISIBLE* SCREEN ---
+  // Android Chrome can leave the page panned/scrolled (keyboard, address bar, edge-to-edge), so the layout
+  // viewport and what you actually see drift apart — the header (in the chat) and the tab bar (fixed to the bottom)
+  // then can't both be on screen. We pin BOTH to the visual viewport on every change:
+  //   chat container → top = visual top, height = visual height
+  //   tab bar        → bottom = gap below the visual viewport (CSS var --vv-bottom, read by MobileTabBar)
+  // Keyboard = an input is focused AND the visible height shrank a lot → <html data-keyboard="open"> (tab bar hides).
   useEffect(() => {
     const vv = window.visualViewport;
-    if (!vv) return;
     const root = document.documentElement;
-    let fullHeight = Math.max(window.innerHeight, vv.height);
-    let lastWidth = window.innerWidth;
+    const c = () => document.getElementById('chat-view-container');
+    const editable = () => {
+      const a = document.activeElement as HTMLElement | null;
+      return !!a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'range'].includes((a as HTMLInputElement).type)) || a.isContentEditable);
+    };
     let wasOpen = false;
     const sync = () => {
-      const c = document.getElementById('chat-view-container');
-      if (window.innerWidth !== lastWidth) { lastWidth = window.innerWidth; fullHeight = Math.max(window.innerHeight, vv.height); } // rotation
-      if (!wasOpen) fullHeight = Math.max(fullHeight, window.innerHeight, vv.height);
-      const open = fullHeight - vv.height > 140;
-      if (open) {
-        root.dataset.keyboard = 'open';
-        if (c) { c.style.height = `${Math.round(vv.height)}px`; c.style.top = `${Math.round(vv.offsetTop)}px`; c.style.bottom = 'auto'; }
-        if (!wasOpen && stickToBottomRef.current) setTimeout(scrollToBottom, 50);
-      } else {
-        delete root.dataset.keyboard;
-        if (c) { c.style.height = ''; c.style.top = ''; c.style.bottom = ''; }
-        if (wasOpen && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0); // undo the pan
+      const el = c();
+      if (!vv || !isMobile) {
+        if (el) { el.style.top = ''; el.style.height = ''; el.style.bottom = ''; }
+        root.style.removeProperty('--vv-bottom'); delete root.dataset.keyboard;
+        return;
       }
+      const top = Math.max(0, Math.round(vv.offsetTop));
+      const height = Math.round(vv.height);
+      const below = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      if (el) { el.style.top = `${top}px`; el.style.height = `${height}px`; el.style.bottom = 'auto'; }
+      root.style.setProperty('--vv-bottom', `${below}px`);
+      const open = editable() && window.innerHeight - vv.height > 120;
+      if (open) root.dataset.keyboard = 'open'; else delete root.dataset.keyboard;
+      if (open && !wasOpen && stickToBottomRef.current) setTimeout(scrollToBottom, 60);
+      if (!open && wasOpen && (window.scrollY || root.scrollTop)) window.scrollTo(0, 0); // undo Chrome's pan
       wasOpen = open;
     };
-    vv.addEventListener('resize', sync);
-    vv.addEventListener('scroll', sync);
+    vv?.addEventListener('resize', sync);
+    vv?.addEventListener('scroll', sync);
+    window.addEventListener('resize', sync);
     window.addEventListener('orientationchange', sync);
+    window.addEventListener('focusin', sync);
+    const onFocusOut = () => setTimeout(sync, 80); // after the keyboard starts closing
+    window.addEventListener('focusout', onFocusOut);
+    // the page itself must never scroll under the fixed chat (that's what pushed things off-screen)
+    const onWinScroll = () => { if (!document.documentElement.dataset.keyboard && (window.scrollY || root.scrollTop)) window.scrollTo(0, 0); };
+    window.addEventListener('scroll', onWinScroll, { passive: true });
     sync();
     return () => {
-      vv.removeEventListener('resize', sync);
-      vv.removeEventListener('scroll', sync);
+      vv?.removeEventListener('resize', sync);
+      vv?.removeEventListener('scroll', sync);
+      window.removeEventListener('resize', sync);
       window.removeEventListener('orientationchange', sync);
+      window.removeEventListener('focusin', sync);
+      window.removeEventListener('focusout', onFocusOut);
+      window.removeEventListener('scroll', onWinScroll);
       delete root.dataset.keyboard;
-      const c = document.getElementById('chat-view-container');
-      if (c) { c.style.height = ''; c.style.top = ''; c.style.bottom = ''; }
+      root.style.removeProperty('--vv-bottom');
+      const el = c();
+      if (el) { el.style.top = ''; el.style.height = ''; el.style.bottom = ''; }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isMobile, isInitializing]); // re-run once the real chat (not the loading screen) is mounted
 
   // --- 3. SEARCH LOGIC ---
   useEffect(() => {
