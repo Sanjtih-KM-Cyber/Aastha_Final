@@ -417,29 +417,49 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       return () => { listener.then(l => l.remove()); };
   }, [user]);
 
-  // --- FIX: SYNC HEIGHT WITH MOBILE KEYBOARD & VIEWPORT ---
-  // This is the "God Mode" fix for mobile browsers (Safari/Chrome)
+  // --- MOBILE KEYBOARD ---
+  // Android Chrome resizes the page for the keyboard (index.html: interactive-widget=resizes-content). Other
+  // browsers (iOS Safari) only shrink the *visual* viewport and pan the page — there we pin the chat to the visible
+  // area while the keyboard is open. When it closes, EVERY override is removed and any pan is undone.
+  // (The old version set a pixel height on every resize/scroll and never reset it → after one message the header
+  // was pushed off-screen and a big gap appeared above the tab bar.)
+  // While the keyboard is open, <html data-keyboard="open"> hides the tab bar and drops the space reserved for it.
   useEffect(() => {
-    // Only run if visualViewport API is supported
-    if (!window.visualViewport) return;
-
-    const handleResize = () => {
-      const appContainer = document.getElementById('chat-view-container');
-      if (appContainer) {
-        // Forces the container to match the actual visible screen height (minus keyboard)
-        appContainer.style.height = `${window.visualViewport.height}px`;
-        // Scroll to bottom so input doesn't get covered
-        scrollToBottom(); 
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = document.documentElement;
+    let fullHeight = Math.max(window.innerHeight, vv.height);
+    let lastWidth = window.innerWidth;
+    let wasOpen = false;
+    const sync = () => {
+      const c = document.getElementById('chat-view-container');
+      if (window.innerWidth !== lastWidth) { lastWidth = window.innerWidth; fullHeight = Math.max(window.innerHeight, vv.height); } // rotation
+      if (!wasOpen) fullHeight = Math.max(fullHeight, window.innerHeight, vv.height);
+      const open = fullHeight - vv.height > 140;
+      if (open) {
+        root.dataset.keyboard = 'open';
+        if (c) { c.style.height = `${Math.round(vv.height)}px`; c.style.top = `${Math.round(vv.offsetTop)}px`; c.style.bottom = 'auto'; }
+        if (!wasOpen && stickToBottomRef.current) setTimeout(scrollToBottom, 50);
+      } else {
+        delete root.dataset.keyboard;
+        if (c) { c.style.height = ''; c.style.top = ''; c.style.bottom = ''; }
+        if (wasOpen && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0); // undo the pan
       }
+      wasOpen = open;
     };
-
-    window.visualViewport.addEventListener('resize', handleResize);
-    window.visualViewport.addEventListener('scroll', handleResize); // Handle scroll events too
-
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    window.addEventListener('orientationchange', sync);
+    sync();
     return () => {
-        window.visualViewport.removeEventListener('resize', handleResize);
-        window.visualViewport.removeEventListener('scroll', handleResize);
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
+      window.removeEventListener('orientationchange', sync);
+      delete root.dataset.keyboard;
+      const c = document.getElementById('chat-view-container');
+      if (c) { c.style.height = ''; c.style.top = ''; c.style.bottom = ''; }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // --- 3. SEARCH LOGIC ---
@@ -684,7 +704,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
 
   const copyToClipboard = (text: string) => {
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
+    const clean = String(text || '').replace(/^> Replying to: "[\s\S]*?"\n\n/, ''); // don't copy the quote header
+    const done = () => toast.success('Copied', { duration: 1500, style: { borderRadius: '999px', background: 'rgb(var(--md-surface-container-high))', color: 'rgb(var(--md-on-surface))' } });
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(clean).then(done).catch(() => {});
+    else {
+      // older Android WebViews
+      const t = document.createElement('textarea'); t.value = clean; t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.appendChild(t); t.select(); try { document.execCommand('copy'); done(); } catch { /* ignore */ } t.remove();
+    }
   };
   
   const handleReply = (content: string) => { setReplyingTo(content); textareaRef.current?.focus(); };
@@ -1476,7 +1503,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
       {/* --- SECTION 3: INPUT AREA --- */}
       {/* FIXED: pb-6 adds padding so the input text isn't covered by Android gesture bar */}
-      <div ref={inputBarRef} className={`absolute bottom-0 left-0 right-0 md:left-[var(--sidebar-space,20rem)] md:transition-[left] md:duration-300 w-full pl-[calc(0.75rem+env(safe-area-inset-left))] pr-[calc(0.75rem+env(safe-area-inset-right))] pt-2 z-30 max-w-[700px] mx-auto pointer-events-none [&>*]:pointer-events-auto ${isMobile ? 'pb-[calc(5.5rem+env(safe-area-inset-bottom))]' : 'md:pb-6 bg-none'}`}>
+      <div ref={inputBarRef} className={`chat-input-bar absolute bottom-0 left-0 right-0 md:left-[var(--sidebar-space,20rem)] md:transition-[left] md:duration-300 w-full pl-[calc(0.75rem+env(safe-area-inset-left))] pr-[calc(0.75rem+env(safe-area-inset-right))] pt-2 z-30 max-w-[700px] mx-auto pointer-events-none [&>*]:pointer-events-auto ${isMobile ? 'pb-[calc(5.5rem+env(safe-area-inset-bottom))]' : 'md:pb-6 bg-none'}`}>
           <div className="flex flex-col gap-2">
              <AnimatePresence>
                  {replyingTo && (

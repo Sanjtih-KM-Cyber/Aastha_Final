@@ -671,7 +671,7 @@ export const initiateReset = async (req: Request, res: Response) => {
     await user.save();
 
     console.log(`[Reset] Sending OTP to ${cleanEmail}`);
-    sendOTPEmail(cleanEmail, otp).catch(e => console.error("[Reset] Email Error:", e));
+    sendOTPEmail(cleanEmail, otp, 'reset').catch(e => console.error("[Reset] Email Error:", e));
 
     (res as any).status(200).json({ message: 'OTP sent.' });
 

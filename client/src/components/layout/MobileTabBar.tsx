@@ -43,7 +43,7 @@ export const MobileTabBar: React.FC<Props> = ({ active, onSelect }) => {
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 z-[60] flex justify-center pointer-events-none"
+      className="mobile-tab-bar fixed inset-x-0 z-[60] flex justify-center pointer-events-none"
       style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}
     >
       <motion.div

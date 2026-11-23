@@ -96,6 +96,9 @@
 49e. [ ] Chat on the phone: scroll — messages slide **under** the see-through header and message bar (blurred), nothing is hidden behind them at the very top/bottom, also with a reply preview or an attached photo open.
 49f. [ ] First login on the phone: "How Aastha keeps you safe" sits in the **middle** of the screen, fully visible. Scroll the chat up **and** down → the tab bar shrinks both ways; back at the newest message → it grows again.
 49g. [ ] PC: no hard line under the header — messages fade away as they scroll up. Collapse the sidebar («) → the chat and the ONLINE pill re-centre.
+49h. [ ] Phone: send a message, open/close the keyboard a few times → header stays at the top, input sits right above the tab bar (no gap); while typing the tab bar hides.
+49i. [ ] Sign-up/forgot password code screen fits the phone; paste the code (or tap the keyboard's code suggestion) → all 6 boxes fill. The email looks branded and lands in **Inbox** (after the DMARC record).
+49j. [ ] Phone chat: swipe a message right → reply; tap → Copy → "Copied"; long-press Aastha's message → only emojis; double-tap → ❤️.
 49. [ ] Settings → Data & Privacy → Export: name, date of birth, city, avatar come out readable.
 
 ## 16. Crash reporting (only if `SENTRY_DSN` / `VITE_SENTRY_DSN` are set)

@@ -111,6 +111,10 @@
 /* Lite mode / reduced transparency: glass becomes an opaque tonal surface (still readable, no GPU cost) */
 html.lite .glass { background-color: rgb(var(--md-surface-container-high) / 0.97); }
 html.lite .glass-clear { background-image: none; }
+/* Phone keyboard open (ChatView sets the flag): the tab bar would sit on top of the keyboard — hide it and give
+   its space back to the chat. */
+html[data-keyboard='open'] .mobile-tab-bar { display: none; }
+html[data-keyboard='open'] .chat-input-bar { padding-bottom: 0.5rem !important; }
 html.lite .glass-specular::before { display: none; }
 @media (prefers-reduced-transparency: reduce) {
   .glass { background-color: rgb(var(--md-surface-container-high) / 0.97); -webkit-backdrop-filter: none; backdrop-filter: none; }

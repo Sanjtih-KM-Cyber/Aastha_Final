@@ -97,7 +97,7 @@ export const sendDiaryResetCode = async (req: AuthRequest, res: Response) => {
   if (!email) return (res as any).status(400).json({ message: 'No email on this account.' });
   const code = crypto.randomInt(100000, 1000000).toString();
   await User.updateOne({ _id: user._id }, { $set: { 'diaryReset.codeHash': await bcrypt.hash(code, 8), 'diaryReset.expires': new Date(Date.now() + CODE_TTL_MS) } });
-  const sent = await sendOTPEmail(email, code, 'Your diary reset code - Aastha');
+  const sent = await sendOTPEmail(email, code, 'diary');
   if (sent === false && process.env.RESEND_API_KEY) return (res as any).status(503).json({ message: "Couldn't send the email right now. Try another method." });
   (res as any).json({ success: true, message: 'Code sent. It expires in 10 minutes.' });
 };

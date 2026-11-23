@@ -1,5 +1,5 @@
 import { MiniMarkdown, stripMarkdown } from '../../utils/miniMarkdown';
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Copy, Reply, Sparkles, Wand2, SmilePlus } from 'lucide-react';
 import { ReactionPicker } from './ReactionPicker';
@@ -190,54 +190,105 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false); // voice notes: text hidden behind "Show text" (7.1)
 
-  // Reactions + actions (WhatsApp-style): long-press on phones, 🙂 button on desktop, double-tap = ❤️
+  // PHONE GESTURES (WhatsApp-style):
+  //   swipe right → reply   ·   tap → "Copy" chip   ·   long-press → reactions (Aastha's messages)   ·   double-tap Aastha → ❤️
+  // DESKTOP: hover buttons (Reply / Copy / 🙂) as before. Pointer events, so a held mouse works in phone layout too.
   const bubbleRef = useRef<HTMLDivElement>(null);
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null);
   const openPicker = () => { if (bubbleRef.current) setPickerAnchor(bubbleRef.current.getBoundingClientRect()); setIsHovered(false); };
+  const canReactHere = !isUser && !!onReact;
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const gesture = useRef<'none' | 'swipe' | 'scroll'>('none');
   const lastTapRef = useRef(0);
+  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [swipeX, setSwipeX] = useState(0);
+  const [showCopy, setShowCopy] = useState(false);
+  const copyHide = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const SWIPE_TRIGGER = 64;
   const cancelLongPress = () => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } };
+  useEffect(() => () => { cancelLongPress(); if (tapTimer.current) clearTimeout(tapTimer.current); if (copyHide.current) clearTimeout(copyHide.current); }, []);
 
-  // Pointer events (not touch-only): long-press works with a finger, a stylus AND a mouse held down
-  // (phone-sized browser windows / the desktop preview). Right-click also opens it in the phone layout.
+  const openCopyChip = () => {
+      setShowCopy(true);
+      if (copyHide.current) clearTimeout(copyHide.current);
+      copyHide.current = setTimeout(() => setShowCopy(false), 3500);
+  };
+
   const openedByPress = useRef(false);
   // React bubbles events from PORTALS (the reaction bar) up to this bubble — a tap that closes the bar must not
-  // start a new long-press here (it re-opened the bar 450 ms later). Only react to presses on the bubble itself.
+  // start a gesture here. Interactive bits inside the bubble (links, buttons, players) keep their own taps.
   const fromThisBubble = (e: React.SyntheticEvent) => (e.currentTarget as Node).contains(e.target as Node);
+  const onControl = (e: React.SyntheticEvent) => !!(e.target as HTMLElement).closest?.('a,button,audio,video,input,textarea,[role="button"]');
+
   const handlePointerDown = (e: React.PointerEvent) => {
-      if (!isMobile || (e.pointerType === 'mouse' && e.button !== 0) || !fromThisBubble(e) || pickerAnchor) return;
+      if (!isMobile || (e.pointerType === 'mouse' && e.button !== 0) || !fromThisBubble(e) || pickerAnchor || onControl(e)) return;
       touchStartPos.current = { x: e.clientX, y: e.clientY };
+      gesture.current = 'none';
       openedByPress.current = false;
       cancelLongPress();
+      if (!canReactHere) return; // your own messages: no reactions, so no long-press
       longPressTimer.current = setTimeout(() => {
           longPressTimer.current = null;
-          // Android also fires `contextmenu` ~after a long-press: ignore it for a moment so it doesn't toggle twice
+          // Android also fires `contextmenu` right after a long-press: ignore it for a moment so it doesn't toggle twice
           openedByPress.current = true;
           setTimeout(() => { openedByPress.current = false; }, 1000);
+          setShowCopy(false);
           openPicker();
           if (navigator.vibrate) navigator.vibrate(30); // haptic tick
       }, 450);
   };
-  // Scrolling must not turn into a long-press
   const handlePointerMove = (e: React.PointerEvent) => {
       const s0 = touchStartPos.current;
-      if (longPressTimer.current && s0 && Math.hypot(e.clientX - s0.x, e.clientY - s0.y) > 10) cancelLongPress();
+      if (!s0 || gesture.current === 'scroll') return;
+      const dx = e.clientX - s0.x, dy = e.clientY - s0.y;
+      if (gesture.current === 'none') {
+          if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { gesture.current = 'scroll'; cancelLongPress(); return; } // scrolling the chat
+          if (dx > 12 && dx > Math.abs(dy) * 1.4 && onReply) { gesture.current = 'swipe'; cancelLongPress(); setShowCopy(false); }
+          else if (Math.hypot(dx, dy) > 10) cancelLongPress();
+      }
+      if (gesture.current === 'swipe') {
+          const x = Math.max(0, Math.min(dx, 96));
+          if (x >= SWIPE_TRIGGER && swipeX < SWIPE_TRIGGER && navigator.vibrate) navigator.vibrate(12); // "you can let go"
+          setSwipeX(x);
+      }
   };
-  const handlePointerUp = () => {
+  const endGesture = (e?: React.PointerEvent) => {
       const wasPending = !!longPressTimer.current;
+      const start = touchStartPos.current;
       cancelLongPress();
-      if (!isMobile || !wasPending || isUser || !onReact) return;
-      // Double-tap Aastha's message = ❤️ (tap again to remove)
+      touchStartPos.current = null;
+      if (!isMobile || !start) return;
+      if (gesture.current === 'swipe') {
+          if (swipeX >= SWIPE_TRIGGER) onReply?.(content);
+          setSwipeX(0);
+          gesture.current = 'none';
+          return;
+      }
+      if (gesture.current === 'scroll' || openedByPress.current || (canReactHere && !wasPending)) { gesture.current = 'none'; return; }
+      if (e && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) return;
+      // A tap. On Aastha's messages wait a moment: a second tap = ❤️ (double-tap), otherwise show "Copy".
       const now = Date.now();
-      if (now - lastTapRef.current < 300) { lastTapRef.current = 0; onReact(myReaction === '❤️' ? null : '❤️'); if (navigator.vibrate) navigator.vibrate(15); }
-      else lastTapRef.current = now;
+      if (canReactHere && now - lastTapRef.current < 300) {
+          lastTapRef.current = 0;
+          if (tapTimer.current) { clearTimeout(tapTimer.current); tapTimer.current = null; }
+          setShowCopy(false);
+          onReact!(myReaction === '❤️' ? null : '❤️');
+          if (navigator.vibrate) navigator.vibrate(15);
+          return;
+      }
+      lastTapRef.current = now;
+      if (!onCopy || (isStreaming && !content)) return;
+      if (canReactHere) { tapTimer.current = setTimeout(() => { tapTimer.current = null; showCopy ? setShowCopy(false) : openCopyChip(); }, 280); }
+      else showCopy ? setShowCopy(false) : openCopyChip();
   };
+  const handlePointerUp = (e: React.PointerEvent) => endGesture(e);
+  const handlePointerCancel = () => { cancelLongPress(); touchStartPos.current = null; if (gesture.current === 'swipe') setSwipeX(0); gesture.current = 'none'; };
   const handleContextMenu = (e: React.MouseEvent) => {
       if (!isMobile || !fromThisBubble(e)) return;
       e.preventDefault(); // the browser's own menu would cover our bar
-      if (!openedByPress.current && !pickerAnchor) { cancelLongPress(); openPicker(); }
+      if (canReactHere && !openedByPress.current && !pickerAnchor) { cancelLongPress(); openPicker(); }
   };
 
   // Parse Content for Proposals
@@ -333,8 +384,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={cancelLongPress}
-      onPointerLeave={cancelLongPress}
+      onPointerCancel={handlePointerCancel}
       onContextMenu={handleContextMenu}
     >
       {/* Assistant avatar (Left Side) */}
@@ -367,6 +417,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
       <div
         ref={bubbleRef}
         className={`
+          ${isMobile ? 'touch-pan-y' : ''}
           relative
           w-fit
           min-w-0
@@ -383,8 +434,16 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
           wordBreak: 'break-word',
           overflowWrap: 'anywhere',
           ...(isMobile ? { WebkitTouchCallout: 'none' } : {}), // no native long-press menu over our reaction bar
+          ...(isMobile ? { transform: swipeX ? `translateX(${swipeX}px)` : undefined, transition: swipeX ? 'none' : 'transform 220ms cubic-bezier(0.2, 0, 0, 1)' } : {}),
         } as React.CSSProperties}
       >
+        {/* Swipe-to-reply indicator (phone): sits just left of the bubble, revealed as the bubble slides right */}
+        {isMobile && swipeX > 4 && (
+          <div aria-hidden className="absolute -left-11 top-1/2 w-9 h-9 rounded-full flex items-center justify-center bg-md-secondary-container text-md-on-secondary-container"
+            style={{ opacity: Math.min(1, swipeX / SWIPE_TRIGGER), transform: `translateY(-50%) scale(${0.6 + 0.4 * Math.min(1, swipeX / SWIPE_TRIGGER)})` }}>
+            <Reply size={17} />
+          </div>
+        )}
         {/* Actual Message Bubble */}
         <div
           className={`
@@ -579,11 +638,27 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
             current={myReaction}
             canReact={!isUser && !!onReact}
             onPick={(emo) => onReact?.(emo)}
-            onReply={onReply ? () => onReply(content) : undefined}
-            onCopy={onCopy ? () => onCopy(content) : undefined}
+            onReply={!isMobile && onReply ? () => onReply(content) : undefined}
+            onCopy={!isMobile && onCopy ? () => onCopy(content) : undefined}
             onClose={() => setPickerAnchor(null)}
           />
         )}
+
+        {/* Phone: one tap on a message → Copy */}
+        <AnimatePresence>
+          {isMobile && showCopy && (
+            <motion.button
+              type="button"
+              initial={{ opacity: 0, y: -4, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.15 }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); onCopy?.(content); setShowCopy(false); if (navigator.vibrate) navigator.vibrate(10); }}
+              className={`glass glass-clear glass-pill absolute -bottom-11 ${isUser ? 'right-0' : 'left-0'} z-30 h-9 px-3.5 inline-flex items-center gap-1.5 text-xs font-medium text-md-on-surface`}
+            >
+              <Copy size={14} /> Copy
+            </motion.button>
+          )}
+        </AnimatePresence>
 
         {/* Hover Actions (Reply/Copy) */}
         <AnimatePresence>

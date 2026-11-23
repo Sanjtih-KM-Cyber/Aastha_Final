@@ -255,15 +255,21 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
   };
 
   const handleOtpChange = (index: number, value: string) => {
-    if (isNaN(Number(value))) return;
+    const digits = value.replace(/\D/g, '');
     const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-
-    // Auto focus next input
-    if (value && index < 5) {
-        otpRefs.current[index + 1]?.focus();
+    if (digits.length > 1) {
+      // Android keyboards paste / autofill ("from Messages", clipboard chip) by TYPING the whole code into one box
+      // (no paste event) — spread it across the boxes from here.
+      const code = digits.slice(0, 6 - index).split('');
+      code.forEach((d, i) => { newOtp[index + i] = d; });
+      setOtp(newOtp);
+      otpRefs.current[Math.min(index + code.length, 5)]?.focus();
+      return;
     }
+    if (value && !digits) return; // a letter
+    newOtp[index] = digits; // '' when cleared
+    setOtp(newOtp);
+    if (digits && index < 5) otpRefs.current[index + 1]?.focus();
   };
 
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
@@ -349,7 +355,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
         </div>
       </div>
 
-      <div className="relative z-10 w-full max-w-6xl mx-auto grid lg:grid-cols-2 gap-8 items-center px-4 pt-[calc(env(safe-area-inset-top)+6rem)] pb-10">
+      <div className="relative z-10 w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 items-center px-4 pt-[calc(env(safe-area-inset-top)+6rem)] pb-10">
         {/* Hero (desktop) — tonal Material card */}
         <div className="hidden lg:flex flex-col justify-between rounded-[36px] bg-md-primary-container text-md-on-primary-container p-12 min-h-[560px] relative overflow-hidden">
           <div aria-hidden className="absolute -right-24 -top-24 w-80 h-80 rounded-full bg-md-primary/25" />
@@ -366,7 +372,7 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
         </div>
 
         {/* Form card */}
-        <div className="w-full max-w-md mx-auto">
+        <div className="w-full max-w-md mx-auto min-w-0">
           <FadeIn direction="up">
             <div className="rounded-[32px] bg-md-surface-container-low border border-md-outline-variant/30 p-6 sm:p-8 shadow-xl">
               <div className="lg:hidden flex justify-center mb-5">
@@ -480,18 +486,19 @@ export const Login: React.FC<LoginProps> = ({ onBack, onLoginSuccess }) => {
               {/* CODE (sign-up + forgot password) */}
               {isCodeStep && (
                 <form className="space-y-6" onSubmit={mode === 'verify-otp' ? handleVerifyOtp : handleForgotOtpVerify}>
-                  <div className="flex justify-between gap-2" aria-label="6-digit code">
+                  <div className="flex justify-center gap-1.5 sm:gap-2" aria-label="6-digit code">
                     {otp.map((digit, idx) => (
                       <input
                         key={idx}
                         ref={el => { otpRefs.current[idx] = el; }}
-                        type="text" maxLength={1} inputMode="numeric" autoComplete="one-time-code" pattern="\d{1}"
+                        type="text" inputMode="numeric" autoComplete={idx === 0 ? 'one-time-code' : 'off'}
                         aria-label={`Digit ${idx + 1}`}
                         value={digit}
                         onChange={(e) => handleOtpChange(idx, e.target.value)}
                         onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                         onPaste={handleOtpPaste}
-                        className={`w-12 h-14 sm:w-14 sm:h-16 rounded-[16px] text-center text-2xl font-semibold text-md-on-surface border-2 focus:outline-none transition-colors ${digit ? 'bg-md-secondary-container border-md-primary/40' : 'bg-md-surface-container-highest border-transparent'} focus:border-md-primary`}
+                        onFocus={(e) => e.target.select()}
+                        className={`flex-1 min-w-0 max-w-14 h-14 sm:h-16 rounded-[16px] text-center text-2xl font-semibold text-md-on-surface border-2 focus:outline-none transition-colors ${digit ? 'bg-md-secondary-container border-md-primary/40' : 'bg-md-surface-container-highest border-transparent'} focus:border-md-primary`}
                       />
                     ))}
                   </div>
