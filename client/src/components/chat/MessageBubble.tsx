@@ -1,4 +1,5 @@
 import { MiniMarkdown, stripMarkdown } from '../../utils/miniMarkdown';
+import { extractProposals } from '../../utils/proposals';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Copy, Reply, Sparkles, Wand2, SmilePlus } from 'lucide-react';
@@ -133,35 +134,7 @@ const reactionMap: Record<string, string> = {
   'balloon': '🎈', 'confetti': '🎊', 'medal': '🥇'
 };
 
-// Helper to parse hidden <proposal> tags AND STRIP LEAKED JSON
-const extractProposals = (text: string) => {
-    // 1. Remove leaked Subconscious JSON block if it appears in text
-    let cleanText = text.replace(/\{[\s\S]*?"internal_monologue"[\s\S]*?\}/g, '').trim();
-
-    // Also remove markdown json blocks if they leaked
-    cleanText = cleanText.replace(/```json[\s\S]*?```/g, '').trim();
-
-    // FIXED REGEX: Matches params with single OR double quotes
-    // capturing groups: 1=tool, 2=quote_char, 3=params_content, 4=reason
-    const proposalRegex = /<proposal tool="([^"]+)" params=(['"])([\s\S]*?)\2 reason="([^"]+)" \/>/g;
-    const proposals = [];
-    let match;
-
-    while ((match = proposalRegex.exec(cleanText)) !== null) {
-        try {
-            proposals.push({
-                tool: match[1],
-                params: JSON.parse(match[3]), // match[3] is the content inside quotes
-                reason: match[4]
-            });
-            // Remove the tag from visible text
-            cleanText = cleanText.replace(match[0], '');
-        } catch (e) {
-            console.error("Failed to parse proposal:", e);
-        }
-    }
-    return { cleanText, proposals };
-};
+// <proposal> tags → chips; never shown as text (utils/proposals.ts)
 
 const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
   role,
@@ -261,7 +234,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
       touchStartPos.current = null;
       if (!isMobile || !start) return;
       if (gesture.current === 'swipe') {
-          if (swipeX >= SWIPE_TRIGGER) onReply?.(content);
+          if (swipeX >= SWIPE_TRIGGER) onReply?.(visibleContent);
           setSwipeX(0);
           gesture.current = 'none';
           return;
@@ -294,8 +267,8 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
   // Parse Content for Proposals
   const { cleanText: visibleContent, proposals } = useMemo(() => {
       if (isUser) return { cleanText: content, proposals: [] };
-      return extractProposals(content);
-  }, [content, isUser]);
+      return extractProposals(content, !!isStreaming);
+  }, [content, isUser, isStreaming]);
 
   const isThinking = isStreaming && (!visibleContent || visibleContent.length === 0);
 
@@ -638,8 +611,8 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
             current={myReaction}
             canReact={!isUser && !!onReact}
             onPick={(emo) => onReact?.(emo)}
-            onReply={!isMobile && onReply ? () => onReply(content) : undefined}
-            onCopy={!isMobile && onCopy ? () => onCopy(content) : undefined}
+            onReply={!isMobile && onReply ? () => onReply(visibleContent) : undefined}
+            onCopy={!isMobile && onCopy ? () => onCopy(visibleContent) : undefined}
             onClose={() => setPickerAnchor(null)}
           />
         )}
@@ -652,7 +625,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
               initial={{ opacity: 0, y: -4, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.15 }}
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); onCopy?.(content); setShowCopy(false); if (navigator.vibrate) navigator.vibrate(10); }}
+              onClick={(e) => { e.stopPropagation(); onCopy?.(visibleContent); setShowCopy(false); if (navigator.vibrate) navigator.vibrate(10); }}
               className={`glass glass-clear glass-pill absolute -bottom-11 ${isUser ? 'right-0' : 'left-0'} z-30 h-9 px-3.5 inline-flex items-center gap-1.5 text-xs font-medium text-md-on-surface`}
             >
               <Copy size={14} /> Copy
@@ -689,13 +662,13 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
                 </button>
               )}
               <button
-                onClick={(e) => { e.stopPropagation(); onReply?.(content); }}
+                onClick={(e) => { e.stopPropagation(); onReply?.(visibleContent); }}
                 className="p-2 rounded-full bg-zinc-800 border border-white/10 text-white/70 hover:text-white shadow-lg"
               >
                 <Reply size={14} />
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); onCopy?.(content); }}
+                onClick={(e) => { e.stopPropagation(); onCopy?.(visibleContent); }}
                 className="p-2 rounded-full bg-zinc-800 border border-white/10 text-white/70 hover:text-white shadow-lg"
               >
                 <Copy size={14} />

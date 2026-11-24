@@ -4,7 +4,7 @@
  * Keep in sync with client/src/legal/legalInfo.ts.
  */
 export const TERMS_VERSION = '2026-11-23';
-export const PRIVACY_VERSION = '2026-11-23';
+export const PRIVACY_VERSION = '2026-11-24'; // Sarvam AI added as voice processor
 export const MIN_AGE = 18; // DPDP Act 2023 s.9: under-18s need verifiable parental consent, which we don't collect
 
 export const ageOn = (dob: Date, now = new Date()) => {

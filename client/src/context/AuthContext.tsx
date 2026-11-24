@@ -4,6 +4,8 @@ import { AuthState, User } from '../types';
 import { deriveKey } from '../utils/encryptionUtils';
 import { AUTH_UNAUTHORIZED_EVENT } from '../constants';
 import { chatCache } from '../services/chatCache';
+import { pendingReply } from '../services/pendingReply';
+import { seenNudge } from '../services/seenNudge';
 
 const getClientServerDecrypt = (ciphertext: string) => {
   try {
@@ -95,6 +97,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionStorage.removeItem('userInfo'); // Tab Isolation Clear
       localStorage.removeItem('auth_last_active'); // Clear lock timer on explicit logout
       chatCache.clearAll(); // Don't leave private chat text on the device after logout
+      pendingReply.wipeDevice(); // nor unsent messages
+      seenNudge.wipe(); // nor a scheduled "you there?" notification
       import('../services/followUpCheckIns').then(m => m.followUpCheckIns.cancelAll()).catch(() => {}); // no check-ins for a logged-out phone
 
       setState({

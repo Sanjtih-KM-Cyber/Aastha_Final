@@ -13,7 +13,8 @@ import Mood from '../models/Mood';
 import Diary from '../models/Diary';
 import { Person } from '../models/Person';
 import { decrypt } from '../utils/serverEncryption';
-import { iterateAllMessages } from '../services/messageStore';
+import { iterateAllMessages, deleteAllMessages } from '../services/messageStore';
+import VoiceNote from '../models/VoiceNote';
 import { upcomingCheckIns } from '../services/reachOut';
 import { getMoodInsights } from '../services/moodInsights';
 import { toPublicPerson } from '../services/detectiveService';
@@ -230,22 +231,61 @@ export const updateNickname = async (req: AuthRequest, res: Response) => {
 // Already signed in (protect), so it only confirms it's still you. 5 wrong tries → 15 min cool-down per account.
 const unlockFails = new Map<string, { n: number; until: number }>();
 export const _resetUnlockLimiter = () => unlockFails.clear();
-export const verifyAccountPassword = async (req: AuthRequest, res: Response) => {
-  if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
-  const id = String(req.user._id);
+/** Shared password check (app lock + fresh start): one lockout per account. */
+const checkAccountPassword = async (id: string, password: string): Promise<'ok' | 'locked' | 'wrong'> => {
   const f = unlockFails.get(id);
-  if (f && f.until > Date.now()) return (res as any).status(429).json({ message: 'Too many tries. Please wait a few minutes.' });
-  const password = String((req as any).body?.password || '');
+  if (f && f.until > Date.now()) return 'locked';
   const u: any = await User.findById(id).select('+passwordHash');
   const ok = !!u?.passwordHash && password.length > 0 && password.length <= 200 && await bcrypt.compare(password, u.passwordHash);
   if (!ok) {
     const n = (f && f.until <= Date.now() && f.n >= 5 ? 0 : f?.n || 0) + 1;
     unlockFails.set(id, { n, until: n >= 5 ? Date.now() + 15 * 60_000 : 0 });
-    // 422, not 401: the app treats 401/403 as "session expired" and signs you out, a typo must not do that
-    return (res as any).status(422).json({ message: 'Wrong password' });
+    return 'wrong';
   }
   unlockFails.delete(id);
+  return 'ok';
+};
+
+export const verifyAccountPassword = async (req: AuthRequest, res: Response) => {
+  if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+  const r = await checkAccountPassword(String(req.user._id), String((req as any).body?.password || ''));
+  if (r === 'locked') return (res as any).status(429).json({ message: 'Too many tries. Please wait a few minutes.' });
+  // 422, not 401: the app treats 401/403 as "session expired" and signs you out, a typo must not do that
+  if (r === 'wrong') return (res as any).status(422).json({ message: 'Wrong password' });
   (res as any).json({ ok: true });
+};
+
+/**
+ * POST /api/users/fresh-start { closeness?, memories?, chats?, password? }  (owner, 2026-11-24)
+ * "Start fresh with Aastha": the user picks what to reset. Account, diary, moods, The Web and payments are never touched.
+ *  - closeness: back to New friend, nickname cleared
+ *  - memories:  facts, summary, check-in follow-ups, learned texting style, old lore / open loops / mirror
+ *  - chats:     every chat message + voice note (yours and hers)
+ * Memories and chats can't be undone → the account password is required for them (same lockout as the app lock).
+ */
+export const freshStart = async (req: AuthRequest, res: Response) => {
+  if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+  const b: any = (req as any).body || {};
+  const closeness = b.closeness === true, memories = b.memories === true, chats = b.chats === true;
+  if (!closeness && !memories && !chats) return (res as any).status(400).json({ message: 'Pick at least one thing to reset.' });
+  const id = String(req.user._id);
+  if (memories || chats) {
+    const r = await checkAccountPassword(id, String(b.password || ''));
+    if (r === 'locked') return (res as any).status(429).json({ message: 'Too many tries. Please wait a few minutes.' });
+    if (r === 'wrong') return (res as any).status(422).json({ message: 'Wrong password' });
+  }
+  const $set: any = {}, $unset: any = {};
+  if (closeness) {
+    $set.bond = { points: 0, level: 0, dayCount: 0, override: null, lastActiveAt: new Date() };
+    $unset.nickname = 1;
+  }
+  if (memories) {
+    Object.assign($set, { facts: [], memorySummary: '', followUps: [], lore: [], openLoops: [], mirrorEntries: [] });
+    $unset.styleProfile = 1;
+  }
+  await User.updateOne({ _id: id }, { ...(Object.keys($set).length ? { $set } : {}), ...(Object.keys($unset).length ? { $unset } : {}) });
+  if (chats) await Promise.all([deleteAllMessages(id), VoiceNote.deleteMany({ user: id })]);
+  (res as any).json({ ok: true, reset: { closeness, memories, chats } });
 };
 
 // POST /api/users/legal-consent { accept: true }, records acceptance of the current Terms + Privacy Policy

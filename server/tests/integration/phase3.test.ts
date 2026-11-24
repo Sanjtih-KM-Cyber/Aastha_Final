@@ -54,6 +54,13 @@ const check = (name: string, cond: boolean, extra: any = '') => {
   check('bond: override wins', rel.effectiveLevel({ points: 0, override: 4 }) === 4 && rel.effectiveLevel({ points: 999, override: 0 }) === 0);
   check('bond: level-up note only when growing naturally', /just become closer/.test(rel.bondPromptLine({ points: 120, override: null }, true)) && !/just become closer/.test(rel.bondPromptLine({ points: 120, override: 2 }, true)));
   check('bond: stranger card forbids nicknames', /no nicknames/.test(rel.bondPromptLine({ points: 0 }, false)));
+  check('bond: every level keeps the same voice (no "polite", no toning down)', [0, 1, 2, 3, 4].every((o) => {
+    const line = rel.bondPromptLine({ points: 0, override: o }, false);
+    return !/polite|light on emojis/i.test(line) && (o === 4 || /same voice|fully yourself/i.test(line));
+  }));
+  b = undefined;
+  for (let d = 1; d <= 21; d++) for (let i = 0; i < 15; i++) b = rel.updateBond(b, 'a normal message', day(d)).state;
+  check('bond: three weeks of regular chatting reaches Bestie', b.level === 4, b);
 
   // ---------------- Crisis detection ----------------
   const crisis = ['I want to die', 'honestly kms', 'i dont want to live anymore', 'everyone would be better off without me', 'mujhe marna chahti hu', 'मैं मरना चाहता हूँ', 'thinking about suicide'];

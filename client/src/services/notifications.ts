@@ -14,6 +14,7 @@ export const NOTIF_IDS = {
   GHOST: [1001, 1002, 1003],
   POMODORO_DONE: 3001,
   FOLLOW_UP: [2001, 2002, 2003, 2004, 2005], // "Aastha reaches out first" (services/followUpCheckIns.ts)
+  SEEN_NUDGE: 4001, // left her reply on seen and closed the app (services/seenNudge.ts)
 } as const;
 
 export const CHANNELS = {

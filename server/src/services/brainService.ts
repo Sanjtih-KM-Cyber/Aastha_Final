@@ -1,5 +1,6 @@
 import axios from 'axios';
 import FormData from 'form-data';
+import { sarvamEnabled, sarvamSpeak } from './sarvamTts';
 
 // The URL of your deployed Hugging Face Space
 const BRAIN_URL = process.env.BRAIN_SERVER_URL || 'https://sking0123-aastha-voice.hf.space';
@@ -17,7 +18,12 @@ export const brainService = {
      * @param description Optional: Style/Emotion tag content (e.g. "Whispering, high pitch")
      * @returns Buffer of the generated audio (WAV)
      */
-    generateSpeech: async (text: string, voiceBuffer?: Buffer, persona: string = 'aastha', description?: string): Promise<Buffer | null> => {
+    generateSpeech: async (text: string, voiceBuffer?: Buffer, persona: string = 'aastha', description?: string, preferredLanguage?: string): Promise<Buffer | null> => {
+        // Sarvam Bulbul first (Indian, human-sounding) when SARVAM_API_KEY is set; cloned voices stay on the Space (F5)
+        if (!voiceBuffer && sarvamEnabled()) {
+            const audio = await sarvamSpeak(text, persona, { description, preferredLanguage });
+            if (audio) return audio;
+        }
         try {
             const form = new FormData();
             form.append('text', text);

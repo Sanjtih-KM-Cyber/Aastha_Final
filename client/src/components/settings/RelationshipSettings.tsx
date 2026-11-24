@@ -4,6 +4,7 @@ import { deviceTimeZone } from '../../utils/timeZone';
 import { Heart, Languages, MapPin, Brain, Loader2, Check, Sparkles, Pencil, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
+import { FreshStartCard } from './FreshStartCard';
 
 const LEVELS = ['New friend', 'Getting to know you', 'Friend', 'Close friend', 'Bestie'];
 
@@ -133,7 +134,7 @@ export const RelationshipSettings: React.FC = () => {
           {status('closeness')}
         </div>
         <p className="text-xs text-md-on-surface-variant mb-4">
-          {botName} starts polite and grows closer the more you talk. You've reached <span className="text-md-on-surface">{LEVELS[earned]}</span>.
+          {botName}'s personality is there from the first message, and you get closer the more you talk: more shared history, more teasing, a nickname at Bestie. You've reached <span className="text-md-on-surface">{LEVELS[earned]}</span>.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -161,7 +162,7 @@ export const RelationshipSettings: React.FC = () => {
           {status('nickname')}
         </div>
         {!atBestie ? (
-          <p className="text-xs text-md-on-surface-variant">Unlocks at <span className="text-md-on-surface">Bestie</span>{botName} will come up with a nickname that's just yours.</p>
+          <p className="text-xs text-md-on-surface-variant">Unlocks at <span className="text-md-on-surface">Bestie</span>. {botName} will come up with a nickname that's just yours.</p>
         ) : nickDraft !== null ? (
           <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); nickAction({ action: 'set', value: nickDraft }); }}>
             <input autoFocus value={nickDraft} maxLength={20} onChange={(e) => setNickDraft(e.target.value)} placeholder="What should they call you?"
@@ -288,6 +289,8 @@ export const RelationshipSettings: React.FC = () => {
           </button>
         </div>
       </div>
+
+      <FreshStartCard botName={botName} />
     </section>
   );
 };

@@ -17,6 +17,8 @@ import { useNavigate } from 'react-router-dom';
 import { useSync } from '../../context/SyncContext';
 import api from '../../services/api';
 import { chatCache } from '../../services/chatCache';
+import { pendingReply, replyArrived } from '../../services/pendingReply';
+import { seenNudge } from '../../services/seenNudge';
 import { useSpecular } from '../../design/LiquidGlass';
 import { useStreamingChat, StreamHttpError } from '../../hooks/useStreamingChat';
 import { planLabel } from '../../utils/plan';
@@ -132,6 +134,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   // --- DEBOUNCE STATE ---
   const [pendingMessages, setPendingMessages] = useState<string[]>([]);
   const sendDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Survive closing the app (services/pendingReply.ts): the debounced send can be fired early when the app goes to
+  // the background, a dropped reply is fetched from history, and a stop by the user is told apart from an unmount.
+  const debounceFireRef = useRef<(() => void) | null>(null);
+  const recoveringRef = useRef(false);
+  const userStoppedRef = useRef(false);
 
   // Subconscious State
   const [statusDisplay, setStatusDisplay] = useState(currentActivity || 'Online');
@@ -354,6 +361,62 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       return Array.isArray(res.data) ? mapServerHistory(res.data) : [];
   };
 
+  // A reply we didn't receive (connection dropped / app closed): the server still finishes and saves it, so keep
+  // checking history (every 5 s, up to 5 min after sending) and show it when it lands.
+  const recoverReply = async () => {
+      const uid = (user as any)?._id;
+      if (recoveringRef.current || !pendingReply.getInFlight(uid)) return;
+      recoveringRef.current = true;
+      setStatusDisplay('Typing...');
+      let found = false;
+      try {
+          for (;;) {
+              const p = pendingReply.getInFlight(uid);
+              if (!p || !mountedRef.current) break;
+              try {
+                  const history = await fetchHistory();
+                  const state = replyArrived(history, p);
+                  if (state !== 'no') {
+                      found = true;
+                      pendingReply.clearInFlight(uid);
+                      mergeWithServer(history);
+                      // drop the half-written bubble of that reply (the saved one replaces it)
+                      setMessages(prev => prev.filter(m => !(m.role === 'assistant' && String(m.id || '').startsWith('temp-')
+                          && new Date(m.timestamp).getTime() <= p.sentAt + 60_000)));
+                      setTimeout(() => scrollToBottom(), 80);
+                      break;
+                  }
+              } catch { /* offline for now: try again */ }
+              await new Promise(r => setTimeout(r, 5000));
+          }
+          if (!found && mountedRef.current) {
+              setMessages(prev => prev.filter(m => !(m.role === 'assistant' && String(m.id || '').startsWith('temp-') && !m.content)));
+              setError(`${botName} couldn't finish that reply. Send it again?`);
+          }
+      } finally {
+          recoveringRef.current = false;
+          if (mountedRef.current) settleStatus();
+      }
+  };
+
+  // Back in the app: a "left on seen" notification that already fired is saved and shown; one still waiting is cancelled.
+  const settleSeenNudge = async () => {
+      const m = await seenNudge.settle();
+      if (m && mountedRef.current) {
+          setMessages(prev => prev.some(x => x.id === m.id) ? prev : [...prev, { role: 'assistant', content: m.content, timestamp: m.timestamp, id: m.id }]);
+          setTimeout(() => scrollToBottom(), 80);
+      }
+  };
+
+  // Messages typed but never sent because the app was closed during the 6 s pause → send them now.
+  const sendOutbox = () => {
+      const texts = pendingReply.takeOutbox((user as any)?._id);
+      if (!texts.length) return;
+      const tempBotId = `temp-${Date.now()}`;
+      setMessages(prev => [...prev, { role: 'assistant', content: '', timestamp: Date.now(), id: tempBotId }]);
+      callChatAPI(texts.join('\n'), [], null, false, tempBotId, false);
+  };
+
   useEffect(() => {
      if (!user) return; 
      if (hasAttemptedInit.current) return;
@@ -396,6 +459,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
              if (mountedRef.current && !cached) {
                  setTimeout(() => { scrollToBottom(); setIsInitializing(false); }, 300);
              }
+             // The app was closed last time before a reply arrived / before a message was sent
+             if (mountedRef.current) { recoverReply(); sendOutbox(); settleSeenNudge(); }
          }
      };
      initChat();
@@ -412,6 +477,28 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   useEffect(() => {
       let lastResumeSync = 0;
       const listener = App.addListener('appStateChange', async ({ isActive }) => {
+          // Going to the background with a message still waiting in the 6 s pause → send it NOW (the timer
+          // won't run while the app is closed, and the message used to be lost)
+          if (!isActive) {
+              if (sendDebounceTimer.current && debounceFireRef.current) {
+                  clearTimeout(sendDebounceTimer.current);
+                  sendDebounceTimer.current = null;
+                  const fire = debounceFireRef.current;
+                  debounceFireRef.current = null;
+                  fire();
+                  return;
+              }
+              // Her reply is the last message and they're leaving → a "you there?" notification later (seenNudge.ts)
+              const last = messagesRef.current[messagesRef.current.length - 1];
+              if (user && last?.role === 'assistant' && !inputValueRef.current.trim() && !pendingReply.getInFlight((user as any)?._id)) {
+                  cancelNudge();
+                  seenNudge.prepare(last.id, botName);
+              }
+              return;
+          }
+          settleSeenNudge();
+          // Back with a reply still missing → look for it right away (not throttled)
+          if (user && pendingReply.getInFlight((user as any)?._id)) { recoverReply(); return; }
           // On the web this fires on every focus/visibility change, throttle to once per 30 s.
           if (isActive && user && Date.now() - lastResumeSync > 30_000) {
               lastResumeSync = Date.now();
@@ -782,6 +869,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
   const settleStatus = () => setStatusDisplay(prev => (prev === 'Listening...' ? prev : 'Online'));
 
   const handleStop = () => {
+    userStoppedRef.current = true;
+    pendingReply.clearInFlight((user as any)?._id);
     chatStream.stop();
     setIsTyping(false);
     settleStatus();
@@ -802,6 +891,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
       processedTagsRef.current.clear();
       let serverAudioPlayed = false;
+      let gotSaved = false;
+      userStoppedRef.current = false;
+      const uid = (user as any)?._id;
+      // Remember it until the reply is saved: if the connection drops or the app closes, recoverReply() finds it.
+      // Voice notes / photos are saved under other text, so they're matched by time instead ('').
+      pendingReply.markInFlight(uid, audioBase64 || images.length ? '' : finalText);
       const patchBot = (fn: (m: ChatMessage) => ChatMessage) => setMessages(prev => prev.map(m => m.id === tempBotId ? fn(m) : m));
 
       await chatStream.stream(getApiUrl('/chat'), readToken(), {
@@ -844,6 +939,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                   setMessages(prev => prev.map(m => m.id === tempId ? { ...m, content: data.text || m.content, voice_note: data.voice_note ? resolveAudioUrl(data.voice_note) : m.voice_note } : m));
               }
               // Saved ids → reactions are stored against the real message (7.4)
+              if (data.type === 'saved') { gotSaved = true; pendingReply.clearInFlight(uid); }
               if (data.type === 'saved' && data.assistantId) {
                   setMessages(prev => prev.map(m => m.id === tempBotId ? { ...m, id: data.assistantId } : m));
                   scheduleNudge('seen', data.assistantId, NUDGE_SEEN_MS); // left on seen → one gentle follow-up
@@ -940,14 +1036,27 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           onDone: (raw) => {
               const cleanFinal = processMagicTags(raw);
               if ((isVoiceMode || ttsEnabled) && raw && !serverAudioPlayed) speakMessage(cleanFinal);
+              // Stream ended without the "saved" event (connection cut short) → fetch the reply from history
+              if (!gotSaved) setTimeout(() => recoverReply(), 0);
           },
           onError: (err: any) => {
-              if (err instanceof StreamHttpError && err.status === 401) { setError("Session expired. Please login again."); return; }
-              console.error(err);
-              setMessages(prev => prev.filter(m => m.id !== tempBotId));
-              setError(err?.message || `${botName} is unreachable.`);
+              if (err instanceof StreamHttpError) {
+                  pendingReply.clearInFlight(uid); // the server refused it (quota, session…): nothing to wait for
+                  if (err.status === 401) { setError("Session expired. Please login again."); return; }
+                  console.error(err);
+                  setMessages(prev => prev.filter(m => m.id !== tempBotId));
+                  setError(err?.message || `${botName} is unreachable.`);
+                  return;
+              }
+              // Network dropped (app in the background, signal lost): the server keeps going and saves the reply.
+              // Keep the half-written bubble and fetch the finished reply instead of showing an error.
+              console.warn('Reply stream dropped, recovering from history', err);
+              setTimeout(() => recoverReply(), 0);
           },
-          onAbort: () => console.log("Generation stopped by user."),
+          onAbort: () => {
+              // Stop button → nothing to recover. Unmount (screen closed) → in-flight stays for the next open.
+              if (userStoppedRef.current) pendingReply.clearInFlight(uid);
+          },
           // Always runs (done, error or stop), the header can't stay on "Typing…" any more (7.1)
           onSettled: ({ superseded }) => {
               if (superseded) return;
@@ -985,7 +1094,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     const SLICE_LIMIT = 50;
     
     // Clear Input
-    setInput(''); setAttachedImage(null); setShowEmojiPicker(false); setSuggestedChips([]); cancelNudge();
+    setInput(''); setAttachedImage(null); setShowEmojiPicker(false); setSuggestedChips([]); cancelNudge(); seenNudge.cancel();
     setError(null);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
     if (isMobile) textareaRef.current?.blur();
@@ -1002,6 +1111,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     if (isPermissionGrant || isVoiceMode || audioBlob) {
         // BYPASS DEBOUNCE for Force Reply or Voice Mode
         if (sendDebounceTimer.current) clearTimeout(sendDebounceTimer.current);
+        sendDebounceTimer.current = null;
+        debounceFireRef.current = null;
+        pendingReply.setOutbox((user as any)?._id, []); // the waiting texts go out with this send
 
         // Flush any pending
         const allText = [...pendingMessages, isPermissionGrant ? "Please reply now." : finalContent].join('\n');
@@ -1029,8 +1141,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
     // Cancel previous timer
     if (sendDebounceTimer.current) clearTimeout(sendDebounceTimer.current);
 
-    // Start new timer (6 seconds)
-    sendDebounceTimer.current = setTimeout(async () => {
+    // Start new timer (6 seconds). Also kept on the device (outbox) and fired early if the app goes to the
+    // background, so closing the app during the pause can't lose the message.
+    pendingReply.setOutbox((user as any)?._id, newPending);
+    const fireSend = async () => {
+        sendDebounceTimer.current = null;
+        debounceFireRef.current = null;
+        pendingReply.setOutbox((user as any)?._id, []);
         // Prepare to send
         const fullText = newPending.join('\n');
         setPendingMessages([]); // clear buffer before sending
@@ -1052,8 +1169,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
 
         const finalImages = overrideImage ? [overrideImage] : (attachedImage ? [attachedImage] : []);
         await callChatAPI(fullText, finalImages, audioBase64, false, tempBotId, !shouldShowBubble, userMsg.id);
-
-    }, 6000); // 6 Seconds Pause (High Latency Mode)
+    };
+    debounceFireRef.current = fireSend;
+    sendDebounceTimer.current = setTimeout(fireSend, 6000); // 6 Seconds Pause (High Latency Mode)
   };
 
   // --- REACTIONS on Aastha's replies (7.4) ---

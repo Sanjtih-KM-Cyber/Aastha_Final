@@ -490,7 +490,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
                 const withVoice: any = await User.findById(userId).select('+cloneMode.voiceSample').lean();
                 cloneVoice = decodeVoiceSample(withVoice?.cloneMode?.voiceSample);
             }
-            const audioBuffer = await brainService.generateSpeech(textToSpeak.slice(0, 4000) /* brain_server trims at a sentence boundary */, cloneVoice, targetPersona, useClone ? undefined : styleDescription);
+            const audioBuffer = await brainService.generateSpeech(textToSpeak.slice(0, 4000) /* brain_server trims at a sentence boundary */, cloneVoice, targetPersona, useClone ? undefined : styleDescription, user.preferredLanguage);
 
             if (audioBuffer) {
                 const audioId = `vn-${crypto.randomUUID()}`; // unguessable: the stream URL is the only access key
@@ -639,41 +639,96 @@ export const reactToMessage = async (req: AuthRequest, res: Response) => {
 // Doesn't use the user's message quota (it's the companion talking, not them).
 // =====================================================================================================
 const NUDGES_PER_DAY = 6;
+const DEFERRED_NUDGE_MAX_AGE_MS = 6 * 3_600_000; // a prepared "left on seen" notification is only valid this long
+
+type NudgeCheck = { ok: true; user: any; recent: any[]; last: any } | { ok: false };
+
+/** Shared rules: right after the companion's reply, not twice in a row, ≤ 6/day, never within 12 h of a crisis. */
+const nudgeAllowed = async (userId: any, forId: string): Promise<NudgeCheck> => {
+    const user: any = await User.findById(userId);
+    if (!user) return { ok: false };
+    const lastCrisis = user.reachOut?.lastCrisisAt ? new Date(user.reachOut.lastCrisisAt).getTime() : 0;
+    if (Date.now() - lastCrisis < 12 * 3_600_000) return { ok: false };
+    const recent: any[] = await getRecentMessages(user._id, 10);
+    const last = recent[recent.length - 1];
+    if (!last || last.role !== 'assistant' || last.isNudge || last.isClone || (forId && String(last._id) !== forId)) return { ok: false };
+    const today = await MessageModel.countDocuments({ user: user._id, isNudge: true, timestamp: { $gt: new Date(Date.now() - 86_400_000) } });
+    if (today >= NUDGES_PER_DAY) return { ok: false };
+    return { ok: true, user, recent, last };
+};
+
+const writeNudge = async (user: any, recent: any[], last: any, reason: NudgeReason) => {
+    const isAastik = user.persona === 'aarav' || user.persona === 'aastik';
+    const nick: any = user.nickname || {};
+    const history = recent.slice(-8).map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' as const : 'user' as const, content: decrypt(m.content || '').slice(0, 600) }));
+    const system = `${PERSONA_VOICE[isAastik ? 'aastik' : 'aastha'].trim()}
+You're texting your friend ${String(user.name || '').split(' ')[0] || 'them'}. Write like a real friend texting: short, natural, no assistant filler, at most one emoji and only if they use them. Reply in the language and script they use.${effectiveLevel(user.bond) >= 4 && nick.value && !nick.off ? ` You sometimes call them "${nick.value}".` : ''}
+${nudgeInstruction(reason, last.userReaction)}`;
+    const text = (await completeChat([{ role: 'system', content: system }, ...history], { task: 'chat', temperature: 0.9, maxTokens: 120 }))
+        .replace(/<[^>]+>/g, '').replace(/\[[A-Z]+:[^\]]*\]/g, '').trim().slice(0, 300);
+    return humanize(text);
+};
+
+const saveNudge = async (res: Response, user: any, cleanText: string) => {
+    const [saved] = await appendMessages(user._id, [{ role: 'assistant', content: encrypt(cleanText), isNudge: true }]);
+    broadcast(String(user._id), 'message', { id: String(saved?._id || ''), content: cleanText, role: 'assistant', timestamp: saved?.timestamp || new Date() });
+    (res as any).json({ id: String(saved?._id || ''), content: cleanText, timestamp: saved?.timestamp || new Date() });
+};
+
+// Signs a prepared nudge so /nudge/commit can only save text this server wrote, for this user + reply.
+const nudgeToken = (userId: string, forId: string, text: string, at: number) =>
+    crypto.createHmac('sha256', String(process.env.JWT_SECRET || 'dev')).update(`nudge|${userId}|${forId}|${at}|${text}`).digest('base64url');
+
+/**
+ * POST /chat/nudge { reason, messageId, deferred? }
+ *  - normal: write the follow-up and save it now (app open, they reacted / left it on seen).
+ *  - deferred (phone app going to the background): write it but DON'T save; return it with a signed token. The app
+ *    shows it as a local notification ~20 min later and calls /nudge/commit once it has fired, so it lands in the
+ *    chat only if it was really sent (and never if they came back and answered first).
+ */
 export const sendNudge = async (req: AuthRequest, res: Response) => {
     if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
     const reason: NudgeReason = (req as any).body?.reason === 'reaction' ? 'reaction' : 'seen';
     const forId = String((req as any).body?.messageId || '');
+    const deferred = (req as any).body?.deferred === true;
     try {
-        const user: any = await User.findById(req.user._id);
-        if (!user) return (res as any).status(404).json({ message: 'Not found' });
-        const lastCrisis = user.reachOut?.lastCrisisAt ? new Date(user.reachOut.lastCrisisAt).getTime() : 0;
-        if (Date.now() - lastCrisis < 12 * 3_600_000) return (res as any).status(204).end();
-
-        const recent: any[] = await getRecentMessages(user._id, 10);
-        const last = recent[recent.length - 1];
-        // Only right after the companion's reply: not if they already answered, not twice in a row
-        if (!last || last.role !== 'assistant' || last.isNudge || last.isClone || (forId && String(last._id) !== forId)) {
-            return (res as any).status(204).end();
-        }
-        const today = await MessageModel.countDocuments({ user: user._id, isNudge: true, timestamp: { $gt: new Date(Date.now() - 86_400_000) } });
-        if (today >= NUDGES_PER_DAY) return (res as any).status(204).end();
-
-        const isAastik = user.persona === 'aarav' || user.persona === 'aastik';
-        const nick: any = user.nickname || {};
-        const history = recent.slice(-8).map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' as const : 'user' as const, content: decrypt(m.content || '').slice(0, 600) }));
-        const system = `${PERSONA_VOICE[isAastik ? 'aastik' : 'aastha'].trim()}
-You're texting your friend ${String(user.name || '').split(' ')[0] || 'them'}. Write like a real friend texting: short, natural, no assistant filler, at most one emoji and only if they use them. Reply in the language and script they use.${effectiveLevel(user.bond) >= 4 && nick.value && !nick.off ? ` You sometimes call them "${nick.value}".` : ''}
-${nudgeInstruction(reason, last.userReaction)}`;
-        const text = (await completeChat([{ role: 'system', content: system }, ...history], { task: 'chat', temperature: 0.9, maxTokens: 80 }))
-            .replace(/<[^>]+>/g, '').replace(/\[[A-Z]+:[^\]]*\]/g, '').trim().slice(0, 300);
-        const cleanText = humanize(text);
+        if (deferred && !forId) return (res as any).status(204).end();
+        const check = await nudgeAllowed(req.user._id, forId);
+        if (!check.ok) return (res as any).status(204).end();
+        const cleanText = await writeNudge(check.user, check.recent, check.last, reason);
         if (!cleanText) return (res as any).status(204).end();
-
-        const [saved] = await appendMessages(user._id, [{ role: 'assistant', content: encrypt(cleanText), isNudge: true }]);
-        broadcast(String(user._id), 'message', { id: String(saved?._id || ''), content: cleanText, role: 'assistant', timestamp: saved?.timestamp || new Date() });
-        (res as any).json({ id: String(saved?._id || ''), content: cleanText, timestamp: saved?.timestamp || new Date() });
+        if (deferred) {
+            const at = Date.now();
+            return (res as any).json({ content: cleanText, preparedAt: at, token: nudgeToken(String(check.user._id), forId, cleanText, at) });
+        }
+        await saveNudge(res, check.user, cleanText);
     } catch (e: any) {
         if (!(e instanceof LlmUnavailableError)) console.error('Nudge error:', e?.message || e);
+        (res as any).status(204).end();
+    }
+};
+
+/** POST /chat/nudge/commit { messageId, content, preparedAt, token } → saves a prepared nudge whose notification fired. */
+export const commitNudge = async (req: AuthRequest, res: Response) => {
+    if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+    const b: any = (req as any).body || {};
+    const forId = String(b.messageId || '');
+    const content = typeof b.content === 'string' ? b.content : '';
+    const at = Number(b.preparedAt);
+    try {
+        if (!forId || !content || !Number.isFinite(at) || Date.now() - at > DEFERRED_NUDGE_MAX_AGE_MS || at > Date.now() + 60_000) {
+            return (res as any).status(204).end();
+        }
+        const expected = nudgeToken(String(req.user._id), forId, content, at);
+        const given = String(b.token || '');
+        if (given.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected))) {
+            return (res as any).status(400).json({ message: 'Invalid nudge.' });
+        }
+        const check = await nudgeAllowed(req.user._id, forId); // they may have answered in the meantime
+        if (!check.ok) return (res as any).status(204).end();
+        await saveNudge(res, check.user, content);
+    } catch (e: any) {
+        console.error('Nudge commit error:', e?.message || e);
         (res as any).status(204).end();
     }
 };

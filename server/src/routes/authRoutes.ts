@@ -21,7 +21,7 @@ import { protect } from '../middleware/authMiddleware';
 import { getDiaryResetOptions, sendDiaryResetCode, resetDiaryPassword, startFreshDiary } from '../controllers/diaryController';
 import { getClone, saveCloneConsent, uploadCloneScreenshot, uploadCloneChatSample, uploadCloneVoice, updateCloneSettings, deleteClone } from '../controllers/cloneController';
 import { getPushKey, subscribePush, unsubscribePush, testPush } from '../controllers/pushController';
-import { getReachOut, updateReachOut, exportMyData, markSafetyIntroSeen, updatePreferences, acceptLegal, updateNickname, verifyAccountPassword } from '../controllers/meController';
+import { getReachOut, updateReachOut, exportMyData, markSafetyIntroSeen, updatePreferences, acceptLegal, updateNickname, verifyAccountPassword, freshStart } from '../controllers/meController';
 
 const router = express.Router();
 
@@ -66,6 +66,7 @@ router.post('/safety-intro', protect, markSafetyIntroSeen);
 router.put('/preferences', protect, updatePreferences);
 router.put('/nickname', protect, updateNickname);
 router.post('/verify-password', protect, verifyAccountPassword); // app-lock screen (rate-limited)
+router.post('/fresh-start', protect, freshStart); // "Start fresh with Aastha": closeness / memories / chats
 router.post('/legal-consent', protect, acceptLegal);
 
 // Account management

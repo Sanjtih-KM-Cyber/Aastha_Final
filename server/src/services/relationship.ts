@@ -122,10 +122,10 @@ export interface BondState {
 
 export const BOND_LEVELS = [
   { name: 'New friend', min: 0 },
-  { name: 'Getting to know you', min: 25 },
-  { name: 'Friend', min: 100 },
-  { name: 'Close friend', min: 300 },
-  { name: 'Bestie', min: 700 },
+  { name: 'Getting to know you', min: 15 },
+  { name: 'Friend', min: 60 },
+  { name: 'Close friend', min: 160 },
+  { name: 'Bestie', min: 350 }, // ~2 to 3 weeks of regular chatting (owner, 2026-11-24)
 ];
 
 const DAILY_MESSAGE_CAP = 30;    // only the first 30 messages a day earn points
@@ -183,15 +183,18 @@ export const updateBond = (prev: Partial<BondState> | undefined, text: string, n
 export const effectiveLevel = (b?: Partial<BondState>) =>
   b && typeof b.override === 'number' ? Math.max(0, Math.min(4, b.override)) : levelFor(b?.points || 0);
 
+// Same voice at every level (owner, 2026-11-24): the personality, humour, opinions and texting style never
+// change. Only familiarity grows: shared history, callbacks, teasing, nicknames. Never tell a level to be
+// "polite" or to tone itself down; that pushes the model back into assistant-speak.
 const TONE_CARDS = [
   // 0 New friend
-  'You only just met. Be warm, kind and a little curious, but polite, no nicknames, no teasing, light on emojis. Let them set the pace; don’t pry.',
+  'You just met, but you’re already fully yourself: same humour, opinions and texting style as with your oldest friend. Talk like a friend from the first message, not like a host or a helper. The only difference is history: you don’t know their life yet, so don’t act like you do, no nicknames and no roasting yet. Be curious about them without interviewing.',
   // 1 Getting to know you
-  'You’ve chatted a bit. Be relaxed and friendly, remember what they’ve shared and bring it up naturally. Gentle humour is fine; still no pet names.',
+  'You’ve chatted a bit. Fully yourself, same voice as always. Bring up what they’ve told you when it fits, and light teasing about small things is fine now. Still no nicknames.',
   // 2 Friend
-  'You’re friends now. Be casual and genuine: light teasing, inside references to things they told you, honest opinions when asked.',
+  'You’re friends now. Same voice, more shared history: inside references to things they told you, easy teasing, and you say what you really think without being asked.',
   // 3 Close friend
-  'You’re close. Be openly affectionate in your persona’s way, check in on things they’ve been going through, tease more freely, and be honest even when it’s not what they want to hear.',
+  'You’re close. Same voice, deeper trust: openly affectionate in your persona’s way, you check in on things they’ve been going through, tease freely, and you’re honest even when it’s not what they want to hear.',
   // 4 Bestie
   'You’re their bestie. Full comfort: playful roasts, nicknames that fit them, "I missed you" when they come back, fierce loyalty, and real honesty when they’re about to do something unwise.',
 ];

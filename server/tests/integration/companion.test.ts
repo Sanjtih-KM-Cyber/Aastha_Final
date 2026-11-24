@@ -100,6 +100,26 @@ const mockRes = () => {
   r = await call(chat.sendNudge, { reason: 'seen' });
   check('no nudges for 12 h after a crisis', r.statusCode === 204);
   await User.updateOne({ _id: u._id }, { $unset: { 'reachOut.lastCrisisAt': 1 } });
+
+  // left on seen + app closed → prepared (not saved), notification fires, then committed (2026-11-24)
+  const so = await Message.findOne({ user: u._id, role: 'assistant' }).sort({ timestamp: -1 });
+  await Message.updateOne({ _id: so!._id }, { $set: { timestamp: new Date() } }); // fixture was in the future
+  await new Promise(r => setTimeout(r, 5));
+  next = 'you there? or did sleep win 😴';
+  const nudgesBefore = await Message.countDocuments({ user: u._id, isNudge: true });
+  r = await call(chat.sendNudge, { reason: 'seen', messageId: String(so!._id), deferred: true });
+  const prep = r.body;
+  check('deferred nudge: written but not saved yet', r.statusCode === 200 && prep.content === next && !!prep.token
+    && (await Message.countDocuments({ user: u._id, isNudge: true })) === nudgesBefore, r.body);
+  r = await call(chat.commitNudge, { messageId: String(so!._id), content: 'something else', preparedAt: prep.preparedAt, token: prep.token });
+  check('deferred nudge: edited text is refused', r.statusCode === 400);
+  r = await call(chat.commitNudge, { messageId: String(so!._id), content: prep.content, preparedAt: prep.preparedAt - 7 * 3_600_000, token: prep.token });
+  check('deferred nudge: stale one is ignored', r.statusCode === 204);
+  r = await call(chat.commitNudge, { messageId: String(so!._id), content: prep.content, preparedAt: prep.preparedAt, token: prep.token });
+  check('deferred nudge: fired → saved in the chat once', r.statusCode === 200 && (await Message.countDocuments({ user: u._id, isNudge: true })) === nudgesBefore + 1);
+  r = await call(chat.commitNudge, { messageId: String(so!._id), content: prep.content, preparedAt: prep.preparedAt, token: prep.token });
+  check('deferred nudge: never saved twice', r.statusCode === 204);
+
   const many = Array.from({ length: 6 }, (_, i) => ({ user: u._id, role: 'assistant', content: encrypt('x'), isNudge: true, timestamp: new Date(Date.now() - 1000 * (i + 5)) }));
   await Message.insertMany(many);
   await Message.create({ user: u._id, role: 'assistant', content: encrypt('anyway'), timestamp: new Date(Date.now() + 2000) });
@@ -115,6 +135,47 @@ const mockRes = () => {
   for (let k = 0; k < 4; k++) await vp('nope');
   check('lock screen: 5 wrong tries → cool-down (even the right one waits)', (await vp('right-pass')) === 429);
   me._resetUnlockLimiter();
+
+  // ---------------- start fresh: the user picks what to reset (2026-11-24) ----------------
+  const VoiceNote = require('../../src/models/VoiceNote').default;
+  await User.updateOne({ _id: pw._id }, { $set: { bond: { points: 500, level: 4, override: 3 }, nickname: { value: encrypt('Chotu') }, facts: [encrypt('likes chai')], memorySummary: encrypt('summary'), diaryPassword: 'keep' } });
+  await Message.insertMany([{ user: pw._id, role: 'user', content: encrypt('hi'), timestamp: new Date() }, { user: pw._id, role: 'assistant', content: encrypt('hey'), timestamp: new Date() }]);
+  await VoiceNote.create({ _id: 'vn-fresh-1', user: pw._id, buffer: Buffer.from('x'), mimeType: 'audio/wav' }).catch(() => {});
+  const fs = async (body: any) => { const res = mockRes(); await me.freshStart({ user: pw, body, params: {}, query: {} } as any, res); return res; };
+  check('fresh start: must pick something', (await fs({})).statusCode === 400);
+  r = await fs({ closeness: true });
+  let fresh: any = await User.findById(pw._id).lean();
+  check('fresh start: closeness alone needs no password, back to New friend, nickname gone, memories kept',
+    r.statusCode === 200 && fresh.bond.points === 0 && fresh.bond.override === null && !fresh.nickname?.value && fresh.facts.length === 1, fresh.bond);
+  check('fresh start: memories need the password (422, never 401)', (await fs({ memories: true, password: 'nope' })).statusCode === 422);
+  r = await fs({ memories: true, password: 'right-pass' });
+  fresh = await User.findById(pw._id).lean();
+  check('fresh start: memories wiped, chats kept', r.statusCode === 200 && fresh.facts.length === 0 && !fresh.memorySummary && (await Message.countDocuments({ user: pw._id })) === 2);
+  r = await fs({ chats: true, password: 'right-pass' });
+  check('fresh start: chats + voice notes deleted', r.statusCode === 200 && (await Message.countDocuments({ user: pw._id })) === 0 && (await VoiceNote.countDocuments({ user: pw._id })) === 0);
+  check('fresh start: account itself untouched', !!(await User.findById(pw._id)));
+  me._resetUnlockLimiter();
+
+  // ---------------- Sarvam voice notes (2026-11-24) ----------------
+  const sv = require('../../src/services/sarvamTts');
+  check('sarvam: Hinglish in English letters → Indian English', sv.languageFor('arre yaar kya scene hai aaj') === 'en-IN');
+  check('sarvam: Devanagari → hi-IN, or mr-IN when they chose Marathi', sv.languageFor('आज कैसा रहा दिन?') === 'hi-IN' && sv.languageFor('आज कसा होता दिवस?', 'marathi') === 'mr-IN');
+  check('sarvam: Tamil / Bengali / Telugu scripts', sv.languageFor('எப்படி இருக்கீங்க') === 'ta-IN' && sv.languageFor('কেমন আছো') === 'bn-IN' && sv.languageFor('ఎలా ఉన్నావు') === 'te-IN');
+  const long = 'This is a sentence. '.repeat(200);
+  check('sarvam: long text cut at a sentence end, ≤ 2500 chars', sv.trimForTts(long).length <= 2500 && sv.trimForTts(long).endsWith('.'));
+  const axios = require('axios');
+  const realPost = axios.post;
+  let sent: any = null, hdr: any = null;
+  axios.post = async (_u: string, body: any, cfg: any) => { sent = body; hdr = cfg.headers; return { status: 200, data: { audios: [Buffer.alloc(400, 1).toString('base64')] } }; };
+  delete process.env.SARVAM_API_KEY;
+  check('sarvam: off without a key', (await sv.sarvamSpeak('hi there', 'aastha')) === null && sent === null);
+  process.env.SARVAM_API_KEY = 'test-key';
+  const audio = await sv.sarvamSpeak('so proud of you, seriously', 'aastik', { description: 'soft and gentle' });
+  check('sarvam: sends text + persona voice + pace, key in header', !!audio && audio.length === 400 && sent.speaker === 'rohan' && sent.language_code === 'en-IN' && sent.pace === 0.92 && hdr['api-subscription-key'] === 'test-key', sent);
+  axios.post = async () => ({ status: 402, data: { error: { code: 'insufficient_quota_error' } } });
+  check('sarvam: out of credits → null (caller falls back to the HF Space)', (await sv.sarvamSpeak('hello', 'aastha')) === null);
+  axios.post = realPost;
+  delete process.env.SARVAM_API_KEY;
 
   await mongoose.disconnect();
   await mongod.stop();

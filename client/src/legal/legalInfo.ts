@@ -14,9 +14,9 @@ export const LEGAL = {
   grievanceEmail: '[grievance@your-domain]',
   jurisdictionCity: '[City, State]',
   website: 'aasthaai.site',
-  effectiveDate: '23 November 2026',
+  effectiveDate: '24 November 2026',
   termsVersion: '2026-11-23',
-  privacyVersion: '2026-11-23',
+  privacyVersion: '2026-11-24', // Sarvam AI added as voice processor
   minAge: 18,
 } as const;
 
