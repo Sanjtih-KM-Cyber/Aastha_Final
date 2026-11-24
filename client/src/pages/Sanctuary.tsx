@@ -10,6 +10,7 @@ import { useSanctuaryFonts } from '../hooks/useAppFonts';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { MobileTabBar, TabKey } from '../components/layout/MobileTabBar';
+import { isStopAction, soundscapeConfig } from '../utils/proposals';
 
 // ✅ DIRECT IMPORTS (Fix for Widgets Not Opening)
 // Lazy load widgets for better error isolation
@@ -174,9 +175,11 @@ export const Sanctuary: React.FC = () => {
   };
 
   const openWidget = (key: string, config?: any) => {
-    // If config provided, update it. If not, we might want to keep old or reset.
-    // Current behavior: if config is undefined, keep old.
-    // If you want to reset, you should pass {} or handle it.
+    // Aastha's "stop the music / sounds" button: close the widget (closing stops playback). It used to open it.
+    if (isStopAction(key, config)) { closeWidget(key); return; }
+    // Soundscape: Aastha sends {mix:{rain:0.8,…,master:0.9}}, the widget reads preset + volume
+    if (key === 'soundscape' && config) config = soundscapeConfig(config);
+    // If config provided, update it. If not, keep the old one.
     if (config) {
         setWidgetConfigs(prev => ({ ...prev, [key]: config }));
     }

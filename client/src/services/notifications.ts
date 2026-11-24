@@ -14,11 +14,13 @@ export const NOTIF_IDS = {
   GHOST: [1001, 1002, 1003],
   POMODORO_DONE: 3001,
   FOLLOW_UP: [2001, 2002, 2003, 2004, 2005], // "Aastha reaches out first" (services/followUpCheckIns.ts)
-  SEEN_NUDGE: 4001, // left her reply on seen and closed the app (services/seenNudge.ts)
+  SEEN_NUDGE: 4001, // left the reply on seen and closed the app (services/seenNudge.ts)
+  WEEKLY_LETTER: 4101, // "Aastha wrote you a letter" on Sunday evening (services/followUpCheckIns.ts)
 } as const;
 
 export const CHANNELS = {
   DEFAULT: 'aastha_default',   // check-ins, reminders
+  PRIVATE: 'aastha_private',   // same, but Android hides the text on a locked screen ("Contents hidden")
   TIMERS: 'pop_notifications', // focus / break alerts (kept id for existing installs)
 } as const;
 
@@ -26,6 +28,12 @@ export const CHANNELS = {
 export const SMALL_ICON = 'ic_stat_aastha';
 
 export const isNative = () => Capacitor.isNativePlatform();
+
+// "Hide notification text on the lock screen" (2026-11-24): saved on the account (web push uses it server-side);
+// this device copy picks the private channel for everything we schedule from now on.
+const PRIVATE_KEY = 'notif-private';
+export const privateNotifications = () => { try { return localStorage.getItem(PRIVATE_KEY) === 'true'; } catch { return false; } };
+export const setPrivateNotificationsLocal = (on: boolean) => { try { localStorage.setItem(PRIVATE_KEY, String(on)); } catch { /* ignore */ } };
 
 export const cancelIds = async (ids: readonly number[]) => {
   if (!isNative() || ids.length === 0) return;
@@ -45,6 +53,15 @@ export const ensureChannels = async () => {
       description: 'Gentle check-ins and your daily reminders',
       importance: 4,
       visibility: 1,
+      vibration: true,
+    });
+    // Android channel visibility can't change after creation, so "hide text on lock screen" is its own channel
+    await LocalNotifications.createChannel({
+      id: CHANNELS.PRIVATE,
+      name: 'Check-ins & reminders (private)',
+      description: 'Text hidden on the lock screen until you unlock',
+      importance: 4,
+      visibility: 0,
       vibration: true,
     });
     await LocalNotifications.createChannel({
@@ -121,7 +138,7 @@ export const scheduleOne = async (n: {
         title: n.title,
         body: n.body,
         smallIcon: SMALL_ICON,
-        channelId: n.channel || CHANNELS.DEFAULT,
+        channelId: (n.channel || CHANNELS.DEFAULT) === CHANNELS.DEFAULT && privateNotifications() ? CHANNELS.PRIVATE : (n.channel || CHANNELS.DEFAULT),
         schedule: n.every
           ? { on: { hour: n.every.hour, minute: n.every.minute }, allowWhileIdle: true }
           : { at: n.at || new Date(), allowWhileIdle: true },

@@ -4,14 +4,14 @@ import { AuthRequest } from '../middleware/authMiddleware';
 import User from '../models/User';
 import { getRecentMessages } from '../services/messageStore';
 import Diary from '../models/Diary';
-import { extractThemeFromImage, getMusicRecommendation, analyzeDiaryEntries, analyzeChatHistory, getVibePlaylist } from '../services/geminiService';
+import { extractThemeFromImage, getMusicRecommendation, analyzeDiaryEntries, analyzeChatHistory, getVibePlaylist, songsForMinutes } from '../services/geminiService';
 import { decrypt } from '../utils/serverEncryption';
 
 // --- Helper: Internal YouTube Search ---
 // Defined ONCE here and used below
 // One cached YouTube lookup per song title (services/youtubeSearch.ts, A11)
 const searchYouTubeInternal = async (query: string) => {
-    const [first] = await searchYouTube(`${query} audio`, { max: 1 });
+    const [first] = await searchYouTube(`${query} audio`, { max: 1, songsOnly: true });
     return first || null;
 };
 
@@ -96,34 +96,35 @@ export const generateVibePlaylist = async (req: AuthRequest, res: Response) => {
         // Pass arrays to service
         const songTitles = await getVibePlaylist(recentMessages, languages, moods, duration, year, genres, specific_songs);
 
-        // 3. Search YouTube
-        // Uses the searchYouTubeInternal defined at the top of the file
-        // Cap at 10 songs per playlist, each uncached title costs 100 YouTube quota units
-        const searchPromises = (songTitles || []).slice(0, 10).map(title => searchYouTubeInternal(title));
-        const results = await Promise.all(searchPromises);
-        let tracks = results.filter(t => t !== null);
+        // 3. Search YouTube: one real song per title (songsOnly: no Shorts, live streams or long mixes)
+        const want = songsForMinutes(duration);
+        const results = await Promise.all((songTitles || []).slice(0, want).map(title => searchYouTubeInternal(title)));
+        const seen = new Set<string>();
+        let tracks = results.filter((t): t is NonNullable<typeof t> => !!t && !seen.has(t.id) && !!seen.add(t.id));
 
-        // 4. Emergency Fallback (Ensure we never return empty)
-        if (tracks.length === 0) {
-            console.warn("Vibe Gen: No tracks found (AI or YouTube failed). Using Fallback.");
-            tracks = [{
-                id: 'jfKfPfyJRdk', // Lofi Girl Radio
-                title: 'lofi hip hop radio - beats to relax/study to',
-                artist: 'Lofi Girl',
-                thumbnail: 'https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg'
-            }];
+        // 4. AI gave nothing usable → ONE search built from what they picked (was: a hard-coded Lofi Girl live-stream
+        //    id that had ended, so Jam played ~8 s and stopped)
+        if (tracks.length < 3) {
+            const q = fallbackQuery({ languages, moods, genres, year });
+            const more = await searchYouTube(q, { max: want, musicOnly: true, songsOnly: true });
+            for (const t of more) if (!seen.has(t.id)) { seen.add(t.id); tracks.push(t); }
+            tracks = tracks.slice(0, want);
         }
 
+        if (tracks.length === 0) {
+            console.warn('Vibe Gen: no playable songs (AI and YouTube both came back empty).');
+            return (res as any).status(503).json({ message: "Couldn't find songs right now. Try searching for one, or try again in a bit." });
+        }
         (res as any).json(tracks);
-
     } catch (e) {
-        console.error(e);
-        // Even in catch, return fallback instead of erroring
-        (res as any).json([{
-            id: 'jfKfPfyJRdk',
-            title: 'lofi hip hop radio - beats to relax/study to',
-            artist: 'Lofi Girl (Safe Mode)',
-            thumbnail: 'https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg'
-        }]);
+        console.error('Vibe Gen error:', (e as any)?.message || e);
+        (res as any).status(503).json({ message: "Couldn't make a playlist right now. Try again in a bit." });
     }
+};
+
+/** "Hindi Happy Pop songs 2010s" style search from the user's picks (never a fixed video). */
+export const fallbackQuery = (p: { languages?: string[]; moods?: string[]; genres?: string[]; year?: string }) => {
+    const pick = (a?: string[]) => (Array.isArray(a) ? a.filter(Boolean).slice(0, 2).join(' ') : '');
+    return [pick(p.languages), pick(p.moods), pick(p.genres), 'songs', p.year || ''].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+        || 'feel good songs';
 };

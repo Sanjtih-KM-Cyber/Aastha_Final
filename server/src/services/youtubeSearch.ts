@@ -64,14 +64,23 @@ export const _ytInternals = {
   get blockedUntil() { return quotaBlockedUntil; },
 };
 
+/** ISO 8601 duration ("PT3M42S") → seconds. */
+export const isoSeconds = (iso: string) => {
+  const m = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(String(iso || ''));
+  return m ? (+(m[1] || 0)) * 86400 + (+(m[2] || 0)) * 3600 + (+(m[3] || 0)) * 60 + (+(m[4] || 0)) : 0;
+};
+// A playable song: not a Short/teaser (Jam used to play an 8 s clip), not a live stream, not a 3-hour mix
+export const SONG_MIN_S = 60;
+export const SONG_MAX_S = 15 * 60;
+
 export const searchYouTube = async (
   query: string,
-  opts: { max?: number; musicOnly?: boolean } = {}
+  opts: { max?: number; musicOnly?: boolean; songsOnly?: boolean } = {}
 ): Promise<Track[]> => {
   const q = String(query || '').trim().slice(0, 200);
   if (!q) return [];
   const max = Math.min(Math.max(opts.max || 1, 1), 15);
-  const key = cacheKey(q, max, !!opts.musicOnly);
+  const key = (opts.songsOnly ? 's|' : '') + cacheKey(q, max, !!opts.musicOnly);
 
   const hot = memory.get(key);
   if (hot) return hot;
@@ -95,15 +104,31 @@ export const searchYouTube = async (
           part: 'snippet',
           q,
           type: 'video',
-          maxResults: max,
+          // songsOnly: ask for a few extra (same 100-unit cost) so filtering still leaves `max`
+          maxResults: opts.songsOnly ? Math.min(max + 4, 15) : max,
           key: apiKey,
           ...(opts.musicOnly ? { videoCategoryId: '10' } : {}),
+          ...(opts.songsOnly ? { videoEmbeddable: 'true', safeSearch: 'moderate' } : {}),
         },
         timeout: 8000,
       });
 
-      const results: Track[] = (response.data?.items || [])
-        .filter((it: any) => it?.id?.videoId)
+      let items: any[] = (response.data?.items || []).filter((it: any) => it?.id?.videoId);
+      if (opts.songsOnly) {
+        items = items.filter((it: any) => (it.snippet?.liveBroadcastContent || 'none') === 'none');
+        // Lengths need videos.list (1 quota unit for up to 50 ids)
+        const ids = items.map((it: any) => it.id.videoId);
+        if (ids.length) {
+          const details = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
+            params: { part: 'contentDetails', id: ids.join(','), key: apiKey }, timeout: 8000,
+          });
+          const secs = new Map<string, number>((details.data?.items || []).map((v: any) => [v.id, isoSeconds(v.contentDetails?.duration)]));
+          items = items.filter((it: any) => { const s = secs.get(it.id.videoId) || 0; return s >= SONG_MIN_S && s <= SONG_MAX_S; });
+        }
+        items = items.slice(0, max);
+      }
+
+      const results: Track[] = items
         .map((it: any) => ({
           id: it.id.videoId,
           title: it.snippet?.title || '',

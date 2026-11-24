@@ -40,6 +40,9 @@ interface JamWidgetProps {
   persistenceKey?: string;
 }
 
+const SESSION_LENGTHS = [15, 30, 45] as const; // a playlist is <= 12 songs (server: songsForMinutes)
+const REPEAT_LABEL: Record<LoopMode, string> = { off: 'Repeat off', all: 'Repeat all', one: 'Repeat this song', custom: 'Repeat this song a few times' };
+
 // --- Helper to Generate UUID ---
 const generateUUID = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -61,25 +64,27 @@ const MinimizedPlayer: React.FC<MinimizedPlayerProps> = ({ isPlaying, track, onP
         {/* Prev */}
         <button
             onClick={onPrev}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center shrink-0"
+            aria-label="Previous"
+            className="w-8 h-8 rounded-full hover:bg-md-on-surface/10 flex items-center justify-center shrink-0 text-md-on-surface-variant"
         >
-            <SkipBack size={14} className="text-white/70" />
+            <SkipBack size={14} />
         </button>
 
         {/* Play/Pause */}
         <button
             onClick={onPlayPause}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center shrink-0"
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+            className="w-8 h-8 rounded-full bg-md-primary text-md-on-primary flex items-center justify-center shrink-0"
         >
-            {isPlaying ? <Pause size={14} className="text-white" /> : <Play size={14} className="text-white ml-0.5" />}
+            {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
         </button>
 
         {/* Info */}
         <div className="flex-1 min-w-0 flex flex-col justify-center">
-            <span className="text-xs font-bold text-white truncate leading-tight">
+            <span className="text-xs font-semibold text-md-on-surface truncate leading-tight">
                 {track?.title || "No Track"}
             </span>
-            <span className="text-xs text-white/50 truncate leading-tight">
+            <span className="text-xs text-md-on-surface-variant truncate leading-tight">
                 {track?.artist || "Aastha's Jam"}
             </span>
         </div>
@@ -87,7 +92,8 @@ const MinimizedPlayer: React.FC<MinimizedPlayerProps> = ({ isPlaying, track, onP
         {/* Next */}
         <button
             onClick={onNext}
-            className="p-1 text-white/30 hover:text-white shrink-0"
+            aria-label="Next"
+            className="w-8 h-8 rounded-full hover:bg-md-on-surface/10 flex items-center justify-center shrink-0 text-md-on-surface-variant"
         >
             <SkipForward size={16} />
         </button>
@@ -205,7 +211,10 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
-  const [targetDuration, setTargetDuration] = useState<number>(30); // minutes
+  const [targetDuration, setTargetDuration] = useState<number>(30); // minutes (15 / 30 / 45)
+  // Short message under the search bar (replaces alert() pop-ups)
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 5000); return () => clearTimeout(t); }, [notice]);
   
   // Volume State
   const [volume, setVolume] = useState(100);
@@ -292,7 +301,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
         events: {
             'onReady': onPlayerReady,
             'onStateChange': onPlayerStateChange,
-            'onError': (e: any) => console.error("YT Player Error:", e.data)
+            'onError': (e: any) => onPlayerError(e?.data)
         }
     });
   };
@@ -326,9 +335,27 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       }
   };
 
+  // 2 bad id, 5 HTML5 error, 100 removed, 101/150 owner blocked embedding: skip to the next song (max 3 in a row)
+  const skippedInARow = useRef(0);
+  const onPlayerError = (code: number) => {
+      console.warn('YT Player Error:', code);
+      const { queue, currentIndex } = stateRef.current;
+      if (skippedInARow.current >= 3 || queue.length <= 1) {
+          skippedInARow.current = 0;
+          setIsPlaying(false);
+          setNotice("This song won't play here. Try another one.");
+          return;
+      }
+      skippedInARow.current += 1;
+      const next = (currentIndex + 1) % queue.length;
+      setCurrentIndex(next);
+      loadAndPlay(queue[next]);
+  };
+
   // --- Custom Loop Logic ---
   const onPlayerStateChange = (event: any) => {
     if (event.data === 1) { // Playing
+      skippedInARow.current = 0;
       setIsPlaying(true);
       setDuration(playerRef.current.getDuration());
       startProgressLoop();
@@ -513,9 +540,9 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               }
               
           } else {
-              console.warn("No results found for query:", q);
+              setNotice(`No songs found for "${q.slice(0, 40)}".`);
           }
-      } catch (e) { console.error("Search failed", e); } 
+      } catch (e) { console.error("Search failed", e); setNotice("Search isn't working right now. Try again in a bit."); } 
       finally { setIsSearching(false); if(!overrideQuery) setQuery(''); }
   };
 
@@ -623,11 +650,11 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                   }
               }, 100);
           } else {
-              alert("Could not generate a vibe. Try manual search.");
+              setNotice("Couldn't make a playlist. Try searching for a song.");
           }
-      } catch (e) {
-          console.error("Vibe Gen Error:", e);
-          alert("Failed to generate vibe. Aastha might be busy.");
+      } catch (e: any) {
+          console.error("Vibe Gen Error:", e?.message || e);
+          setNotice(e?.response?.data?.message || "Couldn't make a playlist right now. Try again in a bit.");
       } finally {
           setIsSearching(false);
       }
@@ -734,14 +761,16 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                         ))}
 
                         <div>
-                            <h4 className="text-sm font-medium text-md-primary mb-2 px-1">Session length</h4>
-                            <div className="rounded-[20px] bg-md-surface-container p-4 flex justify-between items-center">
-                                <div>
-                                    <div className="text-sm text-md-on-surface">Minutes</div>
-                                    <div className="text-[11px] text-md-on-surface-variant">10 – 400</div>
-                                </div>
-                                <Stepper value={targetDuration} onChange={setTargetDuration} min={10} max={400} step={10} />
+                            <h4 className="text-sm font-medium text-md-primary mb-2 px-1">How long</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {SESSION_LENGTHS.map((m) => (
+                                <Chip key={m} selected={targetDuration === m} onClick={() => setTargetDuration(m)}
+                                  icon={targetDuration === m ? <Check size={14} /> : undefined}>
+                                  {m} min
+                                </Chip>
+                              ))}
                             </div>
+                            <p className="text-[11px] text-md-on-surface-variant mt-2 px-1">About {Math.max(4, Math.round(targetDuration / 3.5))} songs. Turn on Repeat all to keep it going.</p>
                         </div>
                     </div>
 
@@ -768,6 +797,13 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                 {isSearching ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
             </IconButton>
         </form>
+
+        {notice && (
+            <div role="status" className="shrink-0 -mt-1 px-4 py-2 rounded-[16px] bg-md-surface-container-highest text-md-on-surface text-xs flex items-center justify-between gap-2">
+                <span>{notice}</span>
+                <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="text-md-on-surface-variant"><X size={14} /></button>
+            </div>
+        )}
 
         {/* --- STAGE or QUEUE --- */}
         <div className="flex-1 min-h-0 rounded-[28px] bg-md-surface-container overflow-hidden flex flex-col">
@@ -856,15 +892,14 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                 <div className="flex items-center gap-1">
                     <button
                         onClick={toggleLoopMode}
-                        aria-label={`Repeat: ${loopMode}`}
-                        title={`Repeat: ${loopMode}`}
+                        aria-label={REPEAT_LABEL[loopMode]}
+                        title={REPEAT_LABEL[loopMode]}
                         className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-colors ${loopMode !== 'off' ? 'bg-md-secondary-container text-md-on-secondary-container' : 'text-md-on-surface-variant hover:bg-md-on-surface/10'}`}
                     >
                         <Repeat size={18} />
                         {loopMode === 'one' && <span className="absolute bottom-1.5 right-1.5 text-[9px] font-bold">1</span>}
-                        {loopMode === 'custom' && <span className="absolute bottom-1.5 right-1.5 text-[9px] font-bold">✱</span>}
+                        {loopMode === 'custom' && <span className="absolute bottom-1 right-1 text-[9px] font-bold">{loopTarget}×</span>}
                     </button>
-                    {loopMode === 'custom' && <Stepper value={loopTarget} onChange={setLoopTarget} min={2} max={50} step={1} compact={true} />}
                 </div>
 
                 <div className="flex items-center gap-1">
@@ -889,6 +924,12 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                     {!showQueue && queue.length > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-md-primary text-md-on-primary text-[10px] font-semibold flex items-center justify-center">{queue.length}</span>}
                 </button>
             </div>
+            {loopMode === 'custom' && (
+                <div className="flex items-center justify-between gap-2 px-1">
+                    <span className="text-xs text-md-on-surface-variant">Play this song</span>
+                    <Stepper value={loopTarget} onChange={setLoopTarget} min={2} max={20} step={1} compact label="times" format={(v) => `${v}×`} />
+                </div>
+            )}
             <div className="flex items-center gap-2 px-1">
                 <button onClick={() => setVolume(volume === 0 ? 60 : 0)} aria-label={volume === 0 ? 'Unmute' : 'Mute'} className="text-md-on-surface-variant shrink-0">
                     {volume === 0 ? <VolumeX size={16} /> : volume < 50 ? <Volume1 size={16} /> : <Volume2 size={16} />}

@@ -50,5 +50,38 @@ export const extractProposals = (text: string, streaming = false): { cleanText: 
   return { cleanText, proposals };
 };
 
+// ── What a tool button does (2026-11-24) ──────────────────────────────────────────────────────────────
+// Aastha can say "I'll turn them off" and attach <proposal tool="jam" params='{"action":"stop"}'>. Before, every
+// button just OPENED the widget, so "stop" started the player instead. Stop = close the widget (that stops audio).
+
+/** Music / sounds stop actions ("stop", "pause", "off"). */
+export const isStopAction = (tool: string, params: any) =>
+  (tool === 'jam' || tool === 'soundscape') && !!params && /^(stop|pause|off|end|close)$/i.test(String(params.action || params.mode || ''));
+
+/**
+ * Soundscape: the prompt sends {"mix":{"rain":0.8,"thunder":0.3,"master":0.9}} but the widget reads
+ * preset "rain:0.8,thunder:0.3" + volume 0.9. Convert (the mix used to be ignored).
+ */
+export const soundscapeConfig = (params: any): { preset?: string; volume?: number } => {
+  if (!params || typeof params !== 'object') return {};
+  const out: { preset?: string; volume?: number } = {};
+  if (typeof params.preset === 'string') out.preset = params.preset;
+  if (params.mix && typeof params.mix === 'object') {
+    const parts = Object.entries(params.mix as Record<string, unknown>)
+      .filter(([k, v]) => k !== 'master' && typeof v === 'number' && v > 0)
+      .map(([k, v]) => `${k}:${Math.max(0, Math.min(1, v as number))}`);
+    if (parts.length) out.preset = parts.join(',');
+    if (typeof (params.mix as any).master === 'number') out.volume = Math.max(0, Math.min(1, (params.mix as any).master));
+  }
+  if (typeof params.volume === 'number') out.volume = Math.max(0, Math.min(1, params.volume));
+  return out;
+};
+
+/** Button text under a reply. */
+export const proposalLabel = (p: Proposal) => {
+  if (isStopAction(p.tool, p.params)) return p.tool === 'jam' ? 'Stop music' : 'Stop sounds';
+  return ({ jam: 'Play music', soundscape: 'Play sounds', breathing: 'Start breathing', diary: 'Open diary', pomodoro: 'Start focus', mood: 'Track mood' } as Record<string, string>)[p.tool] || 'Open';
+};
+
 /** Text a person would copy or reply to: no tool tags. */
 export const visibleText = (text: string) => extractProposals(text).cleanText;

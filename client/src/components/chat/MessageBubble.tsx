@@ -1,5 +1,5 @@
 import { MiniMarkdown, stripMarkdown } from '../../utils/miniMarkdown';
-import { extractProposals } from '../../utils/proposals';
+import { extractProposals, proposalLabel } from '../../utils/proposals';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Copy, Reply, Sparkles, Wand2, SmilePlus } from 'lucide-react';
@@ -23,6 +23,7 @@ interface MessageBubbleProps {
   voice_note?: string;
   reasoning?: string;   // "think deeper" reasoning, shown collapsed
   isClone?: boolean;    // Clone Mode reply → labelled as an AI imitation
+  isLetter?: boolean;   // weekly letter from Aastha → letter card (paper-like tonal card, serif heading)
   gif?: { url: string; width?: number; height?: number; title?: string; source?: string };
   cloneName?: string;
   isDeepThinking?: boolean;
@@ -147,6 +148,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
   myReaction,
   onReact,
   isClone,
+  isLetter,
   cloneName,
   gif,
   mood,
@@ -442,6 +444,12 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
                   background: 'linear-gradient(160deg, rgb(var(--md-primary-container)) 0%, rgb(var(--md-primary-container) / 0.82) 100%)',
                   boxShadow: 'inset 0 1px 0 rgb(255 255 255 / 0.12), 0 8px 22px -14px rgb(var(--md-primary) / 0.7)',
                 }
+              : isLetter
+              ? {
+                  // letter card: warm tertiary paper, a bit wider, no glass
+                  background: 'linear-gradient(170deg, rgb(var(--md-tertiary-container) / 0.55), rgb(var(--md-surface-container-high) / 0.92) 55%)',
+                  boxShadow: 'inset 0 0 0 1px rgb(var(--md-tertiary) / 0.25), 0 10px 26px -18px rgb(0 0 0 / 0.8)',
+                }
               : {
                   background: 'rgb(var(--md-surface-container-high) / 0.74)',
                   boxShadow: 'inset 0 1px 0 rgb(255 255 255 / 0.07), inset 0 0 0 1px rgb(var(--md-outline-variant) / 0.22), 0 8px 22px -16px rgb(0 0 0 / 0.8)',
@@ -451,6 +459,12 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
                 maxWidth: '100%'
           }}
         >
+          {!isUser && isLetter && (
+            <div className="mb-2 flex items-center gap-2 text-md-tertiary">
+              <span aria-hidden>💌</span>
+              <span className="font-serif text-sm font-semibold">A letter about your week</span>
+            </div>
+          )}
           {!isUser && isClone && (
             <div className="mb-1.5 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-md-tertiary">
               🎭 AI imitation{cloneName ? ` · ${cloneName}` : ''}
@@ -536,15 +550,8 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
                           onClick={() => onOpenWidget?.(p.tool, p.params)}
                           className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-md-secondary-container text-md-on-secondary-container hover:brightness-110 transition text-xs font-medium"
                       >
-                          <Wand2 size={12} className="text-teal-400" />
-                          <span>
-                            {p.tool === 'jam' && "Play Music"}
-                            {p.tool === 'breathing' && "Start Breathing"}
-                            {p.tool === 'diary' && "Open Diary"}
-                            {p.tool === 'pomodoro' && "Start Focus"}
-                            {p.tool === 'mood' && "Track Mood"}
-                            {p.tool === 'soundscape' && "Play Sounds"}
-                          </span>
+                          <Wand2 size={12} className="text-md-primary" />
+                          <span>{proposalLabel(p)}</span>
                       </button>
                   ))}
               </div>
@@ -688,7 +695,7 @@ const MessageBubbleInner: React.FC<MessageBubbleProps> = ({
  */
 const DATA_PROPS: (keyof MessageBubbleProps)[] = [
   'role', 'content', 'timestamp', 'reaction', 'mood', 'searchQuery', 'isStreaming',
-  'currentMatchIndex', 'isMobile', 'voice_note', 'reasoning', 'isDeepThinking', 'isClone', 'cloneName', 'gif', 'myReaction',
+  'currentMatchIndex', 'isMobile', 'voice_note', 'reasoning', 'isDeepThinking', 'isClone', 'isLetter', 'cloneName', 'gif', 'myReaction',
 ];
 export const MessageBubble = React.memo(MessageBubbleInner, (prev, next) =>
   DATA_PROPS.every((k) => prev[k] === next[k])

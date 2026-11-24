@@ -10,6 +10,7 @@ import User from '../models/User';
 import { completeChat } from './llm';
 import { encrypt, decrypt } from '../utils/serverEncryption';
 import { saveExtractedFollowUps } from './reachOut';
+import { withoutForgotten } from './memoryEditor';
 import { dayKeyIn, weekdayIn, tzOrDefault } from '../utils/timeZone';
 
 const MAX_FACTS = 40;
@@ -61,7 +62,7 @@ export const mergeFacts = (existing: string[], update: MemoryUpdate): string[] =
 };
 
 export const updateMemory = async (userId: string, recentTurns: MemoryTurn[]): Promise<void> => {
-  const user = await User.findById(userId).select('facts memorySummary timeZone');
+  const user = await User.findById(userId).select('facts memorySummary timeZone memoryEditedAt +forgottenFacts');
   if (!user) return;
 
   const knownFacts = (user.facts || []).map((f) => decrypt(f)).filter(Boolean);
@@ -92,13 +93,17 @@ export const updateMemory = async (userId: string, recentTurns: MemoryTurn[]): P
     update = JSON.parse(m[0]);
   }
 
-  const facts = mergeFacts(knownFacts, update);
+  // Facts the user deleted in "What Aastha remembers" are never re-learned
+  const facts = withoutForgotten(mergeFacts(knownFacts, update), (user as any).forgottenFacts || []);
   const summary = typeof update.summary === 'string' && update.summary.trim() ? update.summary.trim() : previousSummary;
 
-  await User.updateOne(
-    { _id: userId },
+  // Only if the user didn't edit their memory while the model was thinking (their edit wins; next update catches up)
+  const editedAt = (user as any).memoryEditedAt || null;
+  const r = await User.updateOne(
+    { _id: userId, memoryEditedAt: editedAt ? editedAt : { $in: [null] } },
     { $set: { facts: facts.map((f) => encrypt(f)), memorySummary: summary ? encrypt(summary) : user.memorySummary } }
   );
+  if (!r.matchedCount) console.log('[Memory] user edited memory meanwhile, facts/summary update skipped this round');
   // 7.4: dated things they mentioned → gentle next-day check-in (services/reachOut.ts)
   if (Array.isArray(update.follow_ups) && update.follow_ups.length) {
     await saveExtractedFollowUps(userId, update.follow_ups).catch((e) => console.error('[Memory] follow-ups:', e?.message || e));

@@ -144,6 +144,37 @@ html.lite .animate-spin {
   /* loaders still need to show progress */
   animation-iteration-count: infinite !important;
 }
+
+/* ---------------------------------------------------------------------------
+   LITE PLUS (owner, 2026-11-24) — html.lite-plus, always together with html.lite.
+   Chosen by hand for older phones: on top of Lite, nothing moves or fades and nothing is painted twice.
+   Widgets included (DraggableWindow opens instantly; framer-motion durations are 0 via MotionConfig).
+   The breathing orb keeps moving on purpose (it IS the exercise, one GPU transform).
+   --------------------------------------------------------------------------- */
+html.lite-plus *,
+html.lite-plus *::before,
+html.lite-plus *::after {
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+  animation: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  -webkit-mask-image: none !important;   /* chat fade under the header/bar = extra full-screen layer */
+  mask-image: none !important;
+  will-change: auto !important;
+}
+html.lite-plus .animate-spin { animation: spin 1s linear infinite !important; } /* loaders still turn */
+/* Flat backgrounds: the colour aura, gradient overlays and decorative blobs are repainted on every scroll */
+html.lite-plus .chat-aura { background: rgb(var(--md-surface)) !important; }
+/* decorative glow blobs only: whole-word match, so panels with backdrop-blur-* are NOT hidden */
+html.lite-plus [class~="blur-3xl"],
+html.lite-plus [class~="blur-2xl"],
+html.lite-plus [class~="blur-[120px]"],
+html.lite-plus [class~="blur-[60px]"] { display: none !important; }
+html.lite-plus .glass,
+html.lite-plus .glass-clear { background: rgb(var(--md-surface-container-high)) !important; background-image: none !important; }
+/* Long lists: let the browser skip work for rows that are off-screen */
+html.lite-plus .custom-scrollbar > * { contain: layout paint; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-iteration-count: 1 !important;

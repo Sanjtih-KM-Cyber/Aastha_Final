@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence, useDragControls, useMotionValue } from 'framer-motion';
 import { X, Minus, Maximize2 } from 'lucide-react';
 import { useWindowControls } from '../../hooks/useWindowControls';
+import { useTheme } from '../../context/ThemeContext';
 
 interface DraggableWindowProps {
   isOpen: boolean;
@@ -198,9 +199,9 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
   // MAXIMIZE FIX FOR MOBILE: Ensure position resets to 0,0 when un-minimizing
   const mobileStyle = isMobile && !isMinimized ? { top: 0, left: 0, x: 0, y: 0 } : {};
 
-  // Use lite mode hook if available, otherwise fallback to mobile check
-  // (Assuming context is not passed, using simple check for now)
-  const isLiteMode = isMobile; // Can extend this later
+  // Phones and Lite modes get the short fade; Lite Plus opens/closes/minimises instantly (no tween at all)
+  const { isLowPowerMode, isLitePlus } = useTheme();
+  const isLiteMode = isMobile || isLowPowerMode;
 
   // Handle Drag End to Save Position (With Explicit Boundary Check)
   const onDragEnd = (event: any, info: any) => {
@@ -239,7 +240,7 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           // REMOVED constraintsRef to fix "rubber band" / snapping issues.
           // We handle bounds manually in onDragEnd or allow free drag with manual clamp.
           // Actually, purely free drag + manual clamp on release is the smoothest "OS-like" feel.
-          initial={isLiteMode ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
+          initial={isLitePlus ? false : isLiteMode ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
           animate={{
             opacity: 1, 
             scale: 1, 
@@ -253,11 +254,15 @@ export const DraggableWindow: React.FC<DraggableWindowProps> = ({
           // --- MOBILE OPTIMIZATION 1: Fast Transitions & Simple Exit ---
           // Further reduced duration for even snappier feel
           // Smooth, no bounce (Material "emphasized" easing); position changes apply instantly
-          transition={isLiteMode
+          transition={isLitePlus
+            ? { duration: 0 }
+            : isLiteMode
             ? { duration: 0.1, ease: "linear", top: { duration: 0 }, left: { duration: 0 } }
             : { type: "tween", duration: 0.22, ease: [0.2, 0, 0, 1], top: { duration: 0 }, left: { duration: 0 } }
           }
-          exit={isLiteMode
+          exit={isLitePlus
+            ? { opacity: 0, transition: { duration: 0 } }
+            : isLiteMode
             ? { opacity: 0, transition: { duration: 0.05 } }
             : { opacity: 0, scale: 0.96, transition: { duration: 0.15 } }
           }

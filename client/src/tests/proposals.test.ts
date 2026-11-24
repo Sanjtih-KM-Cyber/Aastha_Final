@@ -30,3 +30,20 @@ describe('proposal tags in replies', () => {
     expect(visibleText(TWO)).not.toMatch(/</);
   });
 });
+
+describe('what a tool button does', async () => {
+  const { isStopAction, soundscapeConfig, proposalLabel } = await import('../utils/proposals');
+  it('"stop the music / sounds" is a stop, not an open', () => {
+    expect(isStopAction('jam', { action: 'stop' })).toBe(true);
+    expect(isStopAction('soundscape', { action: 'Stop' })).toBe(true);
+    expect(isStopAction('jam', { query: 'lofi' })).toBe(false);
+    expect(isStopAction('pomodoro', { action: 'stop' })).toBe(false); // the timer handles its own stop
+    expect(proposalLabel({ tool: 'jam', params: { action: 'stop' }, reason: '' })).toBe('Stop music');
+    expect(proposalLabel({ tool: 'soundscape', params: { mix: { rain: 0.5 } }, reason: '' })).toBe('Play sounds');
+  });
+  it('soundscape mix from Aastha becomes the widget preset + volume', () => {
+    expect(soundscapeConfig({ mix: { rain: 0.8, thunder: 0.3, master: 0.9 } })).toEqual({ preset: 'rain:0.8,thunder:0.3', volume: 0.9 });
+    expect(soundscapeConfig({ preset: 'random' })).toEqual({ preset: 'random' });
+    expect(soundscapeConfig({ mix: { rain: 4, master: -1 } })).toEqual({ preset: 'rain:1', volume: 0 });
+  });
+});

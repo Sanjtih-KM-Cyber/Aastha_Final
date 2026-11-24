@@ -3,6 +3,7 @@ import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useSync } from './SyncContext';
 import { MotionConfig } from 'framer-motion';
+import { PerfMode, readPerfMode, savePerfMode, perfClasses } from '../utils/perfMode';
 import { applyMaterialTheme, DEFAULT_SEED, seedFromImage } from '../design/materialTheme';
 
 /** Converts any CSS colour ("blue", "rgb(...)", "#abc") to #rrggbb for the Material seed. */
@@ -46,10 +47,13 @@ export interface Theme {
 interface ThemeContextType {
   currentTheme: Theme;
   wallpaper: string | null;
-  isLowPowerMode: boolean; // Added
+  isLowPowerMode: boolean; // Lite OR Lite Plus
+  isLitePlus: boolean;
+  perfMode: PerfMode;
+  setPerfMode: (m: PerfMode) => void;
   setTheme: (themeId: string, fromSync?: boolean) => void;
   setWallpaper: (file: File | null) => void;
-  setLowPowerMode: (enabled: boolean) => void; // Added
+  setLowPowerMode: (enabled: boolean) => void;
   resetTheme: () => void;
 }
 
@@ -96,20 +100,18 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return w !== 'undefined' && w !== 'null' ? w : null;
   });
 
-  // --- LITE MODE STATE ---
-  const [isLowPowerMode, setIsLowPowerMode] = useState<boolean>(() => {
-      const saved = localStorage.getItem('lite-mode-enabled');
-      if (saved !== null) {
-          return saved === 'true';
-      }
-      return detectLowEndDevice();
-  });
+  // --- PERFORMANCE MODE (full / lite / Lite Plus), utils/perfMode.ts ---
+  const [perfMode, setPerfModeState] = useState<PerfMode>(() => readPerfMode(detectLowEndDevice()));
+  const isLowPowerMode = perfMode !== 'full'; // Lite Plus includes everything Lite does
+  const isLitePlus = perfMode === 'plus';
 
-  // Apply lite mode GLOBALLY (P3): one CSS class turns off every backdrop blur / looping animation,
-  // including the many components that don't read isLowPowerMode themselves.
+  // Apply GLOBALLY (P3): CSS classes turn off blur / animations everywhere, including components that don't
+  // read the flag themselves. Lite Plus adds html.lite-plus on top of html.lite.
   useEffect(() => {
-      document.documentElement.classList.toggle('lite', isLowPowerMode);
-  }, [isLowPowerMode]);
+      const c = perfClasses(perfMode);
+      document.documentElement.classList.toggle('lite', c.lite);
+      document.documentElement.classList.toggle('lite-plus', c['lite-plus']);
+  }, [perfMode]);
 
   useEffect(() => {
     if (user) {
@@ -179,10 +181,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountColor, !!user]);
 
-  const setLowPowerMode = (enabled: boolean) => {
-      setIsLowPowerMode(enabled);
-      localStorage.setItem('lite-mode-enabled', String(enabled));
-  };
+  const setPerfMode = (m: PerfMode) => { setPerfModeState(m); savePerfMode(m); };
+  // Old switch API: Lite on/off (turning Lite on also turns Lite Plus off)
+  const setLowPowerMode = (enabled: boolean) => setPerfMode(enabled ? 'lite' : 'full');
 
   // Wallpaper → Material You seed, computed ON THE DEVICE with Material's own algorithm.
   // (The old server endpoint always returned the same violet, so wallpapers never changed the theme.)
@@ -259,9 +260,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   return (
-    <ThemeContext.Provider value={{ currentTheme, wallpaper, isLowPowerMode, setTheme, setWallpaper, setLowPowerMode, resetTheme }}>
-      {/* Lite mode: framer-motion skips transform/loop animations; otherwise follow the OS "reduce motion" setting */}
-      <MotionConfig reducedMotion={isLowPowerMode ? 'always' : 'user'}>
+    <ThemeContext.Provider value={{ currentTheme, wallpaper, isLowPowerMode, isLitePlus, perfMode, setPerfMode, setTheme, setWallpaper, setLowPowerMode, resetTheme }}>
+      {/* Lite: framer-motion skips transform/loop animations. Lite Plus: every framer animation is instant too.
+          Otherwise follow the OS "reduce motion" setting. */}
+      <MotionConfig reducedMotion={isLowPowerMode ? 'always' : 'user'} transition={isLitePlus ? { duration: 0 } : undefined}>
         {children}
       </MotionConfig>
     </ThemeContext.Provider>

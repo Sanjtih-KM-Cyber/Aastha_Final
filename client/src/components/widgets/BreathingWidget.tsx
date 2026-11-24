@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import { Wind, Play, Pause, RotateCcw, ChevronDown } from 'lucide-react';
 import { Icons } from '../../design/icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -49,7 +49,7 @@ const MODES = {
 };
 
 export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClose, initialMode, zIndex, onFocus, persistenceKey }) => {
-  const { currentTheme } = useTheme();
+  const { currentTheme, isLitePlus } = useTheme();
   const [activeMode, setActiveMode] = useState<keyof typeof MODES>('Box');
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [isActive, setIsActive] = useState(false);
@@ -177,13 +177,18 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
          <div className="flex-1 min-h-[220px] rounded-[28px] bg-md-surface-container relative flex items-center justify-center overflow-hidden">
              <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-md-primary/10 to-transparent" />
 
+             {/* The growing/shrinking orb IS the exercise: keep it moving in Lite and Lite Plus too ("reduce motion"
+                 used to freeze it in Lite). One GPU transform, cheap. Lite Plus drops the extra outer ring. */}
+             <MotionConfig reducedMotion="never">
              <div className="relative z-10 flex items-center justify-center">
                  {/* Outer ring = breath indicator */}
+                 {!isLitePlus && (
                  <motion.div
                     animate={{ scale: getScale(), opacity: phaseLabel === 'Hold' ? 0.7 : 0.35 }}
                     transition={{ duration: duration / 1000, ease: 'easeInOut' }}
                     className="absolute w-36 h-36 rounded-full border-2 border-md-primary"
                  />
+                 )}
                  {/* Orb */}
                  <motion.div
                     animate={{ scale: getScale() }}
@@ -218,6 +223,7 @@ export const BreathingWidget: React.FC<BreathingWidgetProps> = ({ isOpen, onClos
                      </AnimatePresence>
                  </motion.div>
              </div>
+             </MotionConfig>
 
              {/* step dots */}
              <div className="absolute bottom-4 inset-x-0 flex justify-center gap-1.5">

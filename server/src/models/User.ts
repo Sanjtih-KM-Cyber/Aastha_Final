@@ -184,6 +184,10 @@ export interface IUser extends Document {
   // "Aastha reaches out first" (services/reachOut.ts), follow-up text is encrypted
   followUps?: { _id?: any; text: string; dueDate: Date; status: 'pending' | 'asked' | 'sent' | 'dismissed'; createdAt?: Date }[];
   reachOut?: { enabled?: boolean; lastSentAt?: Date | null; lastCrisisAt?: Date | null };
+  memoryEditedAt?: Date;
+  forgottenFacts?: string[];
+  weeklyLetter?: { enabled?: boolean; lastWeek?: string };
+  privateNotifications?: boolean;
   safetyIntroSeenAt?: Date; // "How Aastha keeps you safe" card (7.5)
   customMoods?: { id: string; label: string; emoji: string; score: number }[]; // label encrypted (services/customMoods.ts)
   windowControls?: 'mac' | 'windows'; // widget window buttons style, synced across devices
@@ -380,6 +384,16 @@ const userSchema = new Schema<IUser>({
     enabled: { type: Boolean, default: true },
     lastSentAt: Date,
     lastCrisisAt: Date,
+  },
+  // "What Aastha remembers" (2026-11-24): when the user last edited memory (the background memory updater skips its
+  // write if this changed while it was thinking) + blind-index fingerprints of facts they deleted (never re-learned)
+  memoryEditedAt: Date,
+  forgottenFacts: { type: [String], default: [], select: false },
+  // Weekly letter from Aastha (2026-11-24)
+  privateNotifications: { type: Boolean, default: false }, // hide notification text (lock screen / web push)
+  weeklyLetter: {
+    enabled: { type: Boolean, default: true },
+    lastWeek: String, // "2026-W48" of the last letter (user's zone)
   },
   safetyIntroSeenAt: Date,
   timeZone: { type: String, maxlength: 64 },

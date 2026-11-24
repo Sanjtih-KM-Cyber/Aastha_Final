@@ -156,6 +156,77 @@ const mockRes = () => {
   check('fresh start: account itself untouched', !!(await User.findById(pw._id)));
   me._resetUnlockLimiter();
 
+  // ---------------- What Aastha remembers (2026-11-24) ----------------
+  const memSvc = require(`${SRV}/services/memoryService`);
+  const mu = await User.create({ name: 'Mem', emailEncrypted: encrypt('m@x.com'), passwordHash: 'x', isVerified: true,
+    facts: [encrypt('Loves chai'), encrypt('Has exams in March'), encrypt('Sister is called Riya')], memorySummary: encrypt('Busy with exams lately.'),
+    followUps: [{ text: encrypt('your exam'), dueDate: new Date(Date.now() + 86_400_000), status: 'pending' }] });
+  const mcall = async (fn: any, body: any = {}, params: any = {}) => { const res = mockRes(); await fn({ user: mu, body, params, query: {} } as any, res); return res; };
+  r = await mcall(me.getMemory);
+  check('memory: facts, summary and follow-ups come back readable', r.body?.facts?.length === 3 && r.body.facts[0].text === 'Loves chai' && r.body.summary === 'Busy with exams lately.' && r.body.followUps[0]?.text === 'your exam', r.body);
+  r = await mcall(me.editMemoryFact, { index: 1, original: 'Has exams in March', text: 'Has exams in April' });
+  check('memory: edit a fact', r.statusCode === 200 && r.body.facts[1].text === 'Has exams in April');
+  r = await mcall(me.editMemoryFact, { index: 0, original: 'Something else', text: '' });
+  check('memory: stale edit (list changed) → 409, nothing deleted', r.statusCode === 409 && (await User.findById(mu._id)).facts.length === 3);
+  r = await mcall(me.editMemoryFact, { index: 0, original: 'Loves chai', text: '' });
+  check('memory: delete a fact', r.statusCode === 200 && r.body.facts.length === 2 && !r.body.facts.some((f: any) => /chai/i.test(f.text)));
+  next = JSON.stringify({ summary: 'Busy with exams.', new_facts: ['loves chai.', 'Plays guitar'], outdated_facts: [] });
+  await memSvc.updateMemory(String(mu._id), [{ role: 'user', content: 'I love chai and I play guitar' }]);
+  let memNow = (await mcall(me.getMemory)).body;
+  check('memory: a deleted fact is never re-learned (even reworded case/punctuation), new ones still are',
+    !memNow.facts.some((f: any) => /chai/i.test(f.text)) && memNow.facts.some((f: any) => f.text === 'Plays guitar'), memNow.facts);
+  // the background updater started BEFORE the user's edit must not undo it
+  const realComplete = fake.complete;
+  let releaseModel: () => void = () => {};
+  fake.complete = async (...a: any[]) => { await new Promise<void>((res) => { releaseModel = res; }); return realComplete(...(a as [string, number, any[]])); };
+  next = JSON.stringify({ summary: 'Model summary', new_facts: ['Likes cricket'], outdated_facts: [] });
+  const running = memSvc.updateMemory(String(mu._id), [{ role: 'user', content: 'I like cricket' }]);
+  await new Promise((res) => setTimeout(res, 30));
+  await mcall(me.editMemorySummary, { text: 'My own words.' });
+  releaseModel(); await running;
+  fake.complete = realComplete;
+  memNow = (await mcall(me.getMemory)).body;
+  check('memory: an edit made while she was thinking wins (summary not overwritten)', memNow.summary === 'My own words.', memNow.summary);
+  r = await mcall(me.dismissMemoryFollowUp, {}, { id: String(memNow.followUps[0].id) });
+  check('memory: "don\'t ask me about this" removes the check-in', r.statusCode === 200 && r.body.followUps.length === 0);
+  r = await mcall(me.editMemorySummary, { text: '' });
+  check('memory: summary can be cleared', r.body.summary === '');
+
+  // ---------------- Weekly letter (2026-11-24) ----------------
+  const wl = require(`${SRV}/services/weeklyLetter`);
+  const IST = 'Asia/Kolkata';
+  const at = (s: string) => new Date(s);
+  check('letter: due from Sunday 18:00 their time', wl.dueSunday(at('2026-11-29T17:59:00+05:30'), IST) === null && wl.dueSunday(at('2026-11-29T18:00:00+05:30'), IST) === '2026-11-29');
+  check('letter: still due Mon to Wed (server was asleep), not Thursday', wl.dueSunday(at('2026-12-02T09:00:00+05:30'), IST) === '2026-11-29' && wl.dueSunday(at('2026-12-03T09:00:00+05:30'), IST) === null);
+  check('letter: follows their own time zone', wl.dueSunday(at('2026-11-29T18:30:00+05:30'), 'Europe/London') === null);
+  const lu = await User.create({ name: 'Letter', emailEncrypted: encrypt('l2@x.com'), passwordHash: 'x', isVerified: true, timeZone: IST, persona: 'aastha',
+    memorySummary: encrypt('Exam week, nervous about maths.'), facts: [encrypt('Plays guitar')] });
+  const sundayEve = at('2026-11-29T19:00:00+05:30');
+  const inWeek = (h: number) => new Date(at('2026-11-26T10:00:00+05:30').getTime() + h * 3_600_000);
+  await Message.insertMany([0, 1, 2].map((h) => ({ user: lu._id, role: 'user', content: encrypt(`msg ${h}`), timestamp: inWeek(h) })));
+  let lr = await wl.maybeWriteLetter(lu._id, sundayEve);
+  check('letter: not after a quiet week (< 5 messages)', !lr.letter && lr.reason === 'quiet_week', lr);
+  await Message.insertMany([3, 4, 5].map((h) => ({ user: lu._id, role: 'user', content: encrypt(h === 4 ? 'maths exam went okay actually' : `msg ${h}`), timestamp: inWeek(h) })));
+  await User.updateOne({ _id: lu._id }, { $set: { 'reachOut.lastCrisisAt': new Date(sundayEve.getTime() - 3_600_000) } });
+  lr = await wl.maybeWriteLetter(lu._id, sundayEve);
+  check('letter: none within 48 h of a crisis', !lr.letter && lr.reason === 'crisis');
+  await User.updateOne({ _id: lu._id }, { $unset: { 'reachOut.lastCrisisAt': 1 } });
+  next = 'Hey Letter,\n\nThat maths exam — you were so nervous and then "okay actually". Proud of you.\n\nAastha';
+  const [l1, l2] = await Promise.all([wl.maybeWriteLetter(lu._id, sundayEve), wl.maybeWriteLetter(lu._id, sundayEve)]);
+  const letters = await Message.countDocuments({ user: lu._id, isLetter: true });
+  check('letter: written once even if the cron and the app ask at the same time', letters === 1 && [l1, l2].filter((x: any) => x.letter).length === 1, [l1.reason, l2.reason]);
+  const written = (l1.letter || l2.letter);
+  check('letter: from the week\'s real messages, persona voice, no em dashes', /maths exam went okay actually/.test(lastMsgs[1]?.content || '') && /Exam week/.test(lastMsgs[1]?.content || '') && !written.content.includes('—') && /Aastha$/.test(written.content), written.content);
+  lr = await wl.maybeWriteLetter(lu._id, at('2026-11-30T10:00:00+05:30'));
+  check('letter: not again on Monday', !lr.letter && lr.reason === 'already');
+  const lres = mockRes(); lres.setHeader = () => lres; await chat.getChatHistory({ user: lu, query: {}, params: {} } as any, lres);
+  check('letter: shows in chat history as a letter', Array.isArray(lres.body) && lres.body.some((m: any) => m.isLetter && /Proud of you/.test(m.content)), lres.body?.slice?.(-1));
+  const nres = mockRes(); await chat.sendNudge({ user: lu, body: { reason: 'seen' } } as any, nres);
+  check('letter: no "you there?" nudge after a letter', nres.statusCode === 204);
+  await User.updateOne({ _id: lu._id }, { $set: { 'weeklyLetter.enabled': false }, $unset: { 'weeklyLetter.lastWeek': 1 } });
+  lr = await wl.maybeWriteLetter(lu._id, sundayEve);
+  check('letter: off switch respected', !lr.letter && lr.reason === 'off');
+
   // ---------------- Sarvam voice notes (2026-11-24) ----------------
   const sv = require('../../src/services/sarvamTts');
   check('sarvam: Hinglish in English letters → Indian English', sv.languageFor('arre yaar kya scene hai aaj') === 'en-IN');

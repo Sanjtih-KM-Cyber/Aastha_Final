@@ -19,6 +19,8 @@ import api from '../../services/api';
 import { chatCache } from '../../services/chatCache';
 import { pendingReply, replyArrived } from '../../services/pendingReply';
 import { seenNudge } from '../../services/seenNudge';
+import { setPrivateNotificationsLocal } from '../../services/notifications';
+import { followUpCheckIns } from '../../services/followUpCheckIns';
 import { useSpecular } from '../../design/LiquidGlass';
 import { useStreamingChat, StreamHttpError } from '../../hooks/useStreamingChat';
 import { planLabel } from '../../utils/plan';
@@ -39,6 +41,7 @@ interface ChatMessage {
   reasoning?: string;   // "think deeper" reasoning (shown collapsed)
   isThinking?: boolean;
   isClone?: boolean;    // written by Clone Mode → labelled "AI imitation"
+  isLetter?: boolean;   // weekly letter (shown as a letter card)
   gif?: { url: string; width?: number; height?: number; title?: string; source?: string }; // GIF reaction
   myReaction?: string | null; // your ❤️ 😂 👍 on Aastha's reply (7.4)
 }
@@ -408,6 +411,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       }
   };
 
+  // Weekly letter: written by the server from Sunday 18:00 (their clock); asking also writes it if the server slept
+  const lastLetterCheck = useRef(0);
+  const checkLetter = async () => {
+      if (Date.now() - lastLetterCheck.current < 10 * 60_000) return; // resume fires often
+      lastLetterCheck.current = Date.now();
+      try {
+          const r = await api.post('/users/letter/check', {}, { params: { tz: deviceTimeZone() } });
+          const l = r.data?.letter;
+          if (!l?.id || !mountedRef.current) return;
+          followUpCheckIns.letterArrived().catch(() => {});
+          setMessages(prev => prev.some(x => x.id === l.id) ? prev : [...prev, { role: 'assistant', content: l.content, timestamp: new Date(l.timestamp).getTime(), id: l.id, isLetter: true }]);
+          setTimeout(() => scrollToBottom(), 80);
+      } catch { /* offline: next open */ }
+  };
+
+  // This device follows the account's "hide notification text" choice (services/notifications.ts)
+  useEffect(() => { if (user) setPrivateNotificationsLocal(!!(user as any).privateNotifications); }, [(user as any)?.privateNotifications, !!user]);
+
   // Messages typed but never sent because the app was closed during the 6 s pause → send them now.
   const sendOutbox = () => {
       const texts = pendingReply.takeOutbox((user as any)?._id);
@@ -460,7 +481,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                  setTimeout(() => { scrollToBottom(); setIsInitializing(false); }, 300);
              }
              // The app was closed last time before a reply arrived / before a message was sent
-             if (mountedRef.current) { recoverReply(); sendOutbox(); settleSeenNudge(); }
+             if (mountedRef.current) { recoverReply(); sendOutbox(); settleSeenNudge(); checkLetter(); }
          }
      };
      initChat();
@@ -498,6 +519,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
           }
           settleSeenNudge();
           // Back with a reply still missing → look for it right away (not throttled)
+          checkLetter();
           if (user && pendingReply.getInFlight((user as any)?._id)) { recoverReply(); return; }
           // On the web this fires on every focus/visibility change, throttle to once per 30 s.
           if (isActive && user && Date.now() - lastResumeSync > 30_000) {
@@ -1373,6 +1395,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                         voice_note={msg.voice_note} // Pass Voice Note
                         reasoning={msg.reasoning}
                         isClone={msg.isClone}
+                        isLetter={msg.isLetter}
                         gif={msg.gif}
                         myReaction={msg.myReaction}
                         onReact={msg.role === 'assistant' && !isCurrentlyStreaming ? (emo) => reactTo(msg.id, emo) : undefined}
@@ -1439,7 +1462,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
               <>
                 {/* Phone: soft colour "aura" from the user's own palette, gives the liquid glass something to
                     refract (glass over a flat colour just looks grey). Static gradients: no GPU cost. */}
-                <div className="md:hidden w-full h-full" style={{ background: `
+                <div className="chat-aura md:hidden w-full h-full" style={{ background: `
                   radial-gradient(70% 42% at 88% 6%, rgb(var(--md-primary) / 0.26), transparent 72%),
                   radial-gradient(62% 38% at 4% 46%, rgb(var(--md-tertiary) / 0.18), transparent 72%),
                   radial-gradient(80% 45% at 75% 98%, rgb(var(--md-secondary) / 0.20), transparent 70%),

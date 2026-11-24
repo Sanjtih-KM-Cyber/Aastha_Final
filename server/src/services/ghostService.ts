@@ -6,6 +6,7 @@ import { generateGhostEmailContent } from './geminiService';
 import { decrypt } from '../utils/serverEncryption';
 import { isWebPushConfigured, sendToUser } from './webPush';
 import { runReachOutSweep } from './reachOut';
+import { runLetterSweep } from './weeklyLetter';
 import dotenv from 'dotenv';
 // import { sendPushNotification } from './notificationService'; // Placeholder for Firebase
 
@@ -18,6 +19,11 @@ export const init = () => {
     // 7.4 follow-up check-ins (web push). Caps/quiet hours/crisis cooldown live in reachOut.ts.
     cron.schedule('*/15 * * * *', () => {
         runReachOutSweep().then(n => { if (n) console.log(`[ReachOut] sent ${n} check-in(s)`); }).catch(e => console.error('[ReachOut] sweep failed:', e?.message || e));
+    });
+
+    // Weekly letters: hourly, due from Sunday 18:00 on each user's clock (services/weeklyLetter.ts)
+    cron.schedule('5 * * * *', () => {
+        runLetterSweep().then(n => { if (n) console.log(`[Letter] wrote ${n} weekly letter(s)`); }).catch(e => console.error('[Letter] sweep failed:', e?.message || e));
     });
 
     // Run every 10 minutes

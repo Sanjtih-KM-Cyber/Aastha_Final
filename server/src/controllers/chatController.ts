@@ -603,6 +603,7 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
                 timestamp: m.timestamp,
                 voice_note: m.voice_note,
                 isClone: !!(m as any).isClone,
+                ...((m as any).isLetter ? { isLetter: true } : {}),
                 ...((m as any).userReaction ? { myReaction: (m as any).userReaction } : {}),
                 ...((m as any).gif?.url ? { gif: (m as any).gif } : {})
             };
@@ -651,7 +652,7 @@ const nudgeAllowed = async (userId: any, forId: string): Promise<NudgeCheck> => 
     if (Date.now() - lastCrisis < 12 * 3_600_000) return { ok: false };
     const recent: any[] = await getRecentMessages(user._id, 10);
     const last = recent[recent.length - 1];
-    if (!last || last.role !== 'assistant' || last.isNudge || last.isClone || (forId && String(last._id) !== forId)) return { ok: false };
+    if (!last || last.role !== 'assistant' || last.isNudge || last.isLetter || last.isClone || (forId && String(last._id) !== forId)) return { ok: false };
     const today = await MessageModel.countDocuments({ user: user._id, isNudge: true, timestamp: { $gt: new Date(Date.now() - 86_400_000) } });
     if (today >= NUDGES_PER_DAY) return { ok: false };
     return { ok: true, user, recent, last };

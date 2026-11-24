@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Upload, Trash2, Shield, User, Palette, Check,
   ToggleLeft, ToggleRight, AlertTriangle, Mic, Edit2,
-  Save, Camera, CreditCard, Sparkles, Zap, Image as ImageIcon,
+  Save, Camera, CreditCard, Sparkles, Zap, Gauge, Image as ImageIcon,
   Headphones, ChevronLeft, ChevronRight, Clock, UserPlus, LogOut, Database, Minus
 } from 'lucide-react';
 import { FingerprintPattern, ScanFace, Lock, EyeOff } from 'lucide-react';
@@ -19,7 +19,8 @@ import { useAuth } from '../../context/AuthContext';
 // import { useLowPowerMode } from '../../hooks/useLowPowerMode'; // REMOVED
 import { useBiometrics } from '../../hooks/useBiometrics';
 import { notificationService } from '../../services/notificationService';
-import { exactAlarmsAllowed, openExactAlarmSettings } from '../../services/notifications';
+import { exactAlarmsAllowed, openExactAlarmSettings, setPrivateNotificationsLocal } from '../../services/notifications';
+import { followUpCheckIns } from '../../services/followUpCheckIns';
 import { webPush } from '../../services/webPush';
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
@@ -36,7 +37,7 @@ interface SettingsPanelProps {
 }
 
 const tabs = [
-  { id: 'appearance', label: 'Appearance', icon: Icons.appearance, desc: 'Theme colour, wallpaper, lite mode' },
+  { id: 'appearance', label: 'Appearance', icon: Icons.appearance, desc: 'Theme colour, wallpaper, Lite / Lite Plus' },
   { id: 'voice', label: 'Voice & Sound', icon: Icons.voice, desc: 'Companion and read-aloud' },
   { id: 'persona', label: 'Connection', icon: Icons.connection, desc: 'Closeness, language, check-ins, Clone Mode' },
   { id: 'account', label: 'Account', icon: Icons.me, desc: 'Name, username, photo' },
@@ -57,7 +58,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
   const [isMobile, setIsMobile] = useState(false);
 
   // UPDATED: Consume isLowPowerMode from global ThemeContext
-  const { currentTheme, setTheme, setWallpaper, wallpaper, isLowPowerMode, setLowPowerMode } = useTheme();
+  const { currentTheme, setTheme, setWallpaper, wallpaper, perfMode, setPerfMode } = useTheme();
 
   const { user, logout, updateUser } = useAuth();
   // const { isLowPower, setLowPowerMode } = useLowPowerMode(); // REMOVED
@@ -588,8 +589,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                   <SectionTitle>Performance</SectionTitle>
                   <ListGroup>
                     <ListItem icon={<Zap size={18} />} title="Lite mode"
-                      subtitle={isLowPowerMode ? 'On, blur and animations off for speed and battery.' : 'Off, full glass effects. Turns on by itself on slower phones.'}
-                      trailing={<Switch checked={isLowPowerMode} onChange={(v) => setLowPowerMode(v)} label="Lite mode" />} />
+                      subtitle={perfMode === 'lite' ? 'On, blur and looping animations off for speed and battery.' : 'Less blur and animation. Turns on by itself on slower phones.'}
+                      trailing={<Switch checked={perfMode === 'lite'} onChange={(v) => setPerfMode(v ? 'lite' : 'full')} label="Lite mode" />} />
+                    <ListItem icon={<Gauge size={18} />} title="Lite Plus"
+                      subtitle={perfMode === 'plus' ? 'On, no animations, shadows or fades anywhere, widgets included. Buttery smooth on older phones.' : 'For older phones: nothing animates, flat colours. Turns Lite mode off.'}
+                      trailing={<Switch checked={perfMode === 'plus'} onChange={(v) => setPerfMode(v ? 'plus' : 'full')} label="Lite Plus" />} />
                   </ListGroup>
                 </section>
               </>
@@ -683,6 +687,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                       <ListGroup>
                         <ListItem icon={<Sparkles size={18} />} title="Mindful check-ins" subtitle="Morning and night nudges"
                           trailing={<Switch checked={notificationsEnabled} onChange={() => toggleNotifications()} label="Mindful check-ins" />} />
+                        <ListItem icon={<EyeOff size={18} />} title="Hide text on lock screen"
+                          subtitle="Notifications show only the app name until you unlock. On the web the text is never sent."
+                          trailing={<Switch checked={!!(user as any)?.privateNotifications} label="Hide text on lock screen" onChange={async (v) => {
+                            try { await api.put('/users/preferences', { privateNotifications: v }); updateUser({ privateNotifications: v } as any); setPrivateNotificationsLocal(v); followUpCheckIns.sync(true).catch(() => {}); }
+                            catch { alert('Could not save. Please try again.'); }
+                          }} />} />
                       </ListGroup>
                   </section>
 

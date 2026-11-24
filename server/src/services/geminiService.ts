@@ -144,6 +144,11 @@ export const analyzeChatHistory = async (chatHistory: any[]): Promise<string> =>
     } catch { return "Unable to analyze."; }
 };
 
+// Each uncached song title is one YouTube search (100 of 10,000 daily quota units), so playlists stay ≤ 12 songs.
+export const MAX_PLAYLIST_SONGS = 12;
+/** ~3.5 min a song: 15 min → 4, 30 → 9, 45 → 12 (cap). */
+export const songsForMinutes = (minutes?: number) => Math.max(4, Math.min(MAX_PLAYLIST_SONGS, Math.round((Number(minutes) || 30) / 3.5)));
+
 export const getVibePlaylist = async (
     chatHistory: any[],
     languages: string[],
@@ -161,11 +166,13 @@ Languages: ${languages?.join(', ') || "Any"}
 Moods: ${userMoods?.join(', ') || "Infer from context"}
 Genres: ${genres?.join(', ') || "Any"}
 Era: ${year || "Any"}
-Length: about ${duration || 30} minutes (8-10 real, well-known songs).
+Length: about ${duration || 30} minutes (${songsForMinutes(duration)} real, well-known songs, each a normal 2 to 6 minute track, no mixes or live streams).
 ${specificSongs && specificSongs.length > 0 ? `Include these first: ${specificSongs.join(', ')}` : ''}
 Return JSON: {"songs": ["Song - Artist", ...]}`;
         const parsed = parseJson<any>(await ask(prompt, { json: true }), {});
         const songs = Array.isArray(parsed) ? parsed : parsed.songs;
-        return Array.isArray(songs) && songs.length ? songs.map(String).slice(0, 10) : ["Lo-Fi Beats - Lofi Girl"];
-    } catch { return ["Lo-Fi Beats - Lofi Girl"]; }
+        // No made-up fallback title here: it used to be "Lo-Fi Beats - Lofi Girl", whose top YouTube hit was an 8 s clip.
+        // The controller falls back to a mood/genre search instead.
+        return Array.isArray(songs) ? songs.map(String).filter(Boolean).slice(0, MAX_PLAYLIST_SONGS) : [];
+    } catch { return []; }
 };

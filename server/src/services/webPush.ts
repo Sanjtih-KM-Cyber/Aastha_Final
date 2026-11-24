@@ -61,8 +61,13 @@ export const removeSubscription = (userId: string, endpoint: string) =>
  */
 export const sendToUser = async (userId: string, payload: { title: string; body: string; url?: string; tag?: string }): Promise<number> => {
   if (!isWebPushConfigured()) return 0;
-  const user = await User.findById(userId).select('pushSubscriptions').lean();
+  const user = await User.findById(userId).select('pushSubscriptions privateNotifications persona').lean();
   const subs: any[] = (user as any)?.pushSubscriptions || [];
+  // "Hide notification text" (2026-11-24): a browser can't tell if the screen is locked, so the text never leaves
+  if ((user as any)?.privateNotifications) {
+    const bot = (user as any)?.persona === 'aarav' || (user as any)?.persona === 'aastik' ? 'Aastik' : 'Aastha';
+    payload = { ...payload, title: bot, body: 'New message. Open the app to read it.' };
+  }
   let delivered = 0;
 
   await Promise.all(

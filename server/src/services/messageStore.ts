@@ -11,6 +11,7 @@ export interface NewMessage {
   voice_note?: string;
   isClone?: boolean;
   isNudge?: boolean;
+  isLetter?: boolean;
   gif?: { url: string; width?: number; height?: number; title?: string; source?: string };
 }
 

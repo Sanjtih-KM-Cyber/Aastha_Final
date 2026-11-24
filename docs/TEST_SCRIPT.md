@@ -112,7 +112,13 @@
 49u. [ ] Send a message, then lock the phone or switch apps **while she's typing**. Come back after ~30 s → the full reply is there (no error, no half-reply). Also try with airplane mode on for 20 s mid-reply, then off.
 49v. [ ] Between 09:00 and 21:30: read her reply and leave the app without answering. About **20 min later** a notification like "you there?" arrives once. Open the app → the same text is in the chat. Repeat but come back after 5 min and answer → no notification later.
 49w. [ ] Settings → Connection → **Start fresh with Aastha** → Choose. Only Closeness ticked → no password asked → Start fresh → closeness shows New friend, chats still there. Tick "What Aastha remembers" → password box appears; wrong password → "didn't match" and you stay signed in; right one → done, and she no longer brings up things you told her. (Optional, on a test account) tick Chat history → chat empties and opens fresh.
-49x. [ ] After `SARVAM_API_KEY` is on Render: ask "send me a voice note saying good night" in English, then in Hinglish, then in Hindi → all three sound like an Indian person (not robotic). Aastha = shreya, switch to Aastik → rohan. First open after the update shows "We've updated our Terms and Privacy Policy" once.
+49x. [ ]
+ After `SARVAM_API_KEY` is on Render: ask "send me a voice note saying good night" in English, then in Hinglish, then in Hindi → all three sound like an Indian person (not robotic). Aastha = shreya, switch to Aastik → rohan. First open after the update shows "We've updated our Terms and Privacy Policy" once.
+49y. [ ] Jam: ✨ → pick 15/30/45 min → a playlist of real songs (no 8 s clip). Repeat button cycles off / all / one / "N×" (count row appears under the controls). Ask Aastha "stop the music" → button says Stop music → music stops.
+49z. [ ] Settings → Appearance → Lite Plus on → Lite turns off; nothing animates, widgets open instantly, breathing orb still grows/shrinks. Turn Lite on → Lite Plus turns off.
+49aa. [ ] Settings → Connection → What Aastha remembers → edit a fact, delete one, "Don't ask" a check-in. Chat about the deleted thing again → it doesn't come back.
+49ab. [ ] Chat ≥5 messages in a week → Sunday ~7 pm a "wrote you a letter 💌" notification; the chat shows a letter card. Weekly letter switch off → none.
+49ac. [ ] Settings → Security → Hide text on lock screen → a check-in on the locked phone shows "Contents hidden".
 49. [ ] Settings → Data & Privacy → Export: name, date of birth, city, avatar come out readable.
 
 ## 16. Crash reporting (only if `SENTRY_DSN` / `VITE_SENTRY_DSN` are set)

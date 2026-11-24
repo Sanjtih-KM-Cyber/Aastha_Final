@@ -12,7 +12,7 @@ export interface Track {
   thumbnail?: string;
 }
 
-// --- Reusable Stepper Component ---
+// --- Stepper (Material You: tonal pill, 48 px touch targets on phones) ---
 interface StepperProps {
     value: number;
     onChange: (val: number) => void;
@@ -20,45 +20,25 @@ interface StepperProps {
     max?: number;
     step?: number;
     compact?: boolean;
+    label?: string;          // what the number means, for screen readers ("times")
+    format?: (v: number) => string;
 }
 
-export const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max = 100, step = 1, compact = false }) => {
-    const handleDecrement = () => {
-        if (value - step >= min) onChange(value - step);
-    };
-
-    const handleIncrement = () => {
-        if (value + step <= max) onChange(value + step);
-    };
-
-    const containerClass = compact
-        ? "flex items-center bg-[#1F2937] rounded-lg border border-md-outline-variant/40 h-8 w-24 justify-between px-1"
-        : "flex items-center bg-[#1F2937] rounded-lg border border-md-outline-variant/40 h-10 w-[120px] justify-between px-1";
-
-    const btnClass = compact
-        ? "w-6 h-6 flex items-center justify-center text-md-on-surface-variant hover:text-white disabled:opacity-30 disabled:hover:text-md-on-surface-variant transition-colors"
-        : "w-8 h-8 flex items-center justify-center text-md-on-surface-variant hover:text-white disabled:opacity-30 disabled:hover:text-md-on-surface-variant transition-colors";
-
+export const Stepper: React.FC<StepperProps> = ({ value, onChange, min = 0, max = 100, step = 1, compact = false, label = 'value', format }) => {
+    const dec = () => { if (value - step >= min) onChange(value - step); };
+    const inc = () => { if (value + step <= max) onChange(value + step); };
+    const size = compact ? 'h-9' : 'h-10';
+    const btn = `${compact ? 'w-9' : 'w-10'} h-full rounded-full flex items-center justify-center text-md-on-secondary-container hover:bg-md-on-surface/[0.08] active:bg-md-on-surface/[0.12] disabled:opacity-30 disabled:hover:bg-transparent transition-colors`;
     return (
-        <div className={containerClass}>
-            <button
-                onClick={handleDecrement}
-                disabled={value <= min}
-                className={btnClass}
-            >
-                <Minus size={compact ? 12 : 14} />
+        <div className={`inline-flex items-center ${size} rounded-full bg-md-secondary-container`} role="group" aria-label={label}>
+            <button type="button" onClick={dec} disabled={value <= min} className={btn} aria-label={`Fewer ${label}`}>
+                <Minus size={compact ? 14 : 16} />
             </button>
-
-            <span className={`text-sm font-medium text-md-on-surface font-mono min-w-[20px] text-center ${compact ? 'text-xs' : ''}`}>
-                {value}
+            <span className="min-w-[2.25rem] text-center text-sm font-semibold tabular-nums text-md-on-secondary-container" aria-live="polite">
+                {format ? format(value) : value}
             </span>
-
-            <button
-                onClick={handleIncrement}
-                disabled={value >= max}
-                className={btnClass}
-            >
-                <Plus size={compact ? 12 : 14} />
+            <button type="button" onClick={inc} disabled={value >= max} className={btn} aria-label={`More ${label}`}>
+                <Plus size={compact ? 14 : 16} />
             </button>
         </div>
     );
@@ -79,7 +59,7 @@ export const MobileQueueItem = ({ track, index, isActive, onRemove, onPlay }: an
             layout="position"
         >
             <motion.div
-                className={`flex items-center gap-3 p-2 rounded-lg transition-colors bg-[#111827] border-b border-md-outline-variant/30 relative z-10`}
+                className={`flex items-center gap-3 p-2 rounded-lg transition-colors bg-md-surface-container-high relative z-10`}
                 drag="x"
                 dragConstraints={{ left: -100, right: 0 }}
                 dragElastic={0.1}
@@ -92,7 +72,7 @@ export const MobileQueueItem = ({ track, index, isActive, onRemove, onPlay }: an
             >
                 {/* Active Indicator */}
                 {isActive ? (
-                     <div className="w-1 h-6 bg-teal-400 rounded-full animate-pulse shrink-0"/>
+                     <div className="w-1 h-6 bg-md-primary rounded-full animate-pulse shrink-0"/>
                 ) : (
                      <span className="w-4 text-[10px] text-md-on-surface-variant/70 text-center shrink-0">{index + 1}</span>
                 )}
@@ -106,15 +86,15 @@ export const MobileQueueItem = ({ track, index, isActive, onRemove, onPlay }: an
                 {/* Drag Handle (Right Side) */}
                 <div
                     onPointerDown={(e) => controls.start(e)}
-                    className="p-2 touch-none cursor-grab active:cursor-grabbing text-md-on-surface-variant/70 hover:text-white"
+                    className="p-2 touch-none cursor-grab active:cursor-grabbing text-md-on-surface-variant/70 hover:text-md-on-surface"
                 >
                     <GripVertical size={16} />
                 </div>
             </motion.div>
 
             {/* Trash Background (Revealed on Swipe Left) */}
-            <div className="absolute inset-y-0 right-0 w-24 bg-red-500/20 flex items-center justify-end px-4 rounded-lg z-0">
-                <Trash2 size={16} className="text-red-500" />
+            <div className="absolute inset-y-0 right-0 w-24 bg-md-error-container flex items-center justify-end px-4 rounded-lg z-0">
+                <Trash2 size={16} className="text-md-on-error-container" />
             </div>
         </Reorder.Item>
     );
@@ -125,7 +105,7 @@ export const DesktopQueueItem = ({ track, index, isActive, onRemove, onPlay, onM
     return (
         <div className={`group flex items-center gap-3 p-2 rounded-lg transition-colors ${isActive ? 'bg-md-surface-container-highest' : 'hover:bg-md-on-surface/[0.06]'}`}>
              {isActive ? (
-                 <div className="w-1 h-8 bg-teal-400 rounded-full animate-pulse shrink-0"/>
+                 <div className="w-1 h-8 bg-md-primary rounded-full animate-pulse shrink-0"/>
              ) : (
                  <span className="w-4 text-[10px] text-md-on-surface-variant/70 text-center shrink-0">{index + 1}</span>
              )}
@@ -136,9 +116,9 @@ export const DesktopQueueItem = ({ track, index, isActive, onRemove, onPlay, onM
              </div>
 
              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                 <button onClick={onMoveUp} disabled={isFirst} className="p-1 text-md-on-surface-variant/70 hover:text-white disabled:opacity-0"><ArrowUp size={12}/></button>
-                 <button onClick={onMoveDown} disabled={isLast} className="p-1 text-md-on-surface-variant/70 hover:text-white disabled:opacity-0"><ArrowDown size={12}/></button>
-                 <button onClick={onRemove} className="p-1 text-md-on-surface-variant/70 hover:text-red-400"><Trash2 size={12}/></button>
+                 <button onClick={onMoveUp} disabled={isFirst} className="p-1 text-md-on-surface-variant/70 hover:text-md-on-surface disabled:opacity-0"><ArrowUp size={12}/></button>
+                 <button onClick={onMoveDown} disabled={isLast} className="p-1 text-md-on-surface-variant/70 hover:text-md-on-surface disabled:opacity-0"><ArrowDown size={12}/></button>
+                 <button onClick={onRemove} className="p-1 text-md-on-surface-variant/70 hover:text-md-error"><Trash2 size={12}/></button>
              </div>
          </div>
     );

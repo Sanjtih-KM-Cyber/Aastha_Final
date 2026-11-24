@@ -29,6 +29,7 @@ export interface User {
   nickname?: { value: string; by: string; off: boolean } | null; // Bestie nickname (Settings → Connection)
   safetyIntroSeen?: boolean;   // "How Aastha keeps you safe" card (7.5)
   windowControls?: 'mac' | 'windows'; // widget window buttons (synced across devices)
+  privateNotifications?: boolean; // hide notification text on the lock screen / in web push
   themeColor?: string | null; // Sanctuary colour: preset id or #rrggbb (synced)
   appFont?: string;     // Sanctuary text font id (design/fonts.ts)
   headingFont?: string; // Sanctuary heading font id

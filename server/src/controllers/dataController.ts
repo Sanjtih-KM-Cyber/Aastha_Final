@@ -202,7 +202,7 @@ export const searchVideos = async (req: AuthRequest, res: Response) => {
     if (!q) return (res as any).json([]);
 
     // Cached + quota-protected (services/youtubeSearch.ts, A11)
-    const videos = await searchYouTube(String(q), { max: 15, musicOnly: true });
+    const videos = await searchYouTube(String(q), { max: 15, musicOnly: true, songsOnly: true }); // no Shorts / live streams
 
     (res as any).json(videos);
 

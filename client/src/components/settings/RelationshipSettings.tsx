@@ -5,6 +5,7 @@ import { Heart, Languages, MapPin, Brain, Loader2, Check, Sparkles, Pencil, Refr
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 import { FreshStartCard } from './FreshStartCard';
+import { MemoryCard } from './MemoryCard';
 
 const LEVELS = ['New friend', 'Getting to know you', 'Friend', 'Close friend', 'Bestie'];
 
@@ -66,8 +67,9 @@ export const RelationshipSettings: React.FC = () => {
   const [region, setRegion] = useState<string>(u.region || '');
   // "Aastha reaches out first" (7.4), stored server-side so every device follows it
   const [checkIns, setCheckIns] = useState<{ enabled: boolean; pending: number } | null>(null);
+  const [letterOn, setLetterOn] = useState(true);
   useEffect(() => {
-    api.get('/users/reach-out', { params: { tz: deviceTimeZone() } }).then(r => setCheckIns({ enabled: r.data?.enabled !== false, pending: r.data?.pending || 0 })).catch(() => setCheckIns({ enabled: true, pending: 0 }));
+    api.get('/users/reach-out', { params: { tz: deviceTimeZone() } }).then(r => { setCheckIns({ enabled: r.data?.enabled !== false, pending: r.data?.pending || 0 }); setLetterOn(r.data?.weeklyLetter?.enabled !== false); }).catch(() => setCheckIns({ enabled: true, pending: 0 }));
   }, []);
   const toggleCheckIns = async () => {
     if (!checkIns) return;
@@ -290,6 +292,19 @@ export const RelationshipSettings: React.FC = () => {
         </div>
       </div>
 
+      <div className="p-5 rounded-[24px] bg-md-surface-container border border-md-outline-variant/30 flex items-center justify-between gap-4">
+        <div>
+          <h4 className="text-md-on-surface font-medium">💌 Weekly letter</h4>
+          <p className="text-xs text-md-on-surface-variant mt-1">After a week you chatted, {botName} writes you a short letter on Sunday evening.</p>
+        </div>
+        <button type="button" role="switch" aria-checked={letterOn} aria-label="Weekly letter"
+          onClick={async () => { const v = !letterOn; setLetterOn(v); try { await api.put('/users/weekly-letter', { enabled: v }); followUpCheckIns.sync(true).catch(() => {}); } catch { setLetterOn(!v); } }}
+          className={`relative shrink-0 w-12 h-7 rounded-full transition-colors ${letterOn ? 'bg-md-primary' : 'bg-md-surface-container-highest'}`}>
+          <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${letterOn ? 'left-6' : 'left-1'}`} />
+        </button>
+      </div>
+
+      <MemoryCard botName={botName} />
       <FreshStartCard botName={botName} />
     </section>
   );

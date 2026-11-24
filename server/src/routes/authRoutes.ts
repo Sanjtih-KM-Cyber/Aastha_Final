@@ -21,7 +21,7 @@ import { protect } from '../middleware/authMiddleware';
 import { getDiaryResetOptions, sendDiaryResetCode, resetDiaryPassword, startFreshDiary } from '../controllers/diaryController';
 import { getClone, saveCloneConsent, uploadCloneScreenshot, uploadCloneChatSample, uploadCloneVoice, updateCloneSettings, deleteClone } from '../controllers/cloneController';
 import { getPushKey, subscribePush, unsubscribePush, testPush } from '../controllers/pushController';
-import { getReachOut, updateReachOut, exportMyData, markSafetyIntroSeen, updatePreferences, acceptLegal, updateNickname, verifyAccountPassword, freshStart } from '../controllers/meController';
+import { getReachOut, updateReachOut, exportMyData, markSafetyIntroSeen, updatePreferences, acceptLegal, updateNickname, verifyAccountPassword, freshStart, getMemory, editMemoryFact, editMemorySummary, dismissMemoryFollowUp, checkLetter, updateWeeklyLetter } from '../controllers/meController';
 
 const router = express.Router();
 
@@ -67,6 +67,12 @@ router.put('/preferences', protect, updatePreferences);
 router.put('/nickname', protect, updateNickname);
 router.post('/verify-password', protect, verifyAccountPassword); // app-lock screen (rate-limited)
 router.post('/fresh-start', protect, freshStart); // "Start fresh with Aastha": closeness / memories / chats
+router.get('/memory', protect, getMemory); // What Aastha remembers
+router.put('/memory/fact', protect, editMemoryFact);
+router.put('/memory/summary', protect, editMemorySummary);
+router.delete('/memory/follow-up/:id', protect, dismissMemoryFollowUp);
+router.post('/letter/check', protect, checkLetter); // weekly letter, written when due
+router.put('/weekly-letter', protect, updateWeeklyLetter);
 router.post('/legal-consent', protect, acceptLegal);
 
 // Account management
