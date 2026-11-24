@@ -445,7 +445,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       const el = c();
       if (!vv || !isMobile) {
         if (el) { el.style.top = ''; el.style.height = ''; el.style.bottom = ''; }
-        root.style.removeProperty('--vv-bottom'); delete root.dataset.keyboard;
+        root.style.removeProperty('--vv-bottom'); root.style.removeProperty('--vv-top'); root.style.removeProperty('--vv-height'); delete root.dataset.keyboard;
         return;
       }
       const top = Math.max(0, Math.round(vv.offsetTop));
@@ -453,6 +453,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       const below = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
       if (el) { el.style.top = `${top}px`; el.style.height = `${height}px`; el.style.bottom = 'auto'; }
       root.style.setProperty('--vv-bottom', `${below}px`);
+      root.style.setProperty('--vv-top', `${top}px`);       // the tab bar uses the SAME frame as the chat
+      root.style.setProperty('--vv-height', `${height}px`); // (fixed bottom:0 can sit below the visible screen in mobile Chrome)
       const open = editable() && window.innerHeight - vv.height > 120;
       if (open) root.dataset.keyboard = 'open'; else delete root.dataset.keyboard;
       if (open && !wasOpen && stickToBottomRef.current) setTimeout(scrollToBottom, 60);
@@ -479,7 +481,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
       window.removeEventListener('focusout', onFocusOut);
       window.removeEventListener('scroll', onWinScroll);
       delete root.dataset.keyboard;
-      root.style.removeProperty('--vv-bottom');
+      root.style.removeProperty('--vv-bottom'); root.style.removeProperty('--vv-top'); root.style.removeProperty('--vv-height');
       const el = c();
       if (el) { el.style.top = ''; el.style.height = ''; el.style.bottom = ''; }
     };

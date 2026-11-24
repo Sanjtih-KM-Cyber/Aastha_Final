@@ -210,7 +210,10 @@ const prepareForGroq = (messages: LlmMessage[], allowImages: boolean) => {
 
 /** Reasoning models: ask the API to keep thinking out of the content. */
 const reasoningParams = (model: string, showReasoning = false): Record<string, any> => {
-  if (model.startsWith('qwen/qwen3')) return { reasoning_format: showReasoning ? 'parsed' : 'hidden' };
+  // Qwen3 thinks by default, and HIDDEN thinking still uses max_tokens: with a short reply budget it could think
+  // the whole budget away and answer with nothing (the app then showed "I'm a little overwhelmed…").
+  // Normal chat / JSON → thinking OFF. Only "think deeper" (showReasoning) keeps it, shown separately.
+  if (model.startsWith('qwen/qwen3')) return showReasoning ? { reasoning_format: 'parsed' } : { reasoning_effort: 'none' };
   if (model.startsWith('openai/gpt-oss'))
     return showReasoning ? { reasoning_effort: 'medium', include_reasoning: true } : { reasoning_effort: 'low', include_reasoning: false };
   return {};

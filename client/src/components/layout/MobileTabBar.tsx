@@ -48,9 +48,11 @@ export const MobileTabBar: React.FC<Props> = ({ active, onSelect }) => {
     <nav
       id="mobile-tab-bar"
       aria-label="Main"
-      className="mobile-tab-bar fixed inset-x-0 z-[60] flex justify-center pointer-events-none"
-      // --vv-bottom (set by ChatView) keeps the bar on the VISIBLE screen even if Chrome pans the page
-      style={{ bottom: 'calc(var(--vv-bottom, 0px) + env(safe-area-inset-bottom) + 12px)' }}
+      className="mobile-tab-bar fixed inset-x-0 z-[60] flex flex-col justify-end items-center pointer-events-none"
+      // A full-height frame pinned to the VISIBLE screen (--vv-top/--vv-height, set by ChatView, same as the chat),
+      // with the bar at its bottom. `bottom: 0` alone sits below the visible screen in mobile Chrome while the
+      // address bar shows (the gap between the message bar and the tabs).
+      style={{ top: 'var(--vv-top, 0px)', height: 'var(--vv-height, 100dvh)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}
     >
       {/* Same look + motion as before (bar shrinks/grows, the highlight pill slides between tabs with a little
           spring), but with plain CSS transitions instead of framer-motion `layout`/`layoutId`: on Android Chrome

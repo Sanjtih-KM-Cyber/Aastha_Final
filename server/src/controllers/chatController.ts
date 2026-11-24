@@ -560,7 +560,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
 
     // Quick replies for the USER, written from the reply they just got (not before it, like the old brain chips)
     if (!useClone && risk === 'none' && !isVoiceMode && dbContent && typeof newUserMsgContent === 'string') {
-        const chips = await suggestReplies({ botName: isAastik ? 'Aastik' : 'Aastha', userText: newUserMsgContent, reply: dbContent, ms: 3000 }).catch(() => []);
+        const chips = await suggestReplies({ botName: isAastik ? 'Aastik' : 'Aastha', userText: newUserMsgContent, reply: dbContent, ms: 3000, history: historyWindow.filter((m) => typeof m.content === 'string' && m.role !== 'system').slice(-6).map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content as string })) }).catch(() => []);
         if (chips.length) (res as any).write(`data: ${JSON.stringify({ type: 'suggestions', items: chips })}\n\n`);
     }
 

@@ -34,9 +34,10 @@ const mockRes = () => {
 
   let next = '';                 // what the fake model answers
   let lastSystem = '';
+  let lastMsgs: any[] = [];
   const fake = {
     stream: () => (async function* () { yield 'x'; })(),
-    complete: async (_m: string, _k: number, msgs: any[]) => { lastSystem = String(msgs[0]?.content || ''); return next; },
+    complete: async (_m: string, _k: number, msgs: any[]) => { lastSystem = String(msgs[0]?.content || ''); lastMsgs = msgs; return next; },
   };
   llm._setAdaptersForTest({ groq: fake, gemini: fake }, { groq: 1, gemini: 1 });
 
@@ -49,7 +50,12 @@ const mockRes = () => {
   next = JSON.stringify({ replies: ['haha fair', "I'm all ears", 'My bad, let me try again', 'tell me something real', 'haha fair'] });
   const chips = await extras.suggestReplies({ botName: 'Aastha', userText: 'cringe', reply: 'Okay fine, that was a bit much. What do you actually do for fun?' });
   check('chips come from the reply, deduped, companion-voice lines dropped', JSON.stringify(chips) === JSON.stringify(['haha fair', 'tell me something real']), chips);
-  check('chip prompt tells the model to write AS the user', /Written BY the user/.test(lastSystem) && /Never write as Aastha/.test(lastSystem));
+  check('chip prompt: model plays the USER, with examples', /You are the person texting Aastha/.test(lastSystem) && /never comfort/.test(lastSystem) && /netflix obviously/.test(lastSystem));
+  const swapped = lastMsgs.filter((m: any) => m.role !== 'system');
+  check("chips: roles swapped (Aastha's reply arrives as the other person, the user's text as the model's own)",
+    swapped.some((m: any) => m.role === 'user' && /What do you actually do for fun/.test(m.content)) && swapped.some((m: any) => m.role === 'assistant' && m.content === 'cringe'), swapped);
+  next = JSON.stringify({ replies: ['how are you feeling about it?', "I'm sorry to hear that", 'netflix obviously'] });
+  check('chips: companion-voice lines dropped', JSON.stringify(await extras.suggestReplies({ botName: 'Aastha', userText: 'idk', reply: 'laundry or netflix?' })) === JSON.stringify(['netflix obviously']));
   next = 'not json at all';
   check('bad model output → no chips (no crash)', (await extras.suggestReplies({ botName: 'Aastha', userText: 'hi', reply: 'hey' })).length === 0);
 
