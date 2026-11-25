@@ -71,13 +71,13 @@ const IST = (iso: string) => new Date(new Date(iso).getTime() - 330 * 60_000); /
   check('reach-out: max 1 per day', ro.reachOutBlockedReason({ lastSentAt: new Date(at11.getTime() - 3600_000) }, undefined, at11) === 'already_today');
   check('reach-out: off switch', ro.reachOutBlockedReason({ enabled: false }, undefined, at11) === 'off');
   check('reach-out: not while they are active', ro.reachOutBlockedReason({}, new Date(at11.getTime() - 60_000), at11) === 'active_recently');
-  check('reach-out: check-in copy is gentle, no guilt', /how did your exam go\? No pressure/.test(ro.checkInText('Mira', 'your exam')) && !/miss|where (are|were) you|ignor/i.test(ro.checkInText('Mira', 'your exam')));
+  check('reach-out: check-in copy is warm and personal, no guilt, no "No pressure"', [0, 1, 2, 3].every((k) => { const t = ro.checkInText('Mira', 'your exam', k); return /Mira/.test(t) && /your exam/.test(t) && !/no pressure|miss|where (are|were) you|ignor/i.test(t); }));
 
   const two = ro.mergeFollowUps([], [{ event: 'your exam', date: '2026-11-27' }, { event: 'the dentist', date: '2026-11-27' }, { event: 'the match', date: '2026-11-29' }], now)
     .map((f: any, i: number) => ({ ...f, _id: 'f' + i }));
   const fakeUser = (extra: any = {}) => ({ name: 'Mira Rao', persona: 'aastha', followUps: two.map((f: any) => ({ ...f, text: require(`${SRV}/utils/serverEncryption`).encrypt(f.text) })), reachOut: {}, ...extra });
   const up = ro.upcomingCheckIns(fakeUser(), now);
-  check('phone schedule: one check-in per day, 10:00 IST the day after', up.length === 2 && up[0].at === IST('2026-11-28T10:00:00Z').toISOString() && up[1].at === IST('2026-11-30T10:00:00Z').toISOString() && /Hey Mira/.test(up[0].body), up);
+  check('phone schedule: one check-in per day, 10:00 IST the day after', up.length === 2 && up[0].at === IST('2026-11-28T10:00:00Z').toISOString() && up[1].at === IST('2026-11-30T10:00:00Z').toISOString() && /Mira/.test(up[0].body) && !/no pressure/i.test(up[0].body), up);
   check('phone schedule: empty when switched off', ro.upcomingCheckIns(fakeUser({ reachOut: { enabled: false } }), now).length === 0);
   check('phone schedule: skips the crisis cooldown', ro.upcomingCheckIns(fakeUser({ reachOut: { lastCrisisAt: IST('2026-11-27T20:00:00Z') } }), now).every((c: any) => c.at !== IST('2026-11-28T10:00:00Z').toISOString()));
 
@@ -222,7 +222,7 @@ const IST = (iso: string) => new Date(new Date(iso).getTime() - 330 * 60_000); /
   const n1 = await ro.runReachOutSweep(at11);
   const n2 = await ro.runReachOutSweep(new Date(at11.getTime() + 3600_000));
   const after = await User.findById(sweepUser._id).lean();
-  check('sweep: one gentle push the day after, then marked sent (no repeats)', n1 === 1 && n2 === 0 && sent.length === 1 && /how did the interview go/.test(sent[0].p.body) && after.followUps[0].status === 'sent', { n1, n2, sent });
+  check('sweep: one gentle push the day after, then marked sent (no repeats)', n1 === 1 && n2 === 0 && sent.length === 1 && /interview/.test(sent[0].p.body) && /Mira/.test(sent[0].p.body) && after.followUps[0].status === 'sent', { n1, n2, sent });
   check('sweep: nothing during quiet hours', (await ro.runReachOutSweep(IST('2026-11-28T23:00:00Z'))) === 0);
 
   // export

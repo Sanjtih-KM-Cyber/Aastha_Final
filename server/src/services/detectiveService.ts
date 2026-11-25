@@ -6,6 +6,7 @@
  * upgraded the first time they're read. All AI calls go through services/llm.ts.
  */
 import { Person } from '../models/Person';
+import User from '../models/User';
 import { getRecentMessages } from './messageStore';
 import { completeChat } from './llm';
 import { encrypt, decrypt, blindIndex, isEncrypted, blindIndexCandidates } from '../utils/serverEncryption';
@@ -136,7 +137,7 @@ Identify specific PEOPLE the user mentions (friends, family, partners, exes, col
 Only include facts the user actually said. Do not guess.
 
 For each person:
-- name: as the user refers to them
+- name: as the user refers to them. NEVER the user themselves and never the companion (Aastha / Aastik / "you")
 - alias: a short, kind, descriptive nickname based on how the user talks about them (e.g. "The Planner")
 - role: who they are to the user, exactly one of: ${ROLES.join(', ')}. Use "other" only if nothing fits.
 - roleLabel: only when role is "other", a 1–3 word label (e.g. "dance teacher", "landlord")
@@ -147,6 +148,23 @@ For each person:
 - rapSheet: up to 3 short facts or patterns the user described
 
 Return JSON only: {"people":[{"name":"","alias":"","role":"friend","roleLabel":"","vibe":"warm","score":0,"rapSheet":[]}]}`;
+
+// The Web is about the people in THEIR life: never the companion, never the user (owner saw "Aastha" and
+// "Sanjith" on their own board, 2026-11-25)
+const COMPANION_NAMES = ['aastha', 'aastik', 'aarav', 'you', 'me', 'myself', 'i', 'user', 'assistant', 'ai', 'bot', 'the user'];
+const normName = (s: string) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim();
+export const isSelfOrCompanion = (name: string, userName?: string) => {
+  const n = normName(name);
+  if (!n || COMPANION_NAMES.includes(n)) return true;
+  const full = normName(userName || '');
+  if (!full) return false;
+  const first = full.split(' ')[0];
+  return n === full || n === first || n.split(' ')[0] === first && n.split(' ').length === 1;
+};
+const userNameOf = async (userId: string) => {
+  const u: any = await User.findById(userId).select('name').lean();
+  return String(decrypt(u?.name || '') || '');
+};
 
 export const detectiveService = {
   // 1. SCAN (user-triggered): analyse recent chat and update the user's Web
@@ -172,8 +190,10 @@ export const detectiveService = {
         parsed = m ? JSON.parse(m[0]) : { people: [] };
       }
 
+      const me = await userNameOf(userId);
       let count = 0;
       for (const p of Array.isArray(parsed.people) ? parsed.people.slice(0, 25) : []) {
+        if (isSelfOrCompanion(p?.name, me)) continue;
         if (await upsertPerson(userId, p)) count++;
       }
       return { status: 'success', count };
@@ -224,7 +244,15 @@ export const detectiveService = {
     const docs = await Person.find({ userId }).lean();
     for (const d of docs) await migrateLegacy(d);
     const fresh = await Person.find({ userId }).sort({ relationshipScore: -1 }).lean();
-    return fresh.map(toPublicPerson);
+    // older scans could add the companion or the user: drop those rows for good
+    const me = await userNameOf(userId);
+    const out: any[] = [];
+    for (const d of fresh) {
+      const pub = toPublicPerson(d);
+      if (isSelfOrCompanion(pub.name, me)) { await Person.deleteOne({ _id: (d as any)._id, userId }); continue; }
+      out.push(pub);
+    }
+    return out;
   },
 
   /** The user corrects who someone is / how it feels. Marks the row so a re-scan keeps their choice. */

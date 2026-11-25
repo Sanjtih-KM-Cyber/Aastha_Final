@@ -92,8 +92,8 @@ Make it clear there's no pressure to reply, you're just around if they want to t
     } catch (error) {
         console.error("[Ghost] Email generation error:", error);
         return isAastik
-            ? "Hey, just checking in. No pressure, I'm around whenever you feel like talking."
-            : "Hey you, just thinking of you. No need to reply, I'm here whenever you want to talk 💜";
+            ? "oye, where did you disappear to? update me when you're free"
+            : "heyy, where did you vanish 👀 tell me what I missed";
     }
 };
 

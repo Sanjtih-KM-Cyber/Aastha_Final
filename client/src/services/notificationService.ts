@@ -1,5 +1,12 @@
 import { Preferences } from '@capacitor/preferences';
-import { NOTIF_IDS, cancelIds, ensureChannels, requestPermission, scheduleOne, isNative } from './notifications';
+import { NOTIF_IDS, cancelIds, ensureChannels, requestPermission, scheduleOne, isNative, savedNotifCopy } from './notifications';
+
+const botName = () => {
+    try {
+        const u = JSON.parse(sessionStorage.getItem('userInfo') || localStorage.getItem('userInfo') || '{}');
+        return u?.persona === 'aarav' || u?.persona === 'aastik' ? 'Aastik' : 'Aastha';
+    } catch { return 'Aastha'; }
+};
 
 const NOTIFICATION_ENABLED_KEY = 'notifications_enabled';
 
@@ -22,21 +29,25 @@ export const notificationService = {
         return granted;
     },
 
+    /** Morning 8:30 + night 21:00, in Aastha's own words for this person (refreshed daily by followUpCheckIns.sync). */
     async scheduleDailyReminders() {
         await cancelIds([NOTIF_IDS.DAILY_EVENING, NOTIF_IDS.DAILY_MORNING]);
+        const c = savedNotifCopy();
+        const bot = botName();
         await scheduleOne({
             id: NOTIF_IDS.DAILY_EVENING,
-            title: "How was your day? 🌙",
-            body: "No pressure, if you feel like talking it out, I'm here.",
+            title: bot,
+            body: c?.night || "how was today? tell me the real version 🌙",
             every: { hour: 21, minute: 0 },
         });
         await scheduleOne({
             id: NOTIF_IDS.DAILY_MORNING,
-            title: "Good morning ☀️",
-            body: "Wishing you an easy day. I'm around if you need me.",
+            title: bot,
+            body: c?.morning || "good morning ☀️ what's on today?",
             every: { hour: 8, minute: 30 },
         });
     },
+    async isEnabled() { return (await Preferences.get({ key: NOTIFICATION_ENABLED_KEY })).value === 'true'; },
 
     async disable() {
         await cancelIds([NOTIF_IDS.DAILY_EVENING, NOTIF_IDS.DAILY_MORNING]);

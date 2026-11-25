@@ -192,6 +192,34 @@ const mockRes = () => {
   r = await mcall(me.editMemorySummary, { text: '' });
   check('memory: summary can be cleared', r.body.summary === '');
 
+  // ---------------- Personal notifications (2026-11-25) ----------------
+  const nc = require(`${SRV}/services/notifCopy`);
+  check('notif: banned filler lines rejected', nc.cleanLine('No pressure, I\'m here 💜') === null && nc.cleanLine('just checking in!') === null && nc.cleanLine('a — b') !== null && !String(nc.cleanLine('a — b')).includes('—') && nc.cleanLine('x'.repeat(120)) === null && nc.cleanLine('hi 😀😀') === null);
+  const fb = nc.fallbackCopy('Sanjith', '2026-11-25', 4);
+  check('notif: fallback still uses their name', [fb.morning, fb.night, ...fb.missYou].every((l: string) => /Sanjith/.test(l)) && [fb.morning, fb.night, ...fb.missYou].every((l: string) => nc.cleanLine(l) === l), fb);
+  const nu = await User.create({ name: 'Sanjith K M', emailEncrypted: encrypt('n2@x.com'), passwordHash: 'x', isVerified: true, timeZone: 'Asia/Kolkata',
+    facts: [encrypt('Has a maths exam on Friday'), encrypt('Plays guitar')], bond: { points: 800, level: 4 }, nickname: { value: encrypt('Sanju-bhai') } });
+  next = JSON.stringify({ morning: 'morning Sanju-bhai ☀️ maths exam friday, ready?', night: 'No pressure, I\'m here for you', missYou: ['Sanju-bhai, the guitar misses you', 'where did you vanish 👀', 'two days!! update me'] });
+  const nowN = new Date('2026-11-25T09:00:00+05:30');
+  let copy = await nc.getNotifCopy(nu._id, nowN);
+  check('notif: written by the model from real facts + nickname', copy.morning.includes('maths exam') && /Sanju-bhai/.test(lastMsgs[1]?.content || '') && /Has a maths exam/.test(lastMsgs[1]?.content || ''), copy);
+  check('notif: a filler line from the model is replaced by a personal one', !/no pressure/i.test(copy.night) && /Sanju-bhai/.test(copy.night), copy.night);
+  next = JSON.stringify({ morning: 'something else entirely', night: 'x', missYou: [] });
+  copy = await nc.getNotifCopy(nu._id, new Date('2026-11-25T20:00:00+05:30'));
+  check('notif: cached for the day (one model call per day)', copy.morning.includes('maths exam'));
+  const stored: any = await User.findById(nu._id).lean();
+  check('notif: cached lines encrypted at rest', stored.notifCopy?.day === '2026-11-25' && !String(stored.notifCopy?.data).includes('maths'));
+  const ro2 = require(`${SRV}/services/reachOut`);
+  const leanUser: any = { name: encrypt('Mira Shah'), persona: 'aastik', timeZone: 'Asia/Kolkata', reachOut: {},
+    followUps: [{ _id: '64b000000000000000000001', text: encrypt('your exam'), dueDate: new Date(Date.now() - 86_400_000), status: 'pending' }] };
+  const ups = ro2.upcomingCheckIns(leanUser, new Date());
+  check('check-in: real first name (was ciphertext from a lean read), Aastik title', ups.length === 0 || (/Mira/.test(ups[0].body) && !/v\d:|:/.test(ups[0].body.split(' ')[0]) && ups[0].title === 'Aastik'), ups);
+  check('check-in text: name + event, no "No pressure"', /Mira/.test(ro2.checkInText('Mira', 'your exam')) && !/no pressure/i.test(ro2.checkInText('Mira', 'your exam')));
+
+  // ---------------- The Web: never the companion or the user ----------------
+  const det = require(`${SRV}/services/detectiveService`);
+  check('web: companion / user names filtered', det.isSelfOrCompanion('Aastha') && det.isSelfOrCompanion('aastik') && det.isSelfOrCompanion('Sanjith', 'Sanjith K M') && det.isSelfOrCompanion('Sanjith K M', 'Sanjith K M') && !det.isSelfOrCompanion('Mom', 'Sanjith K M') && !det.isSelfOrCompanion('Riya', 'Sanjith'));
+
   // ---------------- Time sense: gaps between messages (2026-11-24) ----------------
   const tg = require(`${SRV}/services/timeGap`);
   const g0 = tg.describeGap(new Date('2026-11-24T21:50:00+05:30'), new Date('2026-11-24T22:02:00+05:30'), 'Asia/Kolkata');

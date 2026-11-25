@@ -3,7 +3,7 @@
  * notifications (tonight/tomorrow morning, +1 day, +2 days). Cleared when the app is opened.
  * Only touches NOTIF_IDS.GHOST (ROADMAP M3); neutral, no-pressure copy (A10); no gender guessing (S14).
  */
-import { NOTIF_IDS, cancelIds, hasPermission, scheduleOne, isNative } from './notifications';
+import { NOTIF_IDS, cancelIds, hasPermission, scheduleOne, isNative, savedNotifCopy } from './notifications';
 
 const MESSAGES = {
     // Texting voice (same rules as the chat: no "No pressure / I'm here for you", ≤1 emoji, no em dashes)
@@ -73,10 +73,12 @@ export const scheduleGhostNotifications = async (user: any) => {
         third.setDate(third.getDate() + 2);
         third.setHours(18, 0, 0, 0);
 
+        // Aastha's own lines for this person when we have them (name, nickname, real things they told her)
+        const c = savedNotifCopy();
         const [idA, idB, idC] = NOTIF_IDS.GHOST;
-        await scheduleOne({ id: idA, title: persona, body: pick(evening ? MESSAGES.Morning : MESSAGES.Night), at: first });
-        await scheduleOne({ id: idB, title: persona, body: pick(MESSAGES[persona]), at: second });
-        await scheduleOne({ id: idC, title: persona, body: pick(MESSAGES[persona]), at: third });
+        await scheduleOne({ id: idA, title: persona, body: (evening ? c?.morning : c?.night) || pick(evening ? MESSAGES.Morning : MESSAGES.Night), at: first });
+        await scheduleOne({ id: idB, title: persona, body: c?.missYou?.[0] || pick(MESSAGES[persona]), at: second });
+        await scheduleOne({ id: idC, title: persona, body: c?.missYou?.[1] || pick(MESSAGES[persona]), at: third });
     } catch (e) {
         console.error("Failed to schedule check-in notifications", e);
     }

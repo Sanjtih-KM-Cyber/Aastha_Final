@@ -32,6 +32,14 @@ export const isNative = () => Capacitor.isNativePlatform();
 // "Hide notification text on the lock screen" (2026-11-24): saved on the account (web push uses it server-side);
 // this device copy picks the private channel for everything we schedule from now on.
 const PRIVATE_KEY = 'notif-private';
+
+// Today's personal lines written by Aastha on the server (services/notifCopy.ts via GET /users/reach-out)
+export interface NotifCopy { morning: string; night: string; missYou: string[] }
+const COPY_KEY = 'notif-copy';
+export const savedNotifCopy = (): NotifCopy | null => {
+  try { const c = JSON.parse(localStorage.getItem(COPY_KEY) || 'null'); return c?.morning && c?.night && Array.isArray(c.missYou) ? c : null; } catch { return null; }
+};
+export const saveNotifCopy = (c: NotifCopy | null) => { try { if (c) localStorage.setItem(COPY_KEY, JSON.stringify(c)); } catch { /* ignore */ } };
 export const privateNotifications = () => { try { return localStorage.getItem(PRIVATE_KEY) === 'true'; } catch { return false; } };
 export const setPrivateNotificationsLocal = (on: boolean) => { try { localStorage.setItem(PRIVATE_KEY, String(on)); } catch { /* ignore */ } };
 

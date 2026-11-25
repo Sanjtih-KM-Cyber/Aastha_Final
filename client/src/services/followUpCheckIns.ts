@@ -6,7 +6,8 @@
  */
 import api from './api';
 import { deviceTimeZone } from '../utils/timeZone';
-import { NOTIF_IDS, cancelIds, scheduleOne, hasPermission, isNative } from './notifications';
+import { NOTIF_IDS, cancelIds, scheduleOne, hasPermission, isNative, saveNotifCopy } from './notifications';
+import { notificationService } from './notificationService';
 
 export interface UpcomingCheckIn { id: string; at: string; title: string; body: string }
 
@@ -30,6 +31,11 @@ export const followUpCheckIns = {
       const res = await api.get('/users/reach-out', { params: { tz: deviceTimeZone() } });
       upcoming = res.data?.enabled === false ? [] : (res.data?.upcoming || []);
       letterAt = res.data?.weeklyLetter?.enabled === false ? null : (res.data?.weeklyLetter?.nextAt || null);
+      // today's personal lines → the daily reminders pick them up right away
+      if (res.data?.copy) {
+        saveNotifCopy(res.data.copy);
+        if (await notificationService.isEnabled()) notificationService.scheduleDailyReminders().catch(() => {});
+      }
     } catch {
       return; // offline / logged out, keep whatever is scheduled
     }

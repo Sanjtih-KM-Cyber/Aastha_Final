@@ -17,6 +17,7 @@ import mongoose from 'mongoose';
 import User from '../models/User';
 import { encrypt, decrypt } from '../utils/serverEncryption';
 import { isWebPushConfigured, sendToUser } from './webPush';
+import { checkInLine } from './notifCopy';
 import { DEFAULT_TZ, tzOrDefault, dayKeyIn, hourIn, localAt, dayNum } from '../utils/timeZone';
 
 export const MAX_PENDING = 10;
@@ -106,8 +107,12 @@ export const dueForCheckIn = (list: FollowUpDoc[], now = new Date(), tz: string 
     .sort((a, b) => +a.dueDate - +b.dueDate)[0];
 };
 
-export const checkInText = (firstName: string, event: string) =>
-  `Hey ${firstName || 'you'} 🙂 how did ${/^(the|your|my|their|his|her) /i.test(event) ? event : `the ${event}`} go? No pressure to reply, just thinking of you.`;
+// Warm + varied (2026-11-25); the old one said "No pressure to reply, just thinking of you" every time
+export const checkInText = (firstName: string, event: string, seed = 0) => checkInLine(firstName, event, seed);
+const botTitle = (persona?: string) => (persona === 'aarav' || persona === 'aastik' ? 'Aastik' : 'Aastha');
+// user.name is encrypted (schema setter); .lean() reads return ciphertext, decrypt() is a no-op on plaintext
+const firstNameOf = (name: any) => String(decrypt(String(name || '')) || '').split(' ')[0];
+const seedOf = (id: any) => [...String(id || '')].reduce((a, c) => (a + c.charCodeAt(0)) | 0, 0);
 
 const decryptList = (list: any[]): FollowUpDoc[] => (list || []).map((f) => ({ ...(f.toObject ? f.toObject() : f), text: decrypt(f.text || '') }));
 const encryptList = (list: FollowUpDoc[]) => list.map((f) => ({ ...f, text: encrypt(f.text) }));
@@ -135,7 +140,7 @@ export const upcomingCheckIns = (user: any, now = new Date()) => {
   if (state.enabled === false) return [];
   const zone = tzOrDefault(user.timeZone);
   const crisisUntil = state.lastCrisisAt ? new Date(state.lastCrisisAt).getTime() + CRISIS_COOLDOWN_MS : 0;
-  const first = String(user.name || '').split(' ')[0];
+  const first = firstNameOf(user.name);
   const byDay = new Map<string, { id: string; at: string; title: string; body: string }>();
   for (const f of decryptList(user.followUps).filter((x) => x.status === 'pending').sort((a, b) => +a.dueDate - +b.dueDate)) {
     const dayAfter = new Date(Date.parse(`${dayKeyIn(f.dueDate, zone)}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
@@ -149,7 +154,7 @@ export const upcomingCheckIns = (user: any, now = new Date()) => {
     const day = dayKeyIn(at, zone);
     if (state.lastSentAt && dayKeyIn(state.lastSentAt, zone) === day) continue;
     if (byDay.has(day)) continue;
-    byDay.set(day, { id: String(f._id), at: at.toISOString(), title: user.persona === 'aarav' ? 'Aastik' : 'Aastha', body: checkInText(first, f.text) });
+    byDay.set(day, { id: String(f._id), at: at.toISOString(), title: botTitle(user.persona), body: checkInText(first, f.text, seedOf(f._id)) });
   }
   return [...byDay.values()].slice(0, 5);
 };
@@ -170,8 +175,8 @@ export const runReachOutSweep = async (now = new Date()) => {
       const f = dueForCheckIn(decryptList(u.followUps), now, zone);
       if (!f) continue;
       const pushed = await sendToUser(u._id.toString(), {
-        title: u.persona === 'aarav' ? 'Aastik' : 'Aastha',
-        body: checkInText(String(u.name || '').split(' ')[0], f.text),
+        title: botTitle(u.persona),
+        body: checkInText(firstNameOf(u.name), f.text, seedOf(f._id)),
         tag: 'aastha-follow-up',
       });
       if (pushed > 0) {

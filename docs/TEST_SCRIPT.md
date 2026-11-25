@@ -120,6 +120,8 @@
 49ab. [ ] Chat ≥5 messages in a week → Sunday ~7 pm a "wrote you a letter 💌" notification; the chat shows a letter card. Weekly letter switch off → none.
 49ac. [ ] Settings → Security → Hide text on lock screen → a check-in on the locked phone shows "Contents hidden".
 49ad. [ ] Chat in the morning, leave mid-conversation, come back at night and send "??" or "hey" → she reacts to now (evening/night), may tease once that you vanished, doesn't continue the morning thread or talk like she just woke up. Within a few minutes → she continues normally.
+49ae. [ ] Notifications sound like her and use your name/nickname, sometimes mention something real you told her (exam, sister...); no "No pressure / I'm here". A check-in shows your NAME (not random letters).
+49af. [ ] The Web: drag a name around → its line follows it the whole time; close and reopen → it stays where you dropped it; a drag doesn't open the card, a tap does. Aastha and you are not on the board. The Scan button is fully visible above the tab bar.
 49. [ ] Settings → Data & Privacy → Export: name, date of birth, city, avatar come out readable.
 
 ## 16. Crash reporting (only if `SENTRY_DSN` / `VITE_SENTRY_DSN` are set)

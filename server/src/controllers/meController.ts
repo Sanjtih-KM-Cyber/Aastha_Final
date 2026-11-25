@@ -16,6 +16,7 @@ import { decrypt } from '../utils/serverEncryption';
 import { iterateAllMessages, deleteAllMessages } from '../services/messageStore';
 import VoiceNote from '../models/VoiceNote';
 import { maybeWriteLetter, nextLetterAt } from '../services/weeklyLetter';
+import { getNotifCopy } from '../services/notifCopy';
 import { readMemory, editFact, setSummary, dismissFollowUp, EditResult } from '../services/memoryEditor';
 import { upcomingCheckIns } from '../services/reachOut';
 import { getMoodInsights } from '../services/moodInsights';
@@ -43,6 +44,8 @@ export const getReachOut = async (req: AuthRequest, res: Response) => {
     upcoming: upcomingCheckIns(u),
     // weekly letter: the phone schedules its own "she wrote you a letter" notification for this time
     weeklyLetter: { enabled: u.weeklyLetter?.enabled !== false, nextAt: await nextLetterAt(u).catch(() => null) },
+    // today's personal notification lines (the phone schedules its reminders with these)
+    copy: await getNotifCopy(u._id).catch(() => null),
   });
 };
 

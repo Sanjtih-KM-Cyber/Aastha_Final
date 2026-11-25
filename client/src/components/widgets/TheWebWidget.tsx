@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { DraggableWindow } from '../layout/DraggableWindow';
 import { Network, RefreshCw, User, FileText, Camera, X } from 'lucide-react';
 import { Icons } from '../../design/icons';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import api from '../../services/api';
+
+const OFFSETS_KEY = 'web_node_offsets_v1'; // where the user dragged each person (device-only, px from the default spot)
 
 interface Person {
     _id: string;
@@ -215,6 +217,65 @@ const CaseFile: React.FC<{ person: Person; onClose: () => void; onUpdate: () => 
     );
 };
 
+/**
+ * One person on the board: the node AND its line to "You" use the same motion values, so the line follows the
+ * name every frame while dragging. The dropped position is remembered. A drag never opens the case file (onTap).
+ */
+const WebNode: React.FC<{
+    person: any;
+    base: { x: number; y: number };
+    center: { x: number; y: number };
+    board: { w: number; h: number };
+    saved?: { x: number; y: number };
+    onMoved: (o: { x: number; y: number }) => void;
+    onOpen: () => void;
+}> = ({ person: p, base, center, board, saved, onMoved, onOpen }) => {
+    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+    // keep a saved spot on the board if the window got smaller
+    const x = useMotionValue(clamp(saved?.x || 0, 28 - base.x, board.w - 28 - base.x));
+    const y = useMotionValue(clamp(saved?.y || 0, 28 - base.y, board.h - 40 - base.y));
+    const x2 = useTransform(x, (v) => base.x + v);
+    const y2 = useTransform(y, (v) => base.y + v);
+    const vb = VIBE[vibeOf(p)];
+    return (
+        <>
+            <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" aria-hidden>
+                <motion.line x1={center.x} y1={center.y} x2={x2} y2={y2}
+                    stroke={vb.hex} strokeWidth={p.relationshipScore > 50 ? 2.5 : 1.5}
+                    strokeDasharray={vb.dash} opacity={vb.dash === '0' ? 0.7 : 0.5} />
+            </svg>
+            <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="absolute cursor-grab active:cursor-grabbing group z-10 touch-none"
+                style={{ left: base.x, top: base.y, x, y }}
+                drag
+                dragMomentum={false}
+                dragElastic={0}
+                dragConstraints={{ left: 28 - base.x, right: board.w - 28 - base.x, top: 28 - base.y, bottom: board.h - 40 - base.y }}
+                onDragEnd={() => onMoved({ x: Math.round(x.get()), y: Math.round(y.get()) })}
+                onTap={onOpen}
+            >
+                <div className="relative -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1 transition-transform hover:scale-105">
+                    <span className="w-12 h-12 rounded-full bg-md-surface-container-high flex items-center justify-center overflow-hidden shadow-md"
+                        style={{ boxShadow: `0 0 0 2px ${vb.hex}` }}>
+                        {p.mugshot
+                            ? <img src={p.mugshot} alt="" className="w-full h-full object-cover" draggable={false} />
+                            : <span className="text-sm font-semibold text-md-on-surface">{p.name.charAt(0).toUpperCase()}</span>}
+                    </span>
+                    <span className="px-2 h-5 inline-flex items-center rounded-full bg-md-surface-container-highest text-[10px] font-medium text-md-on-surface max-w-[96px] truncate">{p.name.split(' ')[0]}</span>
+                    <span className="text-[9px] text-md-on-surface-variant max-w-[96px] truncate -mt-0.5">{roleEmoji(p)} {roleText(p)}</span>
+                    {p.alias && (
+                        <span className="absolute top-full mt-1 px-2 py-1 rounded-[8px] bg-md-surface-container-highest text-md-on-surface text-[11px] whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-20 shadow">
+                            {p.alias}
+                        </span>
+                    )}
+                </div>
+            </motion.div>
+        </>
+    );
+};
+
 export const TheWebWidget: React.FC<TheWebProps> = ({ isOpen, onClose, zIndex, onFocus, persistenceKey }) => {
     const { currentTheme } = useTheme();
     const { user } = useAuth();
@@ -257,7 +318,28 @@ export const TheWebWidget: React.FC<TheWebProps> = ({ isOpen, onClose, zIndex, o
     // Angle = distributed evenly.
 
     const centerX = 50; // Percent
-    const centerY = 50;
+    const centerY = 46; // a bit above the middle: the Scan button sits at the bottom
+
+    // Board size in px (lines and nodes share one coordinate system) + where the user dragged each person
+    const boardRef = useRef<HTMLDivElement>(null);
+    const [board, setBoard] = useState({ w: 0, h: 0 });
+    useEffect(() => {
+        const el = boardRef.current;
+        if (!el) return;
+        const measure = () => setBoard({ w: el.clientWidth, h: el.clientHeight });
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [isOpen]);
+    const [offsets, setOffsets] = useState<Record<string, { x: number; y: number }>>(() => {
+        try { return JSON.parse(localStorage.getItem(OFFSETS_KEY) || '{}') || {}; } catch { return {}; }
+    });
+    const saveOffset = (id: string, o: { x: number; y: number }) => setOffsets(prev => {
+        const next = { ...prev, [id]: o };
+        try { localStorage.setItem(OFFSETS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+        return next;
+    });
 
     const getNodePosition = (index: number, total: number, score: number) => {
         const angle = (index / total) * 2 * Math.PI;
@@ -300,7 +382,7 @@ export const TheWebWidget: React.FC<TheWebProps> = ({ isOpen, onClose, zIndex, o
                 />
 
                 {/* --- Floating controls (Liquid Glass) --- */}
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 glass glass-pill flex items-center gap-1 p-1.5">
+                <div className="absolute bottom-[calc(6.5rem+env(safe-area-inset-bottom))] md:bottom-3 left-1/2 -translate-x-1/2 z-20 glass glass-pill flex items-center gap-1 p-1.5">
                     <button
                         onClick={runScan}
                         disabled={isScanning}
@@ -324,35 +406,10 @@ export const TheWebWidget: React.FC<TheWebProps> = ({ isOpen, onClose, zIndex, o
                 )}
 
                 {/* --- THE BOARD --- */}
-                <div className="flex-1 relative">
+                <div ref={boardRef} className="flex-1 relative">
 
-                    {/* SVG LINES LAYER */}
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
-                        {people.map((p, i) => {
-                            const pos = getNodePosition(i, people.length, p.relationshipScore);
-
-                            // Line style follows how the relationship feels (AI-chosen vibe)
-                            const vb = VIBE[vibeOf(p)];
-                            const stroke = vb.hex;
-                            const strokeDasharray = vb.dash;
-                            const opacity = vb.dash === '0' ? 0.7 : 0.5;
-                            const width = p.relationshipScore > 50 ? 2.5 : 1.5;
-
-                            return (
-                                <line
-                                    key={p._id}
-                                    x1={`${centerX}%`} y1={`${centerY}%`}
-                                    x2={`${pos.x}%`} y2={`${pos.y}%`}
-                                    stroke={stroke}
-                                    strokeWidth={width}
-                                    strokeDasharray={strokeDasharray}
-                                    opacity={opacity}
-                                />
-                            );
-                        })}
-                    </svg>
-
-                    {/* NODES LAYER */}
+                    {/* Lines are drawn by each WebNode from the SAME live drag position, so they follow the name
+                        (they used to be fixed in % while the name moved by its own drag offset) */}
                     {/* Center User Node */}
                     <div
                         className="absolute w-16 h-16 rounded-full bg-md-primary text-md-on-primary text-sm font-semibold flex items-center justify-center z-10 ring-8 ring-md-primary/20 shadow-lg"
@@ -362,43 +419,21 @@ export const TheWebWidget: React.FC<TheWebProps> = ({ isOpen, onClose, zIndex, o
                     </div>
 
                     {/* People Nodes */}
-                    <AnimatePresence>
-                        {people.map((p, i) => {
-                            const pos = getNodePosition(i, people.length, p.relationshipScore);
-                            return (
-                                <motion.div
-                                    key={p._id}
-                                    initial={{ scale: 0, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    className="absolute cursor-pointer group z-10"
-                                    style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-                                    drag
-                                    dragConstraints={{ left: -50, right: 50, top: -50, bottom: 50 }} // Loose constraints
-                                    onClick={() => setSelectedPerson(p)}
-                                >
-                                    <div
-                                        className="relative -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1 transition-transform hover:scale-105"
-                                    >
-                                        <span
-                                            className="w-12 h-12 rounded-full bg-md-surface-container-high flex items-center justify-center overflow-hidden shadow-md"
-                                            style={{ boxShadow: `0 0 0 2px ${VIBE[vibeOf(p)].hex}` }}
-                                        >
-                                            {p.mugshot
-                                                ? <img src={p.mugshot} alt="" className="w-full h-full object-cover" />
-                                                : <span className="text-sm font-semibold text-md-on-surface">{p.name.charAt(0).toUpperCase()}</span>}
-                                        </span>
-                                        <span className="px-2 h-5 inline-flex items-center rounded-full bg-md-surface-container-highest text-[10px] font-medium text-md-on-surface max-w-[96px] truncate">{p.name.split(' ')[0]}</span>
-                                        <span className="text-[9px] text-md-on-surface-variant max-w-[96px] truncate -mt-0.5">{roleEmoji(p)} {roleText(p)}</span>
-                                        {p.alias && (
-                                            <span className="absolute top-full mt-1 px-2 py-1 rounded-[8px] bg-md-surface-container-highest text-md-on-surface text-[11px] whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-20 shadow">
-                                                {p.alias}
-                                            </span>
-                                        )}
-                                    </div>
-                                </motion.div>
-                            );
-                        })}
-                    </AnimatePresence>
+                    {board.w > 0 && people.map((p, i) => {
+                        const pos = getNodePosition(i, people.length, p.relationshipScore);
+                        return (
+                            <WebNode
+                                key={p._id}
+                                person={p}
+                                base={{ x: (pos.x / 100) * board.w, y: (pos.y / 100) * board.h }}
+                                center={{ x: (centerX / 100) * board.w, y: (centerY / 100) * board.h }}
+                                board={board}
+                                saved={offsets[p._id]}
+                                onMoved={(o) => saveOffset(p._id, o)}
+                                onOpen={() => setSelectedPerson(p)}
+                            />
+                        );
+                    })}
 
                     {people.length === 0 && !isLoading && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-8">

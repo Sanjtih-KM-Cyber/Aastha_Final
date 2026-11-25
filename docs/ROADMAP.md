@@ -348,6 +348,7 @@ Order matters: fix what users see first, then prove it on real devices, then add
 - [x] **Indian, human voice notes via Sarvam Bulbul** (2026-11-24, V1/V2 follow-up): `services/sarvamTts.ts`, on when `SARVAM_API_KEY` is set, HF Space as fallback, cloned voices stay on F5. Privacy Policy + Privacy Center list Sarvam (privacy version bumped to 2026-11-24 → users re-accept once). **Owner:** create the key and add it on Render; voices picked by ear: **shreya** (Aastha), **rohan** (Aastik), the code defaults.
 - [x] Jam fixes (songs-only search, real fallback, chips, skip unplayable), stop actions, Lite Plus, What Aastha remembers, weekly letter, hide notification text (2026-11-24)
 - [x] **Time sense** (2026-11-24): gap since the last message in the prompt; long gaps = new moment, stale thread trimmed (`services/timeGap.ts`)
+- [x] **Personal notifications** (2026-11-25): daily lines written by Aastha per user; check-in name bug fixed (ciphertext in text). The Web: lines follow dragged names; companion and user filtered out.
 - **Owner:** fill `client/src/legal/legalInfo.ts` (operator, address, emails, grievance officer, court city) and get a lawyer to review `client/src/legal/content.tsx` before launch.
 
 **Owner-side:** Render paid instance or uptime ping (R3), env vars (VAPID, BRAIN_SHARED_SECRET, GIPHY/Tenor), Sentry account → `SENTRY_DSN` (Render) + `VITE_SENTRY_DSN` (Vercel), DNS for the API subdomain, **rebuild the APK** (new mic permission + 2 plugins), then run [TEST_SCRIPT.md](TEST_SCRIPT.md).

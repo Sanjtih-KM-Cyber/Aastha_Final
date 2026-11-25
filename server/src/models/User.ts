@@ -188,6 +188,7 @@ export interface IUser extends Document {
   forgottenFacts?: string[];
   weeklyLetter?: { enabled?: boolean; lastWeek?: string };
   privateNotifications?: boolean;
+  notifCopy?: { day?: string; data?: string };
   safetyIntroSeenAt?: Date; // "How Aastha keeps you safe" card (7.5)
   customMoods?: { id: string; label: string; emoji: string; score: number }[]; // label encrypted (services/customMoods.ts)
   windowControls?: 'mac' | 'windows'; // widget window buttons style, synced across devices
@@ -391,6 +392,7 @@ const userSchema = new Schema<IUser>({
   forgottenFacts: { type: [String], default: [], select: false },
   // Weekly letter from Aastha (2026-11-24)
   privateNotifications: { type: Boolean, default: false }, // hide notification text (lock screen / web push)
+  notifCopy: { day: String, data: String }, // today's personal notification lines (services/notifCopy.ts), data encrypted
   weeklyLetter: {
     enabled: { type: Boolean, default: true },
     lastWeek: String, // "2026-W48" of the last letter (user's zone)
