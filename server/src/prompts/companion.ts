@@ -16,6 +16,7 @@ export interface PromptContext {
   facts: string[];           // things the user has told us about themselves
   summary?: string;          // rolling memory summary
   timeContext: string;
+  gapLine?: string;          // services/timeGap.describeGap(): how long since the last message, and what that means
   ageContext?: string;
   isVoiceMode?: boolean;
   voiceAvailable: boolean;
@@ -112,7 +113,7 @@ them: "should I text him first"
 
 # Right now
 - Time: {{timeContext}}
-- Their mood (best guess): {{userMood}}
+{{gapLine}}- Their mood (best guess): {{userMood}}
 
 # Your relationship
 {{bondLine}}
@@ -139,6 +140,7 @@ export const buildCompanionPrompt = (c: PromptContext): string => {
     .replace('{{ageContext}}', c.ageContext ? ` (${c.ageContext})` : '')
     .replace('{{voiceNote}}', c.voiceAvailable ? '' : 'voice notes are used up for today, so text only')
     .replace('{{timeContext}}', c.timeContext)
+    .replace('{{gapLine}}', c.gapLine ? `- ${c.gapLine}\n` : '')
     .replace('{{userMood}}', c.userMood || 'neutral')
     .replace('{{memory}}', memoryLines)
     .replace('{{bondLine}}', c.bondLine || 'Closeness: New friend. Be warm and polite; let them set the pace.')

@@ -192,6 +192,19 @@ const mockRes = () => {
   r = await mcall(me.editMemorySummary, { text: '' });
   check('memory: summary can be cleared', r.body.summary === '');
 
+  // ---------------- Time sense: gaps between messages (2026-11-24) ----------------
+  const tg = require(`${SRV}/services/timeGap`);
+  const g0 = tg.describeGap(new Date('2026-11-24T21:50:00+05:30'), new Date('2026-11-24T22:02:00+05:30'), 'Asia/Kolkata');
+  check('gap: 12 minutes = same conversation, no note', !g0.line && !g0.trim);
+  const g1 = tg.describeGap(new Date('2026-11-24T20:30:00+05:30'), new Date('2026-11-24T22:02:00+05:30'), 'Asia/Kolkata');
+  check('gap: ~1.5 h = short break, thread can continue', /short break/.test(g1.line) && !g1.trim);
+  const g2 = tg.describeGap(new Date('2026-11-24T08:10:00+05:30'), new Date('2026-11-24T22:02:00+05:30'), 'Asia/Kolkata');
+  check('gap: morning → 10 pm = new moment (the owner\'s case), old thread trimmed', /14 hours/.test(g2.line) && /this morning/.test(g2.line) && /night now/.test(g2.line) && /NEW moment/.test(g2.line) && /just woke up/.test(g2.line) && g2.trim, g2.line);
+  const g3 = tg.describeGap(new Date('2026-11-23T23:30:00+05:30'), new Date('2026-11-24T09:00:00+05:30'), 'Asia/Kolkata');
+  check('gap: last night → this morning says "yesterday night"', /yesterday night/.test(g3.line) && /morning now/.test(g3.line), g3.line);
+  check('gap: in the companion prompt under "Right now"', buildCompanionPrompt({ persona: 'aastha', userName: 'S', userMood: 'neutral', facts: [], timeContext: 'Tuesday 10:02 pm', voiceAvailable: false, gapLine: g2.line }).includes(`- ${g2.line}\n`));
+  check('gap: no stray line when there is no gap', !buildCompanionPrompt({ persona: 'aastha', userName: 'S', userMood: 'neutral', facts: [], timeContext: 'x', voiceAvailable: false }).includes('{{gapLine}}'));
+
   // ---------------- Weekly letter (2026-11-24) ----------------
   const wl = require(`${SRV}/services/weeklyLetter`);
   const IST = 'Asia/Kolkata';

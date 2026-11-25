@@ -21,6 +21,7 @@ import { captureError } from '../monitoring';
 import { describeRecentReactions, setReaction, isAllowedReaction } from '../services/reactions';
 import { followUpPromptLine, followUpsAroundNow, markFollowUps } from '../services/reachOut';
 import { cleanTimeZone } from '../utils/timeZone';
+import { describeGap, KEEP_AFTER_LONG_GAP } from '../services/timeGap';
 import { openQuotaWindow, quotaResetsAt } from '../utils/dailyReset';
 import { createHumanizer, humanize } from '../services/humanize';
 import { suggestReplies, makeNickname, nicknamePromptLine, nudgeInstruction, NudgeReason } from '../services/companionExtras';
@@ -179,6 +180,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
     // 2. SUBCONSCIOUS (The Brain)
     // =================================================================================
     const recentMessages = await getRecentMessages(userId, 20);
+    // Time sense: how long since the last message (services/timeGap.ts), on the user's own clock
+    const timeGap = describeGap(recentMessages[recentMessages.length - 1]?.timestamp, new Date(), cleanTimeZone(timeZone) || (user as any).timeZone);
 
     // Decrypt History
     const historyWindow: ChatMessage[] = recentMessages.map(m => ({
@@ -308,6 +311,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         facts: userFacts.slice(-25),
         summary: decryptedSummary || undefined,
         timeContext: describeTime(userLocalTime, typeof userLocalHour === 'number' ? userLocalHour : undefined),
+        gapLine: timeGap.line,
         ageContext: describeAge(user.dateOfBirth),
         isVoiceMode: !!isVoiceMode,
         voiceAvailable,
@@ -345,6 +349,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
             facts: userFacts.slice(-25),
             summary: decryptedSummary || undefined,
             timeContext: describeTime(userLocalTime, typeof userLocalHour === 'number' ? userLocalHour : undefined),
+            gapLine: timeGap.line,
             ageContext: describeAge(user.dateOfBirth),
             voiceAvailable,
             styleLine: describeStyle(user.styleProfile as any),
@@ -388,7 +393,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         : historyWindow.map((m) => (m.role === 'assistant' && typeof m.content === 'string' && !useClone
             // The model copies its own past texts: feed it CLEANED versions of its earlier replies (the stored chat is unchanged)
             ? { ...m, content: humanize(m.content) } : m));
-    const generationHistory: ChatMessage[] = [...baseHistory, { role: 'user', content: newUserMsgContent }];
+    // After a long gap only the last few old messages go in, so a stale thread doesn't steer the reply
+    const generationHistory: ChatMessage[] = [...(timeGap.trim ? baseHistory.slice(-KEEP_AFTER_LONG_GAP) : baseHistory), { role: 'user', content: newUserMsgContent }];
 
     const sendContent = (text: string) => (res as any).write(`data: ${JSON.stringify({ content: text })}\n\n`);
     if (think) (res as any).write(`data: ${JSON.stringify({ type: 'thinking_start' })}\n\n`);
