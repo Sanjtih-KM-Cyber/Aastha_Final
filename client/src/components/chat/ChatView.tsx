@@ -96,7 +96,7 @@ const mapColorToTheme = (colorName: string): string => {
 };
 
 export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWidget, isMobile = false, currentActivity = 'Online' }) => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { setTheme, currentTheme, isLowPowerMode } = useTheme(); // Consuming isLowPowerMode
   const { subscribe } = useSync();
   const navigate = useNavigate();
@@ -975,6 +975,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                       { icon: data.reason === 'safety' ? '💜' : '⏳', style: { borderRadius: '12px', background: '#1f1b2e', color: '#fff' }, duration: 5000 });
               }
               if (data.type === 'bond' && data.name) {
+                  // keep the app's copy in step, or Settings → Closeness keeps showing the old level (owner, 2026-11-25).
+                  // The server only sends this when closeness grows by itself (no override).
+                  if (typeof data.level === 'number') {
+                      const prev: any = (user as any)?.bond || {};
+                      updateUser({ bond: { ...prev, level: data.level, earnedLevel: data.level, name: data.name, override: null } } as any);
+                  }
                   toast(`You and ${botName} are now: ${data.name}`, { icon: '💞', style: { borderRadius: '12px', background: '#1f1b2e', color: '#fff' }, duration: 4000 });
               }
               if (data.type === 'thinking_start' || data.type === 'reasoning' || data.type === 'thinking_end') {

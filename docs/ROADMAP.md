@@ -350,6 +350,7 @@ Order matters: fix what users see first, then prove it on real devices, then add
 - [x] **Time sense** (2026-11-24): gap since the last message in the prompt; long gaps = new moment, stale thread trimmed (`services/timeGap.ts`)
 - [x] **Personal notifications** (2026-11-25): daily lines written by Aastha per user; check-in name bug fixed (ciphertext in text). The Web: lines follow dragged names; companion and user filtered out.
 - [x] **Lock-screen + notification music controls (APK)** (2026-11-25): native media session plugin, one notification, seek bar, headset buttons.
+- [x] Lock-screen Repeat button (plugin patch), Jam with Aastik, persona descriptions, closeness chips follow automatic level-ups (2026-11-25).
 - **Owner:** fill `client/src/legal/legalInfo.ts` (operator, address, emails, grievance officer, court city) and get a lawyer to review `client/src/legal/content.tsx` before launch.
 
 **Owner-side:** Render paid instance or uptime ping (R3), env vars (VAPID, BRAIN_SHARED_SECRET, GIPHY/Tenor), Sentry account → `SENTRY_DSN` (Render) + `VITE_SENTRY_DSN` (Vercel), DNS for the API subdomain, **rebuild the APK** (new mic permission + 2 plugins), then run [TEST_SCRIPT.md](TEST_SCRIPT.md).

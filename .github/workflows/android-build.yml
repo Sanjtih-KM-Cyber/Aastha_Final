@@ -59,6 +59,8 @@ jobs:
           test -f android/app/src/main/assets/public/index.html || { echo "::error::Web build not copied into APK"; exit 1; }
           grep -q "SCHEDULE_EXACT_ALARM" android/app/src/main/AndroidManifest.xml || { echo "::error::Exact alarm permission missing"; exit 1; }
           grep -q "RECORD_AUDIO" android/app/src/main/AndroidManifest.xml || { echo "::error::Microphone permission missing (voice notes)"; exit 1; }
+          # Repeat button on the lock screen comes from our patch (client/patches, applied by npm ci's postinstall)
+          grep -q "Aastha patch" node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin/MediaSessionService.java || { echo "::error::media-session patch not applied (patch-package)"; exit 1; }
           # lock-screen music player: Android 14 crashes a mediaPlayback foreground service without this
           grep -q "FOREGROUND_SERVICE_MEDIA_PLAYBACK" android/app/src/main/AndroidManifest.xml || { echo "::error::Media playback service permission missing (lock-screen music controls)"; exit 1; }
 

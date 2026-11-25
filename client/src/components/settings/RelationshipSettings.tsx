@@ -68,6 +68,13 @@ export const RelationshipSettings: React.FC = () => {
   // "Aastha reaches out first" (7.4), stored server-side so every device follows it
   const [checkIns, setCheckIns] = useState<{ enabled: boolean; pending: number } | null>(null);
   const [letterOn, setLetterOn] = useState(true);
+  // Closeness can grow (or fade) on the server at any time, on any device: refresh it when this screen opens
+  useEffect(() => {
+    api.get('/users/me').then(r => {
+      if (r.data?.bond) updateUser({ bond: r.data.bond, ...(r.data.nickname !== undefined ? { nickname: r.data.nickname } : {}) } as any);
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     api.get('/users/reach-out', { params: { tz: deviceTimeZone() } }).then(r => { setCheckIns({ enabled: r.data?.enabled !== false, pending: r.data?.pending || 0 }); setLetterOn(r.data?.weeklyLetter?.enabled !== false); }).catch(() => setCheckIns({ enabled: true, pending: 0 }));
   }, []);
@@ -145,15 +152,23 @@ export const RelationshipSettings: React.FC = () => {
           >
             Grow naturally
           </button>
-          {LEVELS.map((name, i) => (
-            <button
-              key={name}
-              onClick={() => save('closeness', { closeness: i })}
-              className={`px-3 py-2 rounded-full text-sm border transition-colors ${override === i ? 'bg-white text-black border-white' : 'border-white/15 text-md-on-surface-variant hover:bg-md-on-surface/10'}`}
-            >
-              {name}
-            </button>
-          ))}
+          {LEVELS.map((name, i) => {
+            const chosen = override === i;
+            // "Grow naturally": show where you are right now
+            const now = override === null && earned === i;
+            return (
+              <button
+                key={name}
+                onClick={() => save('closeness', { closeness: i })}
+                aria-pressed={chosen}
+                className={`px-3 py-2 rounded-full text-sm border transition-colors inline-flex items-center gap-1.5 ${chosen ? 'bg-white text-black border-white' : now ? 'bg-md-secondary-container text-md-on-secondary-container border-md-primary/60' : 'border-white/15 text-md-on-surface-variant hover:bg-md-on-surface/10'}`}
+              >
+                {now && <span className="w-1.5 h-1.5 rounded-full bg-md-primary" aria-hidden />}
+                {name}
+                {now && <span className="text-[10px] opacity-75">now</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
 

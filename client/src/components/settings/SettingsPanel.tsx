@@ -605,10 +605,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                        <SectionTitle>Companion</SectionTitle>
                        <div className="grid grid-cols-2 gap-3">
                            {([
-                             { id: 'aastha' as const, name: 'Aastha', blurb: 'Calm, warm, sisterly', emoji: '🌸' },
-                             { id: 'aarav' as const, name: 'Aastik', blurb: 'Grounded, steady, brotherly', emoji: '🧘‍♂️' },
+                             // Matches the personalities in server/src/prompts/companion.ts (PERSONA_VOICE), keep them in sync
+                             { id: 'aastha' as const, name: 'Aastha', blurb: 'Warm, teasing, has opinions. Chai, old Bollywood, stays when it gets heavy.', emoji: '🌸' },
+                             { id: 'aarav' as const, name: 'Aastik', blurb: 'Calm, dry humour, loyal. Roasts you gently, shows up when it matters.', emoji: '🧘‍♂️' },
                            ]).map((p) => {
-                             const on = p.id === 'aarav' ? user?.persona === 'aarav' : user?.persona !== 'aarav';
+                             const isAastik = ['aarav', 'aastik'].includes(String(user?.persona || ''));
+                             const on = p.id === 'aarav' ? isAastik : !isAastik;
                              return (
                                <button key={p.id} onClick={() => savePersona(p.id)} aria-pressed={on}
                                  className={`p-4 rounded-[24px] flex flex-col items-center gap-3 border transition-all duration-200 ease-md-emphasized ${on ? 'bg-md-primary-container text-md-on-primary-container border-transparent' : 'bg-md-surface-container border-md-outline-variant/30 text-md-on-surface hover:bg-md-surface-container-high'}`}>

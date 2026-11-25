@@ -13,7 +13,7 @@
 import { Capacitor } from '@capacitor/core';
 import { MediaSession } from '@jofr/capacitor-media-session';
 
-export interface MediaTrack { title: string; artist?: string; cover?: string }
+export interface MediaTrack { title: string; artist?: string; cover?: string; album?: string }
 export interface MediaHandlers {
   play: () => void;
   pause: () => void;
@@ -21,8 +21,14 @@ export interface MediaHandlers {
   previous: () => void;
   seekTo?: (seconds: number) => void;
   stop?: () => void;
+  repeat?: () => void; // the 🔁 button (APK only, from our plugin patch: client/patches)
 }
-type Action = 'play' | 'pause' | 'nexttrack' | 'previoustrack' | 'seekto' | 'stop';
+type Action = 'play' | 'pause' | 'nexttrack' | 'previoustrack' | 'seekto' | 'stop' | 'repeat';
+
+export type RepeatMode = 'off' | 'all' | 'one' | 'count';
+/** Text under the 🔁 button (screen readers / long-press). */
+export const repeatLabel = (mode: RepeatMode, times?: number) =>
+  mode === 'all' ? 'Repeat all' : mode === 'one' ? 'Repeat this song' : mode === 'count' ? `Repeat this song ${times || 2}×` : 'Repeat off';
 
 const native = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 const webSession = (): any => (typeof navigator !== 'undefined' && 'mediaSession' in navigator ? (navigator as any).mediaSession : null);
@@ -35,10 +41,11 @@ let lastKey = '';
 
 export const mediaControls = {
   async setTrack(t: MediaTrack) {
-    const key = `${t.title}|${t.artist}|${t.cover}`;
+    const key = `${t.title}|${t.artist}|${t.cover}|${t.album}`;
     if (key === lastKey) return; // the plugin downloads the cover every call
     lastKey = key;
-    const meta = { title: t.title || 'Jam with Aastha', artist: t.artist || 'Aastha', album: 'Jam with Aastha', artwork: artworkFor(t.cover) };
+    const album = t.album || 'Jam with Aastha'; // "Jam with Aastik" for Aastik (JamWithAasthaWidget passes it)
+    const meta = { title: t.title || album, artist: t.artist || album, album, artwork: artworkFor(t.cover) };
     try {
       if (native()) await MediaSession.setMetadata(meta);
       else if (webSession() && typeof (window as any).MediaMetadata === 'function') webSession().metadata = new (window as any).MediaMetadata(meta);
@@ -62,6 +69,13 @@ export const mediaControls = {
     } catch { /* not supported */ }
   },
 
+  /** Repeat icon in the system player: faded 🔁 off, 🔁 all songs, 🔂 this song / N times. */
+  async setRepeat(mode: RepeatMode, times?: number) {
+    if (!native()) return;
+    try { await (MediaSession as any).setRepeatMode({ mode, label: repeatLabel(mode, times) }); }
+    catch (e) { console.warn('[MediaControls] repeat', e); }
+  },
+
   async setHandlers(h: MediaHandlers | null) {
     const map: [Action, ((d?: any) => void) | null][] = [
       ['play', h ? () => h.play() : null],
@@ -70,10 +84,12 @@ export const mediaControls = {
       ['previoustrack', h ? () => h.previous() : null],
       ['seekto', h?.seekTo ? (d: any) => { const t = Number(d?.seekTime); if (Number.isFinite(t)) h.seekTo!(t); } : null],
       ['stop', h?.stop ? () => h.stop!() : null],
+      ['repeat', h?.repeat ? () => h.repeat!() : null],
     ];
     for (const [action, fn] of map) {
+      if (action === 'repeat' && !native()) continue; // browsers have no repeat button
       try {
-        if (native()) await MediaSession.setActionHandler({ action }, fn as any);
+        if (native()) await MediaSession.setActionHandler({ action: action as any }, fn as any);
         else webSession()?.setActionHandler?.(action, fn);
       } catch { /* this action isn't supported here */ }
     }

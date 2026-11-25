@@ -1,0 +1,195 @@
+diff --git a/node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin/MediaSessionCallback.java b/node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin/MediaSessionCallback.java
+index e273185..b2caf28 100644
+--- a/node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin/MediaSessionCallback.java
++++ b/node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin/MediaSessionCallback.java
+@@ -1,5 +1,6 @@
+ package io.github.jofr.capacitor.mediasessionplugin;
+ 
++import android.os.Bundle;
+ import android.support.v4.media.session.MediaSessionCompat;
+ 
+ import com.getcapacitor.JSObject;
+@@ -54,4 +55,12 @@ public class MediaSessionCallback extends MediaSessionCompat.Callback {
+     public void onStop() {
+         plugin.actionCallback("stop");
+     }
++
++    // Aastha patch: Repeat button (custom action)
++    @Override
++    public void onCustomAction(String action, Bundle extras) {
++        if (MediaSessionService.CUSTOM_ACTION_REPEAT.equals(action)) {
++            plugin.actionCallback(MediaSessionService.CUSTOM_ACTION_REPEAT);
++        }
++    }
+ }
+diff --git a/node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin/MediaSessionPlugin.java b/node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin/MediaSessionPlugin.java
+index 6f54b7f..e29f3f2 100644
+--- a/node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin/MediaSessionPlugin.java
++++ b/node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin/MediaSessionPlugin.java
+@@ -56,6 +56,7 @@ public class MediaSessionPlugin extends Plugin {
+             service = binder.getService();
+             Intent intent = new Intent(getActivity(), getActivity().getClass());
+             service.connectAndInitialize(MediaSessionPlugin.this, intent);
++            service.setRepeatMode(repeatMode, repeatLabel); // Aastha patch
+             updateServiceMetadata();
+             updateServicePlaybackState();
+             updateServicePositionState();
+@@ -187,6 +188,21 @@ public class MediaSessionPlugin extends Plugin {
+         call.resolve();
+     }
+ 
++    // Aastha patch: the app's repeat mode → the Repeat icon in the system player
++    private String repeatMode = "off";
++    private String repeatLabel = "Repeat off";
++
++    @PluginMethod
++    public void setRepeatMode(PluginCall call) {
++        repeatMode = call.getString("mode", "off");
++        repeatLabel = call.getString("label", "Repeat");
++        if (service != null) {
++            service.setRepeatMode(repeatMode, repeatLabel);
++            service.update();
++        }
++        call.resolve();
++    }
++
+     @PluginMethod(returnType = PluginMethod.RETURN_CALLBACK)
+     public void setActionHandler(PluginCall call) {
+         call.setKeepAlive(true);
+diff --git a/node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin/MediaSessionService.java b/node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin/MediaSessionService.java
+index cb0417f..da774c4 100644
+--- a/node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin/MediaSessionService.java
++++ b/node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin/MediaSessionService.java
+@@ -11,6 +11,7 @@ import android.graphics.Bitmap;
+ import android.os.Build;
+ import android.os.IBinder;
+ import android.os.Binder;
++import android.os.Bundle;
+ import android.support.v4.media.MediaMetadataCompat;
+ import android.support.v4.media.session.MediaSessionCompat;
+ import android.support.v4.media.session.PlaybackStateCompat;
+@@ -42,6 +43,12 @@ public class MediaSessionService extends Service {
+     final Set<String> possibleCompactViewActions = new HashSet<>(Arrays.asList("previoustrack", "play", "pause", "nexttrack", "stop"));
+     private static final int NOTIFICATION_ID = 1;
+ 
++    // Aastha patch: Repeat button. Modes come from the app: "off", "all", "one", "count" (this song N times).
++    public static final String CUSTOM_ACTION_REPEAT = "repeat";
++    public static final String INTENT_ACTION_REPEAT = "io.github.jofr.capacitor.mediasessionplugin.REPEAT";
++    private String repeatMode = "off";
++    private String repeatLabel = "Repeat off";
++
+     private int playbackState = PlaybackStateCompat.STATE_NONE;
+     private String title = "";
+     private String artist = "";
+@@ -153,6 +160,11 @@ public class MediaSessionService extends Service {
+ 
+     @Override
+     public int onStartCommand(Intent intent, int flags, int startId) {
++        // Aastha patch: the Repeat button in the notification (Android 12 and older)
++        if (intent != null && INTENT_ACTION_REPEAT.equals(intent.getAction())) {
++            if (plugin != null) plugin.actionCallback(CUSTOM_ACTION_REPEAT);
++            return START_NOT_STICKY;
++        }
+         MediaButtonReceiver.handleIntent(mediaSession, intent);
+         return super.onStartCommand(intent, flags, startId);
+     }
+@@ -210,6 +222,23 @@ public class MediaSessionService extends Service {
+         }
+     }
+ 
++    /** Aastha patch: which repeat mode the app is in (changes the Repeat icon). */
++    public void setRepeatMode(String mode, String label) {
++        String m = mode == null ? "off" : mode;
++        String l = label == null || label.isEmpty() ? "Repeat" : label;
++        if (!m.equals(this.repeatMode) || !l.equals(this.repeatLabel)) {
++            this.repeatMode = m;
++            this.repeatLabel = l;
++            possibleActionsUpdate = true;
++        }
++    }
++
++    private int repeatIcon() {
++        if ("one".equals(repeatMode) || "count".equals(repeatMode)) return R.drawable.ic_aastha_repeat_one_24;
++        if ("all".equals(repeatMode)) return R.drawable.ic_aastha_repeat_on_24;
++        return R.drawable.ic_aastha_repeat_off_24;
++    }
++
+     public void setPlaybackSpeed(float playbackSpeed) {
+         if (this.playbackSpeed != playbackSpeed) {
+             this.playbackSpeed = playbackSpeed;
+@@ -253,8 +282,24 @@ public class MediaSessionService extends Service {
+                 }
+             }
+ 
++            // Aastha patch: Repeat as a notification button (older Android) and a custom action (Android 13+ media card)
++            boolean repeatEnabled = plugin.hasActionHandler(CUSTOM_ACTION_REPEAT);
++            if (repeatEnabled) {
++                Intent repeatIntent = new Intent(this, MediaSessionService.class).setAction(INTENT_ACTION_REPEAT);
++                int piFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT : PendingIntent.FLAG_UPDATE_CURRENT;
++                PendingIntent repeatPending = PendingIntent.getService(this, 7, repeatIntent, piFlags);
++                notificationBuilder.addAction(new NotificationCompat.Action(repeatIcon(), repeatLabel, repeatPending));
++                notificationActionIndex++;
++            }
++
+             if (playbackStateBuilder != null) {
++              // custom actions can't be removed from a builder, so start a fresh one each time
++              playbackStateBuilder = new PlaybackStateCompat.Builder();
+               playbackStateBuilder.setActions(activePlaybackStateActions);
++              if (repeatEnabled) {
++                  playbackStateBuilder.addCustomAction(
++                      new PlaybackStateCompat.CustomAction.Builder(CUSTOM_ACTION_REPEAT, repeatLabel, repeatIcon()).build());
++              }
+             }
+             if (notificationStyle != null) {
+               if (compactNotificationActionIndicesIndex > 0) {
+diff --git a/node_modules/@jofr/capacitor-media-session/android/src/main/res/drawable/ic_aastha_repeat_off_24.xml b/node_modules/@jofr/capacitor-media-session/android/src/main/res/drawable/ic_aastha_repeat_off_24.xml
+new file mode 100644
+index 0000000..83757d2
+--- /dev/null
++++ b/node_modules/@jofr/capacitor-media-session/android/src/main/res/drawable/ic_aastha_repeat_off_24.xml
+@@ -0,0 +1,11 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24"
++    android:tint="#000000">
++  <path
++      android:fillColor="@android:color/white"
++      android:fillAlpha="0.45"
++      android:pathData="M7,7h10v3l4,-4 -4,-4v3L5,5v6h2L7,7zM17,17L7,17v-3l-4,4 4,4v-3h12v-6h-2v4z"/>
++</vector>
+diff --git a/node_modules/@jofr/capacitor-media-session/android/src/main/res/drawable/ic_aastha_repeat_on_24.xml b/node_modules/@jofr/capacitor-media-session/android/src/main/res/drawable/ic_aastha_repeat_on_24.xml
+new file mode 100644
+index 0000000..f3cf416
+--- /dev/null
++++ b/node_modules/@jofr/capacitor-media-session/android/src/main/res/drawable/ic_aastha_repeat_on_24.xml
+@@ -0,0 +1,11 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24"
++    android:tint="#000000">
++  <path
++      android:fillColor="@android:color/white"
++      android:fillAlpha="1"
++      android:pathData="M7,7h10v3l4,-4 -4,-4v3L5,5v6h2L7,7zM17,17L7,17v-3l-4,4 4,4v-3h12v-6h-2v4z"/>
++</vector>
+diff --git a/node_modules/@jofr/capacitor-media-session/android/src/main/res/drawable/ic_aastha_repeat_one_24.xml b/node_modules/@jofr/capacitor-media-session/android/src/main/res/drawable/ic_aastha_repeat_one_24.xml
+new file mode 100644
+index 0000000..d6db1e9
+--- /dev/null
++++ b/node_modules/@jofr/capacitor-media-session/android/src/main/res/drawable/ic_aastha_repeat_one_24.xml
+@@ -0,0 +1,11 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24"
++    android:tint="#000000">
++  <path
++      android:fillColor="@android:color/white"
++      android:fillAlpha="1"
++      android:pathData="M7,7h10v3l4,-4 -4,-4v3L5,5v6h2L7,7zM17,17L7,17v-3l-4,4 4,4v-3h12v-6h-2v4zM13,15L13,9h-1l-2,1v1h1.5v4L13,15z"/>
++</vector>

@@ -127,6 +127,9 @@
 49ai. [ ] While a playlist plays: "play Kesariya now" → button "Play now" → the playlist is replaced and it starts. "add Perfect after this" → "Add to queue" → added at the end. Unclear ask → added, with a Play now button in the player.
 49aj. [ ] "play Tum Hi Ho, Kesariya, Perfect and Shape of You" → "Play these 4 songs" → a playlist of exactly those, in order; any not found are listed. Every song shows a cover.
 49ak. [ ] APK: play a song in Jam → (first time) Android asks to let Aastha run in the background → allow. Pull down the notification shade: ONE music player with the song name, artist and cover; ⏮ ⏯ ⏭ work; dragging the seek bar jumps in the song. Lock the phone: the same player is on the lock screen. Headphone/Bluetooth play-pause and next work. ⏮ in the first 3 s goes to the previous song, later it restarts the song. Close Jam → the player disappears.
+49al. [ ] APK lock screen / notification player: a 🔁 button next to the controls. Tap it → it cycles off (faded) → all → this song (🔂), same as in Jam, and Jam's own button follows. With Aastik, the player and Jam say "Jam with Aastik".
+49am. [ ] Settings → Companion: the two cards describe today's Aastha and Aastik; the chosen one says Selected (also for Aastik).
+49an. [ ] Closeness on Grow naturally: chat until you level up (💞 toast) → Settings → Connection → the new level chip is highlighted with "now" (no re-login needed).
 49. [ ] Settings → Data & Privacy → Export: name, date of birth, city, avatar come out readable.
 
 ## 16. Crash reporting (only if `SENTRY_DSN` / `VITE_SENTRY_DSN` are set)

@@ -73,9 +73,10 @@ interface MinimizedPlayerProps {
     onPlayPause: (e: React.MouseEvent) => void;
     onNext: (e: React.MouseEvent) => void;
     onPrev: (e: React.MouseEvent) => void;
+    fallbackArtist: string;
 }
 
-const MinimizedPlayer: React.FC<MinimizedPlayerProps> = ({ isPlaying, track, onPlayPause, onNext, onPrev }) => (
+const MinimizedPlayer: React.FC<MinimizedPlayerProps> = ({ isPlaying, track, onPlayPause, onNext, onPrev, fallbackArtist }) => (
     <div className="flex items-center gap-3 w-full max-w-full">
         {/* Prev */}
         <button
@@ -101,7 +102,7 @@ const MinimizedPlayer: React.FC<MinimizedPlayerProps> = ({ isPlaying, track, onP
                 {track?.title || "No Track"}
             </span>
             <span className="text-xs text-md-on-surface-variant truncate leading-tight">
-                {track?.artist || "Aastha's Jam"}
+                {track?.artist || fallbackArtist}
             </span>
         </div>
 
@@ -118,7 +119,11 @@ const MinimizedPlayer: React.FC<MinimizedPlayerProps> = ({ isPlaying, track, onP
 
 export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose, zIndex, onFocus, initialParams, persistenceKey }) => {
   const { currentTheme } = useTheme();
-  const { setPreventAutoLock } = useAuth();
+  const { setPreventAutoLock, user } = useAuth();
+  // "Jam with Aastha" / "Jam with Aastik", follows the chosen persona everywhere (window, notification, lock screen)
+  const persona = (user as any)?.persona;
+  const botName = persona === 'aastik' || persona === 'aarav' ? 'Aastik' : 'Aastha';
+  const jamName = `Jam with ${botName}`;
   
   // Audio State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -403,7 +408,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       const currentTrack = queue[currentIndex];
       backgroundService.enable(
           'jam',
-          "Jam with Aastha 🎵",
+          `${jamName} 🎵`,
           currentTrack ? `${currentTrack.title} - ${currentTrack.artist}` : "Playing Music..."
       );
 
@@ -529,8 +534,14 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   useEffect(() => {
       const track = queue[currentIndex];
       if (!isOpen || !track) return;
-      mediaControls.setTrack({ title: track.title, artist: track.artist, cover: coverUrls(track)[0] });
-  }, [queue, currentIndex, isOpen]);
+      mediaControls.setTrack({ title: track.title, artist: track.artist, cover: coverUrls(track)[0], album: jamName });
+  }, [queue, currentIndex, isOpen, jamName]);
+
+  // Repeat icon on the lock screen / notification follows the in-app mode
+  useEffect(() => {
+      if (!isOpen) return;
+      mediaControls.setRepeat(loopMode === 'custom' ? 'count' : loopMode, loopTarget);
+  }, [loopMode, loopTarget, isOpen]);
 
   // Playing / paused (the system player shows the right button); gone when Jam is closed or the queue is empty
   useEffect(() => {
@@ -540,7 +551,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   useEffect(() => () => { mediaControls.setPlaying('none'); mediaControls.setHandlers(null); }, []);
 
   // Buttons: registered once, always calling the LATEST functions (no stale queue / index)
-  const controlsRef = useRef<{ play: () => void; pause: () => void; next: () => void; previous: () => void; seekTo: (s: number) => void; stop: () => void } | null>(null);
+  const controlsRef = useRef<{ play: () => void; pause: () => void; next: () => void; previous: () => void; seekTo: (s: number) => void; stop: () => void; repeat: () => void } | null>(null);
   controlsRef.current = {
       play: () => {
           const st = playerRef.current?.getPlayerState?.();
@@ -557,6 +568,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       },
       seekTo: (sec: number) => { playerRef.current?.seekTo?.(sec, true); setCurrentTime(sec); },
       stop: () => { pauseByUser(); onClose(); },
+      repeat: () => toggleLoopMode(), // same cycle as the in-app button: off → all → this song → N times
   };
   useEffect(() => {
       if (!isOpen) return;
@@ -567,6 +579,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           previous: () => controlsRef.current?.previous(),
           seekTo: (sec) => controlsRef.current?.seekTo(sec),
           stop: () => controlsRef.current?.stop(),
+          repeat: () => controlsRef.current?.repeat(),
       });
       return () => { mediaControls.setHandlers(null); };
   }, [isOpen]);
@@ -787,7 +800,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
   return (
     <DraggableWindow
-      isOpen={isOpen} onClose={onClose} title="Music · Jam with Aastha"
+      isOpen={isOpen} onClose={onClose} title={`Music · ${jamName}`}
       initialWidth={380} initialHeight={660} defaultPosition={{ x: 800, y: 150 }}
       zIndex={zIndex || 10} onFocus={onFocus || (() => {})}
       icon={Icons.music}
@@ -795,6 +808,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           <MinimizedPlayer
              isPlaying={isPlaying}
              track={currentTrackData}
+             fallbackArtist={jamName}
              onPlayPause={(e) => {
                 e.stopPropagation();
                 if (!playerRef.current) return;
@@ -861,7 +875,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
                     <div className="pt-4 shrink-0">
                         <Button size="lg" className="w-full" onClick={() => generateVibePlaylist()} icon={<Sparkles size={18} />}>Make my playlist</Button>
-                        <p className="text-[11px] text-md-on-surface-variant mt-2 text-center">Aastha blends how you've been feeling with these picks.</p>
+                        <p className="text-[11px] text-md-on-surface-variant mt-2 text-center">{botName} blends how you've been feeling with these picks.</p>
                     </div>
                 </motion.div>
             )}
@@ -939,7 +953,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                   <div className="shrink-0 flex items-end justify-between gap-3">
                       <div className="min-w-0">
                           <h3 className="text-md-on-surface font-semibold text-lg truncate">{currentTrackData?.title || 'Ready to jam'}</h3>
-                          <p className="text-md-on-surface-variant text-sm truncate">{currentTrackData?.artist || 'Search a song or ask Aastha'}</p>
+                          <p className="text-md-on-surface-variant text-sm truncate">{currentTrackData?.artist || `Search a song or ask ${botName}`}</p>
                       </div>
                       {loopMode === 'custom' && (
                           <span className="shrink-0 h-7 px-2.5 rounded-full bg-md-secondary-container text-md-on-secondary-container text-[11px] font-medium inline-flex items-center">Loop {currentLoopCount}/{loopTarget}</span>
