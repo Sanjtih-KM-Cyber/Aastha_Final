@@ -212,6 +212,30 @@ export const searchVideos = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// POST /api/data/videos/batch { songs: ["Song - Artist", ...] } → one real song per title, in the order asked
+// (owner, 2026-11-25: "if I ask for many songs in one go, make a playlist of exactly those"). Max 12: every
+// uncached title is one YouTube search (100 of 10,000 daily quota units).
+export const MAX_BATCH_SONGS = 12;
+export const searchSongBatch = async (req: AuthRequest, res: Response) => {
+  if (!req.user) return (res as any).status(401).json({ message: 'Unauthorized' });
+  const raw = (req as any).body?.songs;
+  const titles: string[] = (Array.isArray(raw) ? raw : [])
+    .map((t: any) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 120)).filter(Boolean)
+    .filter((t: string, i: number, a: string[]) => a.findIndex((x) => x.toLowerCase() === t.toLowerCase()) === i)
+    .slice(0, MAX_BATCH_SONGS);
+  if (!titles.length) return (res as any).status(400).json({ message: 'No songs given.' });
+  try {
+    const found = await Promise.all(titles.map((t) => searchYouTube(`${t} audio`, { max: 1, songsOnly: true }).then((r) => r[0] || null).catch(() => null)));
+    const seen = new Set<string>();
+    const tracks = found.filter((t): t is NonNullable<typeof t> => !!t && !seen.has(t.id) && !!seen.add(t.id));
+    const missing = titles.filter((_, i) => !found[i]);
+    (res as any).json({ tracks, missing });
+  } catch (e: any) {
+    console.error('Song batch error:', e?.message || e);
+    (res as any).status(503).json({ message: "Couldn't find those songs right now." });
+  }
+};
+
 // --- DETECTIVE WEB CONTROLLERS ---
 
 export const getDetectiveWeb = async (req: AuthRequest, res: Response) => {

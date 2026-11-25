@@ -80,6 +80,13 @@ export const soundscapeConfig = (params: any): { preset?: string; volume?: numbe
 /** Button text under a reply. */
 export const proposalLabel = (p: Proposal) => {
   if (isStopAction(p.tool, p.params)) return p.tool === 'jam' ? 'Stop music' : 'Stop sounds';
+  if (p.tool === 'jam') {
+    const songs = Array.isArray((p.params as any)?.songs) ? (p.params as any).songs.length : 0;
+    const a = String((p.params as any)?.action || '').toLowerCase();
+    if (songs > 1) return `Play these ${songs} songs`;
+    if (a === 'queue' || a === 'add' || a === 'next') return 'Add to queue';
+    if (a === 'play' || a === 'replace') return 'Play now';
+  }
   return ({ jam: 'Play music', soundscape: 'Play sounds', breathing: 'Start breathing', diary: 'Open diary', pomodoro: 'Start focus', mood: 'Track mood' } as Record<string, string>)[p.tool] || 'Open';
 };
 

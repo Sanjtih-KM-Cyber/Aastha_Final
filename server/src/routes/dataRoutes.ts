@@ -7,6 +7,7 @@ import {
   getMoods, 
   createMood,
   searchVideos,
+  searchSongBatch,
   getDetectiveWeb, // New
   triggerRetroScan, // New
   updateMugshot, // New Mugshot Upload
@@ -31,6 +32,7 @@ router.post('/moods', protect as any, createMood as any);
 
 // Video Routes
 router.get('/videos/search', protect as any, searchVideos as any);
+router.post('/videos/batch', protect as any, searchSongBatch as any); // several requested songs → one playlist
 
 // Detective Web Routes
 router.get('/web', protect as any, getDetectiveWeb as any);

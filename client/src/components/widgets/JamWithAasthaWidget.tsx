@@ -23,6 +23,7 @@ import {
     GENRES
 } from '../../constants';
 import { LoopMode } from '../../types';
+import { coverUrls, requestMode, RequestMode } from '../../utils/jamRequest';
 
 declare global {
   interface Window {
@@ -42,6 +43,20 @@ interface JamWidgetProps {
 
 const SESSION_LENGTHS = [15, 30, 45] as const; // a playlist is <= 12 songs (server: songsForMinutes)
 const REPEAT_LABEL: Record<LoopMode, string> = { off: 'Repeat off', all: 'Repeat all', one: 'Repeat this song', custom: 'Repeat this song a few times' };
+
+// Cover art: the stored thumbnail, else YouTube's own covers for that video (every video has them), else a disc.
+// (Some search results had no "high" thumbnail, or the stored link stopped loading → blank square.)
+const Cover: React.FC<{ track?: Track }> = ({ track }) => {
+    const urls = coverUrls(track);
+    const [i, setI] = useState(0);
+    useEffect(() => setI(0), [track?.id, track?.thumbnail]);
+    if (!urls[i]) return (
+        <div className="w-full h-full flex items-center justify-center bg-md-primary-container text-md-on-primary-container">
+            <Disc size={56} className="opacity-60" />
+        </div>
+    );
+    return <img src={urls[i]} onError={() => setI((n) => n + 1)} className="w-full h-full object-cover" alt="" draggable={false} />;
+};
 
 // --- Helper to Generate UUID ---
 const generateUUID = () => {
@@ -161,12 +176,18 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   // --- MANAGER MODE: Auto-Generate Playlist from Params ---
   useEffect(() => {
       if (initialParams && isOpen) {
-          const { query } = initialParams;
+          const { query, songs, action } = initialParams;
+          const mode = requestMode(action);
 
-          // 1. SPECIFIC SONG SEARCH
+          // 0. SEVERAL SPECIFIC SONGS → a playlist of exactly those
+          if (Array.isArray(songs) && songs.length) {
+             playSongList(songs.map(String), mode);
+             return;
+          }
+          // 1. ONE SPECIFIC SONG: play now (replaces the playlist) or add to the queue
           if (query) {
              setQuery(query); // Update UI
-             handleSearch(undefined, query); // Force search
+             handleSearch(undefined, query, mode);
              return;
           }
 
@@ -213,8 +234,10 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [targetDuration, setTargetDuration] = useState<number>(30); // minutes (15 / 30 / 45)
   // Short message under the search bar (replaces alert() pop-ups)
-  const [notice, setNotice] = useState<string | null>(null);
-  useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 5000); return () => clearTimeout(t); }, [notice]);
+  const [notice, setNoticeText] = useState<string | null>(null);
+  const [noticeAction, setNoticeAction] = useState<{ label: string; run: () => void } | null>(null);
+  const setNotice = (text: string | null, action?: { label: string; run: () => void }) => { setNoticeText(text); setNoticeAction(action || null); };
+  useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), noticeAction ? 9000 : 5000); return () => clearTimeout(t); }, [notice]);
   
   // Volume State
   const [volume, setVolume] = useState(100);
@@ -352,6 +375,21 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       loadAndPlay(queue[next]);
   };
 
+  // Who paused? Only the user's own pause (button, notification, headphones) really stops the music.
+  const userPausedRef = useRef(false);
+  const autoResumes = useRef<number[]>([]);
+  const pauseByUser = () => { userPausedRef.current = true; try { playerRef.current?.pauseVideo(); } catch { /* ignore */ } };
+  const playByUser = () => { userPausedRef.current = false; try { playerRef.current?.playVideo(); } catch { /* ignore */ } };
+  // Back in the app and the music got paused behind our back → carry on
+  useEffect(() => {
+      const onVis = () => {
+          if (document.visibilityState !== 'visible' || userPausedRef.current || !playerRef.current?.getPlayerState) return;
+          if (playerRef.current.getPlayerState() === 2 && stateRef.current.queue.length > 0) playByUser();
+      };
+      document.addEventListener('visibilitychange', onVis);
+      return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
   // --- Custom Loop Logic ---
   const onPlayerStateChange = (event: any) => {
     if (event.data === 1) { // Playing
@@ -369,6 +407,15 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       );
 
     } else if (event.data === 2) { // Paused
+      // Paused while the app is in the background and NOT by the user (Android/Chrome/YouTube pause hidden
+      // players): play again, at most 3 times a minute so we never fight a real pause.
+      const now = Date.now();
+      autoResumes.current = autoResumes.current.filter((t) => now - t < 60_000);
+      if (!userPausedRef.current && document.visibilityState === 'hidden' && autoResumes.current.length < 3) {
+          autoResumes.current.push(now);
+          setTimeout(() => { try { playerRef.current?.playVideo(); } catch { /* ignore */ } }, 250);
+          return; // keep the background service + "playing" state
+      }
       setIsPlaying(false);
       stopProgressLoop();
       backgroundService.disable('jam');
@@ -437,6 +484,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   }, [queue]);
 
   const loadAndPlay = (track: Track) => {
+      userPausedRef.current = false;
       if (playerRef.current && playerRef.current.loadVideoById) {
           playerRef.current.loadVideoById(track.id);
           playerRef.current.playVideo();
@@ -480,7 +528,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
               title: track.title,
               artist: track.artist,
               artwork: [
-                  { src: track.thumbnail || 'https://i.imgur.com/8QZ9X9r.png', sizes: '512x512', type: 'image/png' }
+                  { src: coverUrls(track)[0] || '/icon-512.png', sizes: '512x512', type: 'image/jpeg' }
               ]
           });
       }
@@ -490,16 +538,12 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
   useEffect(() => {
       if ('mediaSession' in navigator) {
           const handleStop = () => {
-              if (playerRef.current && playerRef.current.pauseVideo) playerRef.current.pauseVideo();
+              pauseByUser();
               onClose(); // Stop means "Close Widget" / "Clear Notification"
           };
 
-          navigator.mediaSession.setActionHandler('play', () => {
-              if (playerRef.current && playerRef.current.playVideo) playerRef.current.playVideo();
-          });
-          navigator.mediaSession.setActionHandler('pause', () => {
-              if (playerRef.current && playerRef.current.pauseVideo) playerRef.current.pauseVideo();
-          });
+          navigator.mediaSession.setActionHandler('play', playByUser);
+          navigator.mediaSession.setActionHandler('pause', pauseByUser);
           navigator.mediaSession.setActionHandler('previoustrack', playPrev);
           navigator.mediaSession.setActionHandler('nexttrack', playNext);
           navigator.mediaSession.setActionHandler('stop', handleStop);
@@ -516,7 +560,46 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
   // --- Handlers ---
 
-  const handleSearch = async (e?: React.FormEvent, overrideQuery?: string) => {
+  /**
+   * Put found songs in: 'play' = replace the playlist and start now; 'queue' = add after the current songs;
+   * 'auto' (Aastha wasn't sure / typed in the search box) = start now if nothing is playing, otherwise add and
+   * offer "Play now".
+   */
+  const applyTracks = (found: Omit<Track, 'uuid'>[], mode: RequestMode, label: string) => {
+      const tracks = found.map(t => ({ ...t, uuid: generateUUID() })) as Track[];
+      if (!tracks.length) return;
+      const startNow = () => {
+          setQueue(tracks);
+          setCurrentIndex(0);
+          setCurrentLoopCount(1);
+          if (loopMode === 'custom' || loopMode === 'one') setLoopMode('off');
+          setTimeout(() => loadAndPlay(tracks[0]), 100);
+      };
+      const { queue: q } = stateRef.current;
+      if (mode === 'play' || q.length === 0 || (mode === 'auto' && !isPlaying)) {
+          startNow();
+          if (mode === 'play' && q.length > 0) setNotice(`Playing ${label} now.`);
+          return;
+      }
+      setQueue(prev => [...prev, ...tracks]);
+      setNotice(`Added ${label} to your queue.`, mode === 'auto' ? { label: 'Play now', run: startNow } : undefined);
+  };
+
+  const playSongList = async (titles: string[], mode: RequestMode) => {
+      setIsSearching(true);
+      try {
+          const r = await api.post('/data/videos/batch', { songs: titles.slice(0, 12) });
+          const tracks = Array.isArray(r.data?.tracks) ? r.data.tracks : [];
+          if (!tracks.length) { setNotice("Couldn't find those songs. Try searching one by one."); return; }
+          applyTracks(tracks, mode, `${tracks.length} song${tracks.length === 1 ? '' : 's'}`);
+          const missing: string[] = Array.isArray(r.data?.missing) ? r.data.missing : [];
+          if (missing.length) setTimeout(() => setNotice(`Couldn't find: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? '…' : ''}`), 2500);
+      } catch (e: any) {
+          setNotice(e?.response?.data?.message || "Couldn't find those songs right now.");
+      } finally { setIsSearching(false); }
+  };
+
+  const handleSearch = async (e?: React.FormEvent, overrideQuery?: string, mode: RequestMode = 'auto') => {
       e?.preventDefault();
       const q = overrideQuery || query;
       if (!q.trim()) return;
@@ -526,19 +609,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
           const res = await api.get(`/data/videos/search?q=${encodeURIComponent(q)}`);
           
           if (Array.isArray(res.data) && res.data.length > 0) {
-              const newTrack = {
-                  ...res.data[0],
-                  uuid: generateUUID()
-              };
-
-              if (queue.length > 0) {
-                  setQueue(prev => [...prev, newTrack]);
-              } else {
-                  setQueue([newTrack]);
-                  setCurrentIndex(0);
-                  setTimeout(() => loadAndPlay(newTrack), 100);
-              }
-              
+              applyTracks([res.data[0]], mode, `"${String(res.data[0].title || q).slice(0, 40)}"`);
           } else {
               setNotice(`No songs found for "${q.slice(0, 40)}".`);
           }
@@ -690,13 +761,14 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
       // FORCE LOAD if the player is "unstarted"/"cued" (state -1 / 5)
       const state = playerRef.current.getPlayerState ? playerRef.current.getPlayerState() : -1;
       if (isPlaying) {
-          playerRef.current.pauseVideo();
+          pauseByUser();
       } else if ((state === -1 || state === 5) && queue.length > 0) {
+          userPausedRef.current = false;
           playerRef.current.loadVideoById(queue[currentIndex].id);
           const savedTime = localStorage.getItem('jam_time');
           if (savedTime) playerRef.current.seekTo(parseFloat(savedTime));
       } else {
-          playerRef.current.playVideo();
+          playByUser();
       }
   };
 
@@ -713,8 +785,8 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
              onPlayPause={(e) => {
                 e.stopPropagation();
                 if (!playerRef.current) return;
-                if (isPlaying) playerRef.current.pauseVideo();
-                else playerRef.current.playVideo();
+                if (isPlaying) pauseByUser();
+                else playByUser();
              }}
              onNext={(e) => { e.stopPropagation(); playNext(); }}
              onPrev={(e) => { e.stopPropagation(); playPrev(); }}
@@ -800,8 +872,12 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
         {notice && (
             <div role="status" className="shrink-0 -mt-1 px-4 py-2 rounded-[16px] bg-md-surface-container-highest text-md-on-surface text-xs flex items-center justify-between gap-2">
-                <span>{notice}</span>
-                <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="text-md-on-surface-variant"><X size={14} /></button>
+                <span className="flex-1 min-w-0">{notice}</span>
+                {noticeAction && (
+                    <button type="button" onClick={() => { const a = noticeAction; setNotice(null); a.run(); }}
+                        className="shrink-0 h-8 px-3 rounded-full bg-md-primary text-md-on-primary text-xs font-medium">{noticeAction.label}</button>
+                )}
+                <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="shrink-0 text-md-on-surface-variant"><X size={14} /></button>
             </div>
         )}
 
@@ -842,13 +918,7 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
                           animate={{ scale: isPlaying ? 1 : 0.94 }}
                           transition={{ duration: 0.4, ease: [0.2, 0, 0, 1] }}
                       >
-                          {currentTrackData?.thumbnail ? (
-                              <img src={currentTrackData.thumbnail} className="w-full h-full object-cover" alt="" />
-                          ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-md-primary-container text-md-on-primary-container">
-                                  <Disc size={56} className="opacity-60" />
-                              </div>
-                          )}
+                          <Cover track={currentTrackData} />
                       </motion.div>
                   </div>
 

@@ -47,3 +47,26 @@ describe('what a tool button does', async () => {
     expect(soundscapeConfig({ mix: { rain: 4, master: -1 } })).toEqual({ preset: 'rain:1', volume: 0 });
   });
 });
+
+describe('Jam requests (2026-11-25)', async () => {
+  const { requestMode, coverUrls } = await import('../utils/jamRequest');
+  const { proposalLabel } = await import('../utils/proposals');
+  it('play now / add to queue / unsure', () => {
+    expect(requestMode('play')).toBe('play');
+    expect(requestMode('Replace')).toBe('play');
+    expect(requestMode('queue')).toBe('queue');
+    expect(requestMode('next')).toBe('queue');
+    expect(requestMode(undefined)).toBe('auto');
+  });
+  it('button says what will happen', () => {
+    expect(proposalLabel({ tool: 'jam', params: { query: 'x', action: 'play' }, reason: '' })).toBe('Play now');
+    expect(proposalLabel({ tool: 'jam', params: { query: 'x', action: 'queue' }, reason: '' })).toBe('Add to queue');
+    expect(proposalLabel({ tool: 'jam', params: { songs: ['a', 'b', 'c'] }, reason: '' })).toBe('Play these 3 songs');
+    expect(proposalLabel({ tool: 'jam', params: { query: 'x' }, reason: '' })).toBe('Play music');
+  });
+  it('a cover always exists: stored one first, then YouTube\'s own, no duplicates', () => {
+    expect(coverUrls({ id: 'abc', thumbnail: '' })).toEqual(['https://i.ytimg.com/vi/abc/hqdefault.jpg', 'https://i.ytimg.com/vi/abc/mqdefault.jpg']);
+    expect(coverUrls({ id: 'abc', thumbnail: 'https://x/y.jpg' })[0]).toBe('https://x/y.jpg');
+    expect(coverUrls({ id: 'abc', thumbnail: 'https://i.ytimg.com/vi/abc/hqdefault.jpg' }).length).toBe(2);
+  });
+});

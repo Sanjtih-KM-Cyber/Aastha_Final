@@ -240,6 +240,39 @@ const mockRes = () => {
   const board2 = await det.detectiveService.getWeb(String(wu._id));
   check('web: an old "Aastha · Someone" row from earlier scans is cleaned up, real people kept', board2.length === 2 && !board2.some((x: any) => x.name === 'Aastha'), board2.map((x: any) => x.name));
 
+  // ---------------- Jam: several songs in one go + covers (2026-11-25) ----------------
+  {
+    process.env.YOUTUBE_API_KEY = 'test-yt';
+    const axios = require('axios');
+    const realGet = axios.get;
+    const yt = require(`${SRV}/services/youtubeSearch`);
+    const data = require(`${SRV}/controllers/dataController`);
+    yt._ytInternals.reset();
+    // fake YouTube: search returns one id per query (titles containing "nope" find nothing); every song is 3:30
+    axios.get = async (url: string, cfg: any) => {
+      if (url.includes('/search')) {
+        const q = String(cfg.params.q);
+        if (/nope/i.test(q)) return { data: { items: [] } };
+        const id = 'v' + Math.abs([...q].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7)).toString(36).slice(0, 8);
+        return { data: { items: [{ id: { videoId: id }, snippet: { title: q.replace(/ audio$/, ''), channelTitle: 'Artist', liveBroadcastContent: 'none', thumbnails: {} } }] } };
+      }
+      const ids = String(cfg.params.id).split(',');
+      return { data: { items: ids.map((id: string) => ({ id, contentDetails: { duration: 'PT3M30S' } })) } };
+    };
+    const bres = mockRes();
+    await data.searchSongBatch({ user: u, body: { songs: ['Kesariya - Arijit Singh', 'Tum Hi Ho', 'kesariya - arijit singh', 'nope song', 'Perfect - Ed Sheeran'] } } as any, bres);
+    check('jam batch: one song per title, in order, duplicates dropped, missing reported',
+      bres.body?.tracks?.length === 3 && /Kesariya/.test(bres.body.tracks[0].title) && /Perfect/.test(bres.body.tracks[2].title) && bres.body.missing?.[0] === 'nope song', bres.body);
+    check('jam: every track has a cover even when YouTube gave no thumbnail', bres.body.tracks.every((t: any) => t.thumbnail === `https://i.ytimg.com/vi/${t.id}/hqdefault.jpg`));
+    const tooMany = mockRes();
+    await data.searchSongBatch({ user: u, body: { songs: Array.from({ length: 20 }, (_, k) => `Song ${k}`) } } as any, tooMany);
+    check('jam batch: capped at 12 songs (YouTube quota)', tooMany.body?.tracks?.length === 12);
+    const none = mockRes(); await data.searchSongBatch({ user: u, body: { songs: [] } } as any, none);
+    check('jam batch: empty list → 400', none.statusCode === 400);
+    axios.get = realGet;
+    yt._ytInternals.reset();
+  }
+
   // ---------------- Time sense: gaps between messages (2026-11-24) ----------------
   const tg = require(`${SRV}/services/timeGap`);
   const g0 = tg.describeGap(new Date('2026-11-24T21:50:00+05:30'), new Date('2026-11-24T22:02:00+05:30'), 'Asia/Kolkata');

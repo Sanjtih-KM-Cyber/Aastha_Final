@@ -64,6 +64,10 @@ export const _ytInternals = {
   get blockedUntil() { return quotaBlockedUntil; },
 };
 
+/** Cover art that always exists (YouTube serves hqdefault for every video). */
+export const coverFor = (id: string, thumbs?: any) =>
+  thumbs?.high?.url || thumbs?.medium?.url || thumbs?.standard?.url || thumbs?.default?.url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+
 /** ISO 8601 duration ("PT3M42S") → seconds. */
 export const isoSeconds = (iso: string) => {
   const m = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(String(iso || ''));
@@ -133,7 +137,8 @@ export const searchYouTube = async (
           id: it.id.videoId,
           title: it.snippet?.title || '',
           artist: it.snippet?.channelTitle || '',
-          thumbnail: it.snippet?.thumbnails?.high?.url || it.snippet?.thumbnails?.default?.url || '',
+          // some results have no "high" size; every video has i.ytimg.com/vi/<id>/hqdefault.jpg
+          thumbnail: coverFor(it.id.videoId, it.snippet?.thumbnails),
         }));
 
       remember(key, results);

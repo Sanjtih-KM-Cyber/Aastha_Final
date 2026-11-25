@@ -105,10 +105,15 @@ class BackgroundService {
             silent: !isFirst, // Only sound/vibrate on first activation if needed, but usually better silent always for updates
             hidden: false,
             allowClose: false,
-            color: '1c1c1e'
+            color: '1c1c1e',
+            // THE fix for "music stops when I switch apps" (2026-11-25): Android tells the WebView it's hidden when the
+            // app goes to the background and the YouTube player pauses itself. This keeps the WebView "visible"
+            // while a background reason (music, sounds, focus timer) is active.
+            disableWebViewOptimization: true,
         });
 
         await BackgroundMode.enable();
+        try { await BackgroundMode.disableWebViewOptimizations(); } catch { /* older plugin builds: setting above */ }
 
         // Battery check on first enable
         if (isFirst) {
@@ -134,6 +139,7 @@ class BackgroundService {
 
       if (this.reasons.size === 0) {
           console.log("[BackgroundService] No active reasons, disabling.");
+          try { await BackgroundMode.enableWebViewOptimizations(); } catch { /* ignore */ } // normal battery behaviour again
           await BackgroundMode.disable();
       } else if (existed) {
           // Update notification to remove the disabled item text
