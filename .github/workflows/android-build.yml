@@ -52,12 +52,15 @@ jobs:
           cat "$PLUGINS"
           for p in "@capacitor/local-notifications" "@capacitor/preferences" "@capacitor/app" \
                    "@capgo/capacitor-native-biometric" "@anuradev/capacitor-background-mode" \
-                   "@capacitor-community/privacy-screen" "@capacitor/filesystem" "@capacitor/share"; do
+                   "@capacitor-community/privacy-screen" "@capacitor/filesystem" "@capacitor/share" \
+                   "@jofr/capacitor-media-session"; do
             grep -q "\"$p\"" "$PLUGINS" || { echo "::error::Native plugin $p is not registered"; exit 1; }
           done
           test -f android/app/src/main/assets/public/index.html || { echo "::error::Web build not copied into APK"; exit 1; }
           grep -q "SCHEDULE_EXACT_ALARM" android/app/src/main/AndroidManifest.xml || { echo "::error::Exact alarm permission missing"; exit 1; }
           grep -q "RECORD_AUDIO" android/app/src/main/AndroidManifest.xml || { echo "::error::Microphone permission missing (voice notes)"; exit 1; }
+          # lock-screen music player: Android 14 crashes a mediaPlayback foreground service without this
+          grep -q "FOREGROUND_SERVICE_MEDIA_PLAYBACK" android/app/src/main/AndroidManifest.xml || { echo "::error::Media playback service permission missing (lock-screen music controls)"; exit 1; }
 
       - name: Build APK
         working-directory: client/android

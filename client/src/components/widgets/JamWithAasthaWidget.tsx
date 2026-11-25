@@ -24,6 +24,7 @@ import {
 } from '../../constants';
 import { LoopMode } from '../../types';
 import { coverUrls, requestMode, RequestMode } from '../../utils/jamRequest';
+import { mediaControls } from '../../services/mediaControls';
 
 declare global {
   interface Window {
@@ -509,9 +510,12 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
 
   const startProgressLoop = () => {
     if (progressInterval.current) clearInterval(progressInterval.current);
+    let ticks = 0;
     progressInterval.current = setInterval(() => {
       if (playerRef.current && playerRef.current.getCurrentTime) {
-        setCurrentTime(playerRef.current.getCurrentTime());
+        const t = playerRef.current.getCurrentTime();
+        setCurrentTime(t);
+        if (ticks++ % 5 === 0) mediaControls.setPosition(playerRef.current.getDuration?.() || 0, t);
       }
     }, 1000);
   };
@@ -520,43 +524,52 @@ export const JamWithAasthaWidget: React.FC<JamWidgetProps> = ({ isOpen, onClose,
     if (progressInterval.current) clearInterval(progressInterval.current);
   };
 
-  // ✅ FIXED: Media Session Metadata
+  // --- Lock screen + notification player (services/mediaControls.ts) ---
+  // Song info: title, artist, cover
   useEffect(() => {
-      if ('mediaSession' in navigator && queue.length > 0) {
-          const track = queue[currentIndex];
-          navigator.mediaSession.metadata = new MediaMetadata({
-              title: track.title,
-              artist: track.artist,
-              artwork: [
-                  { src: coverUrls(track)[0] || '/icon-512.png', sizes: '512x512', type: 'image/jpeg' }
-              ]
-          });
-      }
-  }, [queue, currentIndex]);
+      const track = queue[currentIndex];
+      if (!isOpen || !track) return;
+      mediaControls.setTrack({ title: track.title, artist: track.artist, cover: coverUrls(track)[0] });
+  }, [queue, currentIndex, isOpen]);
 
-  // ✅ FIXED: Media Session Handlers (Notification Controls)
+  // Playing / paused (the system player shows the right button); gone when Jam is closed or the queue is empty
   useEffect(() => {
-      if ('mediaSession' in navigator) {
-          const handleStop = () => {
-              pauseByUser();
-              onClose(); // Stop means "Close Widget" / "Clear Notification"
-          };
+      if (!isOpen || queue.length === 0) { mediaControls.setPlaying('none'); return; }
+      mediaControls.setPlaying(isPlaying ? 'playing' : 'paused');
+  }, [isPlaying, isOpen, queue.length]);
+  useEffect(() => () => { mediaControls.setPlaying('none'); mediaControls.setHandlers(null); }, []);
 
-          navigator.mediaSession.setActionHandler('play', playByUser);
-          navigator.mediaSession.setActionHandler('pause', pauseByUser);
-          navigator.mediaSession.setActionHandler('previoustrack', playPrev);
-          navigator.mediaSession.setActionHandler('nexttrack', playNext);
-          navigator.mediaSession.setActionHandler('stop', handleStop);
-
-          return () => {
-             navigator.mediaSession.setActionHandler('play', null);
-             navigator.mediaSession.setActionHandler('pause', null);
-             navigator.mediaSession.setActionHandler('previoustrack', null);
-             navigator.mediaSession.setActionHandler('nexttrack', null);
-             navigator.mediaSession.setActionHandler('stop', null);
-          };
-      }
-  }, [playPrev, playNext, onClose]);
+  // Buttons: registered once, always calling the LATEST functions (no stale queue / index)
+  const controlsRef = useRef<{ play: () => void; pause: () => void; next: () => void; previous: () => void; seekTo: (s: number) => void; stop: () => void } | null>(null);
+  controlsRef.current = {
+      play: () => {
+          const st = playerRef.current?.getPlayerState?.();
+          if ((st === -1 || st === 5) && stateRef.current.queue.length) loadAndPlay(stateRef.current.queue[stateRef.current.currentIndex]);
+          else playByUser();
+      },
+      pause: pauseByUser,
+      next: playNext,
+      previous: () => {
+          // like every music app: back = restart the song if we're past 3 s, else the previous song
+          const t = playerRef.current?.getCurrentTime?.() || 0;
+          if (t > 3) { playerRef.current?.seekTo?.(0, true); setCurrentTime(0); }
+          else playPrev();
+      },
+      seekTo: (sec: number) => { playerRef.current?.seekTo?.(sec, true); setCurrentTime(sec); },
+      stop: () => { pauseByUser(); onClose(); },
+  };
+  useEffect(() => {
+      if (!isOpen) return;
+      mediaControls.setHandlers({
+          play: () => controlsRef.current?.play(),
+          pause: () => controlsRef.current?.pause(),
+          next: () => controlsRef.current?.next(),
+          previous: () => controlsRef.current?.previous(),
+          seekTo: (sec) => controlsRef.current?.seekTo(sec),
+          stop: () => controlsRef.current?.stop(),
+      });
+      return () => { mediaControls.setHandlers(null); };
+  }, [isOpen]);
 
   // --- Handlers ---
 

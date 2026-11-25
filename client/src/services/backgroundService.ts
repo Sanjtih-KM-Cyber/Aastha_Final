@@ -1,6 +1,8 @@
 import { Capacitor } from '@capacitor/core';
 import { BackgroundMode } from '@anuradev/capacitor-background-mode';
 
+const BATTERY_ASKED_KEY = 'aastha_battery_prompt_shown';
+
 class BackgroundService {
   // Store reason -> "Title: Body" or just custom object to reconstruct message
   private reasons = new Map<string, { title: string, body: string }>();
@@ -25,6 +27,11 @@ class BackgroundService {
     } catch (error) {
       console.error('[BackgroundService] init error:', error);
     }
+  }
+
+  /** Only music is keeping us in the background (its media notification is enough). */
+  private onlyMusic() {
+      return this.reasons.size > 0 && [...this.reasons.keys()].every((r) => r === 'jam');
   }
 
   private generateNotificationContent() {
@@ -68,7 +75,7 @@ class BackgroundService {
               title: content.title,
               text: content.body,
               silent: silent,
-              hidden: false, // Vital for background survival
+              hidden: this.onlyMusic(), // music has its own player notification
               bigText: true,  // Helps Android identify as media
               allowClose: false,
               color: '1c1c1e',
@@ -103,7 +110,9 @@ class BackgroundService {
             title: content.title,
             text: content.body,
             silent: !isFirst, // Only sound/vibrate on first activation if needed, but usually better silent always for updates
-            hidden: false,
+            // Music has its own player notification (services/mediaControls.ts): don't show a second one while music
+            // is the only thing running (Android shows a hidden keep-alive at minimum priority, out of the way)
+            hidden: this.onlyMusic(),
             allowClose: false,
             color: '1c1c1e',
             // THE fix for "music stops when I switch apps" (2026-11-25): Android tells the WebView it's hidden when the
@@ -115,14 +124,17 @@ class BackgroundService {
         await BackgroundMode.enable();
         try { await BackgroundMode.disableWebViewOptimizations(); } catch { /* older plugin builds: setting above */ }
 
-        // Battery check on first enable
-        if (isFirst) {
+        // Keeping the WebView awake only works when Android doesn't battery-optimise the app. The first time music
+        // plays, show Android's own "Let Aastha always run in the background?" prompt, once (never again if they say no).
+        if (isFirst && reason === 'jam') {
              try {
                 const battery = await BackgroundMode.checkBatteryOptimizations();
-                if (!battery.disabled) {
-                    console.log("[BackgroundService] Battery optimizations enabled.");
+                const asked = localStorage.getItem(BATTERY_ASKED_KEY) === '1';
+                if (!battery.disabled && !asked) {
+                    localStorage.setItem(BATTERY_ASKED_KEY, '1');
+                    await BackgroundMode.requestDisableBatteryOptimizations();
                 }
-             } catch (e) {}
+             } catch (e) { /* not supported on this phone */ }
         }
 
     } catch (error) {

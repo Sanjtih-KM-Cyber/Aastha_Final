@@ -126,6 +126,7 @@
 49ah. [ ] APK: play music in Jam, go to the home screen and open other apps for 5 min, lock the phone → music keeps playing (notification controls work). Pause from the notification → it stays paused.
 49ai. [ ] While a playlist plays: "play Kesariya now" → button "Play now" → the playlist is replaced and it starts. "add Perfect after this" → "Add to queue" → added at the end. Unclear ask → added, with a Play now button in the player.
 49aj. [ ] "play Tum Hi Ho, Kesariya, Perfect and Shape of You" → "Play these 4 songs" → a playlist of exactly those, in order; any not found are listed. Every song shows a cover.
+49ak. [ ] APK: play a song in Jam → (first time) Android asks to let Aastha run in the background → allow. Pull down the notification shade: ONE music player with the song name, artist and cover; ⏮ ⏯ ⏭ work; dragging the seek bar jumps in the song. Lock the phone: the same player is on the lock screen. Headphone/Bluetooth play-pause and next work. ⏮ in the first 3 s goes to the previous song, later it restarts the song. Close Jam → the player disappears.
 49. [ ] Settings → Data & Privacy → Export: name, date of birth, city, avatar come out readable.
 
 ## 16. Crash reporting (only if `SENTRY_DSN` / `VITE_SENTRY_DSN` are set)

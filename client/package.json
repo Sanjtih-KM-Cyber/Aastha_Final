@@ -37,6 +37,7 @@
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "@fontsource-variable/quicksand": "^5.3.0",
     "@fontsource/atkinson-hyperlegible": "^5.3.0",
+    "@jofr/capacitor-media-session": "^4.0.0",
     "@material/material-color-utilities": "^0.3.0",
     "@phosphor-icons/react": "^2.1.10",
     "@sentry/react": "^9.47.2",
