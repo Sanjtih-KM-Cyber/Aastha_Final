@@ -219,6 +219,26 @@ const mockRes = () => {
   // ---------------- The Web: never the companion or the user ----------------
   const det = require(`${SRV}/services/detectiveService`);
   check('web: companion / user names filtered', det.isSelfOrCompanion('Aastha') && det.isSelfOrCompanion('aastik') && det.isSelfOrCompanion('Sanjith', 'Sanjith K M') && det.isSelfOrCompanion('Sanjith K M', 'Sanjith K M') && !det.isSelfOrCompanion('Mom', 'Sanjith K M') && !det.isSelfOrCompanion('Riya', 'Sanjith'));
+  check('web: a friend with the SAME name as the user stays when the scan says it\'s someone else', !det.isSelfOrCompanion('Sanjith', 'Sanjith K M', { distinctPerson: true, role: 'friend' }));
+  check('web: cousin named Aastha stays; "distinct" with no real relationship does not', !det.isSelfOrCompanion('Aastha', 'Sanjith', { distinctPerson: true, role: 'cousin' }) && det.isSelfOrCompanion('Aastha', 'Sanjith', { distinctPerson: true, role: 'other' }));
+  check('web: a same-name row the user corrected by hand stays', !det.isSelfOrCompanion('Sanjith', 'Sanjith K M', { userEdited: true, role: 'best_friend' }));
+  // full scan with the fake model: the user, the companion, a same-name friend and mom
+  const { Person } = require(`${SRV}/models/Person`);
+  const wu = await User.create({ name: 'Sanjith K M', emailEncrypted: encrypt('w@x.com'), passwordHash: 'x', isVerified: true });
+  await Message.insertMany([{ user: wu._id, role: 'user', content: encrypt('my friend Sanjith from college called, and mom made biryani'), timestamp: new Date() }]);
+  next = JSON.stringify({ people: [
+    { name: 'Sanjith', role: 'other', vibe: 'unsure', score: 0, rapSheet: [] },                               // the user
+    { name: 'Aastha', role: 'other', vibe: 'warm', score: 10, rapSheet: [] },                                 // the app
+    { name: 'Sanjith', role: 'friend', vibe: 'warm', score: 40, rapSheet: ['from college'], distinctPerson: true }, // a real friend
+    { name: 'Mom', role: 'parent', vibe: 'supportive', score: 80, rapSheet: ['made biryani'] },
+  ] });
+  await det.detectiveService.runRetroactiveScan(String(wu._id));
+  const board = await det.detectiveService.getWeb(String(wu._id));
+  check('web scan: friend Sanjith + Mom on the board, the user and the app not', board.length === 2 && board.some((x: any) => x.name === 'Sanjith' && x.role === 'friend') && board.some((x: any) => x.name === 'Mom'), board.map((x: any) => `${x.name}/${x.role}`));
+  check('web scan: the model is told the user\'s own name', /The user's own name: Sanjith K M/.test(lastMsgs[1]?.content || ''));
+  await Person.create({ userId: wu._id, name: encrypt('Aastha'), nameHash: require(`${SRV}/utils/serverEncryption`).blindIndex('Aastha'), role: 'other', relationshipScore: 0 });
+  const board2 = await det.detectiveService.getWeb(String(wu._id));
+  check('web: an old "Aastha · Someone" row from earlier scans is cleaned up, real people kept', board2.length === 2 && !board2.some((x: any) => x.name === 'Aastha'), board2.map((x: any) => x.name));
 
   // ---------------- Time sense: gaps between messages (2026-11-24) ----------------
   const tg = require(`${SRV}/services/timeGap`);

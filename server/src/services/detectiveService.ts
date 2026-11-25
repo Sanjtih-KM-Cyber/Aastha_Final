@@ -137,7 +137,10 @@ Identify specific PEOPLE the user mentions (friends, family, partners, exes, col
 Only include facts the user actually said. Do not guess.
 
 For each person:
-- name: as the user refers to them. NEVER the user themselves and never the companion (Aastha / Aastik / "you")
+- name: as the user refers to them. NEVER the user themselves and never the companion app (Aastha / Aastik / "you").
+  The user's own name and the companion's name are given below. If the user clearly talks about a DIFFERENT real
+  person who happens to share one of those names ("my friend Sanjith", "my cousin Aastha"), include them and set
+  "distinctPerson": true. Otherwise leave that name out.
 - alias: a short, kind, descriptive nickname based on how the user talks about them (e.g. "The Planner")
 - role: who they are to the user, exactly one of: ${ROLES.join(', ')}. Use "other" only if nothing fits.
 - roleLabel: only when role is "other", a 1–3 word label (e.g. "dance teacher", "landlord")
@@ -147,19 +150,36 @@ For each person:
 - score: relationship closeness from -100 (very negative) to 100 (very positive), 0 = neutral
 - rapSheet: up to 3 short facts or patterns the user described
 
-Return JSON only: {"people":[{"name":"","alias":"","role":"friend","roleLabel":"","vibe":"warm","score":0,"rapSheet":[]}]}`;
+Return JSON only: {"people":[{"name":"","alias":"","role":"friend","roleLabel":"","vibe":"warm","score":0,"rapSheet":[],"distinctPerson":false}]}`;
 
 // The Web is about the people in THEIR life: never the companion, never the user (owner saw "Aastha" and
-// "Sanjith" on their own board, 2026-11-25)
-const COMPANION_NAMES = ['aastha', 'aastik', 'aarav', 'you', 'me', 'myself', 'i', 'user', 'assistant', 'ai', 'bot', 'the user'];
+// "Sanjith" on their own board, 2026-11-25). BUT a friend can share the user's name ("my friend Sanjith") and
+// Aastha is a common name ("my cousin Aastha"): those are kept when the scan marks them as a different person
+// AND they have a real relationship (role other than "other").
+const NEVER_PEOPLE = ['you', 'me', 'myself', 'i', 'user', 'assistant', 'ai', 'bot', 'the user', 'the app'];
+const COMPANION_NAMES = ['aastha', 'aastik', 'aarav'];
 const normName = (s: string) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim();
-export const isSelfOrCompanion = (name: string, userName?: string) => {
+
+/** Same name as the user (full name, or their first name alone) or the companion. */
+export const nameClashes = (name: string, userName?: string) => {
   const n = normName(name);
-  if (!n || COMPANION_NAMES.includes(n)) return true;
+  if (COMPANION_NAMES.includes(n)) return true;
   const full = normName(userName || '');
   if (!full) return false;
-  const first = full.split(' ')[0];
-  return n === full || n === first || n.split(' ')[0] === first && n.split(' ').length === 1;
+  return n === full || n === full.split(' ')[0];
+};
+
+/**
+ * Should this entry stay OFF the board? `p` = what the scan (or the stored row) says about them.
+ * A same-name entry stays only if it's clearly someone else: flagged distinctPerson by the scan, or a role the
+ * user picked by hand, with a real relationship (not "other"/"Someone").
+ */
+export const isSelfOrCompanion = (name: string, userName?: string, p?: { distinctPerson?: boolean; role?: string; userEdited?: boolean }) => {
+  const n = normName(name);
+  if (!n || NEVER_PEOPLE.includes(n)) return true;
+  if (!nameClashes(name, userName)) return false;
+  const realRole = !!p?.role && p.role !== 'other';
+  return !((p?.distinctPerson || p?.userEdited) && realRole);
 };
 const userNameOf = async (userId: string) => {
   const u: any = await User.findById(userId).select('name').lean();
@@ -174,10 +194,11 @@ export const detectiveService = {
       if (!recentMessages || recentMessages.length === 0) return { status: 'no_history' };
 
       const textLog = recentMessages.map((m: any) => `${m.role}: ${decrypt(m.content)}`).join('\n');
+      const me = await userNameOf(userId);
       const raw = await completeChat(
         [
           { role: 'system', content: SCAN_PROMPT },
-          { role: 'user', content: `Chat log:\n${textLog}` },
+          { role: 'user', content: `The user's own name: ${me || '(unknown)'}\nThe companion's name: Aastha / Aastik\n\nChat log:\n${textLog}` },
         ],
         { task: 'chat', temperature: 0.1, maxTokens: 900, json: true }
       );
@@ -190,10 +211,9 @@ export const detectiveService = {
         parsed = m ? JSON.parse(m[0]) : { people: [] };
       }
 
-      const me = await userNameOf(userId);
       let count = 0;
       for (const p of Array.isArray(parsed.people) ? parsed.people.slice(0, 25) : []) {
-        if (isSelfOrCompanion(p?.name, me)) continue;
+        if (isSelfOrCompanion(p?.name, me, { distinctPerson: p?.distinctPerson === true, role: cleanRole(p?.role) })) continue;
         if (await upsertPerson(userId, p)) count++;
       }
       return { status: 'success', count };
@@ -249,7 +269,11 @@ export const detectiveService = {
     const out: any[] = [];
     for (const d of fresh) {
       const pub = toPublicPerson(d);
-      if (isSelfOrCompanion(pub.name, me)) { await Person.deleteOne({ _id: (d as any)._id, userId }); continue; }
+      // old rows: only a same-name entry with no real relationship that the user never corrected is removed
+      if (isSelfOrCompanion(pub.name, me, { role: (d as any).role, userEdited: !!(d as any).userEdited, distinctPerson: !!(d as any).role && (d as any).role !== 'other' })) {
+        await Person.deleteOne({ _id: (d as any)._id, userId });
+        continue;
+      }
       out.push(pub);
     }
     return out;

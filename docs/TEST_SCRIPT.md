@@ -122,6 +122,7 @@
 49ad. [ ] Chat in the morning, leave mid-conversation, come back at night and send "??" or "hey" → she reacts to now (evening/night), may tease once that you vanished, doesn't continue the morning thread or talk like she just woke up. Within a few minutes → she continues normally.
 49ae. [ ] Notifications sound like her and use your name/nickname, sometimes mention something real you told her (exam, sister...); no "No pressure / I'm here". A check-in shows your NAME (not random letters).
 49af. [ ] The Web: drag a name around → its line follows it the whole time; close and reopen → it stays where you dropped it; a drag doesn't open the card, a tap does. Aastha and you are not on the board. The Scan button is fully visible above the tab bar.
+49ag. [ ] Talk about a friend who has YOUR first name ("my friend Sanjith from college") and someone called Aastha ("my cousin Aastha") → Scan → both appear with their real role; you and the app do not.
 49. [ ] Settings → Data & Privacy → Export: name, date of birth, city, avatar come out readable.
 
 ## 16. Crash reporting (only if `SENTRY_DSN` / `VITE_SENTRY_DSN` are set)
