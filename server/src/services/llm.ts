@@ -225,7 +225,13 @@ interface CallOpts {
   json?: boolean;
   /** Receives the model's reasoning separately (think task). Never mixed into the reply text. */
   onReasoning?: (text: string) => void;
+  /**
+   * Why the stream ended (2026-11-25, replies cut mid-sentence): 'stop' = the model finished, 'length' = it hit
+   * max tokens, 'broken' = the connection died after some text (we never restart, it would duplicate text).
+   */
+  onFinish?: (reason: FinishReason) => void;
 }
+export type FinishReason = 'stop' | 'length' | 'broken';
 
 /** A stream piece: reply text, or reasoning (kept separate). */
 export type StreamPiece = string | { reasoning: string };
@@ -246,11 +252,14 @@ const groqAdapter: ProviderAdapter = {
       ...reasoningParams(model, !!opts.onReasoning),
     };
     const completion: any = await groqClient(keyIdx).chat.completions.create(body);
+    let finish = '';
     for await (const chunk of completion) {
       const delta = chunk?.choices?.[0]?.delta || {};
+      if (chunk?.choices?.[0]?.finish_reason) finish = String(chunk.choices[0].finish_reason);
       if (delta.reasoning) yield { reasoning: String(delta.reasoning) };
       if (delta.content) yield delta.content as string;
     }
+    opts.onFinish?.(finish === 'length' ? 'length' : 'stop');
   },
   async complete(model, keyIdx, messages, opts) {
     const body: any = {
@@ -294,10 +303,14 @@ const geminiAdapter: ProviderAdapter = {
       generationConfig: { temperature: opts.temperature ?? 0.7, maxOutputTokens: opts.maxTokens ?? 1024 },
     });
     const result = await gm.generateContentStream({ contents });
+    let finish = '';
     for await (const chunk of result.stream) {
+      const fr = (chunk as any)?.candidates?.[0]?.finishReason;
+      if (fr) finish = String(fr);
       const text = chunk.text();
       if (text) yield text;
     }
+    opts.onFinish?.(finish === 'MAX_TOKENS' ? 'length' : 'stop');
   },
   async complete(model, keyIdx, messages, opts) {
     const { system, contents } = toGemini(messages);
@@ -378,6 +391,7 @@ export async function* streamChat(
       recordFailure(a.keyIdx, a.model, err);
       if (started) {
         console.warn('[LLM] Stream broke after partial output, ending without retry to avoid duplicate text.');
+        opts.onFinish?.('broken');
         return;
       }
     }

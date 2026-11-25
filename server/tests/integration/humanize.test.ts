@@ -33,5 +33,26 @@ check('streamed result is clean', !/No pressure|Haha, okay/i.test(streamed) && (
 
 check('em dashes become commas', humanize('My bad, Sanjith — sometimes I overdo it.') === 'My bad, Sanjith, sometimes I overdo it.' && !humanize('wait—what? no way').includes('—'), humanize('wait—what? no way'));
 
-console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
-process.exit(failures ? 1 : 0);
+// ---------------- Cut-off replies (2026-11-25: "Some chai and") ----------------
+const { trimToLastSentence } = require(`${SRV}/services/humanize`);
+const cut = "Oh god, Sanjith! My poor sleepy brain can't handle this level of cheekiness this early 😂 What did you really have for breakfast? Some chai and";
+check('cut reply → ends at the last full sentence', trimToLastSentence(cut) === "Oh god, Sanjith! My poor sleepy brain can't handle this level of cheekiness this early 😂 What did you really have for breakfast?", trimToLastSentence(cut));
+check('a finished reply is left alone', trimToLastSentence('haha okay fair.') === 'haha okay fair.' && trimToLastSentence('lol same 😂') === 'lol same 😂');
+check('no full sentence at all → keep it, end with "…"', trimToLastSentence('honestly I was going to say that the') === 'honestly I was going to say that the…');
+check('a tiny first sentence isn\'t used to throw most of the reply away', trimToLastSentence('Ok. so the thing about long replies is that they can run into the limit and then') .endsWith('…'));
+
+(async () => {
+  // the model layer reports WHY a stream ended: a broken connection after some text is 'broken'
+  const llm = require(`${SRV}/services/llm`);
+  llm._setAdaptersForTest({
+    groq: { async *stream() { yield 'Some chai and '; throw Object.assign(new Error('socket hang up'), { status: 500 }); }, complete: async () => '' },
+    gemini: { async *stream() { yield 'x'; }, complete: async () => '' },
+  }, { groq: 1, gemini: 1 });
+  let reason = '';
+  let got = '';
+  for await (const t of llm.streamChat([{ role: 'user', content: 'hi' }], { onFinish: (r: string) => { reason = r; } })) got += t;
+  check('connection broke mid-reply → onFinish("broken"), no duplicate restart', reason === 'broken' && got === 'Some chai and ', { reason, got });
+
+  console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
+  process.exit(failures ? 1 : 0);
+})();

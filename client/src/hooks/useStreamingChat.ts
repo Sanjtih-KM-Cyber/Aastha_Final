@@ -14,6 +14,8 @@ export class StreamHttpError extends Error {
 export interface StreamContext {
   /** Append text to the raw reply (e.g. proposal tags from the brain event). */
   append: (text: string) => void;
+  /** Replace the whole reply (server sent a cleaned final version, e.g. a cut-off reply trimmed to its last sentence). */
+  replace: (text: string) => void;
   readonly raw: string;
 }
 
@@ -55,6 +57,7 @@ export const useStreamingChat = () => {
     };
     const ctx: StreamContext = {
       append: (t) => { raw += t; },
+      replace: (t) => { raw = t; if (!timer) timer = setTimeout(flush, BATCH_MS); },
       get raw() { return raw; },
     };
 

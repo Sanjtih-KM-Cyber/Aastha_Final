@@ -8,7 +8,7 @@ import path from 'path';
 import crypto from 'crypto';
 import Groq from 'groq-sdk';
 import dotenv from 'dotenv';
-import { streamChat, completeChat, LlmMessage } from './llm';
+import { streamChat, completeChat, LlmMessage, FinishReason } from './llm';
 
 dotenv.config();
 
@@ -144,7 +144,7 @@ const toLlmMessages = (history: ChatMessage[], systemPrompt: string): LlmMessage
 export async function* streamReply(
     history: ChatMessage[],
     systemPrompt: string,
-    opts: { maxTokens?: number; voiceTags?: boolean; think?: boolean; onReasoning?: (t: string) => void } = {}
+    opts: { maxTokens?: number; voiceTags?: boolean; think?: boolean; onReasoning?: (t: string) => void; onFinish?: (r: FinishReason) => void } = {}
 ) {
     const prompt = opts.voiceTags ? `${systemPrompt}\n${VOICE_TAG_INSTRUCTIONS}` : systemPrompt;
     const hasImages = history.some(m => Array.isArray(m.content) && m.content.some(p => p.type === 'image_url'));
@@ -155,6 +155,7 @@ export async function* streamReply(
         temperature: task === 'think' ? 0.6 : 0.85, // a little more natural variety (less 'assistant-flat')
         maxTokens: opts.maxTokens || (task === 'think' ? 2048 : 1024),
         onReasoning: task === 'think' ? opts.onReasoning : undefined,
+        onFinish: opts.onFinish,
     });
 }
 

@@ -951,6 +951,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onMobileMenuClick, onOpenWid
                   if (data.level === 'crisis') window.dispatchEvent(new Event('aastha:reach-out-refresh'));
               }
               if (data.type === 'error' && data.message) setError(String(data.message));
+              // The reply was cut off on the server and trimmed to its last full sentence: show that version
+              // (keep any tool tags the brain appended, they are not part of the text)
+              if (data.type === 'final' && typeof data.content === 'string') {
+                  const tags = (ctx.raw.match(/<proposal\b[^>]*>/gi) || []).join('\n');
+                  ctx.replace(tags ? `${data.content}\n${tags}` : data.content);
+              }
               if (data.type === 'clone' && data.name) {
                   setCloneName(data.name);
                   patchBot(m => ({ ...m, isClone: true }));

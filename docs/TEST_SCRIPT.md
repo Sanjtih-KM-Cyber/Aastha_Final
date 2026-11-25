@@ -130,6 +130,7 @@
 49al. [ ] APK lock screen / notification player: a 🔁 button next to the controls. Tap it → it cycles off (faded) → all → this song (🔂), same as in Jam, and Jam's own button follows. With Aastik, the player and Jam say "Jam with Aastik".
 49am. [ ] Settings → Companion: the two cards describe today's Aastha and Aastik; the chosen one says Selected (also for Aastik).
 49an. [ ] Closeness on Grow naturally: chat until you level up (💞 toast) → Settings → Connection → the new level chip is highlighted with "now" (no re-login needed).
+49ao. [ ] Over a day of chatting, no reply ends mid-sentence (like "Some chai and"). Long replies (e.g. something heavy) still come through in full.
 49. [ ] Settings → Data & Privacy → Export: name, date of birth, city, avatar come out readable.
 
 ## 16. Crash reporting (only if `SENTRY_DSN` / `VITE_SENTRY_DSN` are set)

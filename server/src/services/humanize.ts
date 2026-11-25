@@ -136,6 +136,23 @@ export const createHumanizer = () => {
   };
 };
 
+/**
+ * A reply that was cut off (hit max tokens / connection broke) ends mid-sentence ("Some chai and"). Keep it up to
+ * the last complete sentence (., !, ?, …, an emoji or a line break). If there's no complete sentence at all, keep
+ * the text and end it with "…" rather than show a dangling word as if it were finished.
+ */
+export const trimToLastSentence = (text: string): string => {
+  const t = String(text || '').replace(/\s+$/, '');
+  if (!t) return t;
+  if (/[.!?…)"'\]]$/.test(t) || /\p{Extended_Pictographic}\uFE0F?$/u.test(t)) return t; // already ends cleanly
+  let cut = -1;
+  const re = /[.!?…]+["')\]]*(?=\s)|\p{Extended_Pictographic}\uFE0F?(?=\s)|\n/gu;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(t)) !== null) cut = m.index + m[0].length;
+  if (cut > 0 && cut >= Math.min(40, t.length * 0.3)) return t.slice(0, cut).replace(/\s+$/, '');
+  return t.replace(/[\s,;:–-]+$/, '') + '…';
+};
+
 /** Non-streaming convenience (tests, nudges, saved text). Falls back to the original if nothing survives. */
 export const humanize = (text: string): string => {
   const h = createHumanizer();

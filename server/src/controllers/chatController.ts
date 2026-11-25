@@ -6,7 +6,7 @@ import { buildCompanionPrompt, describeTime, describeAge, describeLanguage } fro
 import { streamReply, ChatMessage, generateSubconscious, transcribeAudio, canSkipBrain, defaultBrain, wantsDeepThinking } from '../services/groqService';
 import { updateStyle, describeStyle, updateBond, bondPromptLine, BOND_LEVELS } from '../services/relationship';
 import { assessRisk, HELPLINES, CRISIS_PROMPT, CONCERN_PROMPT, CRISIS_FALLBACK_TEXT } from '../utils/safety';
-import { LlmUnavailableError } from '../services/llm';
+import { LlmUnavailableError, FinishReason } from '../services/llm';
 import { createVoiceTagExtractor } from '../utils/streamTags';
 import { searchGif, gifsEnabled } from '../services/gifSearch';
 import { hasValidConsent, decryptStyle, buildClonePrompt, cloneDisplayName, decodeVoiceSample, CLONE_DAILY_LIMIT } from '../services/cloneService';
@@ -23,7 +23,7 @@ import { followUpPromptLine, followUpsAroundNow, markFollowUps } from '../servic
 import { cleanTimeZone } from '../utils/timeZone';
 import { describeGap, KEEP_AFTER_LONG_GAP } from '../services/timeGap';
 import { openQuotaWindow, quotaResetsAt } from '../utils/dailyReset';
-import { createHumanizer, humanize } from '../services/humanize';
+import { createHumanizer, humanize, trimToLastSentence } from '../services/humanize';
 import { suggestReplies, makeNickname, nicknamePromptLine, nudgeInstruction, NudgeReason } from '../services/companionExtras';
 import { effectiveLevel } from '../services/relationship';
 import { PERSONA_VOICE } from '../prompts/companion';
@@ -409,9 +409,10 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         const heavy = ['sad', 'crying', 'anxious', 'scared', 'lonely', 'angry', 'concerned', 'stressed', 'overwhelmed', 'hurt', 'grieving']
             .includes(String(subconscious.mood || '').toLowerCase());
         const replyBudget = risk !== 'none' || think || isVoiceMode || heavy ? undefined
-            : Math.round((userWords <= 6 ? 320 : userWords <= 30 ? 520 : 900) * (nonLatin ? 2 : 1));
+            : Math.round((userWords <= 6 ? 600 : userWords <= 30 ? 850 : 1200) * (nonLatin ? 2 : 1));
         const stream = streamReply(generationHistory, systemPrompt, {
             maxTokens: replyBudget,
+            onFinish: (r) => { finishReason = r; },
             voiceTags: risk !== 'crisis' && !useClone,
             think,
             onReasoning: (r) => (res as any).write(`data: ${JSON.stringify({ type: 'reasoning', content: r })}\n\n`),
@@ -421,6 +422,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         // (it imitates a real person's own style).
         const human = risk === 'none' && !useClone ? createHumanizer() : null;
         let rawText = '';
+        let finishReason: FinishReason = 'stop';
         for await (const chunk of stream) {
             const visibleRaw = tagExtractor.push(chunk);
             if (!visibleRaw) continue;
@@ -438,6 +440,16 @@ export const chatWithAI = async (req: AuthRequest, res: Response) => {
         if (tail) {
             fullTextResponse += tail;
             sendContent(tail);
+        }
+        // Cut off (max tokens / connection broke)? Never leave "Some chai and" on screen or in the chat history:
+        // end at the last complete sentence and tell the app to show that instead (2026-11-25).
+        if (finishReason !== 'stop' && fullTextResponse.trim()) {
+            const clean = trimToLastSentence(fullTextResponse);
+            if (clean !== fullTextResponse.replace(/\s+$/, '')) {
+                console.warn(`[Chat] reply cut off (${finishReason}), trimmed to the last full sentence`);
+                fullTextResponse = clean;
+                (res as any).write(`data: ${JSON.stringify({ type: 'final', content: clean })}\n\n`);
+            }
         }
     } catch (e) {
         if (e instanceof LlmUnavailableError) {
